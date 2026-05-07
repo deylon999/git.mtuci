@@ -1,202 +1,124 @@
-import { Download, Plus, Search, Eye, Pencil, X } from "lucide-react";
+
+import { useEffect, useMemo, useState } from "react";
+import { Download, Search, Eye, Pencil, X } from "lucide-react";
 import AdminPageHeader from "../components/AdminPageHeader";
 
-interface ForksPageProps {
-  isDarkTheme?: boolean;
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+interface ForksPageProps { isDarkTheme?: boolean; }
+
+interface Repository {
+  id: string;
+  name: string;
+  owner_full_name: string | null;
+  clone_url: string | null;
+  commits_count: number;
+  language: string | null;
+  repo_type: "public" | "private" | "course";
+  created_at: string;
+  updated_at: string;
 }
 
-type Row = {
-  repo: string;
-  repoPath: string;
-  initials: string;
-  ownerInitials: string;
-  ownerName: string;
-  ownerRepo: string;
-  type: "Форк" | "Клон";
-  language: string;
-  languageColor: string;
-  commits: number;
-  additions: number;
-  deletions: number;
-  status: "Активен" | "Неактивен";
-  date: string;
-};
+function getAuthHeaders() {
+  const token = localStorage.getItem("token");
+  return { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
-const rows: Row[] = [
-  {
-    repo: "os-course-2026",
-    repoPath: "kuz/os-course-2026",
-    initials: "КУ",
-    ownerInitials: "ПИ",
-    ownerName: "Петров И.А.",
-    ownerRepo: "petrov/os-course-2026",
-    type: "Форк",
-    language: "C++",
-    languageColor: "#f14e9e",
-    commits: 24,
-    additions: 142,
-    deletions: 38,
-    status: "Активен",
-    date: "12.04.2026",
-  },
-  {
-    repo: "networks-template",
-    repoPath: "kuz/networks-template",
-    initials: "СЕ",
-    ownerInitials: "ОВ",
-    ownerName: "Орлова В.С.",
-    ownerRepo: "orlova/networks-template",
-    type: "Форк",
-    language: "C",
-    languageColor: "#8b949e",
-    commits: 8,
-    additions: 56,
-    deletions: 12,
-    status: "Активен",
-    date: "15.04.2026",
-  },
-  {
-    repo: "algo-practice",
-    repoPath: "sid/algo-practice",
-    initials: "ИС",
-    ownerInitials: "МЕ",
-    ownerName: "Мишина Е.Р.",
-    ownerRepo: "mishina/algo-practice",
-    type: "Клон",
-    language: "JS",
-    languageColor: "#f4db4f",
-    commits: 0,
-    additions: 0,
-    deletions: 0,
-    status: "Неактивен",
-    date: "20.04.2026",
-  },
-  {
-    repo: "os-course-2026",
-    repoPath: "kuz/os-course-2026",
-    initials: "КУ",
-    ownerInitials: "СА",
-    ownerName: "Сидоров А.Н.",
-    ownerRepo: "sidorov/os-course-2026",
-    type: "Форк",
-    language: "C++",
-    languageColor: "#f14e9e",
-    commits: 11,
-    additions: 89,
-    deletions: 5,
-    status: "Активен",
-    date: "18.04.2026",
-  },
-  {
-    repo: "lab-db-petrov",
-    repoPath: "ist21/lab-db-petrov",
-    initials: "ИС",
-    ownerInitials: "ИК",
-    ownerName: "Иванов К.С.",
-    ownerRepo: "ivanov/lab-db-petrov",
-    type: "Клон",
-    language: "Python",
-    languageColor: "#3b82f6",
-    commits: 3,
-    additions: 17,
-    deletions: 2,
-    status: "Активен",
-    date: "22.04.2026",
-  },
-];
-
-const stats = [
-  { title: "Всего форков", value: "128", extra: "↑ +12 за неделю" },
-  { title: "Активных форков", value: "94", extra: "Без изменений" },
-  { title: "Клонирований сегодня", value: "37", extra: "↑ +8 за день" },
-  { title: "Уникальных студентов", value: "61", extra: "↑ +3 за неделю" },
-];
-
-const buttonBase = "h-8 rounded-md border border-[#2a3140] bg-[#0b111d] px-3 text-xs text-[#e6edf3]";
+const languageColors: Record<string, string> = { Python: "#3b82f6", JavaScript: "#f4db4f", TypeScript: "#3178c6", "C++": "#f14e9e", C: "#8b949e" };
 
 export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
-  if (!isDarkTheme) {
-    return <ForksPage isDarkTheme />;
-  }
+  const [rows, setRows] = useState<Repository[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(`${API_URL}/repositories?skip=0&limit=200`, { headers: getAuthHeaders() });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data: Repository[] = await response.json();
+        setRows(data);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Ошибка загрузки");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const filtered = useMemo(() => rows.filter((r) => `${r.name} ${r.owner_full_name ?? ""}`.toLowerCase().includes(query.toLowerCase())), [rows, query]);
+  const active = filtered.filter((r) => r.commits_count > 0).length;
+  const clonesToday = filtered.filter((r) => new Date(r.created_at).toDateString() === new Date().toDateString()).length;
+  const users = new Set(filtered.map((r) => r.owner_full_name || r.id)).size;
+
+  const c = isDarkTheme
+    ? {
+        page: "bg-[#0a0d14] text-[#e6edf3]",
+        panel: "bg-[#111722] border-[#2a3140]",
+        muted: "text-[#8b949e]",
+        input: "bg-[#0a0d14] border-[#2a3140]",
+      }
+    : {
+        page: "bg-[#f8fafc] text-slate-900",
+        panel: "bg-white border-slate-200",
+        muted: "text-slate-500",
+        input: "bg-white border-slate-200",
+      };
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0a0d14] text-[#e6edf3]">
+    <div className={`h-full overflow-y-auto ${c.page}`}>
       <div className="mx-auto max-w-[2100px] px-6 py-6 pb-10">
         <div className="mb-4 flex items-start justify-between gap-4">
-          <AdminPageHeader isDarkTheme={isDarkTheme} title="Форки и клоны" subtitle="Все форки репозиториев студентов платформы" />
+          <AdminPageHeader isDarkTheme={isDarkTheme} title="Форки и клоны" />
           <div className="mt-1 flex gap-2">
-            <button className={`${buttonBase} flex items-center gap-2`}><Download className="h-3.5 w-3.5" />Экспорт CSV</button>
-            <button className="h-8 rounded-md bg-[#2563eb] px-3 text-xs font-medium text-white">+ Создать форк</button>
+            <button className={`h-8 rounded-md border px-3 text-xs ${c.panel}`}><Download className="mr-1 inline h-3.5 w-3.5" />Экспорт CSV</button>
           </div>
         </div>
 
         <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {stats.map((stat) => (
-            <div key={stat.title} className="rounded-xl border border-[#2a3140] bg-[#111722] p-4">
-              <p className="text-xs text-[#8b949e]">{stat.title}</p>
-              <p className="mt-1 text-4 font-semibold text-[#e6edf3]">{stat.value}</p>
-              <p className="mt-1 text-xs text-[#3fb950]">{stat.extra}</p>
+          {[
+            ["Всего репозиториев", filtered.length],
+            ["Активных", active],
+            ["Создано сегодня", clonesToday],
+            ["Уникальных студентов", users],
+          ].map(([title, value]) => (
+            <div key={String(title)} className={`rounded-xl border p-4 ${c.panel}`}>
+              <p className={`text-xs ${c.muted}`}>{title}</p><p className="mt-1 text-2xl font-semibold">{value}</p>
             </div>
           ))}
         </div>
 
-        <div className="rounded-xl border border-[#2a3140] bg-[#111722]">
-          <div className="flex flex-wrap items-center gap-2 border-b border-[#1f2633] p-3">
-            {['Все', 'Форки', 'Клоны', 'Без изменений'].map((filter, idx) => (
-              <button key={filter} className={`h-8 rounded-md px-4 text-xs ${idx === 0 ? 'bg-[#1f2633] text-white' : 'text-[#8b949e]'}`}>{filter}</button>
-            ))}
-            <div className="ml-2 flex h-8 flex-1 items-center gap-2 rounded-md border border-[#2a3140] bg-[#0a0d14] px-2 text-[#8b949e]">
-              <Search className="h-3.5 w-3.5" />
-              <input className="w-full bg-transparent text-sm outline-none" placeholder="Поиск по репозиторию, студенту..." />
-            </div>
-            <button className={buttonBase}>Все кафедры</button>
-            <button className={buttonBase}>Все языки</button>
-            <button className={buttonBase}>Сортировка: дата</button>
-          </div>
-
-          <table className="w-full text-sm">
-            <thead className="border-b border-[#1f2633] text-xs uppercase text-[#8b949e]">
-              <tr>
-                {['Оригинальный репо','Форк / владелец','Тип','Язык','Коммиты','Изменения','Статус','Дата форка','Действия'].map((h) => <th key={h} className="px-3 py-3 text-left font-medium">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={`${row.repo}${row.ownerName}`} className="border-b border-[#1f2633] last:border-b-0">
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-[#1d4ed8]/30 text-[10px] font-semibold text-[#60a5fa]">{row.initials}</span>
-                      <div>
-                        <p className="font-medium">{row.repo}</p><p className="text-xs text-[#8b949e]">{row.repoPath}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3"><p className="font-medium">{row.ownerName}</p><p className="text-xs text-[#8b949e]">{row.ownerRepo}</p></td>
-                  <td className="px-3 py-3"><span className="rounded-full bg-[#1f6feb]/20 px-2 py-1 text-xs text-[#58a6ff]">{row.type}</span></td>
-                  <td className="px-3 py-3"><span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: row.languageColor }} />{row.language}</span></td>
-                  <td className="px-3 py-3">{row.commits}</td>
-                  <td className="px-3 py-3">{row.additions === 0 && row.deletions === 0 ? <span className="text-[#8b949e]">Нет изменений</span> : <span><span className="text-[#3fb950]">+{row.additions}</span> <span className="text-[#f85149]">−{row.deletions}</span></span>}</td>
-                  <td className="px-3 py-3"><span className={`rounded-full px-2 py-1 text-xs ${row.status === 'Активен' ? 'bg-[#238636]/20 text-[#3fb950]' : 'bg-[#9e6a03]/20 text-[#d29922]'}`}>{row.status}</span></td>
-                  <td className="px-3 py-3 text-[#8b949e]">{row.date}</td>
-                  <td className="px-3 py-3">
-                    <div className="flex gap-1">
-                      <button className="rounded border border-[#2a3140] p-1 text-[#8b949e]"><Eye className="h-3 w-3" /></button>
-                      <button className="rounded border border-[#2a3140] p-1 text-[#8b949e]"><Pencil className="h-3 w-3" /></button>
-                      <button className="rounded border border-[#2a3140] p-1 text-[#f85149]"><X className="h-3 w-3" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="flex items-center justify-between border-t border-[#1f2633] px-3 py-2 text-xs text-[#8b949e]">
-            <span>Показано 5 из 128</span>
-            <div className="flex items-center gap-2">
-              <button className={buttonBase}>‹</button><button className="h-8 w-8 rounded-md bg-[#2563eb] text-white">1</button><button className={buttonBase}>2</button><button className={buttonBase}>3</button><button className={buttonBase}>…</button><button className={buttonBase}>13</button><button className={buttonBase}>›</button>
+        <div className={`rounded-xl border ${c.panel}`}>
+          <div className="flex items-center gap-2 border-b border-inherit p-3">
+            <div className={`flex h-8 flex-1 items-center gap-2 rounded-md border px-2 ${c.input}`}>
+              <Search className={`h-3.5 w-3.5 ${c.muted}`} />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} className="w-full bg-transparent text-sm outline-none" placeholder="Поиск по репозиторию, студенту..." />
             </div>
             <span>По 10 на странице</span>
           </div>
+
+          {loading ? <p className="p-4 text-sm">Загрузка...</p> : error ? <p className="p-4 text-sm text-red-500">{error}</p> : (
+            <table className="w-full text-sm">
+              <thead className={`text-xs uppercase ${c.muted}`}><tr>{["Оригинальный репо","Владелец","Тип","Язык","Коммиты","Дата","Действия"].map((h) => <th key={h} className="px-3 py-3 text-left">{h}</th>)}</tr></thead>
+              <tbody>
+                {filtered.slice(0, 20).map((row) => (
+                  <tr key={row.id} className="border-t border-inherit">
+                    <td className="px-3 py-3"><p className="font-medium">{row.name}</p><p className={`text-xs ${c.muted}`}>{row.clone_url || "—"}</p></td>
+                    <td className="px-3 py-3">{row.owner_full_name || "Неизвестно"}</td>
+                    <td className="px-3 py-3"><span className="rounded-full bg-[#1f6feb]/20 px-2 py-1 text-xs text-[#58a6ff]">{row.repo_type === "course" ? "Форк" : "Клон"}</span></td>
+                    <td className="px-3 py-3"><span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: languageColors[row.language || ""] || "#8b949e" }} />{row.language || "—"}</span></td>
+                    <td className="px-3 py-3">{row.commits_count}</td>
+                    <td className={`px-3 py-3 ${c.muted}`}>{new Date(row.created_at).toLocaleDateString("ru-RU")}</td>
+                    <td className="px-3 py-3"><div className="flex gap-1"><button className="rounded border border-inherit p-1"><Eye className="h-3 w-3" /></button><button className="rounded border border-inherit p-1"><Pencil className="h-3 w-3" /></button><button className="rounded border border-inherit p-1 text-[#f85149]"><X className="h-3 w-3" /></button></div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>
