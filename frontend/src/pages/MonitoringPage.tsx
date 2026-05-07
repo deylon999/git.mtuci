@@ -194,7 +194,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 20px", display: "flex", flexDirection: "column", gap: "14px", backgroundColor: "#111111" }}>
 
         {/* Status Cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
