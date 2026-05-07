@@ -5,8 +5,23 @@ from typing import Any
 
 import httpx
 
+from app.core.config import settings
 
-GITEA_ADMIN_USERNAME = "gitea_admin"
+GITEA_ADMIN_USERNAME = settings.GITEA_ADMIN_USERNAME
+
+
+def _get_auth_headers() -> dict[str, str]:
+    """
+    Возвращает заголовки авторизации для Gitea API.
+    Использует token если задан, иначе basic auth с admin credentials.
+    """
+    if settings.GITEA_TOKEN:
+        return {"Authorization": f"token {settings.GITEA_TOKEN}"}
+
+    # Basic auth с admin credentials
+    credentials = f"{settings.GITEA_ADMIN_USERNAME}:{settings.GITEA_ADMIN_PASSWORD}"
+    encoded = base64.b64encode(credentials.encode()).decode()
+    return {"Authorization": f"Basic {encoded}"}
 
 
 async def create_repo(repo_name: str) -> str:
@@ -14,16 +29,10 @@ async def create_repo(repo_name: str) -> str:
     Создаёт репозиторий в Gitea через REST API.
     Repo создаётся как публичный/приватный по дефолту: public (private=false).
     """
-    from app.core.config import settings
-
-    if not settings.GITEA_TOKEN:
-        raise RuntimeError("GITEA_TOKEN is not configured")
-
     base_url = settings.GITEA_URL.rstrip("/")
     api_url = f"{base_url}/api/v1/user/repos"
 
-    # Gitea ожидает: Authorization: token <TOKEN>
-    headers = {"Authorization": f"token {settings.GITEA_TOKEN}"}
+    headers = _get_auth_headers()
     payload = {"name": repo_name, "private": False}
 
     async with httpx.AsyncClient(timeout=30) as client:
@@ -52,14 +61,9 @@ async def list_repo_commits_page(
     Порядок в ответе Gitea обычно от новых к старым, но для корректности логику
     лучше делать с учётом этого уже на уровне маршрута.
     """
-    from app.core.config import settings
-
-    if not settings.GITEA_TOKEN:
-        raise RuntimeError("GITEA_TOKEN is not configured")
-
     base_url = settings.GITEA_URL.rstrip("/")
     api_url = f"{base_url}/api/v1/repos/{owner}/{repo}/commits"
-    headers = {"Authorization": f"token {settings.GITEA_TOKEN}"}
+    headers = _get_auth_headers()
 
     params = {"limit": limit, "page": page}
 
@@ -113,13 +117,8 @@ async def get_repo_contents(*, owner: str, repo: str, filepath: str = "") -> Any
     Обёртка над Gitea Contents API:
     GET /api/v1/repos/{owner}/{repo}/contents/{filepath}
     """
-    from app.core.config import settings
-
-    if not settings.GITEA_TOKEN:
-        raise RuntimeError("GITEA_TOKEN is not configured")
-
     base_url = settings.GITEA_URL.rstrip("/")
-    headers = {"Authorization": f"token {settings.GITEA_TOKEN}"}
+    headers = _get_auth_headers()
 
     cleaned = filepath.lstrip("/")
     if cleaned:

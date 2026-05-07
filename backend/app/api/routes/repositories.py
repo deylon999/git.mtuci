@@ -1,5 +1,6 @@
 import os
 import asyncio
+import base64
 from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
@@ -28,6 +29,18 @@ router = APIRouter(tags=["repositories"])
 GITEA_URL = os.getenv("GITEA_URL", "http://gitea:3000")
 GITEA_TOKEN = os.getenv("GITEA_TOKEN", "")
 GITEA_ADMIN = os.getenv("GITEA_ADMIN_USERNAME", "gitea_admin")
+GITEA_ADMIN_PASSWORD = os.getenv("GITEA_ADMIN_PASSWORD", "admin12345")
+
+
+def get_gitea_auth_headers() -> dict[str, str]:
+    """Возвращает заголовки авторизации для Gitea API."""
+    if GITEA_TOKEN:
+        return {"Authorization": f"token {GITEA_TOKEN}"}
+
+    # Basic auth с admin credentials
+    credentials = f"{GITEA_ADMIN}:{GITEA_ADMIN_PASSWORD}"
+    encoded = base64.b64encode(credentials.encode()).decode()
+    return {"Authorization": f"Basic {encoded}"}
 
 
 def get_client_ip(request: Request) -> str:
@@ -42,15 +55,11 @@ async def create_gitea_repository(name: str, description: Optional[str], owner_u
     """Create a repository in Gitea via API."""
     import logging
     logger = logging.getLogger(__name__)
-    
+
     logger.info(f"GITEA_TOKEN present: {bool(GITEA_TOKEN)}")
     logger.info(f"GITEA_URL: {GITEA_URL}")
-    
-    if not GITEA_TOKEN:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Gitea integration not configured",
-        )
+
+    auth_headers = get_gitea_auth_headers()
 
     async with httpx.AsyncClient() as client:
         # First check if we can access Gitea at all
@@ -59,22 +68,22 @@ async def create_gitea_repository(name: str, description: Optional[str], owner_u
             logger.info(f"Gitea health check: {health_check.status_code}")
         except Exception as e:
             logger.error(f"Gitea health check failed: {e}")
-        
+
         # Check if user exists in Gitea
         user_check = await client.get(
             f"{GITEA_URL}/api/v1/users/{owner_username}",
-            headers={"Authorization": f"token {GITEA_TOKEN}"},
+            headers=auth_headers,
             timeout=5.0,
         )
         logger.info(f"User check for {owner_username}: {user_check.status_code}")
-        
+
         if user_check.status_code == 404:
             # Create user in Gitea via admin API
             logger.info(f"Creating user {owner_username} in Gitea")
             create_user_resp = await client.post(
                 f"{GITEA_URL}/api/v1/admin/users",
                 headers={
-                    "Authorization": f"token {GITEA_TOKEN}",
+                    **auth_headers,
                     "Content-Type": "application/json",
                 },
                 json={
@@ -94,7 +103,7 @@ async def create_gitea_repository(name: str, description: Optional[str], owner_u
         response = await client.post(
             f"{GITEA_URL}/api/v1/admin/users/{owner_username}/repos",
             headers={
-                "Authorization": f"token {GITEA_TOKEN}",
+                **auth_headers,
                 "Content-Type": "application/json",
             },
             json={
@@ -126,20 +135,18 @@ async def create_gitea_webhook(owner: str, repo_name: str) -> None:
     """Create webhook in Gitea repository to notify backend about events."""
     import logging
     logger = logging.getLogger(__name__)
-    
-    if not GITEA_TOKEN:
-        logger.warning("GITEA_TOKEN not configured, skipping webhook creation")
-        return
-    
+
+    auth_headers = get_gitea_auth_headers()
+
     # URL для webhook - используем имя сервиса api из docker-compose
     webhook_url = os.getenv("WEBHOOK_BASE_URL", "http://api:8000/webhooks")
     secret = os.getenv("GITEA_WEBHOOK_SECRET", "")
-    
+
     async with httpx.AsyncClient() as client:
         # Check if webhook already exists
         hooks_response = await client.get(
             f"{GITEA_URL}/api/v1/repos/{owner}/{repo_name}/hooks",
-            headers={"Authorization": f"token {GITEA_TOKEN}"},
+            headers=auth_headers,
             timeout=10.0,
         )
         
@@ -154,10 +161,7 @@ async def create_gitea_webhook(owner: str, repo_name: str) -> None:
         logger.info(f"Creating webhook for {owner}/{repo_name} -> {webhook_url}/gitea/push")
         response = await client.post(
             f"{GITEA_URL}/api/v1/repos/{owner}/{repo_name}/hooks",
-            headers={
-                "Authorization": f"token {GITEA_TOKEN}",
-                "Content-Type": "application/json",
-            },
+            headers=auth_headers,
             json={
                 "type": "gitea",
                 "config": {
@@ -179,13 +183,12 @@ async def create_gitea_webhook(owner: str, repo_name: str) -> None:
 
 async def delete_gitea_repository(owner: str, repo_name: str) -> None:
     """Delete a repository in Gitea via API."""
-    if not GITEA_TOKEN:
-        return
+    auth_headers = get_gitea_auth_headers()
 
     async with httpx.AsyncClient() as client:
         response = await client.delete(
             f"{GITEA_URL}/api/v1/repos/{owner}/{repo_name}",
-            headers={"Authorization": f"token {GITEA_TOKEN}"},
+            headers=auth_headers,
         )
         # Ignore 404 errors (repo might not exist)
         if response.status_code not in (204, 404):

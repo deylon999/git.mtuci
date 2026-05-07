@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import math
+import os
 from typing import List, Optional
 from uuid import UUID, uuid4
 
@@ -45,7 +46,6 @@ from app.services.course_service import (
     list_teacher_courses,
 )
 from app.services.gitea_service import (
-    GITEA_ADMIN_USERNAME,
     get_repo_contents,
     get_repo_file_content,
     list_repo_commits,
@@ -54,6 +54,8 @@ from app.services.plagiarism_service import check_assignment_plagiarism, compare
 from app.services.student_repository_service import get_student_repo_name
 
 router = APIRouter(tags=["courses"])
+
+GITEA_ADMIN_USERNAME = os.getenv("GITEA_ADMIN_USERNAME", "gitea_admin")
 
 
 def _parse_gitea_datetime(value: str | None) -> datetime | None:

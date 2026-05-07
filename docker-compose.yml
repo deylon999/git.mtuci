@@ -1,37 +1,4 @@
 services:
-  gitea-init:
-    image: curlimages/curl:latest
-    container_name: mtuci-gitea-init
-    depends_on:
-      gitea:
-        condition: service_healthy
-    environment:
-      - GITEA_URL=http://gitea:3000
-      - GITEA_ADMIN_USERNAME=gitea_admin
-      - GITEA_ADMIN_PASSWORD=admin12345
-    command:
-      - /bin/sh
-      - -c
-      - |
-        echo "Waiting for Gitea..."
-        sleep 10
-        echo "Creating API token..."
-        TOKEN=$$(curl -s -X POST "$${GITEA_URL}/api/v1/users/$${GITEA_ADMIN_USERNAME}/tokens" \
-          -u "$${GITEA_ADMIN_USERNAME}:$${GITEA_ADMIN_PASSWORD}" \
-          -H "Content-Type: application/json" \
-          -d '{"name":"mtuci-api-token"}' | grep -o '"sha1":"[^"]*' | cut -d'"' -f4)
-        if [ -n "$$TOKEN" ]; then
-          echo "Token created: $$TOKEN"
-          echo "GITEA_TOKEN=$$TOKEN" > /shared/gitea-token.env
-        else
-          echo "Token creation failed, trying to get existing..."
-          curl -s "$${GITEA_URL}/api/v1/users/$${GITEA_ADMIN_USERNAME}/tokens" \
-            -u "$${GITEA_ADMIN_USERNAME}:$${GITEA_ADMIN_PASSWORD}"
-        fi
-    volumes:
-      - gitea_token:/shared
-    restart: "no"
-
   api:
     build:
       context: ./backend
@@ -43,8 +10,6 @@ services:
         condition: service_healthy
       gitea:
         condition: service_healthy
-      gitea-init:
-        condition: service_completed_successfully
     environment:
       - PYTHONPATH=/app
       - PYTHONIOENCODING=utf-8
@@ -79,7 +44,6 @@ services:
     volumes:
       - ./backend:/app
       - ./backups:/backups
-      - gitea_token:/shared:ro
     working_dir: /app
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
@@ -164,5 +128,4 @@ services:
 volumes:
   postgres_data:
   gitea_data:
-  gitea_token:
 

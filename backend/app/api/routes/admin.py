@@ -2,6 +2,7 @@ import os
 import secrets
 import string
 import asyncio
+import base64
 import csv
 import io
 from datetime import datetime, timedelta, timezone
@@ -722,8 +723,21 @@ async def admin_toggle_repository_block(
 # System-wide Gitea webhook setup
 GITEA_URL = os.getenv("GITEA_URL", "http://gitea:3000")
 GITEA_TOKEN = os.getenv("GITEA_TOKEN", "")
+GITEA_ADMIN_USERNAME = os.getenv("GITEA_ADMIN_USERNAME", "gitea_admin")
+GITEA_ADMIN_PASSWORD = os.getenv("GITEA_ADMIN_PASSWORD", "admin12345")
 WEBHOOK_BASE_URL = os.getenv("WEBHOOK_BASE_URL", "http://api:8000/webhooks")
 WEBHOOK_SECRET = os.getenv("GITEA_WEBHOOK_SECRET", "")
+
+
+def get_gitea_auth_headers() -> dict[str, str]:
+    """Возвращает заголовки авторизации для Gitea API."""
+    if GITEA_TOKEN:
+        return {"Authorization": f"token {GITEA_TOKEN}"}
+
+    # Basic auth с admin credentials
+    credentials = f"{GITEA_ADMIN_USERNAME}:{GITEA_ADMIN_PASSWORD}"
+    encoded = base64.b64encode(credentials.encode()).decode()
+    return {"Authorization": f"Basic {encoded}"}
 
 
 @router.post("/setup-gitea-webhook")
@@ -736,21 +750,17 @@ async def setup_gitea_system_webhook(
     """
     import logging
     logger = logging.getLogger(__name__)
-    
+
     logger.info(f"GITEA_TOKEN configured: {bool(GITEA_TOKEN)}, length: {len(GITEA_TOKEN) if GITEA_TOKEN else 0}")
     logger.info(f"GITEA_URL: {GITEA_URL}")
-    
-    if not GITEA_TOKEN:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="GITEA_TOKEN not configured",
-        )
-    
+
+    auth_headers = get_gitea_auth_headers()
+
     async with httpx.AsyncClient() as client:
         # Check if system webhook already exists
         hooks_response = await client.get(
             f"{GITEA_URL}/api/v1/admin/hooks",
-            headers={"Authorization": f"token {GITEA_TOKEN}"},
+            headers=auth_headers,
             timeout=10.0,
         )
         
@@ -772,7 +782,7 @@ async def setup_gitea_system_webhook(
         response = await client.post(
             f"{GITEA_URL}/api/v1/admin/hooks",
             headers={
-                "Authorization": f"token {GITEA_TOKEN}",
+                **auth_headers,
                 "Content-Type": "application/json",
             },
             json={
@@ -828,11 +838,13 @@ async def sync_gitea_repositories(
 
     logger = logging.getLogger(__name__)
 
+    auth_headers = get_gitea_auth_headers()
+
     async with httpx.AsyncClient() as client:
         # Get all repositories from Gitea (using user repos endpoint with admin token)
         response = await client.get(
             f"{settings.GITEA_URL}/api/v1/user/repos",
-            headers={"Authorization": f"token {settings.GITEA_TOKEN}"},
+            headers=auth_headers,
             timeout=30.0,
         )
 
@@ -897,7 +909,7 @@ async def sync_gitea_repositories(
             try:
                 commits_response = await client.get(
                     f"{settings.GITEA_URL}/api/v1/repos/{full_name}/commits",
-                    headers={"Authorization": f"token {settings.GITEA_TOKEN}"},
+                    headers=auth_headers,
                     timeout=30.0,
                 )
                 if commits_response.status_code == 200:

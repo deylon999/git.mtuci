@@ -37,6 +37,8 @@ class Settings(BaseModel):
     # Gitea (REST API)
     GITEA_URL: str = Field(default_factory=lambda: os.getenv("GITEA_URL", "http://gitea:3000"))
     GITEA_TOKEN: str = Field(default_factory=lambda: os.getenv("GITEA_TOKEN", ""))
+    GITEA_ADMIN_USERNAME: str = Field(default_factory=lambda: os.getenv("GITEA_ADMIN_USERNAME", "gitea_admin"))
+    GITEA_ADMIN_PASSWORD: str = Field(default_factory=lambda: os.getenv("GITEA_ADMIN_PASSWORD", "admin12345"))
 
     # Frontend URL for password reset links
     FRONTEND_URL: str = Field(default_factory=lambda: os.getenv("FRONTEND_URL", "http://localhost:3001"))

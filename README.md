@@ -68,9 +68,9 @@ gitea:
 
 ### Gitea Token
 
-Токен создаётся автоматически при первом запуске. Используется для создания репозиториев студентов, настройки webhooks и получения информации о коммитах.
+Gitea API использует basic auth с admin credentials (gitea_admin / admin12345) для создания репозиториев, настройки webhooks и получения информации о коммитах.
 
-Если автоматическое создание не сработало:
+Если вы хотите использовать токен вместо basic auth:
 1. Зайдите на http://localhost:3000
 2. Settings → Applications → Generate New Token
 3. Добавьте в `docker-compose.yml`: `GITEA_TOKEN=<токен>`
@@ -116,7 +116,6 @@ docker compose exec api alembic revision --autogenerate -m "description"
 ├── backend/
 │   ├── app/              # Основной код приложения
 │   ├── alembic/          # Миграции
-│   ├── entrypoint.sh     # Инициализация и загрузка Gitea токена
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
