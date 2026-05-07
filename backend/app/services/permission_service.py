@@ -1,10 +1,9 @@
 """
-Permission service with audit logging and caching
+Permission service with audit logging
 """
 from __future__ import annotations
 
 import json
-import time
 from typing import Optional
 from uuid import UUID
 from datetime import datetime, timezone
@@ -13,56 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models.user import User, UserRole
-from app.models.role_permissions import RolePermission
 from app.models.permission_audit import PermissionAudit
-from app.core.permissions import DEFAULT_PERMISSIONS
 
-
-# Simple in-memory cache: {user_id: (permissions_set, timestamp)}
-_perms_cache: dict[UUID, tuple[set[str], float]] = {}
-CACHE_TTL_SECONDS = 60  # Cache permissions for 1 minute
-
-
-async def get_user_permissions_cached(
-    user: User,
-    session: AsyncSession,
-) -> set[str]:
-    """Get user permissions with caching."""
-    now = time.time()
-    
-    # Check cache
-    if user.id in _perms_cache:
-        perms, timestamp = _perms_cache[user.id]
-        if now - timestamp < CACHE_TTL_SECONDS:
-            return perms
-    
-    # Fetch from DB
-    result = await session.execute(
-        select(RolePermission)
-        .where(RolePermission.role == user.role)
-    )
-    custom_perms = result.scalars().all()
-    
-    if custom_perms:
-        perms = {p.permission_id for p in custom_perms if p.enabled}
-    else:
-        perms = DEFAULT_PERMISSIONS.get(user.role, set()).copy()
-    
-    # Update cache
-    _perms_cache[user.id] = (perms, now)
-    return perms
-
-
-def invalidate_user_cache(user_id: UUID) -> None:
-    """Invalidate cache for specific user."""
-    _perms_cache.pop(user_id, None)
-
-
-def invalidate_role_cache(role: UserRole) -> None:
-    """Invalidate cache for all users with this role."""
-    # We can't know which users have this role without DB query,
-    # so we clear entire cache to be safe
-    _perms_cache.clear()
+# Re-export permission functions from core.permissions (single source of truth)
+from app.core.permissions import (
+    get_user_permissions as get_user_permissions_cached,
+    invalidate_user_permissions_cache as invalidate_user_cache,
+    invalidate_role_permissions_cache as invalidate_role_cache,
+)
 
 
 async def log_permission_change(

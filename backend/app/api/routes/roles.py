@@ -296,6 +296,16 @@ async def save_role_permissions(
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Only admins can modify permissions")
     
+    # Validate all permission IDs
+    valid_perm_ids = set(PERMISSION_DEFINITIONS.keys())
+    for category in permissions:
+        for perm in category.permissions:
+            if perm.id not in valid_perm_ids:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid permission_id: {perm.id}. Valid permissions: {', '.join(sorted(valid_perm_ids))}"
+                )
+
     # Collect changes for audit log
     changed_perms = []
     for category in permissions:

@@ -5,6 +5,46 @@ export async function getAdminUsers(): Promise<AdminUserRead[]> {
   return apiRequest<AdminUserRead[]>("/admin/users");
 }
 
+export async function exportUsersCSV(): Promise<void> {
+  const token = localStorage.getItem("token");
+  const res = await fetch(`${import.meta.env.VITE_API_URL ?? "/api"}/admin/users/export`, {
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to export users");
+  }
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `users_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
+export interface UserImportResponse {
+  imported: number;
+  errors: string[];
+  total: number;
+}
+
+export async function importUsersCSV(file: File): Promise<UserImportResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return apiRequest<UserImportResponse>("/admin/users/import", {
+    method: "POST",
+    body: formData,
+    headers: {},
+  });
+}
+
 export async function patchAdminUser(
   userId: string,
   payload: { role: UserRole; is_blocked: boolean; is_pending?: boolean; group_name?: string | null; student_id?: string | null },

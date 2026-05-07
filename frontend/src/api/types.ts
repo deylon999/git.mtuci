@@ -42,12 +42,41 @@ export interface SystemMetrics {
   disk_percent: number;
   disk_used_gb: number;
   disk_total_gb: number;
+  network_upload_mbps: number;
+  network_download_mbps: number;
+  load_avg: number[];
+  requests_total_hour: number;
+  requests_errors_hour: number;
+  avg_response_ms: number;
+  p95_response_ms: number;
+  error_rate: number;
+  rps: number;
+  database: DatabaseMetrics;
+}
+
+export interface DatabaseMetrics {
+  connections_active: number;
+  connections_max: number;
+  size_mb: number;
+  tables_count: number;
+  queries_per_sec: number;
+  avg_query_ms: number;
+  cache_hit_rate: number;
+  deadlocks: number;
+  last_migration: string;
 }
 
 export interface ServiceStatus {
   git: boolean;
   db: boolean;
   api: boolean;
+  git_uptime: string | null;
+  git_version: string | null;
+  db_uptime: string | null;
+  db_version: string | null;
+  api_uptime: string | null;
+  api_version: string | null;
+  git_repos_count: number | null;
 }
 
 export interface BackupInfo {

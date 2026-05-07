@@ -18,7 +18,7 @@ import {
   ChevronDown,
   X,
 } from "lucide-react";
-import { getAdminUsers, patchAdminUser, approveUser, resetAdminUserPassword, getGroups } from "../api/adminApi";
+import { getAdminUsers, patchAdminUser, approveUser, resetAdminUserPassword, getGroups, exportUsersCSV, importUsersCSV } from "../api/adminApi";
 import { getMe } from "../api/authApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { usePendingCount } from "../context/PendingCountContext";
@@ -134,6 +134,9 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
   const [actionLoading, setActionLoading] = useState(false);
   const [availableGroups, setAvailableGroups] = useState<string[]>([]);
   const [showPerPageDropdown, setShowPerPageDropdown] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Russian pluralization helper for records
   const pluralizeRecords = (count: number): string => {
@@ -430,6 +433,43 @@ useEffect(() => {
     setSelectedUsers([]);
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportUsersCSV();
+      showToast("Пользователи успешно экспортированы", "success");
+    } catch {
+      showToast("Ошибка при экспорте", "error");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const result = await importUsersCSV(file);
+      const res = await getAdminUsers();
+      updateUsers(res);
+      
+      if (result.errors.length > 0) {
+        showToast(`Импортировано: ${result.imported}, ошибок: ${result.errors.length}`, "error");
+      } else {
+        showToast(`Успешно импортировано ${result.imported} пользователей`, "success");
+      }
+    } catch {
+      showToast("Ошибка при импорте", "error");
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
   // Theme-based colors
   const pageBgStyle = isDarkTheme ? { backgroundColor: "#0f0f10" } : { backgroundColor: "#f8fafc" };
   const textPrimary = isDarkTheme ? "text-white" : "text-slate-900";
@@ -483,14 +523,29 @@ useEffect(() => {
             : `Найдено ${filteredUsers.length} из ${totalUsers}`}
           actions={
             <>
-              <button className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm ${cardBg} ${cardHover}`}>
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm ${cardBg} ${cardHover} ${exporting ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
                 <Download className="h-4 w-4" />
-                Экспорт CSV
+                {exporting ? "Экспорт..." : "Экспорт CSV"}
               </button>
-              <button className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm ${cardBg} ${cardHover}`}>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm ${cardBg} ${cardHover} ${importing ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
                 <Upload className="h-4 w-4" />
-                Импорт
+                {importing ? "Импорт..." : "Импорт"}
               </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleImport}
+                style={{ display: "none" }}
+              />
               <button className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm ${isDarkTheme ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
                 <Plus className="h-4 w-4" />
                 Добавить
@@ -511,24 +566,6 @@ useEffect(() => {
 
         {/* Toolbar */}
         <div className={`${tableBg} rounded-xl p-4 border ${tableBorder} flex items-center gap-3`}>
-          <div className="relative flex-1 max-w-sm">
-            <Search className={`absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 ${tableHeaderText}`} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Поиск по ФИО или Email..."
-              className={`w-full pl-10 pr-10 py-2 ${modalInputBg} rounded-lg text-sm ${tableNameText} placeholder-${tableHeaderText} focus:outline-none focus:border-[#484f58] transition-colors`}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 ${modalBtnHover} rounded-full transition-colors`}
-              >
-                <X className={`h-3.5 w-3.5 ${tableHeaderText}`} />
-              </button>
-            )}
-          </div>
           <div className="relative" ref={roleRef}>
             <button
               onClick={() => setShowRoleDropdown(!showRoleDropdown)}
@@ -873,6 +910,24 @@ useEffect(() => {
                       </div>
                     )}
                   </div>
+                </div>
+                <div className="relative">
+                  <Search className={`absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 ${tableHeaderText}`} />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Поиск по ФИО..."
+                    className={`w-48 pl-10 pr-8 py-1.5 ${modalInputBg} rounded-lg text-sm ${tableNameText} placeholder-${tableHeaderText} focus:outline-none focus:border-[#484f58] transition-colors`}
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 ${modalBtnHover} rounded-full transition-colors`}
+                    >
+                      <X className={`h-3 w-3 ${tableHeaderText}`} />
+                    </button>
+                  )}
                 </div>
               </div>
 

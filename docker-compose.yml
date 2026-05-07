@@ -1,4 +1,37 @@
 services:
+  gitea-init:
+    image: curlimages/curl:latest
+    container_name: mtuci-gitea-init
+    depends_on:
+      gitea:
+        condition: service_healthy
+    environment:
+      - GITEA_URL=http://gitea:3000
+      - GITEA_ADMIN_USERNAME=gitea_admin
+      - GITEA_ADMIN_PASSWORD=admin12345
+    command:
+      - /bin/sh
+      - -c
+      - |
+        echo "Waiting for Gitea..."
+        sleep 10
+        echo "Creating API token..."
+        TOKEN=$$(curl -s -X POST "$${GITEA_URL}/api/v1/users/$${GITEA_ADMIN_USERNAME}/tokens" \
+          -u "$${GITEA_ADMIN_USERNAME}:$${GITEA_ADMIN_PASSWORD}" \
+          -H "Content-Type: application/json" \
+          -d '{"name":"mtuci-api-token"}' | grep -o '"sha1":"[^"]*' | cut -d'"' -f4)
+        if [ -n "$$TOKEN" ]; then
+          echo "Token created: $$TOKEN"
+          echo "GITEA_TOKEN=$$TOKEN" > /shared/gitea-token.env
+        else
+          echo "Token creation failed, trying to get existing..."
+          curl -s "$${GITEA_URL}/api/v1/users/$${GITEA_ADMIN_USERNAME}/tokens" \
+            -u "$${GITEA_ADMIN_USERNAME}:$${GITEA_ADMIN_PASSWORD}"
+        fi
+    volumes:
+      - gitea_token:/shared
+    restart: "no"
+
   api:
     build:
       context: ./backend
@@ -10,18 +43,44 @@ services:
         condition: service_healthy
       gitea:
         condition: service_healthy
+      gitea-init:
+        condition: service_completed_successfully
     environment:
       - PYTHONPATH=/app
       - PYTHONIOENCODING=utf-8
       - LANG=ru_RU.UTF-8
+      # Database
+      - POSTGRES_USER=mtuci
+      - POSTGRES_PASSWORD=mtuci
+      - POSTGRES_DB=mtuci_app
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      # JWT
+      - JWT_SECRET_KEY=dev-secret-key-63d3de08-f361-4b2c-be30-f097f498d8f7
+      - JWT_ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=120
+      # Gitea
+      - GITEA_URL=http://gitea:3000
+      - GITEA_ADMIN_USERNAME=gitea_admin
+      - GITEA_ADMIN_PASSWORD=admin12345
+      - GITEA_WEBHOOK_SECRET=dev-webhook-secret-2024
+      # Admin
+      - ADMIN_EMAIL=admin@mtuci.local
+      - ADMIN_PASSWORD=admin123
+      # Frontend
+      - FRONTEND_URL=http://localhost:3001
+      # SMTP (optional, for password reset)
+      - SMTP_HOST=
+      - SMTP_PORT=587
+      - SMTP_USER=
+      - SMTP_PASS=
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
       - ./backups:/backups
+      - gitea_token:/shared:ro
     working_dir: /app
-    env_file:
-      - ./backend/.env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
       interval: 10s
@@ -33,18 +92,20 @@ services:
     image: postgres:16
     container_name: mtuci-postgres
     restart: unless-stopped
+    environment:
+      - POSTGRES_USER=mtuci
+      - POSTGRES_PASSWORD=mtuci
+      - POSTGRES_DB=mtuci_app
     ports:
       - "5432:5432"
-    env_file:
-      - ./backend/.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U mtuci -d mtuci_app"]
       interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 15s
 
   gitea:
     image: gitea/gitea:1.22.1
@@ -53,16 +114,14 @@ services:
       - "3000:3000"
     volumes:
       - gitea_data:/data
-    env_file:
-      - ./backend/.env
     environment:
       # Автоматическая установка Gitea
       - GITEA__security__INSTALL_LOCK=true
       - GITEA__database__DB_TYPE=postgres
       - GITEA__database__HOST=postgres:5432
-      - GITEA__database__NAME=${POSTGRES_DB:-mtuci_app}
-      - GITEA__database__USER=${POSTGRES_USER:-mtuci}
-      - GITEA__database__PASSWD=${POSTGRES_PASSWORD:-mtuci}
+      - GITEA__database__NAME=mtuci_app
+      - GITEA__database__USER=mtuci
+      - GITEA__database__PASSWD=mtuci
       # Админ пользователь
       - GITEA__admin__DEFAULT_ADMIN_USERNAME=gitea_admin
       - GITEA__admin__DEFAULT_ADMIN_PASSWORD=admin12345
@@ -105,4 +164,5 @@ services:
 volumes:
   postgres_data:
   gitea_data:
+  gitea_token:
 

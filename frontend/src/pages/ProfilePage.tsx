@@ -2,10 +2,10 @@ import { useEffect, useState, useRef } from "react";
 import type { FormEvent } from "react";
 import { changeMyPassword, getMe, uploadAvatarWithMode } from "../api/authApi";
 import { getMyRepositories } from "../api/repositoriesApi";
-import { getMyCommits, getTotalUsers } from "../api/adminApi";
-import type { UserRead } from "../api/types";
+import { getMyCommits, getTotalUsers, getLogs } from "../api/adminApi";
+import type { UserRead, LogEntry } from "../api/types";
 import AvatarUploadModal from "../components/AvatarUploadModal";
-import { GitBranch, Users, GitCommit, Shield, Mail, User, Calendar } from "lucide-react";
+import { Mail } from "lucide-react";
 
 interface ProfilePageProps {
   isDarkTheme?: boolean;
@@ -14,43 +14,73 @@ interface ProfilePageProps {
 // Helper для форматирования последнего входа
 function formatLastLogin(dateStr: string | null): string {
   if (!dateStr) return "—";
-  
+
   const date = new Date(dateStr);
   const now = new Date();
-  
+
   // Compare dates in Moscow timezone
   const moscowDate = new Date(date.toLocaleString("en-US", { timeZone: "Europe/Moscow" }));
   const moscowNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Moscow" }));
   const isToday = moscowDate.getDate() === moscowNow.getDate() &&
                   moscowDate.getMonth() === moscowNow.getMonth() &&
                   moscowDate.getFullYear() === moscowNow.getFullYear();
-  
+
   const timeStr = date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
-  
+
   if (isToday) {
     return `Сегодня, ${timeStr}`;
   }
-  
+
   const dateStr_formatted = date.toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" });
   return `${dateStr_formatted}, ${timeStr}`;
 }
 
-// Цвета по ТЗ
-const colors = {
-  pageBg: "#111111",
-  cardBg: "#1e1e1e",
-  border: "#30363d",
-  accent: "#2563eb",
-  textPrimary: "#e6e6e6",
-  textSecondary: "#888888",
-};
+// Helper для форматирования времени действия
+function formatActionTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
 
-// Последние действия (демо)
-const recentActions = [
-  { id: 1, type: "login", text: "Вход в систему", time: "2 мин назад", color: "#22c55e" },
-  { id: 2, type: "change", text: "Изменен пароль", time: "3 час назад", color: "#2563eb" },
-  { id: 3, type: "critical", text: "Неудачная попытка входа", time: "1 день назад", color: "#ef4444" },
-];
+  if (diffMins < 1) return "Только что";
+  if (diffMins < 60) return `${diffMins} мин назад`;
+  if (diffHours < 24) return `${diffHours} час${diffHours > 1 ? (diffHours < 5 ? "а" : "ов") : ""} назад`;
+  if (diffDays === 1) return "Вчера";
+  return `${diffDays} дн${diffDays > 1 ? (diffDays < 5 ? "я" : "ей") : ""} назад`;
+}
+
+// Helper для получения описания действия из лога
+function getActionDescription(log: LogEntry): { title: string; subtitle: string } {
+  const sourceLabels: Record<string, string> = {
+    auth: "Авторизация",
+    repositories: "Репозитории",
+    webhooks: "Webhooks",
+    admin: "Админка",
+    gitea: "Gitea",
+    permissions: "Права доступа",
+    courses: "Курсы",
+  };
+
+  const title = log.message || sourceLabels[log.source] || log.source;
+  const subtitle = log.level === "ERROR" ? "Ошибка" : log.level === "WARNING" ? "Предупреждение" : "Успешно";
+
+  return { title, subtitle };
+}
+
+// Цвета по ТЗ
+const getColors = (isDarkTheme: boolean) => ({
+  pageBg: isDarkTheme ? "#111111" : "#f8f9fa",
+  cardBg: isDarkTheme ? "#141414" : "#ffffff",
+  border: isDarkTheme ? "#30363d" : "#e0e0e0",
+  accent: "#2563eb",
+  textPrimary: isDarkTheme ? "#e6e6e6" : "#1a1a1a",
+  textSecondary: isDarkTheme ? "#888888" : "#666666",
+  inputBg: isDarkTheme ? "#0a0a0a" : "#f5f5f5",
+  statsBg: isDarkTheme ? "#080808" : "#e8e8e8",
+  passwordInputBg: isDarkTheme ? "#050505" : "#e0e0e0",
+});
 
 export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
   const [me, setMe] = useState<UserRead | null>(null);
@@ -64,6 +94,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
   const [success, setSuccess] = useState<string | null>(null);
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [stats, setStats] = useState({ repositories: 0, commits: 0, users: 0 });
+  const [recentActions, setRecentActions] = useState<LogEntry[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -107,11 +138,12 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
     async function loadMe() {
       setLoading(true);
       try {
-        const [meData, repos, myCommits, totalUsers] = await Promise.all([
+        const [meData, repos, myCommits, totalUsers, logsData] = await Promise.all([
           getMe(),
           getMyRepositories().catch(() => []),
           getMyCommits().catch(() => ({ commits: 0, repositories: 0 })),
           getTotalUsers().catch(() => ({ total_users: 0 })),
+          getLogs({ date_from: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() }, { limit: 10, offset: 0 }).catch(() => ({ logs: [], total: 0 })),
         ]);
         if (!cancelled) {
           setMe(meData);
@@ -120,6 +152,9 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
             commits: myCommits.commits,
             users: totalUsers.total_users,
           });
+          // Filter logs for current user
+          const userLogs = logsData.logs.filter(log => log.user_id === meData.id).slice(0, 5);
+          setRecentActions(userLogs);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -158,23 +193,27 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
   }
 
   // Бейдж роли
-  const roleBadge = me?.role === "admin" 
+  const roleBadge = me?.role === "admin"
     ? { text: "Администратор", bg: "rgba(239, 68, 68, 0.2)", color: "#ef4444" }
     : me?.role === "teacher"
     ? { text: "Преподаватель", bg: "rgba(37, 99, 235, 0.2)", color: "#2563eb" }
+    : me?.role === "laborant"
+    ? { text: "Лаборант", bg: "rgba(168, 85, 247, 0.2)", color: "#a855f7" }
     : { text: "Студент", bg: "rgba(34, 197, 94, 0.2)", color: "#22c55e" };
+
+  const colors = getColors(isDarkTheme);
 
   return (
     <>
     <style>{`
       input::placeholder {
-        color: rgba(136, 136, 136, 0.4) !important;
+        color: ${isDarkTheme ? "rgba(136, 136, 136, 0.4)" : "rgba(102, 102, 102, 0.6)"} !important;
       }
       button[type="submit"]:hover:not(:disabled) {
         background-color: #1d4ed8 !important;
       }
       button[type="button"]:hover {
-        background-color: rgba(255, 255, 255, 0.05) !important;
+        background-color: ${isDarkTheme ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)"} !important;
       }
     `}</style>
     <div style={{ backgroundColor: colors.pageBg, minHeight: "100%", padding: "16px" }}>
@@ -197,10 +236,10 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
           {/* Левая колонка — обёртка */}
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {/* Блок Профиль */}
-            <div style={{  
-              backgroundColor: "#141414", 
-              border: `1px solid ${colors.border}`, 
-              borderRadius: "12px", 
+            <div style={{
+              backgroundColor: colors.cardBg,
+              border: `1px solid ${colors.border}`,
+              borderRadius: "12px",
               padding: "20px 20px 16px 20px"
             }}>
               {/* Шапка профиля — горизонтальный layout */}
@@ -305,7 +344,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
               {/* Репозитории */}
               <div style={{
-                backgroundColor: "#0a0a0a",
+                backgroundColor: colors.statsBg,
                 borderRadius: "6px",
                 padding: "16px 12px",
                 textAlign: "center"
@@ -320,7 +359,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
 
               {/* Пользователи — реальные данные */}
               <div style={{
-                backgroundColor: "#0a0a0a",
+                backgroundColor: colors.statsBg,
                 borderRadius: "6px",
                 padding: "16px 12px",
                 textAlign: "center"
@@ -333,9 +372,9 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 </div>
               </div>
 
-              {/* Коммиты — пока 0, нет API */}
+              {/* Коммиты */}
               <div style={{
-                backgroundColor: "#0a0a0a",
+                backgroundColor: colors.statsBg,
                 borderRadius: "6px",
                 padding: "16px 12px",
                 textAlign: "center"
@@ -352,10 +391,10 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
           </div>
 
           {/* Блок ИНФОРМАЦИЯ */}
-          <div style={{  
-            backgroundColor: "#141414", 
-            border: `1px solid ${colors.border}`, 
-            borderRadius: "12px", 
+          <div style={{
+            backgroundColor: colors.cardBg,
+            border: `1px solid ${colors.border}`,
+            borderRadius: "12px",
             padding: "16px 20px",
           }}>
             {/* Заголовок с 'Только чтение' */}
@@ -460,10 +499,10 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
           {/* Правая колонка — обёртка */}
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {/* Блок Смена пароля */}
-            <div style={{  
-              backgroundColor: "#141414", 
-              border: `1px solid ${colors.border}`, 
-              borderRadius: "12px", 
+            <div style={{
+              backgroundColor: colors.cardBg,
+              border: `1px solid ${colors.border}`,
+              borderRadius: "12px",
               padding: "20px"
             }}>
               <h3 style={{ color: colors.textPrimary, fontSize: "16px", fontWeight: "600", marginBottom: "16px" }}>
@@ -482,7 +521,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                   placeholder="Введите текущий пароль"
                   style={{
                     width: "100%",
-                    backgroundColor: "#0a0a0a",
+                    backgroundColor: colors.passwordInputBg,
                     border: `1px solid ${colors.border}`,
                     borderRadius: "6px",
                     padding: "10px 12px",
@@ -505,7 +544,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                   placeholder="Минимум 8 символов"
                   style={{
                     width: "100%",
-                    backgroundColor: "#0a0a0a",
+                    backgroundColor: colors.passwordInputBg,
                     border: `1px solid ${colors.border}`,
                     borderRadius: "6px",
                     padding: "10px 12px",
@@ -528,7 +567,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                   placeholder="Повторите новый пароль"
                   style={{
                     width: "100%",
-                    backgroundColor: "#0a0a0a",
+                    backgroundColor: colors.passwordInputBg,
                     border: `1px solid ${colors.border}`,
                     borderRadius: "6px",
                     padding: "10px 12px",
@@ -611,16 +650,16 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
           </div>
 
           {/* Блок Последние действия */}
-          <div style={{  
-            backgroundColor: "#141414", 
-            border: `1px solid ${colors.border}`, 
-            borderRadius: "12px", 
+          <div style={{
+            backgroundColor: colors.cardBg,
+            border: `1px solid ${colors.border}`,
+            borderRadius: "12px",
             padding: "16px 20px",
           }}>
             {/* Заголовок */}
-            <div style={{ 
-              display: "flex", 
-              justifyContent: "space-between", 
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
               alignItems: "center",
               marginBottom: "12px"
             }}>
@@ -634,49 +673,36 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
 
             {/* Список действий */}
             <div style={{ display: "flex", flexDirection: "column" }}>
-              {/* Действие 1 */}
-              <div style={{ 
-                display: "flex", 
-                justifyContent: "space-between", 
-                alignItems: "center",
-                padding: "8px 0",
-                borderBottom: `1px solid ${colors.border}`
-              }}>
-                <div>
-                  <div style={{ color: colors.textPrimary, fontSize: "11px" }}>Изменение пароля</div>
-                  <div style={{ color: colors.textSecondary, fontSize: "10px" }}>Успешно выполнено</div>
+              {recentActions.length === 0 ? (
+                <div style={{ color: colors.textSecondary, fontSize: "11px", padding: "8px 0" }}>
+                  Нет действий за последние 24 часа
                 </div>
-                <span style={{ color: colors.textSecondary, fontSize: "10px" }}>2 часа назад</span>
-              </div>
-
-              {/* Действие 2 */}
-              <div style={{ 
-                display: "flex", 
-                justifyContent: "space-between", 
-                alignItems: "center",
-                padding: "8px 0",
-                borderBottom: `1px solid ${colors.border}`
-              }}>
-                <div>
-                  <div style={{ color: colors.textPrimary, fontSize: "11px" }}>Вход в систему</div>
-                  <div style={{ color: colors.textSecondary, fontSize: "10px" }}>Chrome • Windows</div>
-                </div>
-                <span style={{ color: colors.textSecondary, fontSize: "10px" }}>5 часов назад</span>
-              </div>
-
-              {/* Действие 3 */}
-              <div style={{ 
-                display: "flex", 
-                justifyContent: "space-between", 
-                alignItems: "center",
-                padding: "8px 0 0 0"
-              }}>
-                <div>
-                  <div style={{ color: colors.textPrimary, fontSize: "11px" }}>Обновление профиля</div>
-                  <div style={{ color: colors.textSecondary, fontSize: "10px" }}>Изменён аватар</div>
-                </div>
-                <span style={{ color: colors.textSecondary, fontSize: "10px" }}>Вчера</span>
-              </div>
+              ) : (
+                recentActions.map((action, index) => {
+                  const { title, subtitle } = getActionDescription(action);
+                  const isLast = index === recentActions.length - 1;
+                  return (
+                    <div
+                      key={action.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "8px 0",
+                        borderBottom: isLast ? "none" : `1px solid ${colors.border}`
+                      }}
+                    >
+                      <div>
+                        <div style={{ color: colors.textPrimary, fontSize: "11px" }}>{title}</div>
+                        <div style={{ color: colors.textSecondary, fontSize: "10px" }}>{subtitle}</div>
+                      </div>
+                      <span style={{ color: colors.textSecondary, fontSize: "10px" }}>
+                        {formatActionTime(action.created_at)}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
           </div>

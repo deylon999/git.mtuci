@@ -23,8 +23,13 @@ ENV PYTHONPATH=/app
 ENV PYTHONIOENCODING=utf-8
 ENV LANG=ru_RU.UTF-8
 
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Expose port
 EXPOSE 8000
 
 # Run migrations and start app
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["sh", "-c", "alembic -c alembic.ini upgrade heads && uvicorn main:app --host 0.0.0.0 --port 8000"]
