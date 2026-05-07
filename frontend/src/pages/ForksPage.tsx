@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from "react";
 import { Download, Search, Eye, Pencil, X } from "lucide-react";
 import AdminPageHeader from "../components/AdminPageHeader";
@@ -97,6 +98,7 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
               <Search className={`h-3.5 w-3.5 ${c.muted}`} />
               <input value={query} onChange={(e) => setQuery(e.target.value)} className="w-full bg-transparent text-sm outline-none" placeholder="Поиск по репозиторию, студенту..." />
             </div>
+            <span>По 10 на странице</span>
           </div>
 
           {loading ? <p className="p-4 text-sm">Загрузка...</p> : error ? <p className="p-4 text-sm text-red-500">{error}</p> : (
