@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { login } from "../api/authApi";
+import { getTheme } from "../theme";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -30,21 +31,7 @@ export default function LoginPage() {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  // Theme-based colors - unified with project standard
-  const pageBgStyle = isDarkTheme ? { backgroundColor: "#111111" } : { backgroundColor: "#f9fafb" };
-  const cardBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-white border-gray-200";
-  const brandText = isDarkTheme ? "text-blue-400" : "text-blue-600";
-  const titleText = isDarkTheme ? "text-white" : "text-gray-900";
-  const subtitleText = isDarkTheme ? "text-gray-400" : "text-gray-600";
-  const labelText = isDarkTheme ? "text-gray-400" : "text-gray-700";
-  const inputBg = isDarkTheme ? "bg-[#111111] border-[#2d2d2d] text-white" : "bg-white border-gray-300 text-gray-900";
-  const inputFocus = "focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20";
-  const eyeIconColor = isDarkTheme ? "text-gray-500 hover:text-gray-400" : "text-gray-400 hover:text-gray-600";
-  const checkboxBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-gray-300";
-  const linkColor = isDarkTheme ? "text-blue-400 hover:text-blue-300" : "text-blue-600 hover:text-blue-800";
-  const errorBg = isDarkTheme ? "bg-red-500/10 border-red-500/30 text-red-400" : "bg-red-50 border-red-200 text-red-800";
-  const primaryBtn = "bg-blue-600 hover:bg-blue-700 text-white";
-  const secondaryBtn = isDarkTheme ? "bg-[#2d2d2d] border-[#3d3d3d] text-gray-300 hover:bg-[#3d3d3d]" : "bg-white border-gray-300 text-gray-800 hover:bg-gray-50";
+  const theme = getTheme(isDarkTheme);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -67,19 +54,20 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={pageBgStyle}>
-      <div className={`w-full max-w-md rounded-xl border p-8 shadow-md ${cardBg}`}>
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: theme.bg }}>
+      <div className="w-full max-w-md rounded-xl border p-8 shadow-md" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
         <div className="mb-6 text-center">
-          <div className={`text-xl font-semibold ${brandText}`}>GIT.MTUCI</div>
-          <h1 className={`mt-3 text-2xl font-semibold ${titleText}`}>Вход в систему</h1>
-          <p className={`mt-1 text-sm ${subtitleText}`}>Войдите, чтобы просматривать курсы и задания.</p>
+          <div className="text-xl font-semibold" style={{ color: theme.accent }}>GIT.MTUCI</div>
+          <h1 className="mt-3 text-2xl font-semibold" style={{ color: theme.text }}>Вход в систему</h1>
+          <p className="mt-1 text-sm" style={{ color: theme.text2 }}>Войдите, чтобы просматривать курсы и задания.</p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>Email</label>
+            <label className="mb-1 block text-sm font-medium transition-colors" style={{ color: theme.text2 }}>Email</label>
             <input
-              className={`w-full rounded-lg border px-3 py-2.5 outline-none transition ${inputBg} ${inputFocus}`}
+              className="w-full rounded-lg border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -89,10 +77,11 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>Password</label>
+            <label className="mb-1 block text-sm font-medium transition-colors" style={{ color: theme.text2 }}>Password</label>
             <div className="relative">
               <input
-                className={`w-full rounded-lg border px-3 py-2.5 pr-10 outline-none transition ${inputBg} ${inputFocus}`}
+                className="w-full rounded-lg border px-3 py-2.5 pr-10 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -102,7 +91,8 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors ${eyeIconColor}`}
+                className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
+                style={{ color: theme.text3 }}
                 tabIndex={-1}
               >
                 {showPassword ? (
@@ -113,18 +103,20 @@ export default function LoginPage() {
               </button>
             </div>
             <div className="mt-1 flex justify-between items-center">
-              <label className={`flex items-center gap-2 text-sm cursor-pointer ${subtitleText} transition-colors`}>
+              <label className="flex items-center gap-2 text-sm cursor-pointer transition-colors" style={{ color: theme.text2 }}>
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className={`rounded text-blue-600 focus:ring-blue-500 ${checkboxBorder}`}
+                  className="rounded text-blue-600 focus:ring-blue-500"
+                  style={{ borderColor: theme.border }}
                 />
                 Запомнить меня
               </label>
               <Link
                 to="/forgot-password"
-                className={`text-sm transition hover:underline ${linkColor}`}
+                className="text-sm transition hover:underline"
+                style={{ color: theme.accent }}
               >
                 Забыли пароль?
               </Link>
@@ -132,13 +124,14 @@ export default function LoginPage() {
           </div>
 
           {error ? (
-            <div className={`rounded-lg border p-3 text-sm ${errorBg} transition-colors`}>{error}</div>
+            <div className="rounded-lg border p-3 text-sm transition-colors" style={{ backgroundColor: `${theme.danger}10`, borderColor: `${theme.danger}30`, color: theme.danger }}>{error}</div>
           ) : null}
 
           <button
             type="submit"
             disabled={loading}
-            className={`w-full rounded-lg px-3 py-2.5 font-medium transition disabled:opacity-60 ${primaryBtn}`}
+            className="w-full rounded-lg px-3 py-2.5 font-medium transition disabled:opacity-60"
+            style={{ backgroundColor: theme.accent, color: '#fff' }}
           >
             {loading ? "Signing in..." : "Войти"}
           </button>
@@ -146,7 +139,8 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={() => navigate("/register")}
-            className={`w-full rounded-lg border px-3 py-2.5 transition ${secondaryBtn}`}
+            className="w-full rounded-lg border px-3 py-2.5 transition"
+            style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text }}
           >
             Регистрация
           </button>

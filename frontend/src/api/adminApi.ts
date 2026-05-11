@@ -109,6 +109,10 @@ export async function createBackup(): Promise<{ success: boolean; file: string; 
   return apiRequest<{ success: boolean; file: string; message: string }>("/admin/backups/create", { method: "POST" });
 }
 
+export async function restartAPI(): Promise<{ status?: string; message?: string }> {
+  return apiRequest<{ status?: string; message?: string }>("/admin/restart", { method: "POST" });
+}
+
 export interface FacultyCommitsStat {
   faculty: string;
   short_name: string;

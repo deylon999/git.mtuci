@@ -118,11 +118,11 @@ function Dropdown({ label, value, options, onChange, isDarkTheme = true }: {
 }) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const dropdownBtnBg = isDarkTheme ? "bg-[#1e1e1e] hover:bg-[#2d2d2d]" : "bg-white hover:bg-gray-100";
+  const dropdownBtnBg = isDarkTheme ? "bg-[#1e1e1e] hover:bg-[#2d2d2d]" : "bg-gray-100 hover:bg-gray-200";
   const dropdownBtnText = isDarkTheme ? "text-gray-300" : "text-gray-700";
   const dropdownIconColor = isDarkTheme ? "text-gray-500" : "text-gray-400";
-  const dropdownBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-white border-gray-200";
-  const dropdownItemHover = isDarkTheme ? "hover:bg-[#2d2d2d]" : "hover:bg-gray-100";
+  const dropdownBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-gray-100 border-gray-200";
+  const dropdownItemHover = isDarkTheme ? "hover:bg-[#2d2d2d]" : "hover:bg-gray-200";
   const dropdownItemText = isDarkTheme ? "text-gray-300" : "text-gray-700";
 
   return (
@@ -332,7 +332,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
 
   if (error) {
     return (
-      <div className={`h-full flex items-center justify-center ${isDarkTheme ? "bg-[#111111] text-white" : "bg-gray-50 text-gray-900"}`}>
+      <div className={`h-full flex items-center justify-center ${isDarkTheme ? "bg-[#0f0f10] text-white" : "bg-gray-50 text-gray-900"}`}>
         <div className="text-center">
           <p className="text-red-400 mb-2">Ошибка загрузки</p>
           <p className={isDarkTheme ? "text-[#8b949e]" : "text-gray-500"}>{error}</p>
@@ -347,19 +347,19 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
     );
   }
 
-  const pageBg = isDarkTheme ? "bg-[#111111] text-white" : "bg-slate-50 text-slate-900";
-  const cardBg = isDarkTheme ? "bg-[#161616] border-[#2d2d2d]" : "bg-white border-slate-200 shadow-sm";
-  const cardBgLight = isDarkTheme ? "bg-[#0d0d0d]" : "bg-slate-100";
+  const pageBg = isDarkTheme ? "bg-[#0f0f10] text-white" : "bg-slate-50 text-slate-900";
+  const cardBg = isDarkTheme ? "bg-[#0f0f10] border-[#2d2d2d]" : "bg-slate-100 border-slate-200 shadow-sm";
+  const cardBgLight = isDarkTheme ? "bg-[#0d0d0d]" : "bg-slate-200";
   const textPrimary = isDarkTheme ? "text-white" : "text-slate-900";
   const textSecondary = isDarkTheme ? "text-gray-500" : "text-slate-500";
   const textTertiary = isDarkTheme ? "text-[#8b949e]" : "text-slate-400";
-  const inputBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d]" : "bg-slate-100 border-slate-200";
+  const inputBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d]" : "bg-slate-200 border-slate-300";
   const inputText = isDarkTheme ? "text-[#ccd0d4]" : "text-slate-900";
   const inputPlaceholder = isDarkTheme ? "placeholder-[#6e7681]" : "placeholder-slate-400";
   const tableHeaderText = isDarkTheme ? "text-[#6e7681]" : "text-slate-400";
-  const tableRowHover = isDarkTheme ? "hover:bg-[#1f2937]" : "hover:bg-slate-50";
+  const tableRowHover = isDarkTheme ? "hover:bg-[#1f2937]" : "hover:bg-slate-100";
   const tableBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-slate-200";
-  const btnBg = isDarkTheme ? "bg-[#161616] border-[#30363d] hover:bg-[#1f2937]" : "bg-white border-slate-200 hover:bg-slate-50";
+  const btnBg = isDarkTheme ? "bg-[#0f0f10] border-[#30363d] hover:bg-[#1f2937]" : "bg-slate-100 border-slate-200 hover:bg-slate-200";
   const btnText = isDarkTheme ? "text-[#8b949e]" : "text-slate-500";
   const btnTextHover = isDarkTheme ? "hover:text-[#ccd0d4]" : "hover:text-slate-900";
 

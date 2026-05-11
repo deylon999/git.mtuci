@@ -15,8 +15,9 @@ import {
   BarChart3,
 } from "lucide-react";
 import { getMe } from "../api/authApi";
-import { getUserStats } from "../api/adminApi";
+import { getUserStats, getSystemMetrics, getServiceStatus } from "../api/adminApi";
 import { usePendingCount } from "../context/PendingCountContext";
+import { getTheme } from "../theme";
 import type { UserRole } from "../api/types";
 
 interface MenuItem {
@@ -64,7 +65,7 @@ const adminMenuSections: MenuSection[] = [
     title: "СИСТЕМА",
     items: [
       { path: "/logs", label: "Логи", icon: FileCode },
-      { path: "/admin/monitoring", label: "Мониторинг", icon: Clock, badge: { text: "!", variant: "orange" } },
+      { path: "/admin/monitoring", label: "Мониторинг", icon: Clock },
       { path: "/admin/settings", label: "Настройки", icon: Settings },
     ],
   },
@@ -99,6 +100,8 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   const location = useLocation();
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const { pendingCount, setPendingCount } = usePendingCount();
+  const [hasSystemIssues, setHasSystemIssues] = useState(false);
+  const theme = getTheme(isDarkTheme);
 
   useEffect(() => {
     console.log("[Sidebar] useEffect triggered");
@@ -142,6 +145,40 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
     };
   }, [userRole, setPendingCount]);
 
+  // Check for system issues (CPU/RAM/Disk > 80% or services offline)
+  useEffect(() => {
+    if (userRole !== "admin") return;
+    let cancelled = false;
+    async function checkSystemHealth() {
+      try {
+        const [metrics, status] = await Promise.all([
+          getSystemMetrics().catch(() => null),
+          getServiceStatus().catch(() => null),
+        ]);
+
+        if (!cancelled) {
+          const hasIssues =
+            (metrics?.cpu_percent ?? 0) > 80 ||
+            (metrics?.memory_percent ?? 0) > 80 ||
+            (metrics?.disk_percent ?? 0) > 80 ||
+            !status?.api ||
+            !status?.db ||
+            !status?.git;
+          setHasSystemIssues(hasIssues);
+        }
+      } catch (e) {
+        console.error("[Sidebar] Failed to check system health:", e);
+      }
+    }
+    checkSystemHealth();
+    // Check every 30 seconds
+    const interval = setInterval(checkSystemHealth, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [userRole]);
+
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(`${path}/`);
 
@@ -149,8 +186,8 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   if (userRole === null) {
     console.log("[Sidebar] Role is null, showing loading state");
     return (
-      <aside className={`w-[260px] flex-shrink-0 h-full border-r ${isDarkTheme ? "border-[#2d2d2d] bg-[#111111]" : "border-gray-200 bg-white"}`}>
-        <div className={`p-4 text-sm ${isDarkTheme ? "text-[#8b949e]" : "text-gray-500"}`}>Loading...</div>
+      <aside className={`w-[260px] flex-shrink-0 h-full border-r`} style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
+        <div className={`p-4 text-sm`} style={{ color: theme.text2 }}>Loading...</div>
       </aside>
     );
   }
@@ -158,24 +195,12 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   const menuSections = userRole === "admin" ? adminMenuSections : studentMenuSections;
   console.log("[Sidebar] Rendering menu for role:", userRole, "sections count:", menuSections.length);
 
-  // Theme-based colors
-  const sidebarBg = isDarkTheme ? "bg-[#111111]" : "bg-white";
-  const sidebarBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-gray-200";
-  const sectionTitleColor = isDarkTheme ? "text-[#484f58]" : "text-gray-400";
-  const itemTextColor = isDarkTheme ? "text-[#8b949e]" : "text-gray-600";
-  const itemHoverBg = isDarkTheme ? "hover:bg-[#1a1a1a]" : "hover:bg-gray-100";
-  const itemHoverText = isDarkTheme ? "hover:text-[#ccd0d4]" : "hover:text-gray-900";
-  const itemIconColor = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  const activeBg = isDarkTheme ? "bg-[#1f2937]" : "bg-blue-50";
-  const activeText = isDarkTheme ? "text-white" : "text-blue-700";
-  const activeIconColor = isDarkTheme ? "text-white" : "text-blue-600";
-
   return (
-    <aside className={`w-[260px] flex-shrink-0 h-full border-r ${sidebarBorder} ${sidebarBg}`}>
+    <aside className={`w-[260px] flex-shrink-0 h-full border-r`} style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
       <nav className="p-4">
         {menuSections.map((section) => (
           <div key={section.title} className="mb-6">
-            <h3 className={`text-xs font-semibold uppercase tracking-wider mb-2 px-3 ${sectionTitleColor}`}>
+            <h3 className={`text-xs font-semibold uppercase tracking-wider mb-2 px-3`} style={{ color: theme.text2 }}>
               {section.title}
             </h3>
             <ul className="space-y-1">
@@ -188,16 +213,16 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
                       to={item.path}
                       className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                         active
-                          ? `${activeBg} ${activeText} border-l-2 border-blue-500`
-                          : `${itemTextColor} ${itemHoverBg} ${itemHoverText}`
+                          ? `border-l-2 border-blue-500`
+                          : ``
                       }`}
+                      style={{
+                        backgroundColor: active ? theme.hoverBg : 'transparent',
+                        color: active ? theme.accent : theme.text2
+                      }}
                     >
                       <div className="flex items-center gap-3">
-                        <Icon className={`h-5 w-5 ${
-                          active 
-                            ? activeIconColor
-                            : itemIconColor
-                        }`} />
+                        <Icon className={`h-5 w-5`} style={{ color: active ? theme.accent : theme.text3 }} />
                         <span>{item.label}</span>
                       </div>
                       {/* Pending users badge for "Все пользователи" */}
@@ -219,7 +244,7 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
                           {item.badge.text}
                         </span>
                       )}
-                      {item.label === "Мониторинг" && !item.badge && (
+                      {item.label === "Мониторинг" && hasSystemIssues && (
                         <AlertCircle className="h-4 w-4 text-orange-500" />
                       )}
                     </Link>

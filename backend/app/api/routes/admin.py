@@ -5,6 +5,9 @@ import asyncio
 import base64
 import csv
 import io
+import subprocess
+import re
+import time
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
@@ -13,7 +16,7 @@ import httpx
 import psutil
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Query, Request, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import func, select, and_, or_
+from sqlalchemy import func, select, and_, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
@@ -41,19 +44,21 @@ from app.services.logging_service import log_event_background
 
 
 class DatabaseMetrics(BaseModel):
-    connections_active: int
+    connections_active: int | None = None
     connections_max: int
-    size_mb: float
-    tables_count: int
-    queries_per_sec: float
-    avg_query_ms: float
-    cache_hit_rate: float
-    deadlocks: int
-    last_migration: str
+    size_mb: float | None = None
+    tables_count: int | None = None
+    queries_per_sec: float | None = None
+    avg_query_ms: float | None = None
+    cache_hit_rate: float | None = None
+    deadlocks: int | None = None
+    last_migration: str | None = None
+    top_tables: list[dict] | None = None
 
 
 class SystemMetrics(BaseModel):
     cpu_percent: float
+    cpu_model: str
     memory_percent: float
     memory_used_gb: float
     memory_total_gb: float
@@ -63,12 +68,12 @@ class SystemMetrics(BaseModel):
     network_upload_mbps: float
     network_download_mbps: float
     load_avg: list[float]
-    requests_total_hour: int
-    requests_errors_hour: int
-    avg_response_ms: float
-    p95_response_ms: float
-    error_rate: float
-    rps: float
+    requests_total_hour: int | None = None
+    requests_errors_hour: int | None = None
+    avg_response_ms: float | None = None
+    p95_response_ms: float | None = None
+    error_rate: float | None = None
+    rps: float | None = None
     database: DatabaseMetrics
 
 
@@ -88,6 +93,7 @@ class ServiceStatus(BaseModel):
 class BackupInfo(BaseModel):
     last_backup: str | None
     next_backup: str | None
+    last_backup_size_mb: float | None
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -401,6 +407,25 @@ async def admin_system_metrics(
 
     # CPU
     cpu_percent = psutil.cpu_percent(interval=1)
+    # Get CPU model name
+    cpu_model = "Unknown"
+    try:
+        cpu_info = psutil.cpu_freq()
+        if hasattr(psutil, "cpu_count"):
+            cpu_count = psutil.cpu_count(logical=False) or psutil.cpu_count()
+        else:
+            cpu_count = 1
+        # Try to get brand from cpuinfo if available (Linux)
+        if os.path.exists("/proc/cpuinfo"):
+            with open("/proc/cpuinfo", "r") as f:
+                for line in f:
+                    if "model name" in line:
+                        cpu_model = line.split(":")[1].strip()
+                        break
+        else:
+            cpu_model = f"{cpu_count} cores @ {cpu_info.max:.0f}MHz" if cpu_info else f"{cpu_count} cores"
+    except Exception:
+        pass
 
     # Memory
     mem = psutil.virtual_memory()
@@ -421,33 +446,115 @@ async def admin_system_metrics(
 
     # Load average (Linux only, fallback for Windows)
     try:
-        load_avg = list(psutil.getloadavg())
+        load_avg = [round(x, 2) for x in psutil.getloadavg()]
     except (AttributeError, OSError):
-        load_avg = [cpu_percent / 100, cpu_percent / 100, cpu_percent / 100]
+        load_avg = [round(cpu_percent / 100, 2), round(cpu_percent / 100, 2), round(cpu_percent / 100, 2)]
 
-    # HTTP request metrics (simplified for now)
-    requests_total_hour = 4821  # Would be from actual metrics collection
-    requests_errors_hour = 34
-    avg_response_ms = 48.0
-    p95_response_ms = 142.0
-    error_rate = 0.7
-    rps = 12.4
+    # HTTP request metrics from middleware
+    from app.core.metrics_middleware import get_http_metrics
+    http_metrics = get_http_metrics()
+    requests_total_hour = http_metrics["requests_total_hour"]
+    requests_errors_hour = http_metrics["requests_errors_hour"]
+    avg_response_ms = http_metrics["avg_response_ms"]
+    p95_response_ms = http_metrics["p95_response_ms"]
+    error_rate = http_metrics["error_rate"]
+    rps = http_metrics["rps"]
 
-    # Database metrics
+    # Database metrics from actual queries
+    try:
+        # Active connections
+        result = await session.execute(text("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()"))
+        connections_active = result.scalar()
+
+        # Database size in MB
+        result = await session.execute(text("SELECT pg_database_size(current_database()) / 1024 / 1024"))
+        size_mb = round(result.scalar(), 1)
+
+        # Tables count
+        result = await session.execute(text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"))
+        tables_count = result.scalar()
+
+        # Last migration from alembic_version
+        result = await session.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num DESC LIMIT 1"))
+        last_migration = result.scalar()
+
+        # Cache hit rate from pg_stat_database
+        result = await session.execute(text("""
+            SELECT
+                round(sum(blks_hit)::numeric / nullif(sum(blks_hit + blks_read), 0) * 100, 2)
+            FROM pg_stat_database
+            WHERE datname = current_database()
+        """))
+        cache_hit_rate = result.scalar()
+
+        # Deadlocks from pg_stat_database
+        result = await session.execute(text("""
+            SELECT deadlocks
+            FROM pg_stat_database
+            WHERE datname = current_database()
+        """))
+        deadlocks = result.scalar()
+
+        # Top tables by size
+        result = await session.execute(text("""
+            SELECT
+                schemaname,
+                tablename,
+                pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size,
+                pg_total_relation_size(schemaname||'.'||tablename) as size_bytes
+            FROM pg_tables
+            WHERE schemaname = 'public'
+            ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
+            LIMIT 5
+        """))
+        top_tables = [{"name": row.tablename, "size": row.size, "size_mb": round(row.size_bytes / 1024 / 1024, 1)} for row in result]
+
+        # Queries per second and avg query time from pg_stat_statements
+        try:
+            result = await session.execute(text("""
+                SELECT
+                    sum(calls) as total_calls,
+                    sum(total_exec_time) as total_time,
+                    avg(mean_exec_time) as avg_time
+                FROM pg_stat_statements
+            """))
+            row = result.fetchone()
+            if row and row.total_calls:
+                queries_per_sec = round(row.total_calls / 3600, 1)  # за час
+                avg_query_ms = round(row.avg_time, 1)
+            else:
+                queries_per_sec = 0
+                avg_query_ms = 0
+        except:
+            queries_per_sec = None
+            avg_query_ms = None
+    except:
+        connections_active = None
+        size_mb = None
+        tables_count = None
+        last_migration = None
+        cache_hit_rate = None
+        deadlocks = None
+        top_tables = None
+        queries_per_sec = None
+        avg_query_ms = None
+
     database = DatabaseMetrics(
-        connections_active=14,
+        connections_active=connections_active,
         connections_max=100,
-        size_mb=284.0,
-        tables_count=24,
-        queries_per_sec=8.2,
-        avg_query_ms=12.0,
-        cache_hit_rate=99.1,
-        deadlocks=0,
-        last_migration="0022_add_activity_log",
+        size_mb=size_mb,
+        tables_count=tables_count,
+        queries_per_sec=queries_per_sec,
+        avg_query_ms=avg_query_ms,
+        cache_hit_rate=cache_hit_rate,
+        deadlocks=deadlocks,
+        last_migration=str(last_migration) if last_migration else None,
+        top_tables=top_tables,
     )
 
     return SystemMetrics(
         cpu_percent=cpu_percent,
+        cpu_model=cpu_model,
         memory_percent=memory_percent,
         memory_used_gb=memory_used_gb,
         memory_total_gb=memory_total_gb,
@@ -483,14 +590,15 @@ async def admin_service_status(
         response = httpx.get("http://gitea:3000/api/v1/version", timeout=2)
         if response.status_code == 200:
             git_status = True
-            git_version = "1.21.4"  # Would parse from response
-            git_uptime = "7д 3ч"
+            git_version = response.text.strip('"')
+            # Cannot get uptime from inside container, set to None
+            git_uptime = None
             # Try to get repo count
             try:
                 repo_response = httpx.get("http://gitea:3000/api/v1/user/repos", timeout=2, params={"limit": 1})
                 if repo_response.status_code == 200:
-                    # Get total count from headers or estimate
-                    git_repos_count = 342
+                    repos = repo_response.json()
+                    git_repos_count = len(repos) if isinstance(repos, list) else 0
             except:
                 pass
     except:
@@ -498,14 +606,41 @@ async def admin_service_status(
 
     # API is online since we got here
     api_status = True
-    api_uptime = "2д 14ч"
-    api_version = "0.1.0"
+    api_version = "1.0.0"
+    # Calculate API uptime using process uptime
+    try:
+        uptime_seconds = time.time() - psutil.Process().create_time()
+        days = int(uptime_seconds // 86400)
+        hours = int((uptime_seconds % 86400) // 3600)
+        api_uptime = f"{days}д {hours}ч"
+    except:
+        api_uptime = None
 
     # DB check via simple query would be done in get_session
     # If this endpoint works, DB is up
     db_status = True
-    db_uptime = "5д 8ч"
-    db_version = "15.2"
+    # Get PostgreSQL uptime from pg_stat_activity
+    try:
+        result = await session.execute(text("SELECT pg_postmaster_start_time()"))
+        start_time = result.scalar()
+        if start_time:
+            uptime = datetime.now(timezone.utc) - start_time.replace(tzinfo=timezone.utc)
+            days = uptime.days
+            hours = uptime.seconds // 3600
+            db_uptime = f"{days}д {hours}ч"
+    except:
+        db_uptime = None
+    # Get PostgreSQL version
+    try:
+        result = await session.execute(text("SELECT version()"))
+        version_str = result.scalar()
+        if version_str:
+            # Extract version number from "PostgreSQL 15.2 ..."
+            match = re.search(r"PostgreSQL (\d+\.\d+)", version_str)
+            if match:
+                db_version = match.group(1)
+    except:
+        db_version = None
 
     return ServiceStatus(
         git=git_status,
@@ -555,10 +690,11 @@ async def admin_backups(
     # Check for backup files in backups directory
     backup_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "backups")
     last_backup = None
+    last_backup_size_mb = None
 
     if os.path.exists(backup_dir):
         try:
-            files = [f for f in os.listdir(backup_dir) if f.endswith(".sql") or f.endswith(".dump")]
+            files = [f for f in os.listdir(backup_dir) if f.endswith(".sql") or f.endswith(".sql.gz") or f.endswith(".dump")]
             if files:
                 # Get most recent file
                 files_with_time = [
@@ -567,16 +703,24 @@ async def admin_backups(
                 ]
                 files_with_time.sort(key=lambda x: x[1], reverse=True)
                 last_backup_time = datetime.fromtimestamp(files_with_time[0][1])
-                last_backup = last_backup_time.strftime("%d.%m.%Y %H:%M")
+                # Convert to Moscow time (UTC+3)
+                last_backup_time_msk = last_backup_time.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=3)))
+                last_backup = last_backup_time_msk.strftime("%d.%m.%Y %H:%M")
+                # Get file size in MB
+                file_size_bytes = os.path.getsize(os.path.join(backup_dir, files_with_time[0][0]))
+                last_backup_size_mb = round(file_size_bytes / (1024 * 1024), 1)
         except Exception:
             pass
 
-    # Next backup is scheduled for 03:00 tomorrow if backups exist
-    next_backup = "03:00"
-    if last_backup:
-        next_backup = f"Завтра 03:00"
+    # Next backup is scheduled for 03:00 MSK daily
+    now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=3)))
+    next_backup_time = now.replace(hour=3, minute=0, second=0, microsecond=0)
+    if now >= next_backup_time:
+        # If it's already past 03:00 today, schedule for tomorrow
+        next_backup_time = next_backup_time + timedelta(days=1)
+    next_backup = next_backup_time.strftime("%d.%m.%Y %H:%M")
 
-    return BackupInfo(last_backup=last_backup, next_backup=next_backup)
+    return BackupInfo(last_backup=last_backup, next_backup=next_backup, last_backup_size_mb=last_backup_size_mb)
 
 
 @router.post("/backups/create")
@@ -585,9 +729,6 @@ async def admin_create_backup(
     current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-
-    import subprocess
-    from datetime import datetime
 
     # Use backups directory in project root for local development
     backup_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "backups")
@@ -626,7 +767,10 @@ async def admin_create_backup(
         )
 
         if result.returncode == 0:
-            return {"success": True, "file": f"backup_{timestamp}.sql", "message": "Backup created successfully"}
+            # Compress the backup
+            subprocess.run(["gzip", backup_file], check=True)
+            backup_file_gz = f"{backup_file}.gz"
+            return {"success": True, "file": f"backup_{timestamp}.sql.gz", "message": "Backup created successfully"}
         else:
             raise HTTPException(status_code=500, detail=f"Backup failed: {result.stderr}")
 

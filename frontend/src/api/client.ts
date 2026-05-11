@@ -60,8 +60,13 @@ export async function apiRequest<T>(
   if (!res.ok) {
     let detail = "";
     try {
-      const data = await parseJson<{ detail?: string }>(res.clone());
-      detail = data?.detail ?? "";
+      const data = await parseJson<{ detail?: string | Array<{ loc: string[]; msg: string; type: string }> }>(res.clone());
+      if (Array.isArray(data?.detail)) {
+        // FastAPI validation error format
+        detail = data.detail.map(e => `${e.loc.join('.')}: ${e.msg}`).join(', ');
+      } else {
+        detail = data?.detail ?? "";
+      }
     } catch {
       // ignore parse errors
     }

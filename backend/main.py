@@ -23,6 +23,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.core.logging_middleware import LoggingMiddleware
+from app.core.metrics_middleware import MetricsMiddleware
 from app.models.user import User, UserRole
 from app.models.assignment_file import AssignmentFile  # Import BEFORE Assignment
 from app.models.assignment import Assignment
@@ -51,6 +52,9 @@ app.add_middleware(
 
 # Add logging middleware for automatic request logging
 app.add_middleware(LoggingMiddleware)
+
+# Add metrics middleware for HTTP request statistics
+app.add_middleware(MetricsMiddleware)
 
 # Original FastAPI init continues belowtitle="MTUCI Lab Submission API", version="0.1.0")
 

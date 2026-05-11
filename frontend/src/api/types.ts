@@ -2,6 +2,17 @@ export type UserRole = "student" | "teacher" | "admin" | "laborant";
 
 export type TokenType = "bearer";
 
+export type NotificationType = "info" | "success" | "warning" | "error";
+
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  read: boolean;
+  created_at: string;
+}
+
 export interface TokenResponse {
   access_token: string;
   token_type: TokenType | string;

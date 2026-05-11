@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getMe } from "../api/authApi";
 import { getCourses } from "../api/coursesApi";
+import { getTheme } from "../theme";
 import type { UserRead, Course as CourseType } from "../api/types";
 
 interface Activity {
@@ -69,9 +70,9 @@ function getActivityIcon(type: Activity["type"]) {
   }
 }
 
-function StarRating({ rating, isDarkTheme }: { rating: number; isDarkTheme: boolean }) {
+function StarRating({ rating, theme }: { rating: number; theme: any }) {
   return (
-    <span className={isDarkTheme ? "text-yellow-400" : "text-yellow-500"}>
+    <span style={{ color: theme.warning }}>
       {Array.from({ length: 5 }).map((_, i) =>
         i < rating ? "⭐" : "☆"
       )}
@@ -90,14 +91,14 @@ function getUrgencyLabel(urgency: Deadline["urgency"]) {
   }
 }
 
-function getUrgencyColor(urgency: Deadline["urgency"], isDarkTheme: boolean) {
+function getUrgencyColor(urgency: Deadline["urgency"], theme: any) {
   switch (urgency) {
     case "today":
-      return isDarkTheme ? "text-red-400 font-medium" : "text-red-600 font-medium";
+      return theme.danger;
     case "tomorrow":
-      return isDarkTheme ? "text-orange-400" : "text-orange-600";
+      return theme.warning;
     case "later":
-      return isDarkTheme ? "text-[#8b949e]" : "text-gray-600";
+      return theme.text2;
   }
 }
 
@@ -112,20 +113,7 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
   const [courses, setCourses] = useState<CourseType[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
 
-  // Theme-based colors
-  const pageBgStyle = isDarkTheme ? { backgroundColor: "#0f0f10" } : { backgroundColor: "#f8fafc" };
-  const cardBg = isDarkTheme ? "bg-[#161616] border-[#2d2d2d]" : "bg-white border-[#d4cfe6]";
-  const cardBgAlt = isDarkTheme ? "bg-[#0d0d0d]" : "bg-[#faf9fd]";
-  const titleText = isDarkTheme ? "text-[#ccd0d4]" : "text-gray-900";
-  const bodyText = isDarkTheme ? "text-[#8b949e]" : "text-gray-700";
-  const mutedText = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  const selectBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d] text-[#ccd0d4]" : "bg-white border-gray-300 text-gray-700";
-  const progressBg = isDarkTheme ? "bg-[#30363d]" : "bg-gray-200";
-  const progressFill = "bg-[#372579]";
-  const ratingText = "text-[#372579]";
-  const starColor = isDarkTheme ? "text-yellow-400" : "text-yellow-500";
-  const deadlineBorder = isDarkTheme ? "border-[#30363d]" : "border-gray-200";
-  const hoverBorder = isDarkTheme ? "hover:border-[#484f58]" : "hover:border-[#d4cfe6]";
+  const theme = getTheme(isDarkTheme);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,10 +142,10 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
   const weeklyProgress = 75;
 
   return (
-    <div className="min-h-screen pb-20" style={pageBgStyle}>
+    <div className="min-h-screen pb-20" style={{ backgroundColor: theme.bg }}>
       {/* Приветствие */}
       <div className="mb-6">
-        <h1 className={`text-2xl font-semibold ${titleText}`}>
+        <h1 className="text-2xl font-semibold" style={{ color: theme.text }}>
           👋 Привет, {loading ? "..." : user?.full_name || user?.email || "Иван"}!
         </h1>
       </div>
@@ -167,15 +155,16 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
         {/* Левая колонка (основной контент) */}
         <div className="space-y-6 lg:col-span-2">
           {/* Активность за неделю */}
-          <div className={`rounded-xl border p-5 shadow-sm ${cardBg} transition-colors`}>
+          <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <h2 className={`text-lg font-semibold ${titleText} transition-colors`}>📊 Активность за неделю</h2>
+                <h2 className="text-lg font-semibold transition-colors" style={{ color: theme.text }}>📊 Активность за неделю</h2>
               </div>
               <select
                 value={selectedCourse}
                 onChange={(e) => setSelectedCourse(e.target.value)}
-                className={`rounded-md border px-3 py-1.5 text-sm outline-none focus:border-[#372579] focus:ring-1 focus:ring-[#372579] ${selectBg} transition-colors`}
+                className="rounded-md border px-3 py-1.5 text-sm outline-none focus:border-[#372579] focus:ring-1 focus:ring-[#372579] transition-colors"
+                style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
               >
                 <option value="all">Все курсы ▼</option>
                 {coursesLoading ? (
@@ -194,22 +183,22 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
 
             {/* Прогресс бар */}
             <div className="mb-2">
-              <div className={`h-3 w-full rounded-full ${progressBg} transition-colors`}>
+              <div className="h-3 w-full rounded-full transition-colors" style={{ backgroundColor: theme.bg4 }}>
                 <div
-                  className={`h-3 rounded-full ${progressFill} transition-all`}
-                  style={{ width: `${weeklyProgress}%` }}
+                  className="h-3 rounded-full transition-all"
+                  style={{ backgroundColor: theme.accent, width: `${weeklyProgress}%` }}
                 />
               </div>
             </div>
-            <div className={`text-sm font-medium ${bodyText} transition-colors`}>{weeklyProgress}%</div>
+            <div className="text-sm font-medium transition-colors" style={{ color: theme.text }}>{weeklyProgress}%</div>
           </div>
 
           {/* Последние действия */}
-          <div className={`rounded-xl border p-5 shadow-sm ${cardBg} transition-colors`}>
-            <h2 className={`mb-3 text-lg font-semibold ${titleText} transition-colors`}>🔥 Последние действия</h2>
+          <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
+            <h2 className="mb-3 text-lg font-semibold transition-colors" style={{ color: theme.text }}>🔥 Последние действия</h2>
             <ul className="space-y-2">
               {mockActivities.map((activity) => (
-                <li key={activity.id} className={`flex items-start gap-2 text-sm ${bodyText} transition-colors`}>
+                <li key={activity.id} className="flex items-start gap-2 text-sm transition-colors" style={{ color: theme.text2 }}>
                   <span>{getActivityIcon(activity.type)}</span>
                   <span>{activity.text}</span>
                 </li>
@@ -218,21 +207,22 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
           </div>
 
           {/* Активные курсы */}
-          <div className={`rounded-xl border p-5 shadow-sm ${cardBg} transition-colors`}>
-            <h2 className={`mb-4 text-lg font-semibold ${titleText} transition-colors`}>📚 Активные курсы</h2>
+          <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
+            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>📚 Активные курсы</h2>
             {coursesLoading ? (
-              <div className={`text-sm ${mutedText} transition-colors`}>Загрузка курсов...</div>
+              <div className="text-sm transition-colors" style={{ color: theme.text2 }}>Загрузка курсов...</div>
             ) : courses.length === 0 ? (
-              <div className={`text-sm ${mutedText} transition-colors`}>Нет доступных курсов</div>
+              <div className="text-sm transition-colors" style={{ color: theme.text2 }}>Нет доступных курсов</div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {courses.map((course) => (
                   <div
                     key={course.id}
-                    className={`rounded-lg border p-4 transition hover:shadow-md ${cardBgAlt} ${isDarkTheme ? "border-[#30363d]" : "border-gray-200"} ${hoverBorder} transition-colors`}
+                    className="rounded-lg border p-4 transition hover:shadow-md transition-colors"
+                    style={{ backgroundColor: theme.bg2, borderColor: theme.border }}
                   >
-                    <div className={`mb-2 text-sm font-medium ${titleText} transition-colors`}>{course.title}</div>
-                    <div className={`text-xs ${mutedText} transition-colors`}>{course.description || "Без описания"}</div>
+                    <div className="mb-2 text-sm font-medium transition-colors" style={{ color: theme.text }}>{course.title}</div>
+                    <div className="text-xs transition-colors" style={{ color: theme.text2 }}>{course.description || "Без описания"}</div>
                   </div>
                 ))}
               </div>
@@ -243,40 +233,40 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
         {/* Правая колонка (сайдбар) */}
         <div className="space-y-6">
           {/* Дедлайны */}
-          <div className={`rounded-xl border p-5 shadow-sm ${cardBg} transition-colors`}>
-            <h2 className={`mb-4 text-lg font-semibold ${titleText} transition-colors`}>📅 Дедлайны</h2>
+          <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
+            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>📅 Дедлайны</h2>
             <ul className="space-y-3">
               {mockDeadlines.map((deadline) => (
-                <li key={deadline.id} className={`border-l-2 pl-3 ${deadlineBorder} transition-colors`}>
-                  <div className={`text-xs ${getUrgencyColor(deadline.urgency, isDarkTheme)} transition-colors`}>
+                <li key={deadline.id} className="border-l-2 pl-3 transition-colors" style={{ borderColor: theme.border }}>
+                  <div className="text-xs transition-colors" style={{ color: getUrgencyColor(deadline.urgency, theme) }}>
                     {getUrgencyLabel(deadline.urgency)} {deadline.time}
                   </div>
-                  <div className={`text-sm ${bodyText} transition-colors`}>{deadline.title}</div>
+                  <div className="text-sm transition-colors" style={{ color: theme.text2 }}>{deadline.title}</div>
                 </li>
               ))}
             </ul>
           </div>
 
           {/* Рейтинг */}
-          <div className={`rounded-xl border p-5 shadow-sm ${cardBg} transition-colors`}>
-            <h2 className={`mb-4 text-lg font-semibold ${titleText} transition-colors`}>🏆 Рейтинг</h2>
+          <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
+            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>🏆 Рейтинг</h2>
             <ul className="space-y-2">
               {mockRatings.map((student, index) => (
                 <li key={student.id} className="flex items-center justify-between text-sm">
-                  <span className={bodyText}>
-                    <span className={`mr-2 font-medium ${mutedText}`}>{index + 1}.</span>
+                  <span style={{ color: theme.text2 }}>
+                    <span className="mr-2 font-medium" style={{ color: theme.text3 }}>{index + 1}.</span>
                     {student.name}
                   </span>
-                  <span className={`font-medium ${ratingText}`}>{student.points}</span>
+                  <span className="font-medium" style={{ color: theme.accent }}>{student.points}</span>
                 </li>
               ))}
             </ul>
           </div>
 
           {/* Советы */}
-          <div className={`rounded-xl border p-5 shadow-sm ${cardBgAlt} ${isDarkTheme ? "border-[#2d2d2d]" : "border-[#d4cfe6]"} transition-colors`}>
-            <h2 className={`mb-3 text-lg font-semibold ${titleText} transition-colors`}>💡 Советы</h2>
-            <p className={`text-sm italic ${mutedText} transition-colors`}>"Не забудь push"</p>
+          <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg2, borderColor: theme.border }}>
+            <h2 className="mb-3 text-lg font-semibold transition-colors" style={{ color: theme.text }}>💡 Советы</h2>
+            <p className="text-sm italic transition-colors" style={{ color: theme.text2 }}>"Не забудь push"</p>
           </div>
         </div>
       </div>

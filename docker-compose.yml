@@ -30,7 +30,7 @@ services:
       - GITEA_ADMIN_PASSWORD=admin12345
       - GITEA_WEBHOOK_SECRET=dev-webhook-secret-2024
       # Admin
-      - ADMIN_EMAIL=admin@mtuci.local
+      - ADMIN_EMAIL=admin@mtuci.ru
       - ADMIN_PASSWORD=admin123
       # Frontend
       - FRONTEND_URL=http://localhost:3001
@@ -47,10 +47,10 @@ services:
     working_dir: /app
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 60s
 
   postgres:
     image: postgres:16
@@ -64,12 +64,19 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mtuci -d mtuci_app"]
       interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
 
   gitea:
     image: gitea/gitea:1.22.1
@@ -101,17 +108,17 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/healthz"]
-      interval: 10s
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/api/healthz"]
+      interval: 15s
       timeout: 5s
-      retries: 10
-      start_period: 60s
+      retries: 20
+      start_period: 120s
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: mtuci-frontend
+    container_name: mtuci-frontend-v2
     restart: unless-stopped
     depends_on:
       api:
@@ -124,6 +131,40 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+
+  backup-cron:
+    image: postgres:16
+    container_name: mtuci-backup-cron
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - POSTGRES_USER=mtuci
+      - POSTGRES_PASSWORD=mtuci
+      - POSTGRES_DB=mtuci_app
+      - POSTGRES_HOST=postgres
+      - BACKUP_SCHEDULE=0 3 * * *
+      - TZ=Europe/Moscow
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "Starting backup cron service..."
+        while true; do
+          current_hour=$$(date +%H)
+          current_minute=$$(date +%M)
+          
+          if [ "$$current_hour" = "03" ] && [ "$$current_minute" = "00" ]; then
+            echo "Running scheduled backup at $$(date)"
+            /backup.sh
+          fi
+          
+          sleep 30
+        done
 
 volumes:
   postgres_data:

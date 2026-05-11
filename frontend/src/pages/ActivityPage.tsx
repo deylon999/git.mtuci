@@ -10,9 +10,9 @@ interface ActivityPageProps {
 
 // Цвета в зависимости от темы
 const getColors = (isDark: boolean) => ({
-  pageBg: isDark ? "#111111" : "#f5f5f5",
+  pageBg: isDark ? "#0f0f10" : "#f5f5f5",
   cardBg: isDark ? "#1e1e1e" : "#ffffff",
-  cardBg2: isDark ? "#161616" : "#f0f0f0",
+  cardBg2: isDark ? "#0f0f10" : "#f0f0f0",
   border: isDark ? "#30363d" : "#e0e0e0",
   accent: "#2563eb",
   accent2: "#3b82f6",

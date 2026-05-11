@@ -1,63 +1,66 @@
 import { Github, GitBranch, AlertCircle, BookOpen } from "lucide-react";
+import { useEffect, useState } from "react";
+import { apiRequest } from "../api/client";
+import { getTheme } from "../theme";
 
 interface FooterProps {
   isDarkTheme?: boolean;
 }
 
 export default function Footer({ isDarkTheme = true }: FooterProps) {
-  const commitCount = 42;
-  const version = "v1.2.0";
+  const [commitCount, setCommitCount] = useState(0);
+  const [version, setVersion] = useState("v1.0.0");
+  const theme = getTheme(isDarkTheme);
 
-  // Theme-based colors
-  const footerBg = isDarkTheme ? "bg-[#111111]" : "bg-white";
-  const footerBorder = isDarkTheme ? "border-[#30363d]" : "border-gray-200";
-  const textColor = isDarkTheme ? "text-[#484f58]" : "text-gray-500";
-  const hoverColor = isDarkTheme ? "hover:text-[#8b949e]" : "hover:text-gray-700";
-  const dividerColor = isDarkTheme ? "bg-[#30363d]" : "bg-gray-300";
-  const buttonBg = isDarkTheme ? "bg-[#21262d] border-[#30363d] text-[#8b949e]" : "bg-gray-100 border-gray-300 text-gray-600";
-  const buttonHover = isDarkTheme ? "hover:bg-[#30363d] hover:text-[#ccd0d4]" : "hover:bg-gray-200 hover:text-gray-900";
+  useEffect(() => {
+    // TODO: Replace with actual API call when backend endpoint is available
+    // For now, fetch from a simple stats endpoint or use package.json version
+    async function fetchSystemInfo() {
+      try {
+        // Try to get version from API if available
+        const info = await apiRequest<any>("/system/info").catch(() => null);
+        if (info) {
+          setVersion(info.version || "v1.0.0");
+          setCommitCount(info.commits || 0);
+        }
+      } catch (e) {
+        console.error("Failed to fetch system info:", e);
+        // Fallback to default values
+        setVersion("v1.0.0");
+        setCommitCount(0);
+      }
+    }
+    fetchSystemInfo();
+  }, []);
 
   return (
-    <footer className={`border-t ${footerBorder} ${footerBg} transition-colors`}>
-      <div className="mx-auto max-w-7xl px-4 py-3">
-        <div className="flex items-center justify-between text-sm">
-          {/* Left: Logo & Links */}
-          <div className="flex items-center gap-6">
-            <a
-              href="https://mtuci.ru"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`transition-colors ${textColor} ${hoverColor}`}
-            >
+    <footer className={`border-t`} style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className={`flex flex-col sm:flex-row items-center justify-between gap-4`} style={{ color: theme.text2 }}>
+          {/* Left: Links */}
+          <div className="flex items-center gap-6 text-sm">
+            <a href="https://mtuci.ru" target="_blank" rel="noopener noreferrer" className={`hover:underline`} style={{ color: theme.text2 }}>
               MTUCI.ru
             </a>
-            <div className={`h-4 w-px transition-colors ${dividerColor}`} />
-            <button className={`flex items-center gap-1.5 transition-colors ${textColor} ${hoverColor}`}>
-              <AlertCircle className="h-4 w-4" />
-              <span>Сообщить об ошибке</span>
+            <button className={`hover:underline`} style={{ color: theme.text2 }}>
+              Сообщить об ошибке
             </button>
-          </div>
-
-          {/* Center: Actions */}
-          <div className="flex items-center gap-4">
-            <button className={`flex items-center gap-1.5 transition-colors ${textColor} ${hoverColor}`}>
-              <BookOpen className="h-4 w-4" />
-              <span>Шпаргалка по Git</span>
+            <button className={`hover:underline`} style={{ color: theme.text2 }}>
+              Шпаргалка по Git
             </button>
-            <button className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors border ${buttonBg} ${buttonHover}`}>
-              <Github className="h-4 w-4" />
-              <span>Импорт из GitHub</span>
+            <button className={`hover:underline`} style={{ color: theme.text2 }}>
+              Импорт из GitHub
             </button>
           </div>
 
           {/* Right: Version */}
-          <div className={`flex items-center gap-3 text-xs transition-colors ${textColor}`}>
-            <div className="flex items-center gap-1.5">
-              <GitBranch className="h-3.5 w-3.5" />
-              <span>{commitCount} коммитов</span>
+          <div className="flex items-center gap-6 text-sm">
+            <div className="flex items-center gap-2">
+              <GitBranch className={`h-4 w-4`} style={{ color: theme.text2 }} />
+              <span>{commitCount} commits</span>
             </div>
-            <span>•</span>
-            <span className="font-mono">{version}</span>
+            <div className={`h-4 w-px`} style={{ backgroundColor: theme.divider }} />
+            <span className={`font-mono`} style={{ color: theme.text2 }}>{version}</span>
           </div>
         </div>
       </div>

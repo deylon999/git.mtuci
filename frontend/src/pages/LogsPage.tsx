@@ -39,7 +39,7 @@ const LogRow = memo(function LogRow({
   const hoverBg = isDarkTheme ? "hover:bg-[#1f2937]" : "hover:bg-gray-50";
   const borderColor = isDarkTheme ? "border-[#2d2d2d]" : "border-gray-200";
   const sourceBadgeBg = isDarkTheme ? "bg-gray-500/20 border-gray-500/30 text-gray-300" : "bg-gray-200 border-gray-300 text-gray-600";
-  const detailBg = isDarkTheme ? "bg-[#161616]" : "bg-gray-50";
+  const detailBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-gray-50";
 
   const isClickable = log.level === "ERROR" || log.level === "WARNING" || log.detail;
 
@@ -238,13 +238,15 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
 
   const totalPages = Math.ceil(total / limit);
 
-  const bgColor = isDarkTheme ? "bg-[#111111]" : "bg-gray-50";
-  const cardBg = isDarkTheme ? "bg-[#161616] border-[#2d2d2d]" : "bg-white border-gray-200";
-  const inputBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d]" : "bg-white border-gray-300";
+  const bgColor = isDarkTheme ? "bg-[#0f0f10]" : "bg-gray-50";
+  const cardBg = isDarkTheme ? "bg-[#0f0f10] border-[#2d2d2d]" : "bg-gray-100 border-gray-200";
+  const cardBg2 = isDarkTheme ? "#1e1e1e" : "#ffffff";
+  const borderColor = isDarkTheme ? "#30363d" : "#e0e0e0";
+  const inputBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d]" : "bg-gray-100 border-gray-300";
   const textMain = isDarkTheme ? "text-white" : "text-gray-900";
   const textMuted = isDarkTheme ? "text-gray-500" : "text-gray-500";
   const textDim = isDarkTheme ? "text-[#6e7681]" : "text-gray-400";
-  const hoverBg = isDarkTheme ? "hover:bg-[#1f2937]" : "hover:bg-gray-50";
+  const hoverBg = isDarkTheme ? "hover:bg-[#1f2937]" : "hover:bg-gray-200";
 
   return (
     <div className={`min-h-screen ${bgColor} ${textMain}`}>
@@ -276,25 +278,25 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-2.5 mb-4">
-          <div className={`p-3 rounded-xl border ${cardBg}`}>
-            <div className={`text-xs ${textMuted} mb-1`}>Всего записей</div>
-            <div className="text-xl font-semibold">{stats?.total ?? "-"}</div>
-            <div className={`text-xs ${textMuted} mt-0.5`}>За всё время</div>
+          <div style={{ background: cardBg2, border: `1px solid ${borderColor}`, borderRadius: "10px", padding: "14px 16px" }}>
+            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>Всего записей</div>
+            <div style={{ fontSize: "22px", fontWeight: 600, color: textMain }}>{stats?.total ?? "-"}</div>
+            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>За всё время</div>
           </div>
-          <div className={`p-3 rounded-xl border ${cardBg}`}>
-            <div className={`text-xs ${textMuted} mb-1`}>Ошибок сегодня</div>
-            <div className="text-xl font-semibold text-red-500">{stats?.errors_today ?? "-"}</div>
-            <div className={`text-xs ${textMuted} mt-0.5`}>За сегодня</div>
+          <div style={{ background: cardBg2, border: `1px solid ${borderColor}`, borderRadius: "10px", padding: "14px 16px" }}>
+            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>Ошибок сегодня</div>
+            <div style={{ fontSize: "22px", fontWeight: 600, color: "#e24b4a" }}>{stats?.errors_today ?? "-"}</div>
+            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>За сегодня</div>
           </div>
-          <div className={`p-3 rounded-xl border ${cardBg}`}>
-            <div className={`text-xs ${textMuted} mb-1`}>Предупреждений</div>
-            <div className="text-xl font-semibold text-amber-500">{stats?.warnings_today ?? "-"}</div>
-            <div className={`text-xs ${textMuted} mt-0.5`}>За сегодня</div>
+          <div style={{ background: cardBg2, border: `1px solid ${borderColor}`, borderRadius: "10px", padding: "14px 16px" }}>
+            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>Предупреждений</div>
+            <div style={{ fontSize: "22px", fontWeight: 600, color: "#f59e0b" }}>{stats?.warnings_today ?? "-"}</div>
+            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>За сегодня</div>
           </div>
-          <div className={`p-3 rounded-xl border ${cardBg}`}>
-            <div className={`text-xs ${textMuted} mb-1`}>Успешных запросов</div>
-            <div className="text-xl font-semibold text-green-500">{stats?.success_today ?? "-"}</div>
-            <div className={`text-xs ${textMuted} mt-0.5`}>За сегодня</div>
+          <div style={{ background: cardBg2, border: `1px solid ${borderColor}`, borderRadius: "10px", padding: "14px 16px" }}>
+            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>Успешных запросов</div>
+            <div style={{ fontSize: "22px", fontWeight: 600, color: "#4caf50" }}>{stats?.success_today ?? "-"}</div>
+            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>За сегодня</div>
           </div>
         </div>
 
@@ -414,7 +416,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
                   {page > 1 && (
                     <button
                       onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${isDarkTheme ? "bg-[#161616] border-[#30363d] text-[#8b949e] hover:bg-[#1f2937] hover:text-[#ccd0d4]" : "bg-white border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${isDarkTheme ? "bg-[#0f0f10] border-[#30363d] text-[#8b949e] hover:bg-[#1f2937] hover:text-[#ccd0d4]" : "bg-gray-100 border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-900"}`}
                     >
                       ←
                     </button>
@@ -425,7 +427,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
                   {page < totalPages && (
                     <button
                       onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${isDarkTheme ? "bg-[#161616] border-[#30363d] text-[#8b949e] hover:bg-[#1f2937] hover:text-[#ccd0d4]" : "bg-white border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${isDarkTheme ? "bg-[#0f0f10] border-[#30363d] text-[#8b949e] hover:bg-[#1f2937] hover:text-[#ccd0d4]" : "bg-gray-100 border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-900"}`}
                     >
                       →
                     </button>

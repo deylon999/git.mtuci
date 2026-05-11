@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { changeMyPassword, getMe, uploadAvatarWithMode } from "../api/authApi";
 import { getMyRepositories } from "../api/repositoriesApi";
 import { getMyCommits, getTotalUsers, getLogs } from "../api/adminApi";
+import { getTheme } from "../theme";
 import type { UserRead, LogEntry } from "../api/types";
 import AvatarUploadModal from "../components/AvatarUploadModal";
 import { Mail } from "lucide-react";
@@ -69,18 +70,6 @@ function getActionDescription(log: LogEntry): { title: string; subtitle: string 
   return { title, subtitle };
 }
 
-// Цвета по ТЗ
-const getColors = (isDarkTheme: boolean) => ({
-  pageBg: isDarkTheme ? "#111111" : "#f8f9fa",
-  cardBg: isDarkTheme ? "#141414" : "#ffffff",
-  border: isDarkTheme ? "#30363d" : "#e0e0e0",
-  accent: "#2563eb",
-  textPrimary: isDarkTheme ? "#e6e6e6" : "#1a1a1a",
-  textSecondary: isDarkTheme ? "#888888" : "#666666",
-  inputBg: isDarkTheme ? "#0a0a0a" : "#f5f5f5",
-  statsBg: isDarkTheme ? "#080808" : "#e8e8e8",
-  passwordInputBg: isDarkTheme ? "#050505" : "#e0e0e0",
-});
 
 export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
   const [me, setMe] = useState<UserRead | null>(null);
@@ -201,7 +190,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
     ? { text: "Лаборант", bg: "rgba(168, 85, 247, 0.2)", color: "#a855f7" }
     : { text: "Студент", bg: "rgba(34, 197, 94, 0.2)", color: "#22c55e" };
 
-  const colors = getColors(isDarkTheme);
+  const theme = getTheme(isDarkTheme);
 
   return (
     <>
@@ -216,19 +205,19 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
         background-color: ${isDarkTheme ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)"} !important;
       }
     `}</style>
-    <div style={{ backgroundColor: colors.pageBg, minHeight: "100%", padding: "16px" }}>
+    <div style={{ backgroundColor: theme.bg, minHeight: "100%", padding: "16px" }}>
       {/* Заголовок */}
       <div style={{ marginBottom: "16px" }}>
-        <h1 style={{ color: colors.textPrimary, fontSize: "24px", fontWeight: "700", marginBottom: "4px" }}>
+        <h1 style={{ color: theme.text, fontSize: "24px", fontWeight: "700", marginBottom: "4px" }}>
           Профиль
         </h1>
-        <p style={{ color: colors.textSecondary, fontSize: "12px" }}>
+        <p style={{ color: theme.text2, fontSize: "12px" }}>
           Управление аккаунтом и настройки безопасности
         </p>
       </div>
 
       {loading ? (
-        <div style={{ color: colors.textSecondary }}>Загрузка...</div>
+        <div style={{ color: theme.text2 }}>Загрузка...</div>
       ) : me ? (
         <>
         {/* Две колонки */}
@@ -237,8 +226,8 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {/* Блок Профиль */}
             <div style={{
-              backgroundColor: colors.cardBg,
-              border: `1px solid ${colors.border}`,
+              backgroundColor: theme.bg3,
+              border: `1px solid ${theme.border}`,
               borderRadius: "12px",
               padding: "20px 20px 16px 20px"
             }}>
@@ -307,12 +296,12 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
               {/* Блок информации справа — вертикально */}
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                 {/* Имя */}
-                <div style={{ color: colors.textPrimary, fontSize: "16px", fontWeight: "600" }}>
+                <div style={{ color: theme.text, fontSize: "16px", fontWeight: "600" }}>
                   {me?.full_name}
                 </div>
 
                 {/* Email с иконкой */}
-                <div style={{ display: "flex", alignItems: "center", gap: "4px", color: colors.textSecondary, fontSize: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px", color: theme.text2, fontSize: "12px" }}>
                   <Mail size={12} />
                   {me?.email}
                 </div>
@@ -336,7 +325,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
             {/* Горизонтальный разделитель */}
             <div style={{
               height: "1px",
-              backgroundColor: colors.border,
+              backgroundColor: theme.border,
               marginBottom: "16px"
             }} />
 
@@ -344,45 +333,45 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
               {/* Репозитории */}
               <div style={{
-                backgroundColor: colors.statsBg,
+                backgroundColor: theme.bg4,
                 borderRadius: "6px",
                 padding: "16px 12px",
                 textAlign: "center"
               }}>
-                <div style={{ color: colors.textPrimary, fontSize: "18px", fontWeight: "700", marginBottom: "2px" }}>
+                <div style={{ color: theme.text, fontSize: "18px", fontWeight: "700", marginBottom: "2px" }}>
                   {stats.repositories}
                 </div>
-                <div style={{ color: colors.textSecondary, fontSize: "10px" }}>
+                <div style={{ color: theme.text2, fontSize: "10px" }}>
                   {stats.repositories === 1 ? "Репозиторий" : stats.repositories >= 2 && stats.repositories <= 4 ? "Репозитория" : "Репозиториев"}
                 </div>
               </div>
 
               {/* Пользователи — реальные данные */}
               <div style={{
-                backgroundColor: colors.statsBg,
+                backgroundColor: theme.bg4,
                 borderRadius: "6px",
                 padding: "16px 12px",
                 textAlign: "center"
               }}>
-                <div style={{ color: colors.textPrimary, fontSize: "18px", fontWeight: "700", marginBottom: "2px" }}>
+                <div style={{ color: theme.text, fontSize: "18px", fontWeight: "700", marginBottom: "2px" }}>
                   {stats.users}
                 </div>
-                <div style={{ color: colors.textSecondary, fontSize: "10px" }}>
+                <div style={{ color: theme.text2, fontSize: "10px" }}>
                   {stats.users === 1 ? "Пользователь" : stats.users >= 2 && stats.users <= 4 ? "Пользователя" : "Пользователей"}
                 </div>
               </div>
 
               {/* Коммиты */}
               <div style={{
-                backgroundColor: colors.statsBg,
+                backgroundColor: theme.bg4,
                 borderRadius: "6px",
                 padding: "16px 12px",
                 textAlign: "center"
               }}>
-                <div style={{ color: colors.textPrimary, fontSize: "18px", fontWeight: "700", marginBottom: "2px" }}>
+                <div style={{ color: theme.text, fontSize: "18px", fontWeight: "700", marginBottom: "2px" }}>
                   {stats.commits}
                 </div>
-                <div style={{ color: colors.textSecondary, fontSize: "10px" }}>
+                <div style={{ color: theme.text2, fontSize: "10px" }}>
                   {stats.commits === 1 ? "Коммит" : stats.commits >= 2 && stats.commits <= 4 && stats.commits !== 0 ? "Коммита" : "Коммитов"}
                 </div>
               </div>
@@ -392,8 +381,8 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
 
           {/* Блок ИНФОРМАЦИЯ */}
           <div style={{
-            backgroundColor: colors.cardBg,
-            border: `1px solid ${colors.border}`,
+            backgroundColor: theme.bg3,
+            border: `1px solid ${theme.border}`,
             borderRadius: "12px",
             padding: "16px 20px",
           }}>
@@ -404,10 +393,10 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
               alignItems: "center",
               marginBottom: "12px"
             }}>
-              <h4 style={{ color: colors.textPrimary, fontSize: "12px", fontWeight: "600", margin: 0 }}>
+              <h4 style={{ color: theme.text, fontSize: "12px", fontWeight: "600", margin: 0 }}>
                 ИНФОРМАЦИЯ
               </h4>
-              <span style={{ color: colors.textSecondary, fontSize: "10px" }}>
+              <span style={{ color: theme.text2, fontSize: "10px" }}>
                 Только чтение
               </span>
             </div>
@@ -420,10 +409,10 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 justifyContent: "space-between", 
                 alignItems: "center",
                 padding: "8px 0",
-                borderBottom: `1px solid ${colors.border}`
+                borderBottom: `1px solid ${theme.border}`
               }}>
-                <span style={{ color: colors.textSecondary, fontSize: "11px" }}>Имя</span>
-                <span style={{ color: colors.textPrimary, fontSize: "11px" }}>{me?.full_name || "-"}</span>
+                <span style={{ color: theme.text2, fontSize: "11px" }}>Имя</span>
+                <span style={{ color: theme.text, fontSize: "11px" }}>{me?.full_name || "-"}</span>
               </div>
 
               {/* Email */}
@@ -432,10 +421,10 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 justifyContent: "space-between", 
                 alignItems: "center",
                 padding: "8px 0",
-                borderBottom: `1px solid ${colors.border}`
+                borderBottom: `1px solid ${theme.border}`
               }}>
-                <span style={{ color: colors.textSecondary, fontSize: "11px" }}>Email</span>
-                <span style={{ color: colors.textPrimary, fontSize: "11px" }}>{me?.email || "—"}</span>
+                <span style={{ color: theme.text2, fontSize: "11px" }}>Email</span>
+                <span style={{ color: theme.text, fontSize: "11px" }}>{me?.email || "—"}</span>
               </div>
 
               {/* Роль */}
@@ -444,10 +433,10 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 justifyContent: "space-between", 
                 alignItems: "center",
                 padding: "8px 0",
-                borderBottom: `1px solid ${colors.border}`
+                borderBottom: `1px solid ${theme.border}`
               }}>
-                <span style={{ color: colors.textSecondary, fontSize: "11px" }}>Роль</span>
-                <span style={{ color: colors.textPrimary, fontSize: "11px" }}>
+                <span style={{ color: theme.text2, fontSize: "11px" }}>Роль</span>
+                <span style={{ color: theme.text, fontSize: "11px" }}>
                   {me?.role === "admin" ? "Администратор" : "Пользователь"}
                 </span>
               </div>
@@ -458,10 +447,10 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 justifyContent: "space-between", 
                 alignItems: "center",
                 padding: "8px 0",
-                borderBottom: `1px solid ${colors.border}`
+                borderBottom: `1px solid ${theme.border}`
               }}>
-                <span style={{ color: colors.textSecondary, fontSize: "11px" }}>Дата регистрации</span>
-                <span style={{ color: colors.textPrimary, fontSize: "11px" }}>{me?.created_at ? new Date(me.created_at).toLocaleDateString("ru-RU") : "—"}</span>
+                <span style={{ color: theme.text2, fontSize: "11px" }}>Дата регистрации</span>
+                <span style={{ color: theme.text, fontSize: "11px" }}>{me?.created_at ? new Date(me.created_at).toLocaleDateString("ru-RU") : "—"}</span>
               </div>
 
               {/* Последний вход */}
@@ -470,10 +459,10 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 justifyContent: "space-between", 
                 alignItems: "center",
                 padding: "8px 0",
-                borderBottom: `1px solid ${colors.border}`
+                borderBottom: `1px solid ${theme.border}`
               }}>
-                <span style={{ color: colors.textSecondary, fontSize: "11px" }}>Последний вход</span>
-                <span style={{ color: colors.textPrimary, fontSize: "11px" }}>{formatLastLogin(me?.last_login || null)}</span>
+                <span style={{ color: theme.text2, fontSize: "11px" }}>Последний вход</span>
+                <span style={{ color: theme.text, fontSize: "11px" }}>{formatLastLogin(me?.last_login || null)}</span>
               </div>
 
               {/* Статус */}
@@ -483,7 +472,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 alignItems: "center",
                 padding: "8px 0 0 0"
               }}>
-                <span style={{ color: colors.textSecondary, fontSize: "11px" }}>Статус</span>
+                <span style={{ color: theme.text2, fontSize: "11px" }}>Статус</span>
                 <span style={{
                   color: me?.is_blocked ? "#ef4444" : "#22c55e",
                   fontSize: "11px",
@@ -500,18 +489,18 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {/* Блок Смена пароля */}
             <div style={{
-              backgroundColor: colors.cardBg,
-              border: `1px solid ${colors.border}`,
+              backgroundColor: theme.bg3,
+              border: `1px solid ${theme.border}`,
               borderRadius: "12px",
               padding: "20px"
             }}>
-              <h3 style={{ color: colors.textPrimary, fontSize: "16px", fontWeight: "600", marginBottom: "16px" }}>
+              <h3 style={{ color: theme.text, fontSize: "16px", fontWeight: "600", marginBottom: "16px" }}>
                 Смена пароля
               </h3>
 
               <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <div>
-                <label style={{ color: colors.textSecondary, fontSize: "12px", display: "block", marginBottom: "4px" }}>
+                <label style={{ color: theme.text2, fontSize: "12px", display: "block", marginBottom: "4px" }}>
                   Старый пароль
                 </label>
                 <input
@@ -521,11 +510,11 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                   placeholder="Введите текущий пароль"
                   style={{
                     width: "100%",
-                    backgroundColor: colors.passwordInputBg,
-                    border: `1px solid ${colors.border}`,
+                    backgroundColor: theme.inputBg,
+                    border: `1px solid ${theme.border}`,
                     borderRadius: "6px",
                     padding: "10px 12px",
-                    color: colors.textPrimary,
+                    color: theme.text,
                     fontSize: "12px",
                     outline: "none",
                   }}
@@ -534,7 +523,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
               </div>
 
               <div>
-                <label style={{ color: colors.textSecondary, fontSize: "12px", display: "block", marginBottom: "4px" }}>
+                <label style={{ color: theme.text2, fontSize: "12px", display: "block", marginBottom: "4px" }}>
                   Новый пароль
                 </label>
                 <input
@@ -544,11 +533,11 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                   placeholder="Минимум 8 символов"
                   style={{
                     width: "100%",
-                    backgroundColor: colors.passwordInputBg,
-                    border: `1px solid ${colors.border}`,
+                    backgroundColor: theme.inputBg,
+                    border: `1px solid ${theme.border}`,
                     borderRadius: "6px",
                     padding: "10px 12px",
-                    color: colors.textPrimary,
+                    color: theme.text,
                     fontSize: "12px",
                     outline: "none",
                   }}
@@ -557,7 +546,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
               </div>
 
               <div>
-                <label style={{ color: colors.textSecondary, fontSize: "12px", display: "block", marginBottom: "4px" }}>
+                <label style={{ color: theme.text2, fontSize: "12px", display: "block", marginBottom: "4px" }}>
                   Повторите новый пароль
                 </label>
                 <input
@@ -567,11 +556,11 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                   placeholder="Повторите новый пароль"
                   style={{
                     width: "100%",
-                    backgroundColor: colors.passwordInputBg,
-                    border: `1px solid ${colors.border}`,
+                    backgroundColor: theme.inputBg,
+                    border: `1px solid ${theme.border}`,
                     borderRadius: "6px",
                     padding: "10px 12px",
-                    color: colors.textPrimary,
+                    color: theme.text,
                     fontSize: "12px",
                     outline: "none",
                   }}
@@ -610,7 +599,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                   type="submit"
                   disabled={saving}
                   style={{
-                    backgroundColor: colors.accent,
+                    backgroundColor: theme.accent,
                     color: "#fff",
                     border: "none",
                     borderRadius: "6px",
@@ -634,8 +623,8 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                   }}
                   style={{
                     backgroundColor: "transparent",
-                    color: colors.textSecondary,
-                    border: `1px solid ${colors.border}`,
+                    color: theme.text2,
+                    border: `1px solid ${theme.border}`,
                     borderRadius: "6px",
                     padding: "8px 20px",
                     fontSize: "12px",
@@ -651,8 +640,8 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
 
           {/* Блок Последние действия */}
           <div style={{
-            backgroundColor: colors.cardBg,
-            border: `1px solid ${colors.border}`,
+            backgroundColor: theme.bg3,
+            border: `1px solid ${theme.border}`,
             borderRadius: "12px",
             padding: "16px 20px",
           }}>
@@ -663,10 +652,10 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
               alignItems: "center",
               marginBottom: "12px"
             }}>
-              <h4 style={{ color: colors.textPrimary, fontSize: "12px", fontWeight: "600", margin: 0 }}>
+              <h4 style={{ color: theme.text, fontSize: "12px", fontWeight: "600", margin: 0 }}>
                 ПОСЛЕДНИЕ ДЕЙСТВИЯ
               </h4>
-              <span style={{ color: colors.textSecondary, fontSize: "10px" }}>
+              <span style={{ color: theme.text2, fontSize: "10px" }}>
                 Последние 24 часа
               </span>
             </div>
@@ -674,7 +663,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
             {/* Список действий */}
             <div style={{ display: "flex", flexDirection: "column" }}>
               {recentActions.length === 0 ? (
-                <div style={{ color: colors.textSecondary, fontSize: "11px", padding: "8px 0" }}>
+                <div style={{ color: theme.text2, fontSize: "11px", padding: "8px 0" }}>
                   Нет действий за последние 24 часа
                 </div>
               ) : (
@@ -689,14 +678,14 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                         justifyContent: "space-between",
                         alignItems: "center",
                         padding: "8px 0",
-                        borderBottom: isLast ? "none" : `1px solid ${colors.border}`
+                        borderBottom: isLast ? "none" : `1px solid ${theme.border}`
                       }}
                     >
                       <div>
-                        <div style={{ color: colors.textPrimary, fontSize: "11px" }}>{title}</div>
-                        <div style={{ color: colors.textSecondary, fontSize: "10px" }}>{subtitle}</div>
+                        <div style={{ color: theme.text, fontSize: "11px" }}>{title}</div>
+                        <div style={{ color: theme.text2, fontSize: "10px" }}>{subtitle}</div>
                       </div>
-                      <span style={{ color: colors.textSecondary, fontSize: "10px" }}>
+                      <span style={{ color: theme.text2, fontSize: "10px" }}>
                         {formatActionTime(action.created_at)}
                       </span>
                     </div>

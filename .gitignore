@@ -201,6 +201,5 @@ TODO.md
 *.seed
 *.pid.lock
 
-backups
+/backups/
 test-repo
-backend/LOGS_BACKEND_ROADMAP.md

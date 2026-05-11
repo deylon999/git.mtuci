@@ -24,6 +24,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { usePendingCount } from "../context/PendingCountContext";
 import type { AdminUserRead, UserRole, UserRead } from "../api/types";
 import AdminPageHeader from "../components/AdminPageHeader";
+import { getTheme } from "../theme";
 
 interface User {
   id: string;
@@ -82,6 +83,7 @@ interface UsersPageProps {
 }
 
 export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
+  const theme = getTheme(isDarkTheme);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -473,43 +475,43 @@ useEffect(() => {
   // Theme-based colors
   const pageBgStyle = isDarkTheme ? { backgroundColor: "#0f0f10" } : { backgroundColor: "#f8fafc" };
   const textPrimary = isDarkTheme ? "text-white" : "text-slate-900";
-  const cardBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-white border-slate-200 shadow-sm";
-  const cardHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-50";
+  const cardBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-slate-100 border-slate-200 shadow-sm";
+  const cardHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-200";
   const textSecondary = isDarkTheme ? "text-gray-400" : "text-slate-500";
   const textTertiary = isDarkTheme ? "text-gray-300" : "text-slate-400";
-  const headerBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-white border-slate-200";
-  const inputBg = isDarkTheme ? "bg-[#252525] border-[#3d3d3d]" : "bg-slate-100 border-slate-200";
+  const headerBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-slate-100 border-slate-200";
+  const inputBg = isDarkTheme ? "bg-[#252525] border-[#3d3d3d]" : "bg-slate-200 border-slate-300";
   const dividerColor = isDarkTheme ? "divide-[#2d2d2d]" : "divide-slate-200";
-  const tableHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-50";
+  const tableHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-100";
   // Table specific colors
-  const tableBg = isDarkTheme ? "bg-[#161616]" : "bg-white";
+  const tableBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-slate-100";
   const tableBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-slate-200";
   const tableHeaderText = isDarkTheme ? "text-[#6e7681]" : "text-slate-400";
   const tableRowBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-slate-200";
-  const tableRowHover = isDarkTheme ? "hover:bg-[#1f2937]" : "hover:bg-slate-50";
+  const tableRowHover = isDarkTheme ? "hover:bg-[#1f2937]" : "hover:bg-slate-200";
   const tableCellText = isDarkTheme ? "text-[#8b949e]" : "text-slate-500";
   const tableNameText = isDarkTheme ? "text-[#ccd0d4]" : "text-slate-900";
   const tableEmailText = isDarkTheme ? "text-[#6e7681]" : "text-slate-400";
   const checkboxBorder = isDarkTheme ? "border-[#484f58]" : "border-gray-400";
   const checkboxHoverBorder = isDarkTheme ? "hover:border-[#6e7681]" : "hover:border-gray-500";
-  const iconBg = isDarkTheme ? "bg-[#1f2937]" : "bg-gray-100";
+  const iconBg = isDarkTheme ? "bg-[#1f2937]" : "bg-gray-200";
   const iconColor = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  const actionBtnHover = isDarkTheme ? "hover:bg-[#30363d] hover:text-[#ccd0d4]" : "hover:bg-gray-200 hover:text-gray-900";
+  const actionBtnHover = isDarkTheme ? "hover:bg-[#30363d] hover:text-[#ccd0d4]" : "hover:bg-gray-300 hover:text-gray-900";
   const actionBtnColor = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
   // Modal colors
-  const modalBg = isDarkTheme ? "bg-[#161616]" : "bg-white";
+  const modalBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-slate-100";
   const modalBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-gray-200";
   const modalText = isDarkTheme ? "text-[#ccd0d4]" : "text-gray-900";
   const modalLabel = isDarkTheme ? "text-[#8b949e]" : "text-gray-600";
-  const modalInputBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d]" : "bg-gray-50 border-gray-300";
-  const modalCardBg = isDarkTheme ? "bg-[#0d0d0d]" : "bg-gray-100";
-  const modalBtnHover = isDarkTheme ? "hover:bg-[#30363d]" : "hover:bg-gray-200";
+  const modalInputBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d]" : "bg-gray-100 border-gray-300";
+  const modalCardBg = isDarkTheme ? "bg-[#0d0d0d]" : "bg-gray-200";
+  const modalBtnHover = isDarkTheme ? "hover:bg-[#30363d]" : "hover:bg-gray-300";
   const modalBtnText = isDarkTheme ? "text-[#6e7681]" : "text-gray-600";
   // Pagination colors
-  const paginationBtn = isDarkTheme ? "bg-[#161616] border-[#30363d] text-[#8b949e] hover:text-[#ccd0d4]" : "bg-white border-gray-300 text-gray-600 hover:text-gray-900";
-  const paginationDropdown = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d] text-[#ccd0d4]" : "bg-gray-50 border-gray-300 text-gray-700";
-  const paginationDropdownBg = isDarkTheme ? "bg-[#161616] border-[#2d2d2d]" : "bg-white border-gray-200";
-  const paginationDropdownItem = isDarkTheme ? "text-[#8b949e] hover:bg-[#1f2937]" : "text-gray-600 hover:bg-gray-100";
+  const paginationBtn = isDarkTheme ? "bg-[#0f0f10] border-[#30363d] text-[#8b949e] hover:text-[#ccd0d4]" : "bg-slate-100 border-gray-300 text-gray-600 hover:text-gray-900";
+  const paginationDropdown = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d] text-[#ccd0d4]" : "bg-gray-100 border-gray-300 text-gray-700";
+  const paginationDropdownBg = isDarkTheme ? "bg-[#0f0f10] border-[#2d2d2d]" : "bg-slate-100 border-gray-200";
+  const paginationDropdownItem = isDarkTheme ? "text-[#8b949e] hover:bg-[#1f2937]" : "text-gray-600 hover:bg-gray-200";
 
   return (
     <div className={`h-full overflow-y-auto ${textPrimary} transition-colors`}>
@@ -883,7 +885,7 @@ useEffect(() => {
                   <div className="relative">
                     <button
                       onClick={() => setShowPerPageDropdown(!showPerPageDropdown)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${paginationDropdown} ${isDarkTheme ? "hover:bg-[#161616]" : "hover:bg-white"}`}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${paginationDropdown} ${isDarkTheme ? "hover:bg-[#0f0f10]" : "hover:bg-gray-200"}`}
                     >
                       {itemsPerPage}
                       <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showPerPageDropdown ? "rotate-180" : ""}`} />

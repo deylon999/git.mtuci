@@ -27,18 +27,18 @@ export default function ForgotPasswordPage() {
   const [success, setSuccess] = useState(false);
 
   // Theme-based colors - unified with project standard
-  const pageBgStyle = isDarkTheme ? { backgroundColor: "#111111" } : { backgroundColor: "#f9fafb" };
-  const cardBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-white border-gray-200";
+  const pageBgStyle = isDarkTheme ? { backgroundColor: "#0f0f10" } : { backgroundColor: "#f9fafb" };
+  const cardBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-gray-100 border-gray-200";
   const brandText = isDarkTheme ? "text-blue-400" : "text-blue-600";
   const titleText = isDarkTheme ? "text-white" : "text-gray-900";
   const subtitleText = isDarkTheme ? "text-gray-400" : "text-gray-600";
   const labelText = isDarkTheme ? "text-gray-400" : "text-gray-700";
-  const inputBg = isDarkTheme ? "bg-[#111111] border-[#2d2d2d] text-white" : "bg-white border-gray-300 text-gray-900";
+  const inputBg = isDarkTheme ? "bg-[#0f0f10] border-[#2d2d2d] text-white" : "bg-gray-100 border-gray-300 text-gray-900";
   const inputFocus = "focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20";
   const successBg = isDarkTheme ? "bg-green-500/10 border-green-500/30 text-green-400" : "bg-green-50 border-green-200 text-green-800";
   const errorBg = isDarkTheme ? "bg-red-500/10 border-red-500/30 text-red-400" : "bg-red-50 border-red-200 text-red-800";
   const primaryBtn = "bg-blue-600 hover:bg-blue-700 text-white";
-  const secondaryBtn = isDarkTheme ? "bg-[#2d2d2d] border-[#3d3d3d] text-gray-300 hover:bg-[#3d3d3d]" : "bg-white border-gray-300 text-gray-800 hover:bg-gray-50";
+  const secondaryBtn = isDarkTheme ? "bg-[#2d2d2d] border-[#3d3d3d] text-gray-300 hover:bg-[#3d3d3d]" : "bg-gray-100 border-gray-300 text-gray-800 hover:bg-gray-200";
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();

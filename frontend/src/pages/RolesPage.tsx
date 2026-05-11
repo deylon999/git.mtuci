@@ -85,7 +85,7 @@ const iconMap: Record<string, React.ElementType> = {
 function getLevelBadge(level: PermissionLevel, isDarkTheme: boolean) {
   const styles = {
     read: isDarkTheme ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700",
-    write: isDarkTheme ? "bg-[#252525] text-[#ccd0d4]" : "bg-white text-gray-900",
+    write: isDarkTheme ? "bg-[#252525] text-[#ccd0d4]" : "bg-gray-100 text-gray-900",
     delete: isDarkTheme ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-700",
     none: isDarkTheme ? "bg-[#2d2d2d] text-[#6e7681]" : "bg-gray-200 text-gray-500",
   };
@@ -319,10 +319,10 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
   }
 
   // Theme-based colors
-  const pageBg = isDarkTheme ? "bg-[#111111] text-white" : "bg-[#f8f9fa] text-gray-900";
-  const cardBg = isDarkTheme ? "bg-[#161616] border-[#2d2d2d]" : "bg-white border-gray-200";
-  const cardBgLight = isDarkTheme ? "bg-[#252525]" : "bg-gray-100";
-  const cardBgLighter = isDarkTheme ? "bg-[#1e1e1e]" : "bg-white";
+  const pageBg = isDarkTheme ? "bg-[#0f0f10] text-white" : "bg-[#f8f9fa] text-gray-900";
+  const cardBg = isDarkTheme ? "bg-[#0f0f10] border-[#2d2d2d]" : "bg-gray-100 border-gray-200";
+  const cardBgLight = isDarkTheme ? "bg-[#252525]" : "bg-gray-200";
+  const cardBgLighter = isDarkTheme ? "bg-[#1e1e1e]" : "bg-gray-100";
   const textPrimary = isDarkTheme ? "text-[#ccd0d4]" : "text-gray-900";
   const textSecondary = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
   const textTertiary = isDarkTheme ? "text-[#8b949e]" : "text-gray-600";
@@ -333,17 +333,17 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
   const activeBadge = isDarkTheme ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700";
   const systemBadge = isDarkTheme ? "bg-[#2d2d2d] text-[#6e7681]" : "bg-gray-200 text-gray-500";
   const dividerColor = isDarkTheme ? "border-[#2d2d2d]" : "border-gray-200";
-  const hoverBg = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-gray-100";
-  const resetBtn = isDarkTheme ? "bg-[#252525] border-[#2d2d2d] text-[#8b949e] hover:text-white" : "bg-gray-100 border-gray-300 text-gray-600 hover:text-gray-900";
+  const hoverBg = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-gray-200";
+  const resetBtn = isDarkTheme ? "bg-[#252525] border-[#2d2d2d] text-[#8b949e] hover:text-white" : "bg-gray-200 border-gray-300 text-gray-600 hover:text-gray-900";
   const saveBtnActive = "bg-blue-600 text-white hover:bg-blue-700";
   const saveBtnInactive = isDarkTheme ? "bg-[#2d2d2d] text-[#6e7681] cursor-not-allowed" : "bg-gray-300 text-gray-500 cursor-not-allowed";
   const sectionHeader = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  const assistantCard = isDarkTheme ? "bg-[#1e1e1e] border-[#30363d]" : "bg-white border-gray-200";
-  const assistantHeader = isDarkTheme ? "bg-[#252525]" : "bg-gray-50";
+  const assistantCard = isDarkTheme ? "bg-[#1e1e1e] border-[#30363d]" : "bg-gray-100 border-gray-200";
+  const assistantHeader = isDarkTheme ? "bg-[#252525]" : "bg-gray-200";
   const trustedText = isDarkTheme ? "text-emerald-400" : "text-emerald-600";
   const untrustedText = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  const auditCard = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-white border-gray-200";
-  const auditTag = isDarkTheme ? "bg-[#252525] text-[#8b949e]" : "bg-gray-100 text-gray-600";
+  const auditCard = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-gray-100 border-gray-200";
+  const auditTag = isDarkTheme ? "bg-[#252525] text-[#8b949e]" : "bg-gray-200 text-gray-600";
 
   return (
     <div className={`h-full overflow-y-auto ${pageBg}`}>

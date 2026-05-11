@@ -11,43 +11,43 @@ interface CoursePageProps {
 
 export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
   // Theme-based colors
-  const pageBg = isDarkTheme ? "bg-[#111111]" : "bg-gray-50";
+  const pageBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-gray-50";
   const pageText = isDarkTheme ? "text-white" : "text-gray-900";
-  const cardBg = isDarkTheme ? "bg-[#161616]" : "bg-white";
+  const cardBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-gray-100";
   const cardBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-gray-200";
   const textPrimary = isDarkTheme ? "text-[#ccd0d4]" : "text-gray-900";
   const textSecondary = isDarkTheme ? "text-[#8b949e]" : "text-gray-600";
   const textTertiary = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  const inputBg = isDarkTheme ? "bg-[#0d1117]" : "bg-white";
+  const inputBg = isDarkTheme ? "bg-[#0d1117]" : "bg-gray-100";
   const inputBorder = isDarkTheme ? "border-[#30363d]" : "border-gray-300";
   const breadcrumbText = isDarkTheme ? "text-purple-400" : "text-purple-700";
   const breadcrumbHover = isDarkTheme ? "hover:text-purple-300" : "hover:text-purple-800";
   const buttonPrimary = isDarkTheme ? "bg-purple-600 hover:bg-purple-700 text-white" : "bg-purple-600 hover:bg-purple-700 text-white";
-  const buttonSecondary = isDarkTheme ? "border-[#30363d] text-[#8b949e] hover:bg-[#2d2d2d]" : "border-gray-300 text-gray-700 hover:bg-gray-50";
-  const formCard = isDarkTheme ? "bg-[#161616] border-[#2d2d2d]" : "bg-white border-gray-200";
-  const commitCard = isDarkTheme ? "border-[#2d2d2d] bg-[#161616]" : "border-gray-100 bg-gray-50";
+  const buttonSecondary = isDarkTheme ? "border-[#30363d] text-[#8b949e] hover:bg-[#2d2d2d]" : "border-gray-300 text-gray-700 hover:bg-gray-200";
+  const formCard = isDarkTheme ? "bg-[#0f0f10] border-[#2d2d2d]" : "bg-gray-100 border-gray-200";
+  const commitCard = isDarkTheme ? "border-[#2d2d2d] bg-[#0f0f10]" : "border-gray-100 bg-gray-50";
   const errorBox = isDarkTheme ? "border-red-800 bg-red-900/20 text-red-300" : "border-red-200 bg-red-50 text-red-800";
   const warningBox = isDarkTheme ? "border-yellow-800 bg-yellow-900/20 text-yellow-300" : "border-yellow-200 bg-yellow-50 text-yellow-800";
   const timelineDot = isDarkTheme ? "bg-purple-500" : "bg-purple-500";
   const timelineLine = isDarkTheme ? "bg-[#2d2d2d]" : "bg-purple-100";
-  const codeHeader = isDarkTheme ? "border-[#30363d] bg-[#161616] text-[#ccd0d4]" : "border-gray-200 bg-gray-50 text-gray-800";
+  const codeHeader = isDarkTheme ? "border-[#30363d] bg-[#0f0f10] text-[#ccd0d4]" : "border-gray-200 bg-gray-100 text-gray-800";
   const codeLineNum = isDarkTheme ? "border-[#30363d] text-[#6e7681]" : "border-gray-100 text-gray-500";
   const avatarBg = isDarkTheme ? "bg-purple-900/30 text-purple-300" : "bg-indigo-100 text-indigo-700";
   const gaugeBg = isDarkTheme ? "#2d2d2d" : "#e5e7eb";
   const modalOverlay = isDarkTheme ? "bg-black/60" : "bg-black/40";
-  const modalBg = isDarkTheme ? "bg-[#161616]" : "bg-white";
-  const linkCard = isDarkTheme ? "bg-[#1f2937] border-[#30363d] hover:border-purple-500/50 hover:bg-[#2d2d2d]" : "bg-gray-50 border-gray-200 hover:border-purple-200 hover:bg-white";
+  const modalBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-gray-100";
+  const linkCard = isDarkTheme ? "bg-[#1f2937] border-[#30363d] hover:border-purple-500/50 hover:bg-[#2d2d2d]" : "bg-gray-50 border-gray-200 hover:border-purple-200 hover:bg-gray-100";
   const badgeActive = isDarkTheme ? "bg-purple-900/30 text-purple-300" : "bg-purple-100 text-purple-700";
   const deleteBtn = isDarkTheme ? "bg-red-900/30 text-red-300 hover:bg-red-900/50" : "bg-red-100 text-red-700 hover:bg-red-200";
   const tabActiveBg = isDarkTheme ? "border-purple-500/30 bg-purple-600/20 text-purple-300" : "border-purple-200 bg-purple-100 text-purple-700";
-  const tabInactiveBg = isDarkTheme ? "border-[#30363d] bg-transparent text-[#8b949e] hover:border-purple-500/30 hover:text-purple-300" : "border-gray-200 bg-white text-gray-700 hover:border-purple-200 hover:text-purple-700";
-  const penaltyBox = isDarkTheme ? "border-[#30363d] bg-[#1f2937]" : "border-gray-200 bg-gray-50";
+  const tabInactiveBg = isDarkTheme ? "border-[#30363d] bg-transparent text-[#8b949e] hover:border-purple-500/30 hover:text-purple-300" : "border-gray-200 bg-gray-100 text-gray-700 hover:border-purple-200 hover:text-purple-700";
+  const penaltyBox = isDarkTheme ? "border-[#30363d] bg-[#1f2937]" : "border-gray-200 bg-gray-100";
   const commitHash = isDarkTheme ? "text-purple-400" : "text-purple-700";
 
   // Form accent colors
   const todayBtn = isDarkTheme ? "bg-purple-900/30 text-purple-300 hover:bg-purple-900/50" : "bg-purple-100 text-purple-700 hover:bg-purple-200";
-  const fileItem = isDarkTheme ? "bg-[#1f2937] text-[#ccd0d4]" : "bg-gray-50 text-gray-700";
-  const penaltyDeleteBtn = isDarkTheme ? "border-red-800 text-red-300 hover:bg-red-900/20" : "border-red-200 text-red-700 hover:bg-red-50";
+  const fileItem = isDarkTheme ? "bg-[#1f2937] text-[#ccd0d4]" : "bg-gray-100 text-gray-700";
+  const penaltyDeleteBtn = isDarkTheme ? "border-red-800 text-red-300 hover:bg-red-900/20" : "border-red-200 text-red-700 hover:bg-red-100";
   const { courseId } = useParams();
   const today = useMemo(() => {
     // Get Moscow date (UTC+3)

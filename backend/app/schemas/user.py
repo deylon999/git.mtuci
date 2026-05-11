@@ -29,7 +29,7 @@ class StudentUserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    email: EmailStr
+    email: str
     full_name: str
     created_at: datetime
 
@@ -38,7 +38,7 @@ class AdminUserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    email: EmailStr
+    email: str
     full_name: str
     role: UserRole
     is_blocked: bool

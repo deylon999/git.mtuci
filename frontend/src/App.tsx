@@ -8,6 +8,7 @@ import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import Footer from "./components/Footer";
 import { PendingCountProvider } from "./context/PendingCountContext";
+import { getTheme } from "./theme";
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
@@ -27,6 +28,7 @@ const LogsPage = lazy(() => import("./pages/LogsPage"));
 const ActivityPage = lazy(() => import("./pages/ActivityPage"));
 const MonitoringPage = lazy(() => import("./pages/MonitoringPage"));
 const AdminSettingsPage = lazy(() => import("./pages/AdminSettingsPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 
 const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 
@@ -49,19 +51,19 @@ export default function App() {
 
   const toggleTheme = () => setIsDarkTheme(prev => !prev);
 
-  // Theme colors - unified background
-  const appBgStyle = isDarkTheme ? { backgroundColor: "#111111" } : { backgroundColor: "#f9fafb" };
-  const mainBgStyle = isDarkTheme ? { backgroundColor: "#111111" } : { backgroundColor: "#ffffff" };
+  const theme = getTheme(isDarkTheme);
+  const appBgStyle = { backgroundColor: theme.bg };
+  const mainBgStyle = { backgroundColor: theme.bg2 };
 
   return (
     <PendingCountProvider>
-    <div className={`h-screen flex flex-col ${isDarkTheme ? "text-white" : "text-gray-900"}`} style={appBgStyle}>
+    <div className={`h-screen flex flex-col`} style={{ color: theme.text, backgroundColor: theme.bg }}>
       {!isAuthPage && <Header isDarkTheme={isDarkTheme} onToggleTheme={toggleTheme} />}
       <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 56px)' }}>
         {!isAuthPage ? <Sidebar isDarkTheme={isDarkTheme} /> : null}
         <div className="flex flex-1 flex-col min-h-0">
-          <main className="flex-1 overflow-y-auto py-6 px-4" style={mainBgStyle}>
-            <Suspense fallback={<div className={`mx-auto max-w-7xl px-4 text-sm ${isDarkTheme ? "text-gray-600" : "text-gray-400"}`}>Loading...</div>}>
+          <main className="flex-1 overflow-y-auto py-6 px-4" style={{ backgroundColor: theme.bg2 }}>
+            <Suspense fallback={<div className={`mx-auto max-w-7xl px-4 text-sm`} style={{ color: theme.text3 }}>Loading...</div>}>
               <Routes>
                 <Route path="/" element={<Navigate to="/home" replace />} />
                 <Route path="/home" element={<HomePage isDarkTheme={isDarkTheme} />} />
@@ -86,7 +88,7 @@ export default function App() {
                   <Route path="/grades" element={<ProfilePage isDarkTheme={isDarkTheme} />} />
                   <Route path="/submissions" element={<CoursesPage />} />
                   <Route path="/students" element={<CoursesPage />} />
-                  <Route path="/settings" element={<ProfilePage isDarkTheme={isDarkTheme} />} />
+                  <Route path="/settings" element={<SettingsPage isDarkTheme={isDarkTheme} onToggleTheme={toggleTheme} />} />
                   <Route element={<AdminRequired />}>
                     <Route path="/admin" element={<AdminPage isDarkTheme={isDarkTheme} />} />
                     <Route path="/users" element={<UsersPage isDarkTheme={isDarkTheme} />} />
@@ -111,22 +113,22 @@ export default function App() {
         toastOptions={{
           duration: 4000,
           style: {
-            background: isDarkTheme ? "#1e1e1e" : "#ffffff",
-            color: isDarkTheme ? "#ffffff" : "#1f2937",
-            border: isDarkTheme ? "1px solid #2d2d2d" : "1px solid #e5e7eb",
+            background: theme.bg3,
+            color: theme.text,
+            border: `1px solid ${theme.border}`,
             padding: "12px 16px",
             borderRadius: "8px",
           },
           success: {
             iconTheme: {
-              primary: "#10b981",
-              secondary: "#1e1e1e",
+              primary: theme.success,
+              secondary: theme.bg3,
             },
           },
           error: {
             iconTheme: {
-              primary: "#ef4444",
-              secondary: "#1e1e1e",
+              primary: theme.danger,
+              secondary: theme.bg3,
             },
           },
         }}
