@@ -25,7 +25,7 @@ const AdminPage = lazy(() => import("./pages/AdminPage"));
 const UsersPage = lazy(() => import("./pages/UsersPage"));
 const RolesPage = lazy(() => import("./pages/RolesPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
-const RepositoriesPage = lazy(() => import("./pages/RepositoriesPage"));
+const RepositoriesRoute = lazy(() => import("./components/RepositoriesRoute"));
 const ForksPage = lazy(() => import("./pages/ForksPage"));
 const LogsPage = lazy(() => import("./pages/LogsPage"));
 const ActivityPage = lazy(() => import("./pages/ActivityPage"));
@@ -33,6 +33,8 @@ const MonitoringPage = lazy(() => import("./pages/MonitoringPage"));
 const AdminSettingsPage = lazy(() => import("./pages/AdminSettingsPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const StudentDeadlinesPage = lazy(() => import("./pages/StudentDeadlinesPage"));
+const StudentRepositoryBrowsePage = lazy(() => import("./pages/StudentRepositoryBrowsePage"));
+const StudentRepositoryCommitsPage = lazy(() => import("./pages/StudentRepositoryCommitsPage"));
 
 const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 
@@ -88,11 +90,19 @@ export default function App() {
                   {/* Placeholder routes for new sidebar items */}
                   <Route path="/dashboard" element={<DashboardRoute isDarkTheme={isDarkTheme} />} />
                   <Route path="/projects" element={<CoursesPage />} />
-                  <Route path="/repositories" element={<RepositoriesPage isDarkTheme={isDarkTheme} />} />
+                  <Route path="/repositories" element={<RepositoriesRoute isDarkTheme={isDarkTheme} />} />
+                  <Route
+                    path="/repositories/:repoId/code"
+                    element={<StudentRepositoryBrowsePage isDarkTheme={isDarkTheme} />}
+                  />
+                  <Route
+                    path="/repositories/:repoId/commits"
+                    element={<StudentRepositoryCommitsPage isDarkTheme={isDarkTheme} />}
+                  />
                   <Route path="/assignments" element={<CoursesPage />} />
                   <Route path="/deadlines" element={<StudentDeadlinesPage isDarkTheme={isDarkTheme} />} />
-                  <Route path="/repositories/new" element={<RepositoriesPage isDarkTheme={isDarkTheme} />} />
-                  <Route path="/repositories/forks" element={<RepositoriesPage isDarkTheme={isDarkTheme} />} />
+                  <Route path="/repositories/new" element={<RepositoriesRoute isDarkTheme={isDarkTheme} />} />
+                  <Route path="/repositories/forks" element={<RepositoriesRoute isDarkTheme={isDarkTheme} />} />
                   <Route path="/grades" element={<ProfilePage isDarkTheme={isDarkTheme} />} />
                   <Route path="/submissions" element={<CoursesPage />} />
                   <Route path="/students" element={<CoursesPage />} />

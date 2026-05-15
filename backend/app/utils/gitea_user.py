@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+import re
+from urllib.parse import quote
+
+from app.models.user import User
+
+_GITEA_USER_RE = re.compile(r"[^a-zA-Z0-9._-]+")
+
+
+def resolve_gitea_username(user: User) -> str:
+    """
+    Gitea owner for a platform user.
+    Prefer MTUCI login (matches webhook pusher). Never returns empty or strings with '@'
+    (email in mtuci_login breaks Gitea API URLs).
+    """
+    candidates: list[str] = []
+    if user.mtuci_login and user.mtuci_login.strip():
+        candidates.append(user.mtuci_login.strip())
+    if user.email and "@" in user.email:
+        candidates.append(user.email.split("@", 1)[0].strip())
+
+    for raw in candidates:
+        login = raw.split("@", 1)[0].strip() if "@" in raw else raw
+        login = _GITEA_USER_RE.sub("-", login).strip("-._")
+        if login:
+            return login[:40]
+
+    fallback = str(user.id).replace("-", "")[:12]
+    return fallback or "student"
+
+
+def gitea_owner_path(owner: str) -> str:
+    """Encode owner for use in Gitea API URL paths."""
+    return quote(owner, safe="._-")
+
+
+def normalize_gitea_owner_repo(owner: str, repo: str) -> tuple[str, str]:
+    """
+    Ensure owner/repo are safe for Gitea API paths.
+    Strips accidental emails and rejects empty values (empty owner → Gitea 401 name: ]).
+    """
+    raw_owner = (owner or "").strip()
+    if "@" in raw_owner:
+        raw_owner = raw_owner.split("@", 1)[0].strip()
+    raw_owner = _GITEA_USER_RE.sub("-", raw_owner).strip("-._")
+
+    repo_name = (repo or "").strip()
+    if not raw_owner:
+        raise ValueError(
+            "Не удалось определить логин Gitea. Укажите mtuci_login в профиле (без @email)."
+        )
+    if not repo_name:
+        raise ValueError("У репозитория нет имени в Gitea — пересоздайте репозиторий.")
+    return raw_owner[:40], repo_name

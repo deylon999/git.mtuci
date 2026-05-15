@@ -1,52 +1,328 @@
 from __future__ import annotations
 
+import asyncio
 import base64
+import logging
+from datetime import datetime
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
 from app.core.config import settings
+from app.utils.gitea_user import gitea_owner_path, normalize_gitea_owner_repo
+
+logger = logging.getLogger(__name__)
 
 GITEA_ADMIN_USERNAME = settings.GITEA_ADMIN_USERNAME
 
+# Max commit pages per repo for dashboard stats (100 commits/page).
+COMMIT_COUNT_MAX_PAGES = 30
+COMMIT_WEEK_MAX_PAGES = 10
 
-def _get_auth_headers() -> dict[str, str]:
-    """
-    Возвращает заголовки авторизации для Gitea API.
-    Использует token если задан, иначе basic auth с admin credentials.
-    """
-    if settings.GITEA_TOKEN:
-        return {"Authorization": f"token {settings.GITEA_TOKEN}"}
 
-    # Basic auth с admin credentials
+class GiteaAuthError(RuntimeError):
+    """Gitea API rejected credentials (invalid token or missing admin user)."""
+
+
+def _basic_auth_headers() -> dict[str, str]:
     credentials = f"{settings.GITEA_ADMIN_USERNAME}:{settings.GITEA_ADMIN_PASSWORD}"
     encoded = base64.b64encode(credentials.encode()).decode()
     return {"Authorization": f"Basic {encoded}"}
 
 
-async def create_repo(repo_name: str) -> str:
+def _token_auth_headers() -> dict[str, str] | None:
+    token = (settings.GITEA_TOKEN or "").strip()
+    if not token:
+        return None
+    return {"Authorization": f"token {token}"}
+
+
+def _get_auth_headers(*, prefer_basic: bool = False) -> dict[str, str]:
     """
-    Создаёт репозиторий в Gitea через REST API.
-    Repo создаётся как публичный/приватный по дефолту: public (private=false).
+    Заголовки авторизации для Gitea API.
+    По умолчанию — token; при prefer_basic или пустом token — basic admin.
     """
+    if prefer_basic or _token_auth_headers() is None:
+        return _basic_auth_headers()
+    return _token_auth_headers()  # type: ignore[return-value]
+
+
+async def _gitea_request(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    **kwargs: Any,
+) -> httpx.Response:
+    """HTTP-запрос к Gitea с повтором через basic auth, если token отклонён (401)."""
+    merged = {**_get_auth_headers(), **(headers or {})}
+    resp = await client.request(method, url, headers=merged, **kwargs)
+    if resp.status_code == 401 and _token_auth_headers() is not None:
+        logger.warning("GITEA_TOKEN rejected; retrying with admin basic auth")
+        merged = {**_get_auth_headers(prefer_basic=True), **(headers or {})}
+        resp = await client.request(method, url, headers=merged, **kwargs)
+    return resp
+
+
+def gitea_public_base_url() -> str:
+    return settings.GITEA_PUBLIC_URL.rstrip("/")
+
+
+def build_clone_url(owner: str, repo_name: str) -> str:
+    return f"{gitea_public_base_url()}/{owner}/{repo_name}.git"
+
+
+def build_repo_web_url(owner: str, repo_name: str) -> str:
+    return f"{gitea_public_base_url()}/{owner}/{repo_name}"
+
+
+def build_repo_gitea_links(owner: str, repo_name: str) -> dict[str, str]:
+    """Standard Gitea repository section URLs."""
+    base = build_repo_web_url(owner, repo_name).rstrip("/")
+    return {
+        "code": base,
+        "issues": f"{base}/issues",
+        "pulls": f"{base}/pulls",
+        "wiki": f"{base}/wiki",
+        "settings": f"{base}/settings",
+        "commits": f"{base}/commits",
+        "activity": f"{base}/activity",
+    }
+
+
+async def get_last_commit_for_path(
+    *,
+    owner: str,
+    repo: str,
+    filepath: str,
+    ref: str | None = None,
+) -> dict[str, Any] | None:
+    """Latest commit touching a file or directory path."""
+    try:
+        commits, _ = await list_repo_commits_page(
+            owner=owner,
+            repo=repo,
+            limit=1,
+            page=1,
+            ref=ref,
+            path=filepath,
+        )
+    except Exception:
+        return None
+    if not commits or not isinstance(commits[0], dict):
+        return None
+    item = commits[0]
+    commit = item.get("commit") if isinstance(item.get("commit"), dict) else item
+    if not isinstance(commit, dict):
+        return None
+    msg = str(commit.get("message") or "").strip()
+    if "\n" in msg:
+        msg = msg.split("\n", 1)[0].strip()
+    author = commit.get("author") if isinstance(commit.get("author"), dict) else {}
+    return {
+        "message": msg or "Commit",
+        "committed_at": author.get("date"),
+        "sha": str(item.get("sha") or "")[:12],
+    }
+
+
+async def ensure_gitea_user(username: str) -> None:
+    """Create Gitea user via admin API if missing (idempotent)."""
     base_url = settings.GITEA_URL.rstrip("/")
-    api_url = f"{base_url}/api/v1/user/repos"
-
-    headers = _get_auth_headers()
-    payload = {"name": repo_name, "private": False}
-
     async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(api_url, headers=headers, json=payload)
+        check = await _gitea_request(
+            client,
+            "GET",
+            f"{base_url}/api/v1/users/{gitea_owner_path(username)}",
+        )
+        if check.status_code == 200:
+            return
+        if check.status_code == 401:
+            raise GiteaAuthError(
+                "Gitea отклонил авторизацию. Проверьте GITEA_TOKEN или учётную запись "
+                f"{settings.GITEA_ADMIN_USERNAME} в Gitea."
+            )
+        if check.status_code != 404:
+            logger.warning("Gitea user check for %s: %s", username, check.status_code)
+            return
+
+        create = await _gitea_request(
+            client,
+            "POST",
+            f"{base_url}/api/v1/admin/users",
+            headers={"Content-Type": "application/json"},
+            json={
+                "username": username,
+                "email": f"{username}@gitmtuci.lab",
+                "password": "changeme123",
+                "must_change_password": False,
+            },
+        )
+        if create.status_code not in (200, 201):
+            logger.error("Failed to create Gitea user %s: %s", username, create.text[:300])
+
+
+async def create_repository_for_owner(
+    *,
+    owner_username: str,
+    name: str,
+    description: str | None = None,
+    private: bool = False,
+    auto_init: bool = True,
+) -> dict[str, Any]:
+    """Create repository under a specific Gitea user (admin API)."""
+    await ensure_gitea_user(owner_username)
+    base_url = settings.GITEA_URL.rstrip("/")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            f"{base_url}/api/v1/admin/users/{gitea_owner_path(owner_username)}/repos",
+            headers={"Content-Type": "application/json"},
+            json={
+                "name": name,
+                "description": description or "",
+                "private": private,
+                "auto_init": auto_init,
+                "default_branch": "main",
+            },
+        )
 
     if resp.status_code == 409:
-        # Репозиторий уже существует — считаем это idempotent-успехом.
-        return repo_name
+        meta = await get_repo_metadata(owner=owner_username, repo=name)
+        if meta:
+            return meta
+        raise RuntimeError(f"Gitea repo conflict: {name}")
 
     if resp.status_code not in (200, 201):
-        # Пытаемся отдать понятную ошибку.
-        raise RuntimeError(f"Gitea create repo failed: {resp.status_code} {resp.text}")
+        raise RuntimeError(f"Gitea create repo failed: {resp.status_code} {resp.text[:500]}")
 
+    data = resp.json()
+    return data if isinstance(data, dict) else {"name": name}
+
+
+async def create_repo(repo_name: str) -> str:
+    """
+    Deprecated: creates under admin token user. Use create_repository_for_owner.
+    Kept for backward compatibility in scripts/tests.
+    """
+    await create_repository_for_owner(
+        owner_username=GITEA_ADMIN_USERNAME,
+        name=repo_name,
+        private=False,
+    )
     return repo_name
+
+
+async def delete_repository(*, owner: str, repo_name: str) -> None:
+    base_url = settings.GITEA_URL.rstrip("/")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "DELETE",
+            f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo_name, safe='')}",
+        )
+    if resp.status_code not in (204, 404):
+        logger.warning("Gitea delete %s/%s: %s", owner, repo_name, resp.status_code)
+
+
+async def ensure_repo_webhook(*, owner: str, repo_name: str) -> None:
+    """Register push webhook on a repo (idempotent)."""
+    base_url = settings.GITEA_URL.rstrip("/")
+    webhook_url = settings.WEBHOOK_BASE_URL.rstrip("/")
+    push_url = f"{webhook_url}/gitea/push"
+    secret = settings.GITEA_WEBHOOK_SECRET
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        hooks_resp = await _gitea_request(
+            client,
+            "GET",
+            f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo_name, safe='')}/hooks",
+        )
+        if hooks_resp.status_code == 200:
+            for hook in hooks_resp.json():
+                if hook.get("config", {}).get("url") == push_url:
+                    return
+
+        resp = await _gitea_request(
+            client,
+            "POST",
+            f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo_name, safe='')}/hooks",
+            headers={"Content-Type": "application/json"},
+            json={
+                "type": "gitea",
+                "config": {
+                    "url": push_url,
+                    "content_type": "json",
+                    "secret": secret,
+                },
+                "events": ["push"],
+                "active": True,
+            },
+        )
+        if resp.status_code not in (200, 201):
+            logger.warning("Webhook create %s/%s: %s", owner, repo_name, resp.status_code)
+
+
+def stats_from_repo_metadata(meta: dict[str, Any] | None) -> dict[str, Any]:
+    """Extract display stats from Gitea GET /repos/{owner}/{repo} payload."""
+    if not meta:
+        return {}
+    language = meta.get("language")
+    if isinstance(language, str):
+        language = language.strip() or None
+    forks = meta.get("forks_count")
+    stars = meta.get("stars_count")
+    open_pr = meta.get("open_pr_counter")
+    if open_pr is None:
+        open_pr = meta.get("open_pr_count")
+    return {
+        "language": language,
+        "forks_count": int(forks) if forks is not None else None,
+        "stars_count": int(stars) if stars is not None else None,
+        "open_pr_count": int(open_pr) if open_pr is not None else None,
+    }
+
+
+async def get_repo_metadata(*, owner: str, repo: str) -> dict[str, Any] | None:
+    try:
+        owner, repo = normalize_gitea_owner_repo(owner, repo)
+    except ValueError:
+        return None
+    base_url = settings.GITEA_URL.rstrip("/")
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await _gitea_request(
+            client,
+            "GET",
+            f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}",
+        )
+    if resp.status_code == 401:
+        raise GiteaAuthError(
+            "Gitea отклонил авторизацию. Обновите GITEA_TOKEN в .env или создайте пользователя "
+            f"{settings.GITEA_ADMIN_USERNAME} в Gitea."
+        )
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        logger.warning("Gitea get repo %s/%s: %s", owner, repo, resp.status_code)
+        return None
+    data = resp.json()
+    return data if isinstance(data, dict) else None
+
+
+async def resolve_repo_owner(*, primary_owner: str, repo_name: str) -> str:
+    """
+    Return Gitea owner where the repo actually lives.
+    Supports legacy assignment repos created under admin before the fix.
+    """
+    if await get_repo_metadata(owner=primary_owner, repo=repo_name):
+        return primary_owner
+    if primary_owner != GITEA_ADMIN_USERNAME:
+        if await get_repo_metadata(owner=GITEA_ADMIN_USERNAME, repo=repo_name):
+            return GITEA_ADMIN_USERNAME
+    return primary_owner
 
 
 async def list_repo_commits_page(
@@ -55,6 +331,10 @@ async def list_repo_commits_page(
     repo: str,
     limit: int = 100,
     page: int = 1,
+    since: str | None = None,
+    until: str | None = None,
+    ref: str | None = None,
+    path: str | None = None,
 ) -> tuple[list[dict[str, Any]], bool]:
     """
     Возвращает одну страницу коммитов репозитория.
@@ -62,13 +342,19 @@ async def list_repo_commits_page(
     лучше делать с учётом этого уже на уровне маршрута.
     """
     base_url = settings.GITEA_URL.rstrip("/")
-    api_url = f"{base_url}/api/v1/repos/{owner}/{repo}/commits"
-    headers = _get_auth_headers()
-
-    params = {"limit": limit, "page": page}
+    api_url = f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/commits"
+    params: dict[str, Any] = {"limit": limit, "page": page}
+    if since:
+        params["since"] = since
+    if until:
+        params["until"] = until
+    if ref:
+        params["sha"] = ref
+    if path:
+        params["path"] = path.lstrip("/")
 
     async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.get(api_url, headers=headers, params=params)
+        resp = await _gitea_request(client, "GET", api_url, params=params)
 
     # Gitea возвращает 409, если репозиторий пустой (нет ни одного коммита).
     if resp.status_code == 409:
@@ -112,35 +398,234 @@ async def list_repo_commits(
     return commits
 
 
-async def get_repo_contents(*, owner: str, repo: str, filepath: str = "") -> Any:
+async def count_repo_commits(
+    *,
+    owner: str,
+    repo: str,
+    since: datetime | None = None,
+    max_pages: int = COMMIT_COUNT_MAX_PAGES,
+    page_size: int = 100,
+) -> tuple[int | None, bool]:
+    """
+    Count commits in a repo. Returns (count, is_approximate).
+    None if Gitea is unreachable or repo missing.
+    """
+    since_str = since.isoformat() if since else None
+    total = 0
+    page = 1
+    try:
+        while page <= max_pages:
+            commits, has_more = await list_repo_commits_page(
+                owner=owner,
+                repo=repo,
+                limit=page_size,
+                page=page,
+                since=since_str,
+            )
+            total += len(commits)
+            if not has_more:
+                return total, False
+            page += 1
+        return total, True
+    except Exception as exc:
+        logger.debug("count_repo_commits %s/%s: %s", owner, repo, exc)
+        return None, False
+
+
+async def enrich_repos_gitea_stats(
+    repo_specs: list[tuple[str, str]],
+    *,
+    since: datetime | None = None,
+    max_pages: int = COMMIT_COUNT_MAX_PAGES,
+) -> list[tuple[int | None, bool, str]]:
+    """
+    For each (primary_owner, repo_name): resolve owner, count commits.
+    Returns list of (count, is_approx, resolved_owner) in same order.
+    """
+    owner_cache: dict[tuple[str, str], str] = {}
+    sem = asyncio.Semaphore(6)
+
+    async def one(primary: str, repo_name: str) -> tuple[int | None, bool, str]:
+        key = (primary, repo_name)
+        if key not in owner_cache:
+            owner_cache[key] = await resolve_repo_owner(primary_owner=primary, repo_name=repo_name)
+        owner = owner_cache[key]
+        async with sem:
+            count, approx = await count_repo_commits(
+                owner=owner,
+                repo=repo_name,
+                since=since,
+                max_pages=max_pages if since is None else COMMIT_WEEK_MAX_PAGES,
+            )
+        return count, approx, owner
+
+    return await asyncio.gather(*[one(p, r) for p, r in repo_specs])
+
+
+async def list_repo_branches(*, owner: str, repo: str) -> list[dict[str, Any]]:
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/branches"
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", api_url)
+    if resp.status_code == 404:
+        return []
+    if resp.status_code != 200:
+        logger.warning("Gitea list branches %s/%s: %s", owner, repo, resp.status_code)
+        return []
+    data = resp.json()
+    if not isinstance(data, list):
+        return []
+    return [b for b in data if isinstance(b, dict)]
+
+
+async def list_repo_file_paths(
+    *,
+    owner: str,
+    repo: str,
+    ref: str,
+    max_files: int = 800,
+) -> list[str]:
+    """Flat list of file paths in a branch (for search / go-to-file)."""
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    base_url = settings.GITEA_URL.rstrip("/")
+    branch_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/branches/{quote(ref, safe='')}"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        branch_resp = await _gitea_request(client, "GET", branch_url)
+        if branch_resp.status_code != 200:
+            return []
+        branch_data = branch_resp.json()
+        commit = branch_data.get("commit") if isinstance(branch_data, dict) else None
+        sha = commit.get("id") if isinstance(commit, dict) else None
+        if not sha:
+            return []
+        tree_url = (
+            f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/git/trees/{sha}"
+        )
+        tree_resp = await _gitea_request(
+            client,
+            "GET",
+            tree_url,
+            params={"recursive": "true", "per_page": max_files},
+        )
+    if tree_resp.status_code != 200:
+        return []
+    tree_data = tree_resp.json()
+    tree_items = tree_data.get("tree") if isinstance(tree_data, dict) else None
+    if not isinstance(tree_items, list):
+        return []
+    paths: list[str] = []
+    for item in tree_items:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != "blob":
+            continue
+        path = str(item.get("path") or "").strip()
+        if path:
+            paths.append(path)
+        if len(paths) >= max_files:
+            break
+    return sorted(paths)
+
+
+async def create_repo_file(
+    *,
+    owner: str,
+    repo: str,
+    filepath: str,
+    content: str,
+    branch: str,
+    message: str,
+) -> dict[str, Any]:
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    cleaned = filepath.strip().strip("/")
+    if not cleaned or ".." in cleaned.split("/"):
+        raise ValueError("Invalid filepath")
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/contents/{quote(cleaned, safe='/')}"
+    )
+    encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            api_url,
+            headers={"Content-Type": "application/json"},
+            json={
+                "branch": branch,
+                "content": encoded,
+                "message": message or f"Add {cleaned}",
+            },
+        )
+    if resp.status_code in (401, 403):
+        raise GiteaAuthError("Gitea отклонил создание файла. Проверьте права доступа.")
+    if resp.status_code == 422:
+        raise RuntimeError("Файл уже существует. Выберите другое имя или отредактируйте в Gitea.")
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Gitea create file failed: {resp.status_code} {resp.text[:300]}")
+    data = resp.json()
+    return data if isinstance(data, dict) else {}
+
+
+async def get_repo_contents(
+    *,
+    owner: str,
+    repo: str,
+    filepath: str = "",
+    ref: str | None = None,
+) -> Any:
     """
     Обёртка над Gitea Contents API:
     GET /api/v1/repos/{owner}/{repo}/contents/{filepath}
     """
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
     base_url = settings.GITEA_URL.rstrip("/")
-    headers = _get_auth_headers()
-
     cleaned = filepath.lstrip("/")
     if cleaned:
-        api_url = f"{base_url}/api/v1/repos/{owner}/{repo}/contents/{cleaned}"
+        api_url = (
+            f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/contents/{quote(cleaned, safe='/')}"
+        )
     else:
         # Для корня Gitea ожидает /contents/ (с trailing slash).
-        api_url = f"{base_url}/api/v1/repos/{owner}/{repo}/contents/"
+        api_url = f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/contents/"
+
+    params: dict[str, str] = {}
+    if ref:
+        params["ref"] = ref
 
     async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.get(api_url, headers=headers)
+        resp = await _gitea_request(client, "GET", api_url, params=params or None)
 
+    if resp.status_code == 404:
+        raise RuntimeError(
+            f"Репозиторий {owner}/{repo} не найден в Gitea. "
+            "Возможно, он создан только в базе — удалите и создайте заново."
+        )
+    if resp.status_code == 401:
+        raise GiteaAuthError(
+            f"Gitea отклонил запрос для {owner}/{repo}. Проверьте GITEA_TOKEN и что пользователь "
+            f"«{owner}» существует в Gitea."
+        )
     if resp.status_code != 200:
-        raise RuntimeError(f"Gitea get contents failed: {resp.status_code} {resp.text}")
+        raise RuntimeError(f"Gitea get contents failed: {resp.status_code} {resp.text[:300]}")
 
     return resp.json()
 
 
-async def get_repo_file_content(*, owner: str, repo: str, filepath: str) -> str:
+async def get_repo_file_content(
+    *,
+    owner: str,
+    repo: str,
+    filepath: str,
+    ref: str | None = None,
+) -> str:
     """
     Возвращает декодированный текст файла из Content API (base64 -> UTF-8).
     """
-    data = await get_repo_contents(owner=owner, repo=repo, filepath=filepath)
+    data = await get_repo_contents(owner=owner, repo=repo, filepath=filepath, ref=ref)
     if not isinstance(data, dict) or data.get("type") != "file":
         raise RuntimeError(f"Gitea file not found: {filepath}")
 

@@ -10,6 +10,7 @@ import {
   X,
   Check,
   AlertTriangle,
+  Search,
 } from "lucide-react";
 import { clearToken } from "../api/client";
 import { getMe, invalidateMeCache } from "../api/authApi";
@@ -66,6 +67,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -170,6 +172,13 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
     navigate("/login", { replace: true });
   }
 
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) return;
+    navigate(`/courses?q=${encodeURIComponent(q)}`);
+  }
+
   const theme = getTheme(isDarkTheme);
   const hasNotifications = notifications.filter((n) => !n.read).length > 0;
 
@@ -185,7 +194,28 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
             />
           </Link>
 
-          <div className="flex items-center gap-2">
+          <div className="flex-1 max-w-2xl mx-4 md:mx-8 hidden md:block min-w-0">
+            <form onSubmit={handleSearch} className="relative">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
+                style={{ color: theme.text3 }}
+              />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Поиск по курсам и заданиям…"
+                className="w-full h-9 pl-10 pr-4 rounded-lg text-sm outline-none border focus:ring-2 focus:ring-blue-500/50"
+                style={{
+                  backgroundColor: theme.inputBg,
+                  borderColor: theme.border,
+                  color: theme.text,
+                }}
+              />
+            </form>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={onToggleTheme}

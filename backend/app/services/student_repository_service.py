@@ -6,7 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.student_repository import StudentRepository
-from app.services.gitea_service import create_repo
+from app.models.user import User
+from app.services.gitea_service import (
+    create_repository_for_owner,
+    ensure_repo_webhook,
+)
+from app.utils.gitea_user import resolve_gitea_username
 
 
 def build_student_repo_name(*, assignment_id: UUID, student_id: UUID) -> str:
@@ -29,8 +34,21 @@ async def ensure_student_repository(
     if existing:
         return existing
 
+    student = await session.get(User, student_id)
+    if not student:
+        raise ValueError("Student not found")
+
+    owner = resolve_gitea_username(student)
     repo_name = build_student_repo_name(assignment_id=assignment_id, student_id=student_id)
-    await create_repo(repo_name)
+
+    await create_repository_for_owner(
+        owner_username=owner,
+        name=repo_name,
+        description="Assignment repository",
+        private=True,
+        auto_init=True,
+    )
+    await ensure_repo_webhook(owner=owner, repo_name=repo_name)
 
     record = StudentRepository(
         assignment_id=assignment_id,

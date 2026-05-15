@@ -34,11 +34,18 @@ class Settings(BaseModel):
         default_factory=lambda: int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
     )
 
-    # Gitea (REST API)
+    # Gitea (REST API — internal URL for backend → Gitea in Docker/network)
     GITEA_URL: str = Field(default_factory=lambda: os.getenv("GITEA_URL", "http://gitea:3000"))
+    # Public URL shown to students (clone links, open in browser). Defaults to GITEA_URL.
+    GITEA_PUBLIC_URL: str = Field(
+        default_factory=lambda: os.getenv("GITEA_PUBLIC_URL") or os.getenv("GITEA_URL", "http://localhost:3000")
+    )
     GITEA_TOKEN: str = Field(default_factory=lambda: os.getenv("GITEA_TOKEN", ""))
     GITEA_ADMIN_USERNAME: str = Field(default_factory=lambda: os.getenv("GITEA_ADMIN_USERNAME", "gitea_admin"))
     GITEA_ADMIN_PASSWORD: str = Field(default_factory=lambda: os.getenv("GITEA_ADMIN_PASSWORD", "admin12345"))
+    GITEA_WEBHOOK_SECRET: str = Field(default_factory=lambda: os.getenv("GITEA_WEBHOOK_SECRET", ""))
+    # Base URL Gitea uses to call our webhooks (Docker service name or public API host)
+    WEBHOOK_BASE_URL: str = Field(default_factory=lambda: os.getenv("WEBHOOK_BASE_URL", "http://api:8000/webhooks"))
 
     # Frontend URL for password reset links
     FRONTEND_URL: str = Field(default_factory=lambda: os.getenv("FRONTEND_URL", "http://localhost:3001"))

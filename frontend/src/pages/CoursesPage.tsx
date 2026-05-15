@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { getMe } from "../api/authApi";
 import { createCourse, deleteCourse, getCourses, getGroups } from "../api/coursesApi";
 import { getTheme } from "../theme";
@@ -12,6 +12,8 @@ interface CoursesPageProps {
 
 export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
   const theme = getTheme(isDarkTheme);
+  const [searchParams] = useSearchParams();
+  const searchQuery = (searchParams.get("q") ?? "").trim().toLowerCase();
 
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -78,6 +80,15 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
 
   const canCreateCourse = me?.role === "teacher";
 
+  const filteredCourses = useMemo(() => {
+    if (!searchQuery) return courses;
+    return courses.filter((c) => {
+      const title = c.title.toLowerCase();
+      const desc = (c.description ?? "").toLowerCase();
+      return title.includes(searchQuery) || desc.includes(searchQuery);
+    });
+  }, [courses, searchQuery]);
+
   async function onCreateCourse(e: FormEvent) {
     e.preventDefault();
     setCreateLoading(true);
@@ -125,7 +136,14 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
   return (
     <div className="w-full min-h-screen py-4" style={{ backgroundColor: theme.bg }}>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-3xl font-semibold" style={{ color: theme.text }}>Мои курсы</h1>
+        <div>
+          <h1 className="text-3xl font-semibold" style={{ color: theme.text }}>Мои курсы</h1>
+          {searchQuery ? (
+            <p className="mt-1 text-sm" style={{ color: theme.text2 }}>
+              Поиск: «{searchParams.get("q")}»
+            </p>
+          ) : null}
+        </div>
         {canCreateCourse ? (
           <button
             onClick={() => setShowCreateForm((v) => !v)}
@@ -283,8 +301,14 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
         </div>
       ) : null}
 
+      {!loading && !error && searchQuery && filteredCourses.length === 0 ? (
+        <p className="text-sm mb-4" style={{ color: theme.text2 }}>
+          Ничего не найдено по запросу «{searchParams.get("q")}»
+        </p>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {courses.map((c) => (
+        {filteredCourses.map((c) => (
           <div
             key={c.id}
             className="rounded-xl border p-5 shadow-md transition duration-200"

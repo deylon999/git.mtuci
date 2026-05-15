@@ -2,6 +2,7 @@ import os
 import asyncio
 import base64
 from datetime import datetime, timezone
+from urllib.parse import quote
 from typing import List, Optional
 from uuid import UUID
 
@@ -22,7 +23,9 @@ from app.schemas.repository import (
     RepositoryUpdateRequest,
 )
 from app.services.activity_service import log_repo_created, log_repo_deleted
+from app.services.gitea_service import build_clone_url, ensure_repo_webhook
 from app.services.logging_service import log_info, log_warning, log_event_background
+from app.utils.gitea_user import gitea_owner_path, resolve_gitea_username
 
 router = APIRouter(tags=["repositories"])
 
@@ -71,7 +74,7 @@ async def create_gitea_repository(name: str, description: Optional[str], owner_u
 
         # Check if user exists in Gitea
         user_check = await client.get(
-            f"{GITEA_URL}/api/v1/users/{owner_username}",
+            f"{GITEA_URL}/api/v1/users/{gitea_owner_path(owner_username)}",
             headers=auth_headers,
             timeout=5.0,
         )
@@ -101,7 +104,7 @@ async def create_gitea_repository(name: str, description: Optional[str], owner_u
         # Create repository for the user using admin API
         logger.info(f"Creating repo {name} for user {owner_username}")
         response = await client.post(
-            f"{GITEA_URL}/api/v1/admin/users/{owner_username}/repos",
+            f"{GITEA_URL}/api/v1/admin/users/{gitea_owner_path(owner_username)}/repos",
             headers={
                 **auth_headers,
                 "Content-Type": "application/json",
@@ -145,7 +148,7 @@ async def create_gitea_webhook(owner: str, repo_name: str) -> None:
     async with httpx.AsyncClient() as client:
         # Check if webhook already exists
         hooks_response = await client.get(
-            f"{GITEA_URL}/api/v1/repos/{owner}/{repo_name}/hooks",
+            f"{GITEA_URL}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo_name, safe='')}/hooks",
             headers=auth_headers,
             timeout=10.0,
         )
@@ -160,7 +163,7 @@ async def create_gitea_webhook(owner: str, repo_name: str) -> None:
         # Create webhook for push events
         logger.info(f"Creating webhook for {owner}/{repo_name} -> {webhook_url}/gitea/push")
         response = await client.post(
-            f"{GITEA_URL}/api/v1/repos/{owner}/{repo_name}/hooks",
+            f"{GITEA_URL}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo_name, safe='')}/hooks",
             headers=auth_headers,
             json={
                 "type": "gitea",
@@ -187,7 +190,7 @@ async def delete_gitea_repository(owner: str, repo_name: str) -> None:
 
     async with httpx.AsyncClient() as client:
         response = await client.delete(
-            f"{GITEA_URL}/api/v1/repos/{owner}/{repo_name}",
+            f"{GITEA_URL}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo_name, safe='')}",
             headers=auth_headers,
         )
         # Ignore 404 errors (repo might not exist)
@@ -245,27 +248,19 @@ async def create_repository(
             # Log all user attributes for debugging
             logger.info(f"User object: id={current_user.id}, email={current_user.email}, full_name={current_user.full_name}")
             
-            # Use email prefix or user id as username
-            if current_user.email and "@" in current_user.email:
-                owner_username = current_user.email.split("@")[0]
-            else:
-                # Fallback: use user id first 8 chars
-                owner_username = str(current_user.id)[:8]
-            
+            owner_username = resolve_gitea_username(current_user)
             logger.info(f"Owner username extracted: {owner_username}")
             gitea_repo = await create_gitea_repository(
                 name=payload.name,
                 description=payload.description,
                 owner_username=owner_username,
             )
-            # Build clone URL
-            clone_url = gitea_repo.get("clone_url") or f"{GITEA_URL}/{owner_username}/{payload.name}.git"
             gitea_repo_name = gitea_repo.get("name") or payload.name
+            clone_url = build_clone_url(owner_username, gitea_repo_name)
             gitea_success = True
             logger.info(f"Gitea repo created successfully: {clone_url}")
-            
-            # Create webhook for automatic activity tracking
-            await create_gitea_webhook(owner=owner_username, repo_name=payload.name)
+
+            await ensure_repo_webhook(owner=owner_username, repo_name=gitea_repo_name)
         except Exception as e:
             # Log but don't fail - create repo in DB only
             logger.warning(f"Gitea repo creation failed (will create in DB only): {e}")
