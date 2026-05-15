@@ -23,6 +23,8 @@ export interface UserRead {
   email: string;
   full_name: string;
   role: UserRole;
+  group_name: string | null;
+  student_id: string | null;
   is_blocked: boolean;
   avatar_url: string | null;
   avatar_display_mode: "cover" | "contain" | "fill" | "scale-down";

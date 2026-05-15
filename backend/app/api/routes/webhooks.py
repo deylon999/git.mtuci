@@ -6,6 +6,7 @@ import hmac
 import hashlib
 import asyncio
 from typing import Optional
+from uuid import UUID
 import logging
 from datetime import datetime, timezone
 
@@ -17,7 +18,18 @@ from sqlalchemy import select
 from app.core.database import get_session
 from app.models.user import User
 from app.models.system_log import LogLevel, LogSource
-from app.services.activity_service import log_commit, log_push, log_repo_created, log_repo_deleted, log_pull_request, log_pr_merge, log_fork, log_login
+from app.services.activity_service import (
+    log_commit,
+    log_push,
+    log_repo_created,
+    log_repo_deleted,
+    log_pull_request,
+    log_pr_merge,
+    log_pr_comment,
+    log_fork,
+    log_login,
+)
+from app.services.notification_service import create_pr_comment_notification
 from app.services.logging_service import log_event_background
 from app.core.security import get_current_user
 from app.api.routes.websocket import broadcast_new_activity, broadcast_stats_update
@@ -84,6 +96,15 @@ class GiteaUserPayload(BaseModel):
     """Gitea user event payload (login/logout)."""
     action: str  # login, logout
     user: dict
+
+
+class GiteaIssueCommentPayload(BaseModel):
+    """Gitea issue_comment event (includes PR review comments)."""
+    action: str
+    issue: dict
+    comment: dict
+    repository: dict
+    sender: dict
 
 
 def verify_webhook_signature(payload: bytes, signature: Optional[str]) -> bool:
@@ -167,6 +188,8 @@ async def gitea_webhook(
         return await handle_fork_event(body, session, logger, ip_address)
     elif event_type == "pull_request":
         return await handle_pull_request_event(body, session, logger, ip_address)
+    elif event_type == "issue_comment":
+        return await handle_issue_comment_event(body, session, logger, ip_address)
     elif event_type in ("create", "delete"):
         return await handle_repository_event(body, session, logger, ip_address)
     else:
@@ -455,6 +478,93 @@ async def handle_pull_request_event(body: bytes, session: AsyncSession, logger: 
 
     await broadcast_stats_update()
     return {"status": "ok", "action": action, "pr_number": pr_number}
+
+
+async def _user_id_by_mtuci_login(session: AsyncSession, login: str) -> Optional[UUID]:
+    if not login:
+        return None
+    result = await session.execute(select(User.id).where(User.mtuci_login == login))
+    return result.scalar_one_or_none()
+
+
+async def _repo_owner_id_from_full_name(session: AsyncSession, full_name: str) -> Optional[UUID]:
+    parts = full_name.split("/")
+    if len(parts) != 2:
+        return None
+    owner_login, _repo = parts[0], parts[1]
+    return await _user_id_by_mtuci_login(session, owner_login)
+
+
+async def handle_issue_comment_event(
+    body: bytes,
+    session: AsyncSession,
+    logger: logging.Logger,
+    ip_address: str = "unknown",
+) -> dict:
+    """Handle comments on issues/PRs from Gitea."""
+    try:
+        payload = GiteaIssueCommentPayload.model_validate_json(body)
+    except Exception as e:
+        logger.error(f"Invalid issue_comment payload: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid issue_comment payload: {str(e)}",
+        )
+
+    if payload.action not in ("created", "edited"):
+        return {"status": "ok", "message": f"Action {payload.action} ignored"}
+
+    issue = payload.issue or {}
+    if not issue.get("pull_request"):
+        return {"status": "ok", "message": "Not a pull request comment"}
+
+    repo_name = payload.repository.get("full_name", "unknown")
+    pr_number = int(issue.get("number", 0))
+    comment_body = (payload.comment or {}).get("body", "") or ""
+    sender_login = payload.sender.get("login", "") or (payload.comment or {}).get("user", {}).get("login", "")
+
+    owner_id = await _repo_owner_id_from_full_name(session, repo_name)
+    if not owner_id:
+        logger.warning(f"Could not resolve repo owner for {repo_name}")
+        return {"status": "ok", "message": "Owner not found"}
+
+    sender_id = await _user_id_by_mtuci_login(session, sender_login)
+    if sender_id == owner_id:
+        return {"status": "ok", "message": "Self-comment ignored"}
+
+    log_entry = await log_pr_comment(
+        session=session,
+        user_id=owner_id,
+        repo_name=repo_name,
+        pr_number=pr_number,
+        comment_body=comment_body,
+        commenter_login=sender_login or None,
+        ip_address=ip_address,
+    )
+    await session.flush()
+
+    await create_pr_comment_notification(
+        session,
+        user_id=owner_id,
+        repo_name=repo_name,
+        pr_number=pr_number,
+        comment_preview=comment_body,
+        activity_log_id=log_entry.id,
+    )
+
+    result = await session.execute(select(User.full_name).where(User.id == owner_id))
+    owner_name = result.scalar_one_or_none() or "Unknown"
+
+    await broadcast_new_activity(
+        activity_type="pr_comment",
+        user_name=owner_name,
+        repo_name=repo_name,
+        message=f"PR #{pr_number}: комментарий от {sender_login}",
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+    await broadcast_stats_update()
+
+    return {"status": "ok", "pr_number": pr_number, "owner_id": str(owner_id)}
 
 
 async def handle_fork_event(body: bytes, session: AsyncSession, logger: logging.Logger, ip_address: str = "unknown") -> dict:

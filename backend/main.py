@@ -19,6 +19,8 @@ from app.api.routes.roles import router as roles_router
 from app.api.routes.webhooks import router as webhooks_router
 from app.api.routes.websocket import router as websocket_router
 from app.api.routes.activity import router as activity_router
+from app.api.routes.student_dashboard import router as student_dashboard_router
+from app.api.routes.notifications import router as notifications_router
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import hash_password
@@ -74,6 +76,8 @@ app.include_router(roles_router)
 app.include_router(webhooks_router)
 app.include_router(websocket_router)
 app.include_router(activity_router)
+app.include_router(student_dashboard_router)
+app.include_router(notifications_router)
 
 # Development CORS:
 # Frontend runs on http://localhost:3001 and API on http://localhost:8000.

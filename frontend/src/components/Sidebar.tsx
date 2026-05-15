@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutGrid,
@@ -12,11 +12,13 @@ import {
   Settings,
   AlertCircle,
   BookOpen,
-  BarChart3,
+  FolderPlus,
+  ClipboardList,
 } from "lucide-react";
 import { getMe } from "../api/authApi";
 import { getUserStats, getSystemMetrics, getServiceStatus } from "../api/adminApi";
 import { usePendingCount } from "../context/PendingCountContext";
+import { useStudentNavCountsOptional } from "../context/StudentNavCountsContext";
 import { getTheme } from "../theme";
 import type { UserRole } from "../api/types";
 
@@ -43,7 +45,7 @@ const adminMenuSections: MenuSection[] = [
   {
     title: "ОБЗОР",
     items: [
-      { path: "/dashboard", label: "Дашборд", icon: LayoutGrid },
+      { path: "/admin", label: "Дашборд", icon: LayoutGrid },
     ],
   },
   {
@@ -73,21 +75,28 @@ const adminMenuSections: MenuSection[] = [
 
 const studentMenuSections: MenuSection[] = [
   {
+    title: "ГЛАВНОЕ",
+    items: [{ path: "/dashboard", label: "Дашборд", icon: LayoutGrid }],
+  },
+  {
+    title: "МОИ РЕПОЗИТОРИИ",
+    items: [
+      { path: "/repositories", label: "Все репозитории", icon: FileText },
+      { path: "/repositories/new", label: "Создать репо", icon: FolderPlus },
+      { path: "/repositories/forks", label: "Форки", icon: GitFork },
+    ],
+  },
+  {
     title: "УЧЁБА",
     items: [
-      { path: "/courses", label: "Курсы", icon: BookOpen },
-      { path: "/dashboard", label: "Дашборд", icon: LayoutGrid },
+      { path: "/courses", label: "Мои курсы", icon: BookOpen },
+      { path: "/assignments", label: "Задания", icon: ClipboardList },
+      { path: "/deadlines", label: "Дедлайны", icon: Clock },
+      { path: "/grades", label: "Оценки", icon: TrendingUp },
     ],
   },
   {
-    title: "РЕПОЗИТОРИИ",
-    items: [
-      { path: "/repositories", label: "Мои репозитории", icon: FileText },
-      { path: "/assignments", label: "Задания", icon: BarChart3 },
-    ],
-  },
-  {
-    title: "НАСТРОЙКИ",
+    title: "АККАУНТ",
     items: [
       { path: "/profile", label: "Профиль", icon: Users },
       { path: "/settings", label: "Настройки", icon: Settings },
@@ -100,8 +109,14 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   const location = useLocation();
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const { pendingCount, setPendingCount } = usePendingCount();
+  const studentNav = useStudentNavCountsOptional();
   const [hasSystemIssues, setHasSystemIssues] = useState(false);
   const theme = getTheme(isDarkTheme);
+
+  useEffect(() => {
+    if (userRole !== "student") return;
+    void studentNav?.refreshSidebarCounts();
+  }, [userRole, studentNav?.refreshSidebarCounts]);
 
   useEffect(() => {
     console.log("[Sidebar] useEffect triggered");
@@ -182,6 +197,25 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(`${path}/`);
 
+  const menuSections = useMemo(() => {
+    if (userRole === "admin") return adminMenuSections;
+    if (userRole !== "student") return studentMenuSections;
+    const sidebar = studentNav?.sidebar;
+    return studentMenuSections.map((section) => ({
+      ...section,
+      items: section.items.map((item) => {
+        let badge = item.badge;
+        if (item.path === "/courses" && sidebar && sidebar.courses_count > 0) {
+          badge = { text: String(sidebar.courses_count), variant: "orange" };
+        }
+        if (item.path === "/assignments" && sidebar && sidebar.assignments_pending > 0) {
+          badge = { text: String(sidebar.assignments_pending), variant: "red" };
+        }
+        return { ...item, badge };
+      }),
+    }));
+  }, [userRole, studentNav?.sidebar]);
+
   // While loading, show nothing or student menu to avoid flashing admin menu
   if (userRole === null) {
     console.log("[Sidebar] Role is null, showing loading state");
@@ -192,7 +226,6 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
     );
   }
 
-  const menuSections = userRole === "admin" ? adminMenuSections : studentMenuSections;
   console.log("[Sidebar] Rendering menu for role:", userRole, "sections count:", menuSections.length);
 
   return (
@@ -233,7 +266,7 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
                           {pendingCount}
                         </span>
                       )}
-                      {item.badge && (
+                      {item.path !== "/users" && item.badge && (
                         <span
                           className={`flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full text-xs font-semibold ${
                             item.badge.variant === "red"

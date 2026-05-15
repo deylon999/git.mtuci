@@ -24,6 +24,7 @@ class ActivityType(str, Enum):
     login = "login"
     logout = "logout"
     file_upload = "file_upload"
+    pr_comment = "pr_comment"
 
 
 class ActivityLog(Base):

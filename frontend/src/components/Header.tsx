@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getMe } from "../api/authApi";
 import type { UserRole } from "../api/types";
 import AdminHeader from "./AdminHeader";
-import NavBar from "./NavBar";
+import StudentHeader from "./StudentHeader";
 
 interface HeaderProps {
   isDarkTheme?: boolean;
@@ -41,5 +41,5 @@ export default function Header({ isDarkTheme = false, onToggleTheme }: HeaderPro
     return <AdminHeader isDarkTheme={isDarkTheme} onToggleTheme={onToggleTheme} />;
   }
 
-  return <NavBar isDarkTheme={isDarkTheme} onToggleTheme={onToggleTheme} />;
+  return <StudentHeader isDarkTheme={isDarkTheme} onToggleTheme={onToggleTheme} />;
 }

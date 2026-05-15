@@ -137,6 +137,30 @@ async def log_pr_merge(
     )
 
 
+async def log_pr_comment(
+    session: AsyncSession,
+    user_id: UUID,
+    repo_name: str,
+    pr_number: int,
+    comment_body: str,
+    *,
+    commenter_login: str | None = None,
+    ip_address: Optional[str] = None,
+) -> ActivityLog:
+    """Log a comment on a pull request (from Gitea issue_comment webhook)."""
+    preview = (comment_body or "").strip().replace("\n", " ")[:200]
+    by = f" от {commenter_login}" if commenter_login else ""
+    return await log_activity(
+        session=session,
+        user_id=user_id,
+        activity_type=ActivityType.pr_comment,
+        repo_name=repo_name,
+        message=f"PR #{pr_number}{by}: {preview}",
+        ip_address=ip_address,
+        user_login=commenter_login,
+    )
+
+
 async def log_fork(
     session: AsyncSession,
     user_id: UUID,

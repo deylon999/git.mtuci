@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { clearToken } from "../api/client";
 import { getMe, invalidateMeCache } from "../api/authApi";
 import { getTheme } from "../theme";
+import { pageGutterClass } from "../layout/pageLayout";
 import type { UserRole } from "../api/types";
 
 interface NavBarProps {
@@ -90,7 +91,7 @@ export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarPro
 
   return (
     <div className="border-b transition-colors" style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2">
+      <div className={`flex items-center justify-between py-2 ${pageGutterClass}`}>
         {/* Left: Logo */}
         <Link to="/home" className="flex items-center">
           <img

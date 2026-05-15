@@ -365,7 +365,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
 
   return (
     <div className={`h-full overflow-y-auto ${pageBg}`}>
-      <div className="max-w-[1400px] mx-auto py-6 px-6 pb-20">
+      <div className="w-full py-6 pb-20">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">

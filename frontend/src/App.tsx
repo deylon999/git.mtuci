@@ -4,17 +4,20 @@ import { useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import AuthRequired from "./components/AuthRequired";
 import AdminRequired from "./components/AdminRequired";
+import RoleBasedHomeRedirect from "./components/RoleBasedHomeRedirect";
+import DashboardRoute from "./components/DashboardRoute";
+import HomeRoute from "./components/HomeRoute";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import Footer from "./components/Footer";
 import { PendingCountProvider } from "./context/PendingCountContext";
+import { StudentNavCountsProvider } from "./context/StudentNavCountsContext";
 import { getTheme } from "./theme";
+import { pageGutterClass } from "./layout/pageLayout";
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
-const HomePage = lazy(() => import("./pages/HomePage"));
-const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const CoursesPage = lazy(() => import("./pages/CoursesPage"));
 const CoursePage = lazy(() => import("./pages/CoursePage"));
 const AssignmentPage = lazy(() => import("./pages/AssignmentPage"));
@@ -29,6 +32,7 @@ const ActivityPage = lazy(() => import("./pages/ActivityPage"));
 const MonitoringPage = lazy(() => import("./pages/MonitoringPage"));
 const AdminSettingsPage = lazy(() => import("./pages/AdminSettingsPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const StudentDeadlinesPage = lazy(() => import("./pages/StudentDeadlinesPage"));
 
 const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 
@@ -57,16 +61,17 @@ export default function App() {
 
   return (
     <PendingCountProvider>
+    <StudentNavCountsProvider>
     <div className={`h-screen flex flex-col`} style={{ color: theme.text, backgroundColor: theme.bg }}>
       {!isAuthPage && <Header isDarkTheme={isDarkTheme} onToggleTheme={toggleTheme} />}
       <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 56px)' }}>
         {!isAuthPage ? <Sidebar isDarkTheme={isDarkTheme} /> : null}
         <div className="flex flex-1 flex-col min-h-0">
-          <main className="flex-1 overflow-y-auto py-6 px-4" style={{ backgroundColor: theme.bg2 }}>
-            <Suspense fallback={<div className={`mx-auto max-w-7xl px-4 text-sm`} style={{ color: theme.text3 }}>Loading...</div>}>
+          <main className={`flex-1 overflow-y-auto py-6 ${pageGutterClass}`} style={{ backgroundColor: theme.bg2 }}>
+            <Suspense fallback={<div className="text-sm" style={{ color: theme.text3 }}>Loading...</div>}>
               <Routes>
-                <Route path="/" element={<Navigate to="/home" replace />} />
-                <Route path="/home" element={<HomePage isDarkTheme={isDarkTheme} />} />
+                <Route path="/" element={<RoleBasedHomeRedirect />} />
+                <Route path="/home" element={<HomeRoute isDarkTheme={isDarkTheme} />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -81,10 +86,13 @@ export default function App() {
                     element={<AssignmentPage />}
                   />
                   {/* Placeholder routes for new sidebar items */}
-                  <Route path="/dashboard" element={<DashboardPage isDarkTheme={isDarkTheme} />} />
+                  <Route path="/dashboard" element={<DashboardRoute isDarkTheme={isDarkTheme} />} />
                   <Route path="/projects" element={<CoursesPage />} />
                   <Route path="/repositories" element={<RepositoriesPage isDarkTheme={isDarkTheme} />} />
                   <Route path="/assignments" element={<CoursesPage />} />
+                  <Route path="/deadlines" element={<StudentDeadlinesPage isDarkTheme={isDarkTheme} />} />
+                  <Route path="/repositories/new" element={<RepositoriesPage isDarkTheme={isDarkTheme} />} />
+                  <Route path="/repositories/forks" element={<RepositoriesPage isDarkTheme={isDarkTheme} />} />
                   <Route path="/grades" element={<ProfilePage isDarkTheme={isDarkTheme} />} />
                   <Route path="/submissions" element={<CoursesPage />} />
                   <Route path="/students" element={<CoursesPage />} />
@@ -101,7 +109,7 @@ export default function App() {
                   </Route>
                 </Route>
 
-                <Route path="*" element={<Navigate to="/home" replace />} />
+                <Route path="*" element={<RoleBasedHomeRedirect />} />
               </Routes>
             </Suspense>
           </main>
@@ -134,6 +142,7 @@ export default function App() {
         }}
       />
     </div>
+    </StudentNavCountsProvider>
     </PendingCountProvider>
   );
 }

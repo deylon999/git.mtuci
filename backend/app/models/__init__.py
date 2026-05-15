@@ -7,6 +7,7 @@ from app.models.course_enrollment import CourseEnrollment
 from app.models.repository import Repository
 from app.models.student_repository import StudentRepository
 from app.models.submission import Submission
+from app.models.notification import Notification
 from app.models.system_log import SystemLog, LogLevel, LogSource
 from app.models.user import User
 
@@ -18,6 +19,7 @@ __all__ = [
     "Assignment",
     "AssignmentFile",
     "Submission",
+    "Notification",
     "Repository",
     "StudentRepository",
     "ActivityLog",

@@ -2,6 +2,7 @@ import { Github, GitBranch, AlertCircle, BookOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiRequest } from "../api/client";
 import { getTheme } from "../theme";
+import { pageGutterClass } from "../layout/pageLayout";
 
 interface FooterProps {
   isDarkTheme?: boolean;
@@ -35,7 +36,7 @@ export default function Footer({ isDarkTheme = true }: FooterProps) {
 
   return (
     <footer className={`border-t`} style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
-      <div className="max-w-7xl mx-auto px-4 py-4">
+      <div className={`${pageGutterClass} py-4`}>
         <div className={`flex flex-col sm:flex-row items-center justify-between gap-4`} style={{ color: theme.text2 }}>
           {/* Left: Links */}
           <div className="flex items-center gap-6 text-sm">

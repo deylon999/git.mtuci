@@ -123,7 +123,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 min-h-screen py-4" style={{ backgroundColor: theme.bg }}>
+    <div className="w-full min-h-screen py-4" style={{ backgroundColor: theme.bg }}>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-3xl font-semibold" style={{ color: theme.text }}>Мои курсы</h1>
         {canCreateCourse ? (
