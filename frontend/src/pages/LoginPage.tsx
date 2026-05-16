@@ -59,7 +59,7 @@ export default function LoginPage() {
       const me = await getMe({ force: true });
       navigate(getDefaultRouteForRole(me.role), { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : "Не удалось войти");
     } finally {
       setLoading(false);
     }
@@ -76,7 +76,7 @@ export default function LoginPage() {
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium transition-colors" style={{ color: theme.text2 }}>Email</label>
+            <label className="mb-1 block text-sm font-medium transition-colors" style={{ color: theme.text2 }}>Эл. почта</label>
             <input
               className="w-full rounded-lg border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
@@ -89,7 +89,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium transition-colors" style={{ color: theme.text2 }}>Password</label>
+            <label className="mb-1 block text-sm font-medium transition-colors" style={{ color: theme.text2 }}>Пароль</label>
             <div className="relative">
               <input
                 className="w-full rounded-lg border px-3 py-2.5 pr-10 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
@@ -145,7 +145,7 @@ export default function LoginPage() {
             className="w-full rounded-lg px-3 py-2.5 font-medium transition disabled:opacity-60"
             style={{ backgroundColor: theme.accent, color: '#fff' }}
           >
-            {loading ? "Signing in..." : "Войти"}
+            {loading ? "Вход…" : "Войти"}
           </button>
 
           <button

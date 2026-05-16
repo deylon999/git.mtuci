@@ -69,7 +69,7 @@ export default function RegisterPage() {
       }
       navigate("/login", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      setError(err instanceof Error ? err.message : "Не удалось зарегистрироваться");
     } finally {
       setLoading(false);
     }
@@ -82,13 +82,13 @@ export default function RegisterPage() {
           <div className={`text-xl font-semibold ${brandText}`}>GIT.MTUCI</div>
           <h1 className={`mt-3 text-2xl font-semibold ${titleText}`}>Создание аккаунта</h1>
           <p className={`mt-1 text-sm ${subtitleText}`}>
-            Создайте аккаунт преподавателя или студента (по умолчанию student).
+            Создайте аккаунт преподавателя или студента (по умолчанию — студент).
           </p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>Email</label>
+            <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>Эл. почта</label>
             <input
               className={`w-full rounded-lg border px-3 py-2.5 outline-none transition ${inputBg} ${inputFocus}`}
               type="email"
@@ -100,7 +100,7 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>Password</label>
+            <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>Пароль</label>
             <div className="relative">
               <input
                 className={`w-full rounded-lg border px-3 py-2.5 pr-10 outline-none transition ${inputBg} ${inputFocus}`}
@@ -182,7 +182,7 @@ export default function RegisterPage() {
             </>
           ) : (
             <div>
-              <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>Full name</label>
+              <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>ФИО</label>
               <input
                 className={`w-full rounded-lg border px-3 py-2.5 outline-none transition ${inputBg} ${inputFocus}`}
                 value={fullName}
@@ -202,7 +202,7 @@ export default function RegisterPage() {
             disabled={loading}
             className={`w-full rounded-lg px-3 py-2.5 font-medium transition disabled:opacity-60 ${primaryBtn}`}
           >
-            {loading ? "Creating..." : useMtuci ? "Создать через ЛК МТУСИ" : "Создать аккаунт"}
+            {loading ? "Создание…" : useMtuci ? "Создать через ЛК МТУСИ" : "Создать аккаунт"}
           </button>
 
           <button
