@@ -1,17 +1,11 @@
-import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import RepoFileBrowser from "../components/RepoFileBrowser";
-import { getStudentRepositories } from "../api/studentDashboardApi";
+import RepoSectionShell from "../components/repo/RepoSectionShell";
+import { useStudentRepoWorkspace, type StudentRepoMeta } from "../hooks/useStudentRepoWorkspace";
 import { getTheme } from "../theme";
 
-interface BrowseState {
+interface BrowseState extends Partial<StudentRepoMeta> {
   name: string;
-  giteaPath?: string | null;
-  giteaWebUrl?: string | null;
-  cloneUrl?: string | null;
-  description?: string | null;
-  language?: string | null;
 }
 
 interface StudentRepositoryBrowsePageProps {
@@ -24,72 +18,31 @@ export default function StudentRepositoryBrowsePage({ isDarkTheme = false }: Stu
   const navigate = useNavigate();
   const location = useLocation();
   const stateMeta = location.state as BrowseState | null;
+  const { meta, summary, loading } = useStudentRepoWorkspace(repoId, stateMeta);
 
-  const [meta, setMeta] = useState<BrowseState | null>(stateMeta);
-  const [loadingMeta, setLoadingMeta] = useState(!stateMeta);
-
-  useEffect(() => {
-    if (!repoId) {
-      navigate("/repositories", { replace: true });
-      return;
-    }
-    if (stateMeta) {
-      setMeta(stateMeta);
-      setLoadingMeta(false);
-      return;
-    }
-
-    let cancelled = false;
-    async function load() {
-      setLoadingMeta(true);
-      try {
-        const data = await getStudentRepositories();
-        if (cancelled) return;
-        const repo = data.repositories.find((r) => r.id === repoId);
-        if (!repo) {
-          navigate("/repositories", { replace: true });
-          return;
-        }
-        setMeta({
-          name: repo.name,
-          giteaPath: repo.gitea_path,
-          giteaWebUrl: repo.gitea_web_url,
-          cloneUrl: repo.clone_url,
-          description: repo.description,
-          language: repo.language,
-        });
-      } catch {
-        if (!cancelled) navigate("/repositories", { replace: true });
-      } finally {
-        if (!cancelled) setLoadingMeta(false);
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [repoId, stateMeta, navigate]);
-
-  if (loadingMeta || !meta || !repoId) {
+  if (!repoId || loading && !meta) {
     return (
-      <div className="flex items-center justify-center gap-2 py-20 text-sm" style={{ color: theme.text2 }}>
-        <Loader2 className="h-5 w-5 animate-spin" />
+      <div className="flex items-center justify-center py-20 text-sm" style={{ color: theme.text2 }}>
         Загрузка репозитория…
       </div>
     );
   }
 
-  return (
-    <div className="w-full flex flex-col gap-4 max-w-7xl mx-auto">
-      <Link
-        to="/repositories"
-        className="inline-flex w-fit items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors hover:opacity-90"
-        style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text2 }}
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        К репозиториям
-      </Link>
+  if (!meta) return null;
 
+  return (
+    <RepoSectionShell
+      theme={theme}
+      repoId={repoId}
+      activeTab="code"
+      meta={meta}
+      summary={summary}
+      loading={loading}
+      onGoToReadme={() => {
+        document.getElementById("repo-readme")?.scrollIntoView({ behavior: "smooth" });
+      }}
+      onOpenLicense={(path) => navigate(`/repositories/${repoId}/code`, { state: { ...meta, openFile: path } })}
+    >
       <RepoFileBrowser
         repoId={repoId}
         isDarkTheme={isDarkTheme}
@@ -99,7 +52,10 @@ export default function StudentRepositoryBrowsePage({ isDarkTheme = false }: Stu
         cloneUrl={meta.cloneUrl}
         repoDescription={meta.description}
         repoLanguage={meta.language}
+        embedded
+        externalSummary={summary}
+        externalSummaryLoading={loading}
       />
-    </div>
+    </RepoSectionShell>
   );
 }

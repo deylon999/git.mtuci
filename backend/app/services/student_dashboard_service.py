@@ -533,6 +533,154 @@ async def get_student_repository_branches(
     }
 
 
+def _parse_gitea_issue(item: dict) -> dict:
+    user = item.get("user") if isinstance(item.get("user"), dict) else {}
+    labels = [
+        str(lb.get("name") or "").strip()
+        for lb in (item.get("labels") or [])
+        if isinstance(lb, dict) and lb.get("name")
+    ]
+    return {
+        "number": int(item.get("number") or 0),
+        "title": str(item.get("title") or "Без названия").strip(),
+        "state": str(item.get("state") or "open"),
+        "author_name": str(user.get("login") or user.get("full_name") or "").strip() or None,
+        "labels": labels,
+        "comments_count": int(item.get("comments") or 0),
+        "created_at": item.get("created_at"),
+        "updated_at": item.get("updated_at"),
+    }
+
+
+def _parse_gitea_pull(item: dict) -> dict:
+    user = item.get("user") if isinstance(item.get("user"), dict) else {}
+    head = item.get("head") if isinstance(item.get("head"), dict) else {}
+    base = item.get("base") if isinstance(item.get("base"), dict) else {}
+    return {
+        "number": int(item.get("number") or 0),
+        "title": str(item.get("title") or "Без названия").strip(),
+        "state": str(item.get("state") or "open"),
+        "author_name": str(user.get("login") or user.get("full_name") or "").strip() or None,
+        "head_branch": str(head.get("ref") or "").strip() or None,
+        "base_branch": str(base.get("ref") or "").strip() or None,
+        "created_at": item.get("created_at"),
+        "updated_at": item.get("updated_at"),
+    }
+
+
+async def get_student_repository_issues(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    page: int = 1,
+    limit: int = 20,
+    state: str = "open",
+) -> dict:
+    from app.services.gitea_service import list_repo_issues_page
+
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    raw, has_more = await list_repo_issues_page(
+        owner=target.owner,
+        repo=target.repo_name,
+        page=max(page, 1),
+        limit=min(limit, 50),
+        state=state,
+    )
+    issues = [_parse_gitea_issue(i) for i in raw if isinstance(i, dict)]
+    return {"issues": issues, "page": page, "has_more": has_more}
+
+
+async def get_student_repository_pulls(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    page: int = 1,
+    limit: int = 20,
+    state: str = "open",
+) -> dict:
+    from app.services.gitea_service import list_repo_pulls_page
+
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    raw, has_more = await list_repo_pulls_page(
+        owner=target.owner,
+        repo=target.repo_name,
+        page=max(page, 1),
+        limit=min(limit, 50),
+        state=state,
+    )
+    pulls = [_parse_gitea_pull(p) for p in raw if isinstance(p, dict)]
+    return {"pulls": pulls, "page": page, "has_more": has_more}
+
+
+async def get_student_repository_wiki_pages(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+) -> dict:
+    from app.services.gitea_service import list_repo_wiki_pages
+
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    raw = await list_repo_wiki_pages(owner=target.owner, repo=target.repo_name)
+    pages = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or item.get("pageName") or "").strip()
+        slug = str(item.get("slug") or item.get("sub_url") or title).strip().strip("/")
+        if not title and not slug:
+            continue
+        pages.append(
+            {
+                "title": title or slug,
+                "slug": slug or title,
+                "subtitle": str(item.get("subtitle") or "").strip() or None,
+            }
+        )
+    return {"pages": pages, "enabled": True}
+
+
+async def get_student_repository_wiki_content(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    page: str,
+) -> dict:
+    from app.services.gitea_service import get_repo_wiki_page
+
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    data = await get_repo_wiki_page(
+        owner=target.owner,
+        repo=target.repo_name,
+        page_name=page,
+    )
+    if not data:
+        raise ValueError("Wiki page not found")
+    title = str(data.get("title") or page).strip()
+    slug = str(data.get("sub_url") or data.get("slug") or page).strip().strip("/")
+    content = str(data.get("content") or "")
+    return {"title": title, "slug": slug, "content": content}
+
+
 async def search_student_repository_files(
     session: AsyncSession,
     *,

@@ -1,0 +1,92 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  getStudentRepoSummary,
+  getStudentRepositories,
+  type StudentRepoSummary,
+} from "../api/studentDashboardApi";
+import { getCachedRepoWorkspace, setCachedRepoWorkspace } from "../utils/repoWorkspaceCache";
+
+export interface StudentRepoMeta {
+  name: string;
+  giteaPath: string | null;
+  giteaWebUrl: string | null;
+  cloneUrl: string | null;
+  description: string | null;
+  language: string | null;
+  visibility: string | null;
+}
+
+function metaFromPartial(initial?: Partial<StudentRepoMeta> | null): StudentRepoMeta | null {
+  if (!initial?.name) return null;
+  return {
+    name: initial.name,
+    giteaPath: initial.giteaPath ?? null,
+    giteaWebUrl: initial.giteaWebUrl ?? null,
+    cloneUrl: initial.cloneUrl ?? null,
+    description: initial.description ?? null,
+    language: initial.language ?? null,
+    visibility: initial.visibility ?? null,
+  };
+}
+
+export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?: Partial<StudentRepoMeta> | null) {
+  const navigate = useNavigate();
+  const cached = repoId ? getCachedRepoWorkspace(repoId) : undefined;
+  const [meta, setMeta] = useState<StudentRepoMeta | null>(
+    () => metaFromPartial(initialMeta) ?? cached?.meta ?? null,
+  );
+  const [summary, setSummary] = useState<StudentRepoSummary | null>(cached?.summary ?? null);
+  const [loading, setLoading] = useState(() => !meta && !cached?.meta);
+
+  useEffect(() => {
+    if (!repoId) {
+      navigate("/repositories", { replace: true });
+      return;
+    }
+    let cancelled = false;
+    async function load() {
+      const hasMeta = !!meta?.name;
+      if (!hasMeta) setLoading(true);
+      try {
+        let nextMeta = meta;
+        if (!nextMeta?.name) {
+          const list = await getStudentRepositories();
+          const repo = list.repositories.find((r) => r.id === repoId);
+          if (!repo) {
+            navigate("/repositories", { replace: true });
+            return;
+          }
+          nextMeta = {
+            name: repo.name,
+            giteaPath: repo.gitea_path,
+            giteaWebUrl: repo.gitea_web_url,
+            cloneUrl: repo.clone_url,
+            description: repo.description,
+            language: repo.language,
+            visibility: repo.visibility,
+          };
+          if (!cancelled) setMeta(nextMeta);
+        }
+        const summaryRes = await getStudentRepoSummary(repoId);
+        if (!cancelled) {
+          setSummary(summaryRes);
+          if (nextMeta) {
+            setCachedRepoWorkspace(repoId, { meta: nextMeta, summary: summaryRes });
+          }
+        }
+      } catch {
+        if (!cancelled) navigate("/repositories", { replace: true });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoId, navigate]);
+
+  return { meta, summary, loading, setSummary };
+}

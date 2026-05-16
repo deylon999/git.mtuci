@@ -194,8 +194,26 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
     };
   }, [userRole]);
 
-  const isActive = (path: string) =>
-    location.pathname === path || location.pathname.startsWith(`${path}/`);
+  /** Служебные разделы под /repositories — не подсвечивают «Все репозитории». */
+  const REPO_LIST_UTILITY_SEGMENTS = new Set(["new", "forks"]);
+
+  const isActive = (path: string) => {
+    const pathname = location.pathname;
+    if (pathname === path) return true;
+
+    if (path === "/repositories") {
+      if (!pathname.startsWith("/repositories/")) return false;
+      const first = pathname.slice("/repositories/".length).split("/")[0];
+      if (!first || REPO_LIST_UTILITY_SEGMENTS.has(first)) return false;
+      return true;
+    }
+
+    if (path === "/repositories/new" || path === "/repositories/forks") {
+      return pathname === path;
+    }
+
+    return pathname.startsWith(`${path}/`);
+  };
 
   const menuSections = useMemo(() => {
     if (userRole === "admin") return adminMenuSections;

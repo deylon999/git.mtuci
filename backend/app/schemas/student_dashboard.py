@@ -207,6 +207,57 @@ class StudentRepoCommitsRead(BaseModel):
     has_more: bool = False
 
 
+class StudentRepoIssueRead(BaseModel):
+    number: int
+    title: str
+    state: str
+    author_name: str | None = None
+    labels: list[str] = Field(default_factory=list)
+    comments_count: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class StudentRepoIssuesRead(BaseModel):
+    issues: list[StudentRepoIssueRead] = Field(default_factory=list)
+    page: int = 1
+    has_more: bool = False
+
+
+class StudentRepoPullRead(BaseModel):
+    number: int
+    title: str
+    state: str
+    author_name: str | None = None
+    head_branch: str | None = None
+    base_branch: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class StudentRepoPullsRead(BaseModel):
+    pulls: list[StudentRepoPullRead] = Field(default_factory=list)
+    page: int = 1
+    has_more: bool = False
+
+
+class StudentRepoWikiPageRead(BaseModel):
+    title: str
+    slug: str
+    subtitle: str | None = None
+
+
+class StudentRepoWikiPagesRead(BaseModel):
+    pages: list[StudentRepoWikiPageRead] = Field(default_factory=list)
+    enabled: bool = True
+
+
+class StudentRepoWikiContentRead(BaseModel):
+    title: str
+    slug: str
+    content: str = ""
+
+
 class StudentRepoFileSearchItemRead(BaseModel):
     path: str
 

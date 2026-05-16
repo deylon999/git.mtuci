@@ -12,8 +12,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { CustomCheckbox } from "../components/CustomCheckbox";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+import { API_URL } from "../api/client";
+import { getAdminRepositories } from "../api/adminApi";
 
 interface Repository {
   id: string;
@@ -222,22 +222,13 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      params.append("skip", offset.toString());
-      params.append("limit", limit.toString());
-      if (typeFilter) params.append("repo_type", typeFilter);
-      if (languageFilter) params.append("language", languageFilter);
-      if (blockedFilter) params.append("is_blocked", blockedFilter);
-
-      const response = await fetch(`${API_URL}/admin/repositories?${params}`, {
-        headers: getAuthHeaders(),
+      const data = await getAdminRepositories({
+        skip: offset,
+        limit,
+        repo_type: typeFilter || undefined,
+        language: languageFilter || undefined,
+        is_blocked: blockedFilter === "true" ? true : blockedFilter === "false" ? false : undefined,
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
       setRepositories(data);
       // Estimate total from stats for now
       setTotalCount(stats?.total_repositories || data.length);

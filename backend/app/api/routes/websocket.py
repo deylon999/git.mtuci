@@ -2,14 +2,18 @@
 WebSocket endpoints for real-time activity updates
 """
 import asyncio
-import json
-from typing import List, Dict, Any
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any, Dict, List
+from uuid import UUID
 
-from app.core.database import get_session
-from app.models import ActivityLog, User, ActivityType
-from sqlalchemy import select
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+
+# RFC 6455: policy violation (invalid/missing auth token)
+_WS_CLOSE_POLICY = 1008
+
+from app.core.database import SessionLocal
+from app.core.security import get_current_user_from_token
+from app.services.notification_realtime import notification_manager, push_notifications_updated
+from app.services.notification_service import sync_user_notifications
 
 router = APIRouter(prefix="/ws", tags=["websocket"])
 
@@ -115,3 +119,59 @@ async def test_broadcast():
 async def get_connections_count():
     """Get number of active WebSocket connections."""
     return {"connections": len(manager.active_connections)}
+
+
+@router.websocket("/notifications")
+async def notifications_websocket(websocket: WebSocket, token: str | None = Query(None)):
+    """
+    Per-user WebSocket for notification updates.
+    Client receives `notifications_updated` and should refetch GET /notifications.
+    """
+    if not token:
+        await websocket.close(code=_WS_CLOSE_POLICY, reason="Missing token")
+        return
+
+    async with SessionLocal() as session:
+        try:
+            user = await get_current_user_from_token(token, session)
+        except Exception:
+            await websocket.close(code=_WS_CLOSE_POLICY, reason="Invalid token")
+            return
+
+        user_id: UUID = user.id
+        group_name = user.group_name
+        role = user.role
+
+    await notification_manager.connect(user_id, websocket)
+    try:
+        await websocket.send_json({"type": "connected", "message": "Notifications WebSocket connected"})
+        await push_notifications_updated(user_id)
+
+        async with SessionLocal() as session:
+            await sync_user_notifications(
+                session,
+                user_id=user_id,
+                group_name=group_name,
+                role=role,
+            )
+
+        while True:
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                if data == "ping":
+                    await websocket.send_json({"type": "pong"})
+                elif data == "refresh":
+                    async with SessionLocal() as session:
+                        await sync_user_notifications(
+                            session,
+                            user_id=user_id,
+                            group_name=group_name,
+                            role=role,
+                        )
+                    await push_notifications_updated(user_id)
+            except asyncio.TimeoutError:
+                await websocket.send_json({"type": "ping"})
+    except WebSocketDisconnect:
+        notification_manager.disconnect(user_id, websocket)
+    except Exception:
+        notification_manager.disconnect(user_id, websocket)

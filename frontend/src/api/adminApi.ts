@@ -124,6 +124,45 @@ export async function getCommitsByFaculty(): Promise<FacultyCommitsStat[]> {
   return apiRequest<FacultyCommitsStat[]>("/stats/commits-by-faculty");
 }
 
+export interface AdminRepository {
+  id: string;
+  name: string;
+  description: string | null;
+  gitea_repo_name: string | null;
+  clone_url: string | null;
+  owner_id: string | null;
+  owner_full_name: string | null;
+  commits_count: number;
+  is_public: boolean;
+  repo_type: "public" | "private" | "course";
+  language: string | null;
+  is_blocked: boolean;
+  faculty_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminRepositoriesQuery {
+  skip?: number;
+  limit?: number;
+  repo_type?: "public" | "private" | "course";
+  language?: string;
+  is_blocked?: boolean;
+}
+
+export async function getAdminRepositories(
+  query: AdminRepositoriesQuery = {},
+): Promise<AdminRepository[]> {
+  const params = new URLSearchParams();
+  if (query.skip != null) params.set("skip", String(query.skip));
+  if (query.limit != null) params.set("limit", String(query.limit));
+  if (query.repo_type) params.set("repo_type", query.repo_type);
+  if (query.language) params.set("language", query.language);
+  if (query.is_blocked != null) params.set("is_blocked", String(query.is_blocked));
+  const qs = params.toString();
+  return apiRequest<AdminRepository[]>(`/admin/repositories${qs ? `?${qs}` : ""}`);
+}
+
 export interface MyCommitsResponse {
   commits: number;
   repositories: number;

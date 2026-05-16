@@ -48,6 +48,10 @@ interface RepoFileBrowserProps {
   cloneUrl?: string | null;
   repoDescription?: string | null;
   repoLanguage?: string | null;
+  /** Встроен в RepoSectionShell: без шапки, вкладок и сайдбара */
+  embedded?: boolean;
+  externalSummary?: StudentRepoSummary | null;
+  externalSummaryLoading?: boolean;
 }
 
 const README_NAMES = ["readme.md", "readme.markdown", "readme", "readme.txt"];
@@ -161,6 +165,9 @@ export default function RepoFileBrowser({
   cloneUrl,
   repoDescription,
   repoLanguage,
+  embedded = false,
+  externalSummary,
+  externalSummaryLoading,
 }: RepoFileBrowserProps) {
   const theme = getTheme(isDarkTheme);
 
@@ -300,8 +307,13 @@ export default function RepoFileBrowser({
   }, [repoId, branch]);
 
   useEffect(() => {
+    if (embedded) {
+      setSummary(externalSummary ?? null);
+      setSummaryLoading(externalSummaryLoading ?? false);
+      return;
+    }
     void loadSummary();
-  }, [loadSummary]);
+  }, [embedded, loadSummary, externalSummary, externalSummaryLoading]);
 
   const onBranchChange = (next: string) => {
     setBranch(next);
@@ -428,12 +440,11 @@ export default function RepoFileBrowser({
     />
   );
 
-  const navTabs = (
+  const navTabs = embedded ? null : (
     <RepoNavTabs
       theme={theme}
       repoId={repoId}
       active="code"
-      giteaLinks={summary?.gitea_links}
       openIssuesCount={summary?.open_issues_count}
       openPrCount={summary?.open_pr_count}
     />
@@ -635,10 +646,9 @@ export default function RepoFileBrowser({
     </div>
   ) : null;
 
-  return (
-    <div className="flex flex-col xl:flex-row gap-4 items-start w-full">
-      <div className="flex-1 min-w-0 flex flex-col gap-4">
-      {isRepoHome && (
+  const browserBody = (
+    <div className={embedded ? "flex flex-col gap-4" : "flex-1 min-w-0 flex flex-col gap-4"}>
+      {!embedded && isRepoHome && (
         <header
           className="rounded-xl border overflow-hidden"
           style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}
@@ -676,8 +686,16 @@ export default function RepoFileBrowser({
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreateFile}
       />
-      </div>
+    </div>
+  );
 
+  if (embedded) {
+    return browserBody;
+  }
+
+  return (
+    <div className="flex flex-col xl:flex-row gap-4 items-start w-full">
+      {browserBody}
       <RepoProjectSidebar
         theme={theme}
         loading={summaryLoading}

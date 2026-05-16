@@ -325,3 +325,78 @@ export function getStudentRepoFileContent(
     `/students/me/repositories/${repoId}/files/${encodeRepoFilePath(filepath)}${repoQuery({ branch })}`,
   );
 }
+
+export interface StudentRepoIssue {
+  number: number;
+  title: string;
+  state: string;
+  author_name: string | null;
+  labels: string[];
+  comments_count: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface StudentRepoIssuesResponse {
+  issues: StudentRepoIssue[];
+  page: number;
+  has_more: boolean;
+}
+
+export function getStudentRepoIssues(
+  repoId: string,
+  state = "open",
+  page = 1,
+): Promise<StudentRepoIssuesResponse> {
+  return apiRequest<StudentRepoIssuesResponse>(
+    `/students/me/repositories/${repoId}/issues${repoQuery({ state, page: String(page) })}`,
+  );
+}
+
+export interface StudentRepoPull {
+  number: number;
+  title: string;
+  state: string;
+  author_name: string | null;
+  head_branch: string | null;
+  base_branch: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface StudentRepoPullsResponse {
+  pulls: StudentRepoPull[];
+  page: number;
+  has_more: boolean;
+}
+
+export function getStudentRepoPulls(
+  repoId: string,
+  state = "open",
+  page = 1,
+): Promise<StudentRepoPullsResponse> {
+  return apiRequest<StudentRepoPullsResponse>(
+    `/students/me/repositories/${repoId}/pulls${repoQuery({ state, page: String(page) })}`,
+  );
+}
+
+export interface StudentRepoWikiPage {
+  title: string;
+  slug: string;
+  subtitle: string | null;
+}
+
+export function getStudentRepoWikiPages(repoId: string): Promise<{ pages: StudentRepoWikiPage[]; enabled: boolean }> {
+  return apiRequest<{ pages: StudentRepoWikiPage[]; enabled: boolean }>(
+    `/students/me/repositories/${repoId}/wiki/pages`,
+  );
+}
+
+export function getStudentRepoWikiContent(
+  repoId: string,
+  name: string,
+): Promise<{ title: string; slug: string; content: string }> {
+  return apiRequest<{ title: string; slug: string; content: string }>(
+    `/students/me/repositories/${repoId}/wiki/page${repoQuery({ name })}`,
+  );
+}

@@ -6,7 +6,6 @@ import {
   BookOpen,
   Settings,
 } from "lucide-react";
-import type { StudentRepoSummary } from "../../api/studentDashboardApi";
 import type { ThemeColors } from "../../theme";
 
 export type RepoNavTabId = "code" | "issues" | "pulls" | "wiki" | "settings";
@@ -15,7 +14,6 @@ interface RepoNavTabsProps {
   theme: ThemeColors;
   repoId: string;
   active: RepoNavTabId;
-  giteaLinks?: StudentRepoSummary["gitea_links"] | null;
   openIssuesCount?: number | null;
   openPrCount?: number | null;
 }
@@ -24,21 +22,20 @@ const TABS: {
   id: RepoNavTabId;
   label: string;
   icon: typeof Code2;
-  giteaKey: keyof NonNullable<StudentRepoSummary["gitea_links"]>;
+  segment: string;
   countKey?: "issues" | "pulls";
 }[] = [
-  { id: "code", label: "Код", icon: Code2, giteaKey: "code" },
-  { id: "issues", label: "Issues", icon: CircleDot, giteaKey: "issues", countKey: "issues" },
-  { id: "pulls", label: "Pull requests", icon: GitPullRequest, giteaKey: "pulls", countKey: "pulls" },
-  { id: "wiki", label: "Wiki", icon: BookOpen, giteaKey: "wiki" },
-  { id: "settings", label: "Settings", icon: Settings, giteaKey: "settings" },
+  { id: "code", label: "Код", icon: Code2, segment: "code" },
+  { id: "issues", label: "Issues", icon: CircleDot, segment: "issues", countKey: "issues" },
+  { id: "pulls", label: "Pull requests", icon: GitPullRequest, segment: "pulls", countKey: "pulls" },
+  { id: "wiki", label: "Wiki", icon: BookOpen, segment: "wiki" },
+  { id: "settings", label: "Settings", icon: Settings, segment: "settings" },
 ];
 
 export default function RepoNavTabs({
   theme,
   repoId,
   active,
-  giteaLinks,
   openIssuesCount,
   openPrCount,
 }: RepoNavTabsProps) {
@@ -70,51 +67,21 @@ export default function RepoNavTabs({
             </span>
           ) : null;
 
-        const className =
-          "inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors";
-        const style = {
-          borderColor: isActive ? theme.accent2 : "transparent",
-          color: isActive ? theme.text : theme.text2,
-          backgroundColor: isActive ? `${theme.accent}10` : "transparent",
-        };
-
-        if (tab.id === "code") {
-          return (
-            <Link key={tab.id} to={`/repositories/${repoId}/code`} className={className} style={style}>
-              <Icon className="h-4 w-4 shrink-0" />
-              {tab.label}
-            </Link>
-          );
-        }
-
-        const href = giteaLinks?.[tab.giteaKey];
-        if (!href) {
-          return (
-            <span
-              key={tab.id}
-              className={`${className} opacity-40 cursor-not-allowed`}
-              style={{ ...style, borderColor: "transparent" }}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {tab.label}
-              {badge}
-            </span>
-          );
-        }
-
         return (
-          <a
+          <Link
             key={tab.id}
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${className} hover:opacity-90`}
-            style={style}
+            to={`/repositories/${repoId}/${tab.segment}`}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors hover:opacity-90"
+            style={{
+              borderColor: isActive ? theme.accent2 : "transparent",
+              color: isActive ? theme.text : theme.text2,
+              backgroundColor: isActive ? `${theme.accent}10` : "transparent",
+            }}
           >
             <Icon className="h-4 w-4 shrink-0" />
             {tab.label}
             {badge}
-          </a>
+          </Link>
         );
       })}
     </nav>

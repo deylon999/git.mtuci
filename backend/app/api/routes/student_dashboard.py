@@ -16,7 +16,11 @@ from app.schemas.student_dashboard import (
     StudentRepositoriesRead,
     StudentRepoBranchesRead,
     StudentRepoCommitsRead,
+    StudentRepoIssuesRead,
+    StudentRepoPullsRead,
     StudentRepoSummaryRead,
+    StudentRepoWikiContentRead,
+    StudentRepoWikiPagesRead,
     StudentRepoCreateFileBody,
     StudentRepoFileContentRead,
     StudentRepoFileRead,
@@ -28,7 +32,11 @@ from app.services.student_dashboard_service import (
     delete_student_personal_repository,
     get_student_repository_branches,
     get_student_repository_commits,
+    get_student_repository_issues,
+    get_student_repository_pulls,
     get_student_repository_summary,
+    get_student_repository_wiki_content,
+    get_student_repository_wiki_pages,
     get_student_repository_file_content,
     get_student_activity_feed,
     get_student_activity_summary,
@@ -146,6 +154,100 @@ async def student_repository_summary(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return StudentRepoSummaryRead.model_validate(data)
+
+
+@router.get("/repositories/{repo_item_id}/issues", response_model=StudentRepoIssuesRead)
+async def student_repository_issues(
+    repo_item_id: str,
+    page: int = Query(default=1, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=50),
+    state: str = Query(default="open", pattern="^(open|closed|all)$"),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoIssuesRead:
+    _require_student(current_user)
+    try:
+        data = await get_student_repository_issues(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            page=page,
+            limit=limit,
+            state=state,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return StudentRepoIssuesRead.model_validate(data)
+
+
+@router.get("/repositories/{repo_item_id}/pulls", response_model=StudentRepoPullsRead)
+async def student_repository_pulls(
+    repo_item_id: str,
+    page: int = Query(default=1, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=50),
+    state: str = Query(default="open", pattern="^(open|closed|all)$"),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoPullsRead:
+    _require_student(current_user)
+    try:
+        data = await get_student_repository_pulls(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            page=page,
+            limit=limit,
+            state=state,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return StudentRepoPullsRead.model_validate(data)
+
+
+@router.get("/repositories/{repo_item_id}/wiki/pages", response_model=StudentRepoWikiPagesRead)
+async def student_repository_wiki_pages(
+    repo_item_id: str,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoWikiPagesRead:
+    _require_student(current_user)
+    try:
+        data = await get_student_repository_wiki_pages(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return StudentRepoWikiPagesRead.model_validate(data)
+
+
+@router.get("/repositories/{repo_item_id}/wiki/page", response_model=StudentRepoWikiContentRead)
+async def student_repository_wiki_page(
+    repo_item_id: str,
+    name: str = Query(min_length=1, max_length=200),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoWikiContentRead:
+    _require_student(current_user)
+    try:
+        data = await get_student_repository_wiki_content(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            page=name,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return StudentRepoWikiContentRead.model_validate(data)
 
 
 @router.get("/repositories/{repo_item_id}/branches", response_model=StudentRepoBranchesRead)

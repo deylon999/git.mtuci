@@ -188,21 +188,18 @@ export default function RepoProjectSidebar({
               icon={<Star className="h-3.5 w-3.5" style={{ color: theme.warning }} />}
               label="Star"
               count={summary?.stars_count}
-              href={links?.code}
             />
             <ActionButton
               theme={theme}
               icon={<Eye className="h-3.5 w-3.5" />}
               label="Watch"
               count={summary?.watchers_count}
-              href={links?.activity}
             />
             <ActionButton
               theme={theme}
               icon={<GitPullRequest className="h-3.5 w-3.5" />}
               label="Fork"
               count={summary?.forks_count}
-              href={links?.code}
             />
           </div>
 

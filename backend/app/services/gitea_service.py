@@ -570,6 +570,105 @@ async def create_repo_file(
     return data if isinstance(data, dict) else {}
 
 
+async def list_repo_issues_page(
+    *,
+    owner: str,
+    repo: str,
+    page: int = 1,
+    limit: int = 20,
+    state: str = "open",
+) -> tuple[list[dict[str, Any]], bool]:
+    """Issues only (excludes pull requests)."""
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/issues"
+    params: dict[str, Any] = {
+        "page": page,
+        "limit": limit,
+        "state": state,
+        "type": "issues",
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", api_url, params=params)
+    if resp.status_code == 404:
+        return [], False
+    if resp.status_code != 200:
+        raise RuntimeError(f"Gitea list issues failed: {resp.status_code} {resp.text[:200]}")
+    data = resp.json()
+    items = data if isinstance(data, list) else []
+    has_more = str(resp.headers.get("X-HasMore", "")).lower() == "true"
+    if not has_more and isinstance(data, list):
+        has_more = len(data) == limit
+    return items, has_more
+
+
+async def list_repo_pulls_page(
+    *,
+    owner: str,
+    repo: str,
+    page: int = 1,
+    limit: int = 20,
+    state: str = "open",
+) -> tuple[list[dict[str, Any]], bool]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/pulls"
+    params: dict[str, Any] = {"page": page, "limit": limit, "state": state}
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", api_url, params=params)
+    if resp.status_code == 404:
+        return [], False
+    if resp.status_code != 200:
+        raise RuntimeError(f"Gitea list pulls failed: {resp.status_code} {resp.text[:200]}")
+    data = resp.json()
+    items = data if isinstance(data, list) else []
+    has_more = str(resp.headers.get("X-HasMore", "")).lower() == "true"
+    if not has_more and isinstance(data, list):
+        has_more = len(data) == limit
+    return items, has_more
+
+
+async def list_repo_wiki_pages(
+    *,
+    owner: str,
+    repo: str,
+) -> list[dict[str, Any]]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/wiki/pages"
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", api_url)
+    if resp.status_code in (404, 403):
+        return []
+    if resp.status_code != 200:
+        raise RuntimeError(f"Gitea list wiki pages failed: {resp.status_code} {resp.text[:200]}")
+    data = resp.json()
+    if isinstance(data, dict) and isinstance(data.get("wiki_page_list"), list):
+        return data["wiki_page_list"]
+    return data if isinstance(data, list) else []
+
+
+async def get_repo_wiki_page(
+    *,
+    owner: str,
+    repo: str,
+    page_name: str,
+) -> dict[str, Any] | None:
+    cleaned = page_name.strip().strip("/")
+    if not cleaned or ".." in cleaned.split("/"):
+        raise ValueError("Invalid wiki page")
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}"
+        f"/wiki/page/{quote(cleaned, safe='')}"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", api_url)
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        raise RuntimeError(f"Gitea get wiki page failed: {resp.status_code} {resp.text[:200]}")
+    data = resp.json()
+    return data if isinstance(data, dict) else None
+
+
 async def get_repo_contents(
     *,
     owner: str,

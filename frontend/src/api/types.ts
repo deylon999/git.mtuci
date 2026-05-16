@@ -10,6 +10,7 @@ export interface Notification {
   message: string;
   type: NotificationType;
   read: boolean;
+  href?: string | null;
   created_at: string;
 }
 

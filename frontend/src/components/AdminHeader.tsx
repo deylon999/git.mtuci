@@ -1,28 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, Bell, ChevronDown, LogOut, User, Shield, Activity, Moon, Sun, X, Check, AlertTriangle } from "lucide-react";
+import { Search, ChevronDown, LogOut, User, Shield, Activity, Moon, Sun } from "lucide-react";
 import { clearToken } from "../api/client";
 import { getMe, invalidateMeCache } from "../api/authApi";
 import { getServiceStatus } from "../api/adminApi";
-import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from "../api/notificationsApi";
 import { getTheme } from "../theme";
-import type { UserRole, Notification } from "../api/types";
-
-// Helper для форматирования времени уведомления
-function formatNotificationTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return "Только что";
-  if (diffMins < 60) return `${diffMins} мин назад`;
-  if (diffHours < 24) return `${diffHours} час${diffHours > 1 ? (diffHours < 5 ? "а" : "ов") : ""} назад`;
-  if (diffDays === 1) return "Вчера";
-  return `${diffDays} дн${diffDays > 1 ? (diffDays < 5 ? "я" : "ей") : ""} назад`;
-}
+import NotificationBell from "./NotificationBell";
+import type { UserRole } from "../api/types";
 
 // Status indicator component
 function StatusIndicator({ status, label, isDarkTheme = true }: { status: "online" | "offline" | "warning"; label: string; isDarkTheme?: boolean }) {
@@ -63,10 +47,6 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
   const [avatarDisplayMode, setAvatarDisplayMode] = useState<string>("cover");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [notificationOpen, setNotificationOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [notificationsLoading, setNotificationsLoading] = useState(false);
-
   // System status from API
   const [systemStatus, setSystemStatus] = useState<{
     api: "online" | "offline";
@@ -126,35 +106,6 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
     };
   }, []);
 
-  // Fetch notifications
-  useEffect(() => {
-    let cancelled = false;
-    async function loadNotifications() {
-      setNotificationsLoading(true);
-      try {
-        const data = await getNotifications();
-        if (!cancelled) {
-          setNotifications(data);
-        }
-      } catch {
-        if (!cancelled) {
-          setNotifications([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setNotificationsLoading(false);
-        }
-      }
-    }
-    loadNotifications();
-    // Refresh every 30 seconds
-    const interval = setInterval(loadNotifications, 30000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
-
   // Close menus on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -162,46 +113,10 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
       if (!target.closest("[data-profile-menu]")) {
         setProfileMenuOpen(false);
       }
-      if (!target.closest("[data-notification-menu]")) {
-        setNotificationOpen(false);
-      }
     };
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
-
-  const markAsRead = async (id: string) => {
-    try {
-      await markNotificationAsRead(id);
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    } catch {
-      // Ignore error, still update local state
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    }
-  };
-
-  const markAllAsRead = async () => {
-    try {
-      await markAllNotificationsAsRead();
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    } catch {
-      // Ignore error, still update local state
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    }
-  };
-
-  const getNotificationIcon = (type: Notification["type"]) => {
-    switch (type) {
-      case "success":
-        return <Check className="h-4 w-4 text-green-500" />;
-      case "warning":
-        return <AlertTriangle className="h-4 w-4 text-amber-500" />;
-      case "error":
-        return <X className="h-4 w-4 text-red-500" />;
-      default:
-        return <Bell className="h-4 w-4 text-blue-500" />;
-    }
-  };
 
   function onLogout() {
     clearToken();
@@ -216,7 +131,6 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
   }
 
   const theme = getTheme(isDarkTheme);
-  const hasNotifications = notifications.filter(n => !n.read).length > 0;
 
   return (
     <header className="border-b transition-colors" style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
@@ -272,90 +186,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
               )}
             </button>
 
-            {/* Notifications */}
-            <div className="relative" data-notification-menu>
-              <button
-                onClick={() => setNotificationOpen(!notificationOpen)}
-                className="relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors mr-1"
-                style={{ color: theme.text2 }}
-              >
-                <Bell className="h-5 w-5" />
-                {hasNotifications && (
-                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2" style={{ borderColor: theme.bg }}>
-                    <span className="absolute inset-0 bg-red-500 rounded-full animate-ping" />
-                  </span>
-                )}
-              </button>
-
-              {/* Notification Dropdown */}
-              {notificationOpen && (
-                <div className="absolute right-0 mt-2 w-80 rounded-xl shadow-2xl z-50 overflow-hidden" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
-                  {/* Header */}
-                  <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: theme.border }}>
-                    <div>
-                      <h3 className="text-sm font-semibold" style={{ color: theme.text }}>Уведомления</h3>
-                      <p className="text-xs" style={{ color: theme.text2 }}>{notifications.filter(n => !n.read).length} непрочитанных</p>
-                    </div>
-                    {hasNotifications && (
-                      <button
-                        onClick={markAllAsRead}
-                        className={`text-xs font-medium ${isDarkTheme ? "text-blue-400 hover:text-blue-300" : "text-blue-600 hover:text-blue-700"}`}
-                      >
-                        Отметить все
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Notifications List */}
-                  <div className="max-h-96 overflow-y-auto">
-                    {notifications.length === 0 ? (
-                      <div className="px-4 py-8 text-center" style={{ color: theme.text2 }}>
-                        <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">Нет уведомлений</p>
-                      </div>
-                    ) : (
-                      notifications.map((notification) => (
-                        <div
-                          key={notification.id}
-                          onClick={() => markAsRead(notification.id)}
-                          className="px-4 py-3 border-b hover:bg-opacity-50 transition-colors cursor-pointer"
-                          style={{ borderColor: theme.border, backgroundColor: notification.read ? 'transparent' : theme.hoverBg }}
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className={`mt-0.5 flex-shrink-0 ${notification.read ? "opacity-50" : ""}`}>
-                              {getNotificationIcon(notification.type)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm font-medium ${notification.read ? "opacity-70" : ""}`} style={{ color: theme.text }}>
-                                {notification.title}
-                              </p>
-                              <p className="text-xs mt-0.5 line-clamp-2" style={{ color: theme.text2 }}>
-                                {notification.message}
-                              </p>
-                              <p className="text-[10px] mt-1" style={{ color: theme.text2 }}>
-                                {formatNotificationTime(notification.created_at)}
-                              </p>
-                            </div>
-                            {!notification.read && (
-                              <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-2" />
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {/* Footer */}
-                  <div className="px-4 py-2 border-t" style={{ borderColor: theme.border }}>
-                    <button
-                      className={`w-full text-center text-xs font-medium ${isDarkTheme ? "text-blue-400 hover:text-blue-300" : "text-blue-600 hover:text-blue-700"}`}
-                    >
-                      Показать все уведомления
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <NotificationBell isDarkTheme={isDarkTheme} />
 
             {/* Profile */}
             <div className="relative ml-2" data-profile-menu>

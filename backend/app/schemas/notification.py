@@ -12,6 +12,7 @@ class NotificationRead(BaseModel):
     message: str
     type: str = Field(description="info | success | warning | error")
     read: bool
+    href: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
