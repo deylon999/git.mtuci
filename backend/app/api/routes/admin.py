@@ -338,6 +338,47 @@ async def admin_approve_user(
     return AdminUserRead.model_validate(user)
 
 
+@router.post("/users/{user_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+@require_permission("user_edit")
+async def admin_reject_user(
+    user_id: UUID,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Reject a pending registration (removes the user account)."""
+    ip_address = get_client_ip(request)
+    _check_not_self(current_user, user_id)
+
+    result = await session.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    _check_target_not_admin(user)
+
+    if not user.is_pending:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only pending users can be rejected",
+        )
+
+    user_email = user.email
+    await delete_user_by_id(session, user_id)
+
+    asyncio.create_task(log_event_background(
+        level=LogLevel.INFO,
+        source=LogSource.admin,
+        message=f"Rejected pending user: {user_email}",
+        ip_address=ip_address,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        user_full_name=current_user.full_name,
+        http_status=204,
+    ))
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 @require_permission("user_delete")
 async def admin_delete_user(

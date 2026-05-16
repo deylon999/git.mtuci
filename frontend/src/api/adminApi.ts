@@ -61,6 +61,12 @@ export async function approveUser(userId: string): Promise<AdminUserRead> {
   });
 }
 
+export async function rejectUser(userId: string): Promise<void> {
+  await apiRequest<void>(`/admin/users/${userId}/reject`, {
+    method: "POST",
+  });
+}
+
 export async function deleteAdminUser(userId: string): Promise<void> {
   await apiRequest<void>(`/admin/users/${userId}`, {
     method: "DELETE",

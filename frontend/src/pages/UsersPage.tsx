@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Download,
   Upload,
@@ -18,7 +18,16 @@ import {
   ChevronDown,
   X,
 } from "lucide-react";
-import { getAdminUsers, patchAdminUser, approveUser, resetAdminUserPassword, getGroups, exportUsersCSV, importUsersCSV } from "../api/adminApi";
+import {
+  getAdminUsers,
+  patchAdminUser,
+  approveUser,
+  rejectUser,
+  resetAdminUserPassword,
+  getGroups,
+  exportUsersCSV,
+  importUsersCSV,
+} from "../api/adminApi";
 import { getMe } from "../api/authApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { usePendingCount } from "../context/PendingCountContext";
@@ -36,6 +45,8 @@ interface User {
   initials: string;
   color: string;
   group: string;
+  group_name: string | null;
+  student_id: string | null;
   role: "student" | "teacher" | "admin" | "laborant";
   status: "active" | "pending" | "blocked";
   repos: number;
@@ -213,6 +224,14 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
 
   const { decrementPending } = usePendingCount();
 
+  const editGroupOptions = useMemo(() => {
+    const names = new Set(availableGroups);
+    const current = editForm.group_name.trim();
+    if (current) names.add(current);
+    if (editUser?.group_name?.trim()) names.add(editUser.group_name.trim());
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "ru"));
+  }, [availableGroups, editForm.group_name, editUser]);
+
   const handleApprove = async (user: User) => {
     if (user.role === "admin") {
       showToast(t("admin.users.cannotConfirmAdmin"), "error");
@@ -233,13 +252,49 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
     }
   };
 
+  const handleReject = async (user: User) => {
+    if (user.role === "admin") {
+      showToast(t("admin.users.cannotConfirmAdmin"), "error");
+      return;
+    }
+    if (!window.confirm(tp("admin.users.rejectConfirm", { name: user.name }))) return;
+    setActionLoading(true);
+    try {
+      await rejectUser(user.id);
+      decrementPending();
+      const res = await getAdminUsers();
+      updateUsers(res);
+      showToast(t("admin.users.rejected"), "success");
+    } catch {
+      showToast(t("admin.users.rejectError"), "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleEdit = (user: User) => {
     setEditUser(user);
+    const groupName = user.group_name?.trim() ?? (user.group === "—" ? "" : user.group.trim());
     setEditForm({
       role: user.role,
-      group_name: user.group === "—" ? "" : user.group,
-      student_id: "",
+      group_name: groupName,
+      student_id: user.student_id ?? "",
     });
+    void getGroups()
+      .then((groups) => {
+        setAvailableGroups((prev) => {
+          const merged = new Set([...prev, ...groups]);
+          if (groupName) merged.add(groupName);
+          return Array.from(merged).sort((a, b) => a.localeCompare(b, "ru"));
+        });
+      })
+      .catch(() => {
+        if (groupName) {
+          setAvailableGroups((prev) =>
+            prev.includes(groupName) ? prev : [...prev, groupName].sort((a, b) => a.localeCompare(b, "ru")),
+          );
+        }
+      });
   };
 
   const handleSaveEdit = async () => {
@@ -254,7 +309,8 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
         role: editForm.role,
         is_blocked: editUser.status === "blocked",
         is_pending: editUser.status === "pending",
-        group_name: editForm.group_name || null,
+        group_name: editForm.group_name.trim() || null,
+        student_id: editForm.student_id.trim() || null,
       });
       setEditUser(null);
       const res = await getAdminUsers();
@@ -274,6 +330,8 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
         name: u.full_name,
         email: u.email,
         group: u.group_name || "—",
+        group_name: u.group_name ?? null,
+        student_id: u.student_id ?? null,
         role: u.role,
         status: u.is_blocked
           ? "blocked"
@@ -308,14 +366,14 @@ useEffect(() => {
           name: u.full_name,
           email: u.email,
           group: u.group_name || "—",
+          group_name: u.group_name ?? null,
+          student_id: u.student_id ?? null,
           role: u.role,
-
           status: u.is_blocked
             ? "blocked"
             : u.is_pending
             ? "pending"
             : "active",
-
           repos: 0,
           lastLogin: u.last_login
             ? new Date(u.last_login).toLocaleString("ru-RU", {
@@ -808,14 +866,24 @@ useEffect(() => {
                         </button>
                       )}
                       {user.status === "pending" && (
-                        <button
-                          onClick={() => handleApprove(user)}
-                          disabled={actionLoading || user.role === "admin"}
-                          title={user.role === "admin" ? t("admin.users.noPermission") : ""}
-                          className={`p-1.5 rounded-lg ${isDarkTheme ? "hover:bg-green-500/20" : "hover:bg-green-100"} ${actionBtnColor} hover:text-green-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed`}
-                        >
-                          <Check className="h-4 w-4" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleApprove(user)}
+                            disabled={actionLoading || user.role === "admin"}
+                            title={user.role === "admin" ? t("admin.users.noPermission") : t("admin.users.confirmed")}
+                            className={`p-1.5 rounded-lg ${isDarkTheme ? "hover:bg-green-500/20" : "hover:bg-green-100"} ${actionBtnColor} hover:text-green-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed`}
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => void handleReject(user)}
+                            disabled={actionLoading || user.role === "admin"}
+                            title={user.role === "admin" ? t("admin.users.noPermission") : t("admin.users.reject")}
+                            className={`p-1.5 rounded-lg ${isDarkTheme ? "hover:bg-red-500/20" : "hover:bg-red-100"} ${actionBtnColor} hover:text-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -1047,11 +1115,17 @@ useEffect(() => {
                   className={`w-full px-3 py-2 rounded-lg ${modalInputBg} ${modalText}`}
                 >
                   <option value="">{t("admin.users.groupNotSelected")}</option>
-                  {availableGroups.map((group) => (
+                  {editGroupOptions.map((group) => (
                     <option key={group} value={group}>{group}</option>
                   ))}
                 </select>
               </div>
+              {editForm.student_id ? (
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${modalLabel}`}>ID</label>
+                  <p className={`text-sm ${modalText}`}>{editForm.student_id}</p>
+                </div>
+              ) : null}
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => setEditUser(null)}
