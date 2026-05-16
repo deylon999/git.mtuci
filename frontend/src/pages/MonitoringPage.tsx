@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { RefreshCw, Clock, AlertTriangle, CheckCircle, XCircle, Activity, HardDrive, Database, Server, Zap, TrendingUp, GitBranch } from "lucide-react";
 import { getSystemMetrics, getServiceStatus, getBackups, getLogs, createBackup, restartAPI } from "../api/adminApi";
 import { getTheme } from "../theme";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface ServiceConfig {
   name: string;
@@ -22,6 +23,8 @@ interface MonitoringPageProps {
 }
 
 export default function MonitoringPage({ isDarkTheme = false }: MonitoringPageProps) {
+  const { t, tp, language } = useUserPreferences();
+  const dateLocale = language === "en" ? "en-US" : "ru-RU";
   const [metrics, setMetrics] = useState<any>(null);
   const [serviceStatus, setServiceStatus] = useState<any>(null);
   const [backups, setBackups] = useState<any>(null);
@@ -47,7 +50,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
       setServiceStatus(statusData);
       setBackups(backupsData);
       setIncidents([...(errorLogs?.logs || []), ...(warningLogs?.logs || [])].slice(0, 10));
-      setLastUpdate(new Date().toLocaleTimeString("ru-RU"));
+      setLastUpdate(new Date().toLocaleTimeString(dateLocale));
       setSecondsSinceUpdate(0);
     } catch (error) {
       console.error("Failed to fetch monitoring data:", error);
@@ -61,10 +64,10 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
     try {
       await createBackup();
       await fetchData();
-      alert("Бэкап создан успешно");
+      alert(t("admin.monitoring.backupCreated"));
     } catch (error) {
       console.error("Failed to create backup:", error);
-      alert("Ошибка при создании бэкапа");
+      alert(t("admin.monitoring.backupCreateError"));
     } finally {
       setBackupLoading(false);
     }
@@ -76,13 +79,13 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
       const responseData = await restartAPI();
       setShowRestartModal(false);
       if (responseData.status === "warning") {
-        alert(responseData.message || "API перезапущен с предупреждением");
+        alert(responseData.message || t("admin.monitoring.apiRestartWarn"));
       } else {
-        alert("API перезапущен");
+        alert(t("admin.monitoring.apiRestarted"));
       }
     } catch (error) {
       console.error("Failed to restart API:", error);
-      alert("Ошибка при перезапуске API");
+      alert(t("admin.monitoring.apiRestartError"));
     } finally {
       setRestartLoading(false);
     }
@@ -119,9 +122,9 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
       {/* Page Header */}
       <div style={{ padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: theme.bg }}>
         <div>
-          <div style={{ fontSize: "18px", fontWeight: "600", color: theme.text }}>Мониторинг</div>
+          <div style={{ fontSize: "18px", fontWeight: "600", color: theme.text }}>{t("admin.monitoring.title")}</div>
           <div style={{ fontSize: "12px", color: theme.text2, marginTop: "2px" }}>
-            Состояние сервисов и ресурсов в реальном времени
+            {t("admin.monitoring.subtitle")}
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -152,7 +155,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             }}
           >
             <RefreshCw className="h-3.5 w-3.5" style={{ animation: backupLoading ? "spin 1s linear infinite" : "none" }} />
-            {backupLoading ? "Создание..." : "Создать бэкап"}
+            {backupLoading ? t("admin.dashboard.backupCreating") : t("admin.monitoring.createBackup")}
           </button>
           <button
             onClick={() => setShowRestartModal(true)}
@@ -164,7 +167,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               cursor: "pointer"
             }}
           >
-            Перезапустить API
+            {t("admin.monitoring.restartApi")}
           </button>
           <button
             onClick={fetchData}
@@ -177,7 +180,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             }}
           >
             <RefreshCw className="h-3.5 w-3.5" style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-            Обновить
+            {t("admin.monitoring.refresh")}
           </button>
         </div>
       </div>
@@ -239,7 +242,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 {serviceStatus?.db ? "Online" : "Offline"}
               </div>
               <div style={{ fontSize: "10px", color: theme.text2, marginTop: "1px" }}>
-                {metrics?.database?.connections_active || 0} соединений · v{serviceStatus?.db_version || "15.2"}
+                {tp("admin.monitoring.dbConnections", { n: metrics?.database?.connections_active || 0, version: serviceStatus?.db_version || "15.2" })}
               </div>
             </div>
             <span style={{
@@ -272,7 +275,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 {serviceStatus?.git ? "Online" : "Offline"}
               </div>
               <div style={{ fontSize: "10px", color: theme.text2, marginTop: "1px" }}>
-                {serviceStatus?.git_repos_count || 0} репо · v{serviceStatus?.git_version || "1.21.4"}
+                {tp("admin.monitoring.gitRepos", { n: serviceStatus?.git_repos_count || 0, version: serviceStatus?.git_version || "1.21.4" })}
               </div>
             </div>
             <span style={{
@@ -301,12 +304,12 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               <HardDrive style={{ width: "18px", height: "18px", color: theme.warning, strokeWidth: 1.4 }} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "11px", color: theme.text2, marginBottom: "2px" }}>Дисковое хранилище</div>
+              <div style={{ fontSize: "11px", color: theme.text2, marginBottom: "2px" }}>{t("admin.monitoring.diskStorage")}</div>
               <div style={{ fontSize: "14px", fontWeight: "600", color: theme.warning }}>
-                {metrics?.disk_percent || 0}% заполнен
+                {tp("admin.monitoring.diskPercent", { n: metrics?.disk_percent || 0 })}
               </div>
               <div style={{ fontSize: "10px", color: theme.text2, marginTop: "1px" }}>
-                {metrics?.disk_used_gb?.toFixed(1) || 0} ГБ из {metrics?.disk_total_gb?.toFixed(1) || 0} ГБ
+                {tp("admin.monitoring.diskUsage", { used: metrics?.disk_used_gb?.toFixed(1) || 0, total: metrics?.disk_total_gb?.toFixed(1) || 0 })}
               </div>
             </div>
             <span style={{
@@ -331,9 +334,9 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               display: "flex", alignItems: "center", justifyContent: "space-between",
               backgroundColor: theme.bg2
             }}>
-              Ресурсы сервера
+              {t("admin.monitoring.serverResources")}
               <span style={{ fontSize: "10px", color: theme.text2, fontWeight: "400" }}>
-                обновлено {secondsSinceUpdate} сек назад
+                {tp("admin.monitoring.updatedAgo", { n: secondsSinceUpdate })}
               </span>
             </div>
             <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -369,7 +372,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
 
               {/* Disk */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-                <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>Диск</span>
+                <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>{t("admin.dashboard.disk")}</span>
                 <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: "3px", transition: "width 0.3s",
@@ -385,7 +388,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
 
               {/* Network Upload */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-                <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>Сеть ↑</span>
+                <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>{t("admin.monitoring.networkUp")}</span>
                 <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: "3px", transition: "width 0.3s",
@@ -399,7 +402,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
 
               {/* Network Download */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-                <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>Сеть ↓</span>
+                <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>{t("admin.monitoring.networkDown")}</span>
                 <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: "3px", transition: "width 0.3s",
@@ -414,33 +417,33 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
 
             <div style={{ padding: "0 14px 14px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Модель CPU</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.cpuModel")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.cpu_model || "Unknown"}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>RAM всего</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.ramTotal")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
-                  {metrics?.memory_total_gb?.toFixed(0) || 0} ГБ
+                  {metrics?.memory_total_gb?.toFixed(0) || 0} {t("admin.monitoring.gb")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>RAM использовано</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.ramUsed")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
-                  {metrics?.memory_used_gb?.toFixed(1) || 0} ГБ
+                  {metrics?.memory_used_gb?.toFixed(1) || 0} {t("admin.monitoring.gb")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Диск всего</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.diskTotal")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
-                  {metrics?.disk_total_gb?.toFixed(1) || 0} ГБ
+                  {metrics?.disk_total_gb?.toFixed(1) || 0} {t("admin.monitoring.gb")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Диск свободно</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.diskFree")}</span>
                 <span style={{ fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px", color: metrics?.disk_percent > 80 ? theme.warning : theme.text }}>
-                  {(metrics?.disk_total_gb - metrics?.disk_used_gb)?.toFixed(1) || 0} ГБ
+                  {(metrics?.disk_total_gb - metrics?.disk_used_gb)?.toFixed(1) || 0} {t("admin.monitoring.gb")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", fontSize: "12px" }}>
@@ -459,7 +462,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               fontSize: "11px", fontWeight: "600", color: theme.text,
               backgroundColor: theme.bg2
             }}>
-              Состояние сервисов
+              {t("admin.monitoring.servicesState")}
             </div>
 
             <div>
@@ -497,29 +500,29 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             </div>
 
             <div style={{ padding: "14px", borderTop: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}` }}>
-              <div style={{ padding: "0 0 10px", fontSize: "11px", fontWeight: "500", color: theme.text }}>Последний бэкап</div>
+              <div style={{ padding: "0 0 10px", fontSize: "11px", fontWeight: "500", color: theme.text }}>{t("admin.monitoring.lastBackup")}</div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Дата</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.date")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {backups?.last_backup
-                    ? new Date(backups.last_backup).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
-                    : "Нет данных"}
+                    ? new Date(backups.last_backup).toLocaleString(dateLocale, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+                    : t("admin.dashboard.noBackupData")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Размер</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.size")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
-                  {backups?.last_backup_size_mb?.toFixed(0) || 0} МБ
+                  {backups?.last_backup_size_mb?.toFixed(0) || 0} {t("admin.monitoring.mb")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Статус</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.status")}</span>
                 <span style={{ fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px", color: backups?.last_backup ? theme.success : theme.warning }}>
-                  {backups?.last_backup ? "Успешно" : "Нет данных"}
+                  {backups?.last_backup ? t("admin.monitoring.success") : t("admin.dashboard.noBackupData")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Следующий</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.next")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {backups?.next_backup || "03:00"}
                 </span>
@@ -539,19 +542,19 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               display: "flex", alignItems: "center", justifyContent: "space-between",
               backgroundColor: theme.bg2
             }}>
-              HTTP запросы
-              <span style={{ fontSize: "10px", color: theme.text2, fontWeight: "400" }}>За последний час</span>
+              {t("admin.monitoring.httpRequests")}
+              <span style={{ fontSize: "10px", color: theme.text2, fontWeight: "400" }}>{t("admin.monitoring.lastHour")}</span>
             </div>
             <div style={{ padding: "14px 14px 4px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
                 <div style={{ backgroundColor: isDarkTheme ? theme.bgCard : "#d4d4d4", borderRadius: "8px", padding: "8px 10px", boxShadow: theme.shadowSm }}>
-                  <div style={{ fontSize: "10px", color: isDarkTheme ? theme.text2 : "#525252", marginBottom: "2px" }}>Всего</div>
+                  <div style={{ fontSize: "10px", color: isDarkTheme ? theme.text2 : "#525252", marginBottom: "2px" }}>{t("admin.monitoring.total")}</div>
                   <div style={{ fontSize: "18px", fontWeight: "600", color: isDarkTheme ? theme.text : "#171717" }}>
                     {metrics?.requests_total_hour?.toLocaleString() || 0}
                   </div>
                 </div>
                 <div style={{ backgroundColor: isDarkTheme ? theme.bgCard : "#d4d4d4", borderRadius: "8px", padding: "8px 10px", boxShadow: theme.shadowSm }}>
-                  <div style={{ fontSize: "10px", color: isDarkTheme ? theme.text2 : "#525252", marginBottom: "2px" }}>Ошибок</div>
+                  <div style={{ fontSize: "10px", color: isDarkTheme ? theme.text2 : "#525252", marginBottom: "2px" }}>{t("admin.monitoring.errors")}</div>
                   <div style={{ fontSize: "18px", fontWeight: "600", color: theme.danger }}>
                     {metrics?.requests_errors_hour || 0}
                   </div>
@@ -562,13 +565,13 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>Avg response</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
-                  {metrics?.avg_response_ms?.toFixed(0) || 0} мс
+                  {metrics?.avg_response_ms?.toFixed(0) || 0} {t("admin.monitoring.ms")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>P95 response</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
-                  {metrics?.p95_response_ms?.toFixed(0) || 0} мс
+                  {metrics?.p95_response_ms?.toFixed(0) || 0} {t("admin.monitoring.ms")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
@@ -578,7 +581,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>RPS (сейчас)</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.rpsNow")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.rps?.toFixed(1) || 0}
                 </span>
@@ -599,25 +602,25 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             </div>
             <div style={{ padding: "14px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Активных соединений</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.activeConnections")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.database?.connections_active || 0} / {metrics?.database?.connections_max || 100}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Размер БД</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.dbSize")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
-                  {metrics?.database?.size_mb || 0} МБ
+                  {metrics?.database?.size_mb || 0} {t("admin.monitoring.mb")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Таблиц</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.tables")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.database?.tables_count || 0}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Запросов/сек</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.queriesPerSec")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.database?.queries_per_sec || 0}
                 </span>
@@ -625,7 +628,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>Avg query time</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
-                  {metrics?.database?.avg_query_ms || 0} мс
+                  {metrics?.database?.avg_query_ms || 0} {t("admin.monitoring.ms")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
@@ -641,7 +644,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Последняя миграция</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.lastMigration")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.database?.last_migration || "—"}
                 </span>
@@ -649,28 +652,28 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             </div>
             <div style={{ padding: "0 14px 14px" }}>
               <div style={{ fontSize: "11px", color: theme.text2, marginBottom: "8px", fontWeight: "500", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                Топ таблиц по размеру
+                {t("admin.monitoring.topTables")}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
                 <span style={{ width: "100px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>activity_log</span>
                 <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{ height: "100%", borderRadius: "3px", width: "80%", backgroundColor: theme.accent2, opacity: 0.6 }} />
                 </div>
-                <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>82МБ</span>
+                <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>82 MB</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "5px", fontSize: "11px" }}>
                 <span style={{ width: "100px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>repositories</span>
                 <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{ height: "100%", borderRadius: "3px", width: "45%", backgroundColor: theme.accent2, opacity: 0.6 }} />
                 </div>
-                <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>46МБ</span>
+                <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>46 MB</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "5px", fontSize: "11px" }}>
                 <span style={{ width: "100px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>users</span>
                 <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{ height: "100%", borderRadius: "3px", width: "22%", backgroundColor: theme.accent2, opacity: 0.6 }} />
                 </div>
-                <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>23МБ</span>
+                <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>23 MB</span>
               </div>
             </div>
           </div>
@@ -683,8 +686,8 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               display: "flex", alignItems: "center", justifyContent: "space-between",
               backgroundColor: theme.bg2
             }}>
-              Инциденты и алерты
-              <span style={{ fontSize: "10px", color: theme.text2, fontWeight: "400" }}>Последние 24ч</span>
+              {t("admin.monitoring.incidents")}
+              <span style={{ fontSize: "10px", color: theme.text2, fontWeight: "400" }}>{t("admin.monitoring.last24h")}</span>
             </div>
             <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
               {metrics?.disk_percent > 80 && (
@@ -692,9 +695,9 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                   <div style={{ width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0, marginTop: "3px", backgroundColor: theme.warning }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: "12px", color: theme.text, lineHeight: 1.4 }}>
-                      Диск заполнен на {metrics.disk_percent.toFixed(0)}% — рекомендуется очистить старые логи или расширить хранилище
+{tp("admin.monitoring.diskAlert", { n: metrics.disk_percent.toFixed(0) })}
                     </div>
-                    <div style={{ fontSize: "10px", color: theme.text3, marginTop: "2px" }}>Активно</div>
+                    <div style={{ fontSize: "10px", color: theme.text3, marginTop: "2px" }}>{t("admin.monitoring.active")}</div>
                   </div>
                 </div>
               )}
@@ -704,9 +707,9 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                   <div style={{ width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0, marginTop: "3px", backgroundColor: theme.danger }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: "12px", color: theme.text, lineHeight: 1.4 }}>
-                      FastAPI недоступен
+                      {t("admin.monitoring.apiDownAlert")}
                     </div>
-                    <div style={{ fontSize: "10px", color: theme.text3, marginTop: "2px" }}>Активно</div>
+                    <div style={{ fontSize: "10px", color: theme.text3, marginTop: "2px" }}>{t("admin.monitoring.active")}</div>
                   </div>
                 </div>
               )}
@@ -722,7 +725,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                       {incident.message}
                     </div>
                     <div style={{ fontSize: "10px", color: theme.text3, marginTop: "2px" }}>
-                      {new Date(incident.created_at).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      {new Date(incident.created_at).toLocaleString(dateLocale, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                     </div>
                   </div>
                 </div>
@@ -730,7 +733,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
 
               {metrics?.disk_percent <= 80 && serviceStatus?.api && serviceStatus?.db && serviceStatus?.git && incidents.length === 0 && (
                 <div style={{ fontSize: "12px", color: theme.text2, textAlign: "center", padding: "20px 0" }}>
-                  Нет активных инцидентов
+                  {t("admin.monitoring.noIncidents")}
                 </div>
               )}
             </div>
@@ -756,10 +759,10 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             width: "100%"
           }}>
             <div style={{ fontSize: "16px", fontWeight: "600", color: theme.text, marginBottom: "12px" }}>
-              Перезапустить API?
+              {t("admin.monitoring.restartConfirmTitle")}
             </div>
             <div style={{ fontSize: "14px", color: theme.text2, marginBottom: "24px", lineHeight: 1.5 }}>
-              Сервис будет недоступен ~10 секунд.
+              {t("admin.monitoring.restartConfirmMsg")}
             </div>
             <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
               <button
@@ -776,10 +779,10 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                   opacity: restartLoading ? 0.5 : 1
                 }}
               >
-                Отмена
+                {t("common.cancel")}
               </button>
               <button
-                onClick={restartAPI}
+                onClick={handleRestartAPI}
                 disabled={restartLoading}
                 style={{
                   padding: "8px 16px",
@@ -792,7 +795,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                   opacity: restartLoading ? 0.5 : 1
                 }}
               >
-                {restartLoading ? "Перезапуск..." : "Перезапустить"}
+                {restartLoading ? t("admin.monitoring.restarting") : t("admin.monitoring.restart")}
               </button>
             </div>
           </div>

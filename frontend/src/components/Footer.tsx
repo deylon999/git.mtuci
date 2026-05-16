@@ -3,12 +3,14 @@ import { useEffect, useState } from "react";
 import { apiRequest } from "../api/client";
 import { getTheme } from "../theme";
 import { pageGutterClass } from "../layout/pageLayout";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface FooterProps {
   isDarkTheme?: boolean;
 }
 
 export default function Footer({ isDarkTheme = true }: FooterProps) {
+  const { t } = useUserPreferences();
   const [commitCount, setCommitCount] = useState(0);
   const [version, setVersion] = useState("v1.0.0");
   const theme = getTheme(isDarkTheme);
@@ -44,13 +46,13 @@ export default function Footer({ isDarkTheme = true }: FooterProps) {
               MTUCI.ru
             </a>
             <button className={`hover:underline`} style={{ color: theme.text2 }}>
-              Сообщить об ошибке
+              {t("admin.footer.reportBug")}
             </button>
             <button className={`hover:underline`} style={{ color: theme.text2 }}>
-              Шпаргалка по Git
+              {t("admin.footer.gitCheatsheet")}
             </button>
             <button className={`hover:underline`} style={{ color: theme.text2 }}>
-              Импорт из GitHub
+              {t("admin.footer.importGithub")}
             </button>
           </div>
 
@@ -58,7 +60,7 @@ export default function Footer({ isDarkTheme = true }: FooterProps) {
           <div className="flex items-center gap-6 text-sm">
             <div className="flex items-center gap-2">
               <GitBranch className={`h-4 w-4`} style={{ color: theme.text2 }} />
-              <span>{commitCount} commits</span>
+              <span>{commitCount} {t("admin.footer.commits")}</span>
             </div>
             <div className={`h-4 w-px`} style={{ backgroundColor: theme.divider }} />
             <span className={`font-mono`} style={{ color: theme.text2 }}>{version}</span>

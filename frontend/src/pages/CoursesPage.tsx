@@ -5,22 +5,26 @@ import { getMe } from "../api/authApi";
 import { createCourse, deleteCourse, getCourses, getGroups } from "../api/coursesApi";
 import { getTheme } from "../theme";
 import type { Course, UserRead } from "../api/types";
+import { useUserPreferences } from "../context/UserPreferencesContext";
+import { pluralWord } from "../i18n/plural";
 
 interface CoursesPageProps {
   isDarkTheme?: boolean;
 }
 
 export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
+  const { t, tp, language } = useUserPreferences();
   const theme = getTheme(isDarkTheme);
   const [searchParams] = useSearchParams();
   const searchQuery = (searchParams.get("q") ?? "").trim().toLowerCase();
+  const openCreate = searchParams.get("create") === "1";
 
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState<Course[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [me, setMe] = useState<UserRead | null>(null);
 
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(openCreate);
   const [createTitle, setCreateTitle] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [createGradeMax, setCreateGradeMax] = useState(10);
@@ -95,7 +99,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
     setCreateError(null);
     try {
       if (!Number.isInteger(createGradeMax) || createGradeMax < 0 || createGradeMax > 50) {
-        setCreateError("Максимальная оценка должна быть целым числом от 0 до 50.");
+        setCreateError(t("admin.courses.gradeMaxError"));
         return;
       }
       const created = await createCourse({
@@ -118,7 +122,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
   }
 
   async function onDeleteCourse(courseId: string) {
-    const ok = window.confirm("Удалить курс? Будут удалены все задания и зачисления.");
+    const ok = window.confirm(t("admin.courses.deleteConfirm"));
     if (!ok) return;
 
     setDeletingCourseId(courseId);
@@ -137,10 +141,10 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
     <div className="w-full min-h-screen py-4" style={{ backgroundColor: theme.bg }}>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold" style={{ color: theme.text }}>Мои курсы</h1>
+          <h1 className="text-3xl font-semibold" style={{ color: theme.text }}>{t("admin.courses.myCourses")}</h1>
           {searchQuery ? (
             <p className="mt-1 text-sm" style={{ color: theme.text2 }}>
-              Поиск: «{searchParams.get("q")}»
+              {tp("admin.courses.searchQuery", { q: searchParams.get("q") ?? "" })}
             </p>
           ) : null}
         </div>
@@ -150,7 +154,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
             className="rounded-lg px-4 py-2 text-sm font-medium transition"
             style={{ backgroundColor: theme.accent, color: '#fff' }}
           >
-            {showCreateForm ? "Скрыть форму" : "Создать курс"}
+            {showCreateForm ? t("admin.courses.hideForm") : t("admin.courses.createCourse")}
           </button>
         ) : null}
       </div>
@@ -161,7 +165,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
           className="mb-6 rounded-xl border p-5 shadow-md"
           style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         >
-          <div className="mb-3 text-sm font-semibold" style={{ color: theme.text }}>Новый курс</div>
+          <div className="mb-3 text-sm font-semibold" style={{ color: theme.text }}>{t("admin.courses.newCourse")}</div>
           <div className="grid gap-3">
             <input
               type="text"
@@ -181,7 +185,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
             />
             <div className="rounded-lg border px-3 py-2 text-sm font-medium"
             style={{ borderColor: theme.accent + '80', backgroundColor: theme.accent + '20', color: theme.accent }}>
-              Максимальная оценка: {createGradeMax}
+              {tp("admin.courses.gradeMaxLabel", { n: createGradeMax })}
             </div>
             <input
               type="range"
@@ -226,7 +230,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
             {/* Groups selection */}
             {availableGroups.length > 0 && (
               <div className="mt-4">
-                <div className="mb-2 text-sm font-medium" style={{ color: theme.text2 }}>Доступные группы:</div>
+                <div className="mb-2 text-sm font-medium" style={{ color: theme.text2 }}>{t("admin.courses.availableGroups")}</div>
                 <div className="flex flex-wrap gap-2">
                   {availableGroups.map((group) => (
                     <label
@@ -258,7 +262,10 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
             )}
 
             <div className="mt-4 text-xs" style={{ color: theme.text3 }}>
-              Выбрано: {selectedGroups.length} {selectedGroups.length === 1 ? 'группа' : selectedGroups.length > 1 && selectedGroups.length < 5 ? 'группы' : 'групп'}
+              {tp("admin.courses.selectedGroups", {
+                n: selectedGroups.length,
+                word: pluralWord(language, "admin.courses.group", selectedGroups.length),
+              })}
             </div>
 
             <div className="mt-6 flex gap-2">
@@ -268,7 +275,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
                 className="w-full rounded-lg px-4 py-2 text-sm font-medium transition"
                 style={{ backgroundColor: theme.accent, color: '#fff' }}
               >
-                {createLoading ? "Создание..." : "Создать курс"}
+                {createLoading ? t("admin.courses.creating") : t("admin.courses.createCourse")}
               </button>
               <button
                 type="button"
@@ -283,7 +290,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
                 className="rounded-lg px-4 py-2 text-sm font-medium transition"
                 style={{ border: `1px solid ${theme.border}`, color: theme.text2 }}
               >
-                Отмена
+                {t("common.cancel")}
               </button>
             </div>
 
@@ -293,7 +300,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
         </form>
       ) : null}
 
-      {loading ? <div className="text-sm" style={{ color: theme.text2 }}>Loading...</div> : null}
+      {loading ? <div className="text-sm" style={{ color: theme.text2 }}>{t("common.loading")}</div> : null}
       {error ? (
         <div className="rounded-md border p-3 text-sm"
         style={{ borderColor: theme.danger + '80', backgroundColor: theme.danger + '20', color: theme.danger }}>
@@ -303,7 +310,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
 
       {!loading && !error && searchQuery && filteredCourses.length === 0 ? (
         <p className="text-sm mb-4" style={{ color: theme.text2 }}>
-          Ничего не найдено по запросу «{searchParams.get("q")}»
+          {tp("admin.courses.nothingFound", { q: searchParams.get("q") ?? "" })}
         </p>
       ) : null}
 
@@ -323,9 +330,11 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
                   </div>
                 ) : null}
                 <div className="mt-4 grid grid-cols-2 gap-2 text-xs" style={{ color: theme.text2 }}>
-                  <div className="rounded-md px-2 py-1" style={{ backgroundColor: theme.bg4 }}>Студентов: {c.enrolled_count ?? 0}</div>
+                  <div className="rounded-md px-2 py-1" style={{ backgroundColor: theme.bg4 }}>
+                    {tp("admin.courses.studentsCount", { n: c.enrolled_count ?? 0 })}
+                  </div>
                   <div className="rounded-md px-2 py-1" style={{ backgroundColor: theme.accent + '20', color: theme.accent }}>
-                    Макс. оценка: {c.grade_max}
+                    {tp("admin.courses.maxGrade", { n: c.grade_max })}
                   </div>
                 </div>
               </Link>
@@ -333,7 +342,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
               {canCreateCourse ? (
                 <button
                   type="button"
-                  title="Удалить курс"
+                  title={t("admin.courses.deleteCourseTitle")}
                   onClick={() => onDeleteCourse(c.id)}
                   disabled={deletingCourseId === c.id}
                   className="rounded-lg border px-2 py-1 transition disabled:opacity-60"

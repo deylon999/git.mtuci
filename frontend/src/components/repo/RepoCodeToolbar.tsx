@@ -13,6 +13,7 @@ import {
 import toast from "react-hot-toast";
 import { getStudentRepoCloneInfo, type StudentRepoCloneInfo } from "../../api/studentDashboardApi";
 import type { ThemeColors } from "../../theme";
+import { useUserPreferences } from "../../context/UserPreferencesContext";
 
 export interface RepoCodeToolbarProps {
   theme: ThemeColors;
@@ -53,6 +54,7 @@ export default function RepoCodeToolbar({
   giteaWebUrl,
   pageUrl,
 }: RepoCodeToolbarProps) {
+  const { t } = useUserPreferences();
   const [branchOpen, setBranchOpen] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
   const [cloneInfo, setCloneInfo] = useState<StudentRepoCloneInfo | null>(null);
@@ -101,7 +103,7 @@ export default function RepoCodeToolbar({
             clone_url: cloneUrl,
             git_clone_command: `git clone ${cloneUrl}`,
             auth_required: false,
-            note: "Не удалось получить токен — для приватного репо может понадобиться логин Gitea.",
+            note: t("repo.clone.tokenNote"),
           });
         }
       })
@@ -118,7 +120,7 @@ export default function RepoCodeToolbar({
       await navigator.clipboard.writeText(text);
       toast.success(label);
     } catch {
-      toast.error("Не удалось скопировать");
+      toast.error(t("repo.errors.copyFailed"));
     }
     setCloneOpen(false);
   };
@@ -142,22 +144,22 @@ export default function RepoCodeToolbar({
             {cloneLoading ? (
               <p className="flex items-center gap-2 px-3 py-3 text-xs" style={{ color: theme.text2 }}>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Подготовка команды…
+                {t("repo.clone.preparing")}
               </p>
             ) : cloneInfo ? (
               <>
                 <button
                   type="button"
                   onClick={() =>
-                    void copyText(cloneInfo.git_clone_command, "Команда git clone скопирована")
+                    void copyText(cloneInfo.git_clone_command, t("repo.clone.cloneCopied"))
                   }
                   className="w-full px-3 py-2 text-left text-xs hover:opacity-90"
                   style={{ color: theme.text }}
                 >
                   <Copy className="inline h-3 w-3 mr-1.5" />
                   {cloneInfo.auth_required
-                    ? "Скопировать git clone (с токеном)"
-                    : "Скопировать git clone (HTTPS)"}
+                    ? t("repo.clone.copyWithToken")
+                    : t("repo.clone.copyHttps")}
                 </button>
                 <p
                   className="px-3 pb-2 text-[10px] font-mono break-all leading-snug max-h-24 overflow-y-auto"
@@ -173,18 +175,18 @@ export default function RepoCodeToolbar({
               </>
             ) : (
               <p className="px-3 py-2 text-xs" style={{ color: theme.text3 }}>
-                URL Gitea недоступен
+                {t("repo.clone.giteaUnavailable")}
               </p>
             )}
             {pageUrl ? (
               <button
                 type="button"
-                onClick={() => void copyText(pageUrl, "Ссылка на страницу MTUCI скопирована")}
+                onClick={() => void copyText(pageUrl, t("repo.clone.pageLinkCopied"))}
                 className="w-full px-3 py-2 text-left text-xs hover:opacity-90 border-t"
                 style={{ color: theme.text2, borderColor: theme.border }}
               >
                 <Link2 className="inline h-3 w-3 mr-1.5" />
-                Ссылка на страницу (не для git)
+                {t("repo.clone.pageLink")}
               </button>
             ) : null}
             {giteaWebUrl ? (
@@ -197,7 +199,7 @@ export default function RepoCodeToolbar({
                 onClick={() => setCloneOpen(false)}
               >
                 <ExternalLink className="h-3 w-3" />
-                Открыть в Gitea
+                {t("repo.clone.openGitea")}
               </a>
             ) : null}
           </div>,
@@ -264,7 +266,7 @@ export default function RepoCodeToolbar({
             onRepoSearchQueryChange(e.target.value);
           }}
           onFocus={() => setSearchFocused(true)}
-          placeholder="Поиск по файлам…"
+          placeholder={t("repo.clone.searchFiles")}
           className="w-full rounded-lg border pl-8 pr-2 py-1.5 text-xs outline-none"
           style={{
             borderColor: theme.border,
@@ -280,11 +282,11 @@ export default function RepoCodeToolbar({
             {repoSearchLoading ? (
               <p className="px-3 py-2 text-xs flex items-center gap-2" style={{ color: theme.text3 }}>
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Поиск…
+                {t("repo.clone.searching")}
               </p>
             ) : repoSearchResults.length === 0 ? (
               <p className="px-3 py-2 text-xs" style={{ color: theme.text3 }}>
-                Ничего не найдено
+                {t("repo.clone.notFound")}
               </p>
             ) : (
               <ul>
@@ -320,7 +322,7 @@ export default function RepoCodeToolbar({
         }}
       >
         <FilePlus className="h-3.5 w-3.5" />
-        Добавить
+        {t("repo.toolbar.newFile")}
       </button>
 
       <div className="relative shrink-0">
@@ -332,7 +334,7 @@ export default function RepoCodeToolbar({
           style={{ borderColor: theme.border, backgroundColor: theme.bg3, color: theme.text }}
         >
           <Copy className="h-3.5 w-3.5" />
-          Клонировать
+          {t("repo.clone.clone")}
           <ChevronDown className="h-3 w-3 opacity-70" />
         </button>
         {cloneMenu}

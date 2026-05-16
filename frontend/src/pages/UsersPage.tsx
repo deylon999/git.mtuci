@@ -25,6 +25,9 @@ import { usePendingCount } from "../context/PendingCountContext";
 import type { AdminUserRead, UserRole, UserRead } from "../api/types";
 import AdminPageHeader from "../components/AdminPageHeader";
 import { getTheme } from "../theme";
+import { tr } from "../utils/i18nLabels";
+import { useUserPreferences } from "../context/UserPreferencesContext";
+import { pluralWord } from "../i18n/plural";
 
 interface User {
   id: string;
@@ -48,10 +51,10 @@ function getRoleBadge(role: User["role"], isDarkTheme: boolean) {
     laborant: isDarkTheme ? "bg-pink-500/20 text-pink-400" : "bg-pink-100 text-pink-700",
   };
   const labels = {
-    student: "Студент",
-    teacher: "Препод",
-    admin: "Админ",
-    laborant: "Лаборант",
+    student: tr("admin.users.roleShortStudent"),
+    teacher: tr("admin.users.roleShortTeacher"),
+    admin: tr("admin.users.roleShortAdmin"),
+    laborant: tr("admin.users.roleShortLaborant"),
   };
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${styles[role]}`}>
@@ -67,9 +70,9 @@ function getStatusBadge(status: User["status"], isDarkTheme: boolean) {
     blocked: isDarkTheme ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-700",
   };
   const labels = {
-    active: "Активен",
-    pending: "Ожидает",
-    blocked: "Заблокирован",
+    active: tr("admin.dashboard.statusActive"),
+    pending: tr("admin.dashboard.statusPending"),
+    blocked: tr("admin.dashboard.statusBlocked"),
   };
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${styles[status]}`}>
@@ -83,6 +86,7 @@ interface UsersPageProps {
 }
 
 export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
+  const { t, tp, language } = useUserPreferences();
   const theme = getTheme(isDarkTheme);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -140,22 +144,8 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
   const [exporting, setExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Russian pluralization helper for records
-  const pluralizeRecords = (count: number): string => {
-    const lastDigit = count % 10;
-    const lastTwoDigits = count % 100;
-    
-    if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
-      return "записей";
-    }
-    if (lastDigit === 1) {
-      return "запись";
-    }
-    if (lastDigit >= 2 && lastTwoDigits <= 4) {
-      return "записи";
-    }
-    return "записей";
-  };
+  const pluralizeRecords = (count: number): string =>
+    pluralWord(language, "admin.users.records", count);
   const perPageRef = useRef<HTMLDivElement>(null);
 
   // Role filter
@@ -200,7 +190,7 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
 
   const handleBlockToggle = async (user: User) => {
     if (user.role === "admin") {
-      showToast("Вы не можете изменить статус пользователя с ролью Администратор", "error");
+      showToast(t("admin.users.cannotChangeAdminStatus"), "error");
       return;
     }
     setActionLoading(true);
@@ -213,9 +203,9 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
       });
       const res = await getAdminUsers();
       updateUsers(res);
-      showToast(currentlyBlocked ? "Пользователь разблокирован" : "Пользователь заблокирован", "success");
+      showToast(currentlyBlocked ? t("admin.users.unblocked") : t("admin.users.blocked"), "success");
     } catch {
-      showToast("Ошибка при изменении статуса", "error");
+      showToast(t("admin.users.statusChangeError"), "error");
     } finally {
       setActionLoading(false);
     }
@@ -225,7 +215,7 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
 
   const handleApprove = async (user: User) => {
     if (user.role === "admin") {
-      showToast("Вы не можете подтвердить пользователя с ролью Администратор", "error");
+      showToast(t("admin.users.cannotConfirmAdmin"), "error");
       return;
     }
     setActionLoading(true);
@@ -235,9 +225,9 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
       decrementPending();
       const res = await getAdminUsers();
       updateUsers(res);
-      showToast("Пользователь подтвержден", "success");
+      showToast(t("admin.users.confirmed"), "success");
     } catch {
-      showToast("Ошибка при подтверждении", "error");
+      showToast(t("admin.users.confirmError"), "error");
     } finally {
       setActionLoading(false);
     }
@@ -255,7 +245,7 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
   const handleSaveEdit = async () => {
     if (!editUser) return;
     if (editUser.role === "admin") {
-      showToast("Вы не можете редактировать пользователя с ролью Администратор", "error");
+      showToast(t("admin.users.cannotEditAdmin"), "error");
       return;
     }
     setActionLoading(true);
@@ -269,9 +259,9 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
       setEditUser(null);
       const res = await getAdminUsers();
       updateUsers(res);
-      showToast("Изменения сохранены", "success");
+      showToast(t("admin.users.saved"), "success");
     } catch {
-      showToast("Ошибка при сохранении", "error");
+      showToast(t("admin.users.saveError"), "error");
     } finally {
       setActionLoading(false);
     }
@@ -351,7 +341,7 @@ useEffect(() => {
       setTotalUsers(res.length);
 
     } catch {
-      setError("Ошибка загрузки пользователей");
+      setError(t("admin.users.loadError"));
     } finally {
       setLoading(false);
     }
@@ -363,22 +353,22 @@ useEffect(() => {
 
   const stats = [
     {
-      label: "Всего",
+      label: t("admin.users.statTotal"),
       value: totalUsers,
       color: isDarkTheme ? "text-[#ccd0d4]" : "text-gray-900",
     },
     {
-      label: "Активных",
+      label: t("admin.users.statActive"),
       value: users.filter(u => u.status === "active").length,
       color: isDarkTheme ? "text-[#ccd0d4]" : "text-gray-900",
     },
     {
-      label: "Ожидают",
+      label: t("admin.users.statPending"),
       value: users.filter(u => u.status === "pending").length,
       color: isDarkTheme ? "text-[#ccd0d4]" : "text-gray-900",
     },
     {
-      label: "Заблокировано",
+      label: t("admin.users.statBlocked"),
       value: users.filter(u => u.status === "blocked").length,
       color: "text-red-400",
     },
@@ -439,9 +429,9 @@ useEffect(() => {
     setExporting(true);
     try {
       await exportUsersCSV();
-      showToast("Пользователи успешно экспортированы", "success");
+      showToast(t("admin.users.exportSuccess"), "success");
     } catch {
-      showToast("Ошибка при экспорте", "error");
+      showToast(t("admin.users.exportError"), "error");
     } finally {
       setExporting(false);
     }
@@ -458,12 +448,12 @@ useEffect(() => {
       updateUsers(res);
       
       if (result.errors.length > 0) {
-        showToast(`Импортировано: ${result.imported}, ошибок: ${result.errors.length}`, "error");
+        showToast(tp("admin.users.importResult", { imported: result.imported, errors: result.errors.length }), "error");
       } else {
-        showToast(`Успешно импортировано ${result.imported} пользователей`, "success");
+        showToast(tp("admin.users.importSuccess", { n: result.imported }), "success");
       }
     } catch {
-      showToast("Ошибка при импорте", "error");
+      showToast(t("admin.users.importError"), "error");
     } finally {
       setImporting(false);
       if (fileInputRef.current) {
@@ -519,10 +509,10 @@ useEffect(() => {
         {/* Header */}
         <AdminPageHeader
           isDarkTheme={isDarkTheme}
-          title="Все пользователи"
+          title={t("admin.users.title")}
           subtitle={filteredUsers.length === totalUsers 
             ? `${totalUsers} ${pluralizeRecords(totalUsers)}` 
-            : `Найдено ${filteredUsers.length} из ${totalUsers}`}
+            : tp("admin.users.foundOf", { found: filteredUsers.length, total: totalUsers })}
           actions={
             <>
               <button
@@ -531,7 +521,7 @@ useEffect(() => {
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm ${cardBg} ${cardHover} ${exporting ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <Download className="h-4 w-4" />
-                {exporting ? "Экспорт..." : "Экспорт CSV"}
+                {exporting ? t("admin.users.exporting") : t("admin.users.exportCsv")}
               </button>
               <button
                 onClick={() => fileInputRef.current?.click()}
@@ -539,7 +529,7 @@ useEffect(() => {
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm ${cardBg} ${cardHover} ${importing ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <Upload className="h-4 w-4" />
-                {importing ? "Импорт..." : "Импорт"}
+                {importing ? t("admin.users.importing") : t("admin.users.import")}
               </button>
               <input
                 ref={fileInputRef}
@@ -550,7 +540,7 @@ useEffect(() => {
               />
               <button className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm ${isDarkTheme ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
                 <Plus className="h-4 w-4" />
-                Добавить
+                {t("admin.users.addUser")}
               </button>
             </>
           }
@@ -574,17 +564,17 @@ useEffect(() => {
               className={`flex items-center gap-2 px-3 py-2 ${modalInputBg} rounded-lg text-sm ${tableCellText} ${tableNameText} transition-colors`}
             >
               <Users className="h-4 w-4" />
-              {roleFilter === "all" ? "Все роли" : roleFilter === "admin" ? "Админ" : roleFilter === "teacher" ? "Препод" : roleFilter === "laborant" ? "Лаборант" : "Студент"}
+              {roleFilter === "all" ? t("admin.users.filterAllRoles") : roleFilter === "admin" ? t("admin.users.roleShortAdmin") : roleFilter === "teacher" ? t("admin.users.roleShortTeacher") : roleFilter === "laborant" ? t("admin.users.roleShortLaborant") : t("admin.users.roleShortStudent")}
               <ChevronDown className={`h-3 w-3 transition-transform ${showRoleDropdown ? "rotate-180" : ""}`} />
             </button>
             {showRoleDropdown && (
               <div className={`absolute top-full left-0 mt-1.5 w-36 ${tableBg} border ${tableBorder} rounded-xl shadow-xl z-50 overflow-hidden`}>
                 {[
-                  { value: "all", label: "Все роли" },
-                  { value: "admin", label: "Администратор" },
-                  { value: "teacher", label: "Преподаватель" },
-                  { value: "laborant", label: "Лаборант" },
-                  { value: "student", label: "Студент" },
+                  { value: "all", label: t("admin.users.filterAllRoles") },
+                  { value: "admin", label: t("admin.users.roleAdminFull") },
+                  { value: "teacher", label: t("admin.users.roleTeacherFull") },
+                  { value: "laborant", label: t("admin.users.roleLaborantFull") },
+                  { value: "student", label: t("admin.users.roleStudentFull") },
                 ].map((opt) => (
                   <button
                     key={opt.value}
@@ -607,16 +597,16 @@ useEffect(() => {
               className={`flex items-center gap-2 px-3 py-2 ${modalInputBg} rounded-lg text-sm ${tableCellText} ${tableNameText} transition-colors`}
             >
               <CheckCircle className="h-4 w-4" />
-              {statusFilter === "all" ? "Все статусы" : statusFilter === "active" ? "Активен" : statusFilter === "pending" ? "Ожидает" : "Заблокирован"}
+              {statusFilter === "all" ? t("admin.users.filterAllStatuses") : statusFilter === "active" ? t("admin.dashboard.statusActive") : statusFilter === "pending" ? t("admin.dashboard.statusPending") : t("admin.dashboard.statusBlocked")}
               <ChevronDown className={`h-3 w-3 transition-transform ${showStatusDropdown ? "rotate-180" : ""}`} />
             </button>
             {showStatusDropdown && (
               <div className={`absolute top-full left-0 mt-1.5 w-36 ${tableBg} border ${tableBorder} rounded-xl shadow-xl z-50 overflow-hidden`}>
                 {[
-                  { value: "all", label: "Все статусы" },
-                  { value: "active", label: "Активен" },
-                  { value: "pending", label: "Ожидает" },
-                  { value: "blocked", label: "Заблокирован" },
+                  { value: "all", label: t("admin.users.filterAllStatuses") },
+                  { value: "active", label: t("admin.dashboard.statusActive") },
+                  { value: "pending", label: t("admin.dashboard.statusPending") },
+                  { value: "blocked", label: t("admin.dashboard.statusBlocked") },
                 ].map((opt) => (
                   <button
                     key={opt.value}
@@ -639,7 +629,7 @@ useEffect(() => {
               className={`flex items-center gap-2 px-3 py-2 ${modalInputBg} rounded-lg text-sm ${tableCellText} ${tableNameText} transition-colors`}
             >
               <Briefcase className="h-4 w-4" />
-              {groupFilter === "all" ? "Все группы" : groupFilter}
+              {groupFilter === "all" ? t("admin.users.filterAllGroups") : groupFilter}
               <ChevronDown className={`h-3 w-3 transition-transform ${showGroupDropdown ? "rotate-180" : ""}`} />
             </button>
             {showGroupDropdown && (
@@ -652,7 +642,7 @@ useEffect(() => {
                       : `${tableCellText} ${tableRowHover}`
                   }`}
                 >
-                  Все группы
+                  {t("admin.users.filterAllGroups")}
                 </button>
                 {availableGroups.map((group) => (
                   <button
@@ -668,7 +658,7 @@ useEffect(() => {
                   </button>
                 ))}
                 {availableGroups.length === 0 && (
-                  <div className={`px-4 py-2.5 text-sm ${tableHeaderText}`}>Нет групп</div>
+                  <div className={`px-4 py-2.5 text-sm ${tableHeaderText}`}>{t("admin.users.noGroups")}</div>
                 )}
               </div>
             )}
@@ -676,7 +666,7 @@ useEffect(() => {
           {selectedUsers.length > 0 && (
             <button className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400 hover:bg-red-500/20 transition-colors ml-auto">
               <Trash2 className="h-4 w-4" />
-              Удалить выбранных ({selectedUsers.length})
+              {tp("admin.users.deleteSelected", { n: selectedUsers.length })}
             </button>
           )}
         </div>
@@ -707,13 +697,13 @@ useEffect(() => {
                     )}
                   </div>
                 </th>
-                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>Пользователь</th>
-                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>Группа</th>
-                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>Роль</th>
-                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>Статус</th>
-                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>Репо</th>
-                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>Последний вход</th>
-                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>Действия</th>
+                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>{t("admin.users.colUser")}</th>
+                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>{t("admin.users.colGroup")}</th>
+                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>{t("admin.users.colRole")}</th>
+                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>{t("admin.users.colStatus")}</th>
+                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>{t("admin.users.colRepos")}</th>
+                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>{t("admin.users.colLastLogin")}</th>
+                <th className={`px-4 py-3 text-left text-xs font-medium uppercase ${tableHeaderText}`}>{t("admin.users.colActions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -724,13 +714,13 @@ useEffect(() => {
                       <div className={`p-4 rounded-full ${iconBg}`}>
                         <Search className={`h-8 w-8 ${iconColor}`} />
                       </div>
-                      <p className={tableCellText}>Пользователи не найдены</p>
+                      <p className={tableCellText}>{t("admin.users.notFound")}</p>
                       {(roleFilter !== "all" || statusFilter !== "all" || groupFilter !== "all" || debouncedSearch) && (
                         <button
                           onClick={clearFilters}
                           className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
                         >
-                          Сбросить фильтры
+                          {t("admin.users.resetFilters")}
                         </button>
                       )}
                     </div>
@@ -777,7 +767,7 @@ useEffect(() => {
                   <td className={`px-4 py-3 text-sm ${tableCellText}`}>{user.group}</td>
                   <td className="px-4 py-3">{getRoleBadge(user.role, isDarkTheme)}</td>
                   <td className="px-4 py-3">{getStatusBadge(user.status, isDarkTheme)}</td>
-                  <td className={`px-4 py-3 text-sm ${tableCellText}`}>{user.repos} репо</td>
+                  <td className={`px-4 py-3 text-sm ${tableCellText}`}>{user.repos} {t("admin.users.reposCount").replace("{n}", String(user.repos))}</td>
                   <td className={`px-4 py-3 text-sm ${tableCellText}`}>{user.lastLogin}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
@@ -792,7 +782,7 @@ useEffect(() => {
                         <button
                           onClick={() => handleEdit(user)}
                           disabled={actionLoading || user.role === "admin"}
-                          title={user.role === "admin" ? "Недостаточно прав для изменения этого профиля" : ""}
+                          title={user.role === "admin" ? t("admin.users.noPermission") : ""}
                           className={`p-1.5 rounded-lg ${actionBtnHover} ${actionBtnColor} transition-colors disabled:opacity-30 disabled:cursor-not-allowed`}
                         >
                           <Edit className="h-4 w-4" />
@@ -802,7 +792,7 @@ useEffect(() => {
                         <button
                           onClick={() => handleBlockToggle(user)}
                           disabled={actionLoading || user.role === "admin"}
-                          title={user.role === "admin" ? "Недостаточно прав для изменения этого профиля" : ""}
+                          title={user.role === "admin" ? t("admin.users.noPermission") : ""}
                           className={`p-1.5 rounded-lg ${actionBtnHover} ${actionBtnColor} transition-colors disabled:opacity-30 disabled:cursor-not-allowed`}
                         >
                           <Unlock className="h-4 w-4" />
@@ -811,7 +801,7 @@ useEffect(() => {
                         <button
                           onClick={() => handleBlockToggle(user)}
                           disabled={actionLoading || user.role === "admin"}
-                          title={user.role === "admin" ? "Недостаточно прав для изменения этого профиля" : ""}
+                          title={user.role === "admin" ? t("admin.users.noPermission") : ""}
                           className={`p-1.5 rounded-lg ${actionBtnHover} ${actionBtnColor} transition-colors disabled:opacity-30 disabled:cursor-not-allowed`}
                         >
                           <Lock className="h-4 w-4" />
@@ -821,7 +811,7 @@ useEffect(() => {
                         <button
                           onClick={() => handleApprove(user)}
                           disabled={actionLoading || user.role === "admin"}
-                          title={user.role === "admin" ? "Недостаточно прав для изменения этого профиля" : ""}
+                          title={user.role === "admin" ? t("admin.users.noPermission") : ""}
                           className={`p-1.5 rounded-lg ${isDarkTheme ? "hover:bg-green-500/20" : "hover:bg-green-100"} ${actionBtnColor} hover:text-green-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed`}
                         >
                           <Check className="h-4 w-4" />
@@ -877,11 +867,11 @@ useEffect(() => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <span className={`text-sm ${tableHeaderText}`}>
-                  Показано {filteredUsers.length} из {totalUsers}
-                  {roleFilter !== "all" || statusFilter !== "all" || groupFilter !== "all" ? " (отфильтровано)" : ""}
+                  {tp("admin.users.shownOf", { shown: filteredUsers.length, total: totalUsers })}
+                  {roleFilter !== "all" || statusFilter !== "all" || groupFilter !== "all" ? t("admin.users.filtered") : ""}
                 </span>
                 <div className="flex items-center gap-2" ref={perPageRef}>
-                  <span className={`text-sm ${tableHeaderText}`}>На странице:</span>
+                  <span className={`text-sm ${tableHeaderText}`}>{t("admin.users.perPage")}</span>
                   <div className="relative">
                     <button
                       onClick={() => setShowPerPageDropdown(!showPerPageDropdown)}
@@ -919,7 +909,7 @@ useEffect(() => {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Поиск по ФИО..."
+                    placeholder={t("admin.users.searchPlaceholder")}
                     className={`w-48 pl-10 pr-8 py-1.5 ${modalInputBg} rounded-lg text-sm ${tableNameText} placeholder-${tableHeaderText} focus:outline-none focus:border-[#484f58] transition-colors`}
                   />
                   {searchQuery && (
@@ -980,7 +970,7 @@ useEffect(() => {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className={`${modalBg} border ${modalBorder} rounded-xl p-6 max-w-md w-full mx-4`}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className={`text-lg font-semibold ${modalText}`}>Профиль пользователя</h3>
+              <h3 className={`text-lg font-semibold ${modalText}`}>{t("admin.users.profileModal")}</h3>
               <button onClick={() => setViewUser(null)} className={`p-1 ${modalBtnHover} rounded ${modalBtnText}`}>
                 <X className="h-5 w-5" />
               </button>
@@ -997,26 +987,26 @@ useEffect(() => {
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className={`${modalCardBg} p-3 rounded-lg`}>
-                  <p className={modalBtnText}>Роль</p>
+                  <p className={modalBtnText}>{t("admin.users.fieldRole")}</p>
                   <p className={`font-medium ${modalText}`}>
-                    {viewUser.role === "admin" ? "Администратор" :
-                     viewUser.role === "teacher" ? "Преподаватель" :
-                     viewUser.role === "laborant" ? "Лаборант" : "Студент"}
+                    {viewUser.role === "admin" ? t("admin.users.roleAdminFull") :
+                     viewUser.role === "teacher" ? t("admin.users.roleTeacherFull") :
+                     viewUser.role === "laborant" ? t("admin.users.roleLaborantFull") : t("admin.users.roleStudentFull")}
                   </p>
                 </div>
                 <div className={`${modalCardBg} p-3 rounded-lg`}>
-                  <p className={modalBtnText}>Группа</p>
+                  <p className={modalBtnText}>{t("admin.users.fieldGroup")}</p>
                   <p className={`font-medium ${modalText}`}>{viewUser.group}</p>
                 </div>
                 <div className={`${modalCardBg} p-3 rounded-lg`}>
-                  <p className={modalBtnText}>Статус</p>
+                  <p className={modalBtnText}>{t("admin.users.colStatus")}</p>
                   <p className={`font-medium ${modalText}`}>
-                    {viewUser.status === "active" ? "Активен" :
-                     viewUser.status === "blocked" ? "Заблокирован" : "Ожидает"}
+                    {viewUser.status === "active" ? t("admin.dashboard.statusActive") :
+                     viewUser.status === "blocked" ? t("admin.dashboard.statusBlocked") : t("admin.dashboard.statusPending")}
                   </p>
                 </div>
                 <div className={`${modalCardBg} p-3 rounded-lg`}>
-                  <p className={modalBtnText}>Последний вход</p>
+                  <p className={modalBtnText}>{t("admin.users.colLastLogin")}</p>
                   <p className={`font-medium ${modalText}`}>{viewUser.lastLogin}</p>
                 </div>
               </div>
@@ -1030,33 +1020,33 @@ useEffect(() => {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className={`${modalBg} border ${modalBorder} rounded-xl p-6 max-w-md w-full mx-4`}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className={`text-lg font-semibold ${modalText}`}>Редактирование пользователя</h3>
+              <h3 className={`text-lg font-semibold ${modalText}`}>{t("admin.users.editModal")}</h3>
               <button onClick={() => setEditUser(null)} className={`p-1 ${modalBtnHover} rounded ${modalBtnText}`}>
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className={`block text-sm font-medium mb-1 ${modalLabel}`}>Роль</label>
+                <label className={`block text-sm font-medium mb-1 ${modalLabel}`}>{t("admin.users.fieldRole")}</label>
                 <select
                   value={editForm.role}
                   onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
                   className={`w-full px-3 py-2 rounded-lg ${modalInputBg} ${modalText}`}
                 >
-                  <option value="student">Студент</option>
-                  <option value="teacher">Преподаватель</option>
-                  <option value="laborant">Лаборант</option>
-                  <option value="admin">Администратор</option>
+                  <option value="student">{t("admin.users.roleStudentFull")}</option>
+                  <option value="teacher">{t("admin.users.roleTeacherFull")}</option>
+                  <option value="laborant">{t("admin.users.roleLaborantFull")}</option>
+                  <option value="admin">{t("admin.users.roleAdminFull")}</option>
                 </select>
               </div>
               <div>
-                <label className={`block text-sm font-medium mb-1 ${modalLabel}`}>Группа</label>
+                <label className={`block text-sm font-medium mb-1 ${modalLabel}`}>{t("admin.users.fieldGroup")}</label>
                 <select
                   value={editForm.group_name}
                   onChange={(e) => setEditForm({ ...editForm, group_name: e.target.value })}
                   className={`w-full px-3 py-2 rounded-lg ${modalInputBg} ${modalText}`}
                 >
-                  <option value="">— Не выбрана —</option>
+                  <option value="">{t("admin.users.groupNotSelected")}</option>
                   {availableGroups.map((group) => (
                     <option key={group} value={group}>{group}</option>
                   ))}
@@ -1067,14 +1057,14 @@ useEffect(() => {
                   onClick={() => setEditUser(null)}
                   className={`flex-1 px-4 py-2 border rounded-lg ${isDarkTheme ? "border-[#30363d] hover:bg-[#1f2937]" : "border-gray-300 hover:bg-gray-100"} ${modalLabel}`}
                 >
-                  Отмена
+                  {t("common.cancel")}
                 </button>
                 <button
                   onClick={handleSaveEdit}
                   disabled={actionLoading}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {actionLoading ? "Сохранение..." : "Сохранить"}
+                  {actionLoading ? t("admin.users.saving") : t("admin.users.save")}
                 </button>
               </div>
             </div>

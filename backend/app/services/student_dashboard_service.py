@@ -174,6 +174,43 @@ async def ensure_student_gitea_clone_token(session: AsyncSession, user: User) ->
     return token
 
 
+def _mask_gitea_token(token: str) -> str:
+    t = token.strip()
+    if len(t) <= 4:
+        return "****"
+    return f"{'•' * 12}{t[-4:]}"
+
+
+async def get_student_git_clone_token_status(user: User) -> dict:
+    prefs: dict = dict(user.preferences) if isinstance(user.preferences, dict) else {}
+    existing = str(prefs.get("gitea_clone_token") or "").strip()
+    configured = bool(existing) and await verify_gitea_access_token(existing)
+    return {
+        "configured": configured,
+        "masked_token": _mask_gitea_token(existing) if configured else None,
+        "gitea_username": resolve_gitea_username(user),
+    }
+
+
+async def regenerate_student_git_clone_token(session: AsyncSession, user: User) -> dict:
+    from app.services.gitea_service import delete_gitea_clone_tokens_for_user
+
+    username = resolve_gitea_username(user)
+    await delete_gitea_clone_tokens_for_user(username)
+    prefs: dict = dict(user.preferences) if isinstance(user.preferences, dict) else {}
+    prefs.pop("gitea_clone_token", None)
+    user.preferences = prefs
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    token = await ensure_student_gitea_clone_token(session, user)
+    username = resolve_gitea_username(user)
+    return {
+        "token": token,
+        "gitea_username": username,
+    }
+
+
 async def get_student_repository_clone_info(
     session: AsyncSession,
     *,
@@ -1117,34 +1154,24 @@ async def get_student_forks(
     student_id: UUID,
     limit: int = 100,
 ) -> list[StudentForkItemRead]:
-    result = await session.execute(
-        select(ActivityLog)
-        .where(
-            ActivityLog.user_id == student_id,
-            ActivityLog.activity_type.in_([ActivityType.fork, ActivityType.repo_created]),
-        )
-        .order_by(ActivityLog.created_at.desc())
-        .limit(limit)
-    )
-    items: list[StudentForkItemRead] = []
-    for log in result.scalars().all():
-        event_type = (
-            log.activity_type.value
-            if hasattr(log.activity_type, "value")
-            else str(log.activity_type)
-        )
-        source = log.repo_name or "—"
-        target = _parse_fork_target(log.message) if event_type == "fork" else source
-        items.append(
-            StudentForkItemRead(
-                id=log.id,
-                event_type=event_type,
-                source_repo=source,
-                target_repo=target,
-                created_at=log.created_at,
-            )
-        )
-    return items
+    from app.services.student_forks_service import get_student_gitea_forks
+
+    user = await session.get(User, student_id)
+    if not user:
+        return []
+    rows = await get_student_gitea_forks(student_user=user)
+    parsed: list[StudentForkItemRead] = []
+    for row in rows[:limit]:
+        updated = row.get("updated_at")
+        if isinstance(updated, str):
+            try:
+                updated_dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+            except ValueError:
+                updated_dt = None
+        else:
+            updated_dt = None
+        parsed.append(StudentForkItemRead.model_validate({**row, "updated_at": updated_dt}))
+    return parsed
 
 
 async def get_student_grades(

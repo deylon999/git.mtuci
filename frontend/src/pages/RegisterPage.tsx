@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { register, registerStudentMtuci } from "../api/authApi";
 import type { FormEvent } from "react";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const { t } = useUserPreferences();
 
   // Read theme from localStorage (persisted across sessions)
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
@@ -69,7 +71,7 @@ export default function RegisterPage() {
       }
       navigate("/login", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось зарегистрироваться");
+      setError(err instanceof Error ? err.message : t("auth.register.error"));
     } finally {
       setLoading(false);
     }
@@ -80,15 +82,13 @@ export default function RegisterPage() {
       <div className={`w-full max-w-md rounded-xl border p-8 shadow-md ${cardBg}`}>
         <div className="mb-6 text-center">
           <div className={`text-xl font-semibold ${brandText}`}>GIT.MTUCI</div>
-          <h1 className={`mt-3 text-2xl font-semibold ${titleText}`}>Создание аккаунта</h1>
-          <p className={`mt-1 text-sm ${subtitleText}`}>
-            Создайте аккаунт преподавателя или студента (по умолчанию — студент).
-          </p>
+          <h1 className={`mt-3 text-2xl font-semibold ${titleText}`}>{t("auth.register.pageTitle")}</h1>
+          <p className={`mt-1 text-sm ${subtitleText}`}>{t("auth.register.pageSubtitle")}</p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>Эл. почта</label>
+            <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>{t("auth.register.email")}</label>
             <input
               className={`w-full rounded-lg border px-3 py-2.5 outline-none transition ${inputBg} ${inputFocus}`}
               type="email"
@@ -100,7 +100,7 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>Пароль</label>
+            <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>{t("auth.register.password")}</label>
             <div className="relative">
               <input
                 className={`w-full rounded-lg border px-3 py-2.5 pr-10 outline-none transition ${inputBg} ${inputFocus}`}
@@ -123,7 +123,7 @@ export default function RegisterPage() {
             <div className="mt-1.5 flex items-center gap-2 text-xs">
               <span className={`inline-block w-2 h-2 rounded-full ${password.length >= 8 ? strengthDotStrong : strengthDotWeak}`} />
               <span className={password.length >= 8 ? strengthTextStrong : strengthTextWeak}>
-                Минимум 8 символов
+                {t("auth.register.passwordMinHint")}
               </span>
             </div>
           </div>
@@ -137,29 +137,27 @@ export default function RegisterPage() {
                 className={`rounded ${checkboxBorder} text-blue-600 focus:ring-blue-500`}
               />
               <span className={`text-sm font-medium ${mtuciText} transition-colors`}>
-                Автозаполнение из ЛК МТУСИ
+                {t("auth.register.mtuciAuto")}
               </span>
             </label>
-            <p className={`mt-1 text-xs ${mtuciSubtext} transition-colors`}>
-              Укажите логин/пароль от ЛК МТУСИ, и ФИО с группой подтянутся автоматически
-            </p>
+            <p className={`mt-1 text-xs ${mtuciSubtext} transition-colors`}>{t("auth.register.mtuciHint")}</p>
           </div>
 
           {useMtuci ? (
             <>
               <div>
-                <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>Логин ЛК МТУСИ</label>
+                <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>{t("auth.register.mtuciLoginLabel")}</label>
                 <input
                   className={`w-full rounded-lg border px-3 py-2.5 outline-none transition ${inputBg} ${inputFocus}`}
                   type="text"
                   value={mtuciLogin}
                   onChange={(e) => setMtuciLogin(e.target.value)}
                   required={useMtuci}
-                  placeholder="ваш_логин"
+                  placeholder={t("auth.register.mtuciLoginPlaceholder")}
                 />
               </div>
               <div>
-                <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>Пароль ЛК МТУСИ</label>
+                <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>{t("auth.register.mtuciPasswordLabel")}</label>
                 <div className="relative">
                   <input
                     className={`w-full rounded-lg border px-3 py-2.5 pr-10 outline-none transition ${inputBg} ${inputFocus}`}
@@ -182,7 +180,7 @@ export default function RegisterPage() {
             </>
           ) : (
             <div>
-              <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>ФИО</label>
+              <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>{t("auth.register.fullName")}</label>
               <input
                 className={`w-full rounded-lg border px-3 py-2.5 outline-none transition ${inputBg} ${inputFocus}`}
                 value={fullName}
@@ -202,7 +200,11 @@ export default function RegisterPage() {
             disabled={loading}
             className={`w-full rounded-lg px-3 py-2.5 font-medium transition disabled:opacity-60 ${primaryBtn}`}
           >
-            {loading ? "Создание…" : useMtuci ? "Создать через ЛК МТУСИ" : "Создать аккаунт"}
+            {loading
+              ? t("auth.register.submittingCreate")
+              : useMtuci
+                ? t("auth.register.submitMtuci")
+                : t("auth.register.submitDefault")}
           </button>
 
           <button
@@ -210,7 +212,7 @@ export default function RegisterPage() {
             onClick={() => navigate("/login")}
             className={`w-full rounded-lg border px-3 py-2.5 transition ${secondaryBtn}`}
           >
-            Назад ко входу
+            {t("auth.register.backToLogin")}
           </button>
         </form>
       </div>

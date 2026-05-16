@@ -13,6 +13,8 @@ import {
   type StudentRecentRepository,
 } from "../api/studentDashboardApi";
 import { useStudentNavCountsOptional } from "../context/StudentNavCountsContext";
+import { translate, translateWithParams } from "../i18n";
+import { getI18nLocale } from "../i18n/runtime";
 import {
   firstNameFromFullName,
   formatDeadlineLabel,
@@ -77,27 +79,28 @@ function mapDeadlines(
       name: dl.name,
       course: dl.course,
       deadline,
-      timeLabel: formatDeadlineLabel(deadline, now),
+      timeLabel: formatDeadlineLabel(deadline, now, getI18nLocale()),
       urgency: dl.urgency,
     };
   });
 }
 
 function buildKpiView(stats: Awaited<ReturnType<typeof getStudentDashboardStats>>): StudentDashboardKpiView {
+  const locale = getI18nLocale();
   const { kpi } = stats;
   const reposSub =
     kpi.repos_week_delta > 0
-      ? `+${kpi.repos_week_delta} на этой неделе`
+      ? translateWithParams(locale, "student.dashboard.kpiReposWeek", { n: kpi.repos_week_delta })
       : kpi.repos_total > 0
-        ? "Без новых за неделю"
-        : "Пока нет репозиториев";
+        ? translate(locale, "student.dashboard.kpiReposNoNew")
+        : translate(locale, "student.dashboard.kpiReposNone");
 
   const commitsSub =
     kpi.commits_week_avg != null
-      ? `Среднее: ${kpi.commits_week_avg.toFixed(1)}/день`
+      ? translateWithParams(locale, "student.dashboard.kpiCommitsAvg", { avg: kpi.commits_week_avg.toFixed(1) })
       : kpi.commits_week > 0
-        ? "За последние 7 дней"
-        : "Скоро";
+        ? translate(locale, "student.dashboard.kpiCommitsWeek")
+        : translate(locale, "student.dashboard.kpiSoon");
 
   return {
     reposTotal: kpi.repos_total,
@@ -105,7 +108,7 @@ function buildKpiView(stats: Awaited<ReturnType<typeof getStudentDashboardStats>
     commitsWeek: kpi.commits_week,
     commitsWeekSub: commitsSub,
     coursesActive: kpi.courses_active,
-    coursesSub: `${kpi.assignments_total} заданий всего`,
+    coursesSub: translateWithParams(locale, "student.dashboard.kpiAssignmentsTotal", { n: kpi.assignments_total }),
     deadlinesToday: kpi.deadlines_today,
     deadlinesTodaySub: kpi.deadlines_today_sub,
   };
@@ -145,7 +148,7 @@ export function useStudentDashboardCore(): StudentDashboardCore {
         setState({
           loading: false,
           error: null,
-          firstName: firstNameFromFullName(me.full_name),
+          firstName: firstNameFromFullName(me.full_name, getI18nLocale()),
           groupName: me.group_name ?? null,
           deadlines,
           deadlinesToday: stats.kpi.deadlines_today,
@@ -163,7 +166,7 @@ export function useStudentDashboardCore(): StudentDashboardCore {
         setState({
           ...initial,
           loading: false,
-          error: e instanceof Error ? e.message : "Не удалось загрузить данные",
+          error: e instanceof Error ? e.message : translate(getI18nLocale(), "student.errors.loadDashboard"),
           refetch,
         });
       }

@@ -6,6 +6,8 @@ import {
   markNotificationAsRead,
 } from "../api/notificationsApi";
 import type { Notification } from "../api/types";
+import { useUserPreferencesOptional } from "../context/UserPreferencesContext";
+import { showBrowserNotification } from "../utils/browserNotifications";
 
 function getNotificationsWsUrl(): string {
   const token = getToken();
@@ -16,19 +18,31 @@ function getNotificationsWsUrl(): string {
 }
 
 export function useNotifications() {
+  const prefs = useUserPreferencesOptional();
+  const pushEnabled = prefs?.notifications.push ?? false;
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevUnreadRef = useRef(0);
 
   const refresh = useCallback(async () => {
     try {
       const data = await getNotifications();
+      const unread = data.filter((n) => !n.read);
+      if (pushEnabled && unread.length > prevUnreadRef.current) {
+        const newest = unread[0];
+        if (newest) {
+          showBrowserNotification(newest.title, { body: newest.message, tag: newest.id });
+        }
+      }
+      prevUnreadRef.current = unread.length;
       setNotifications(data);
     } catch {
       setNotifications([]);
+      prevUnreadRef.current = 0;
     }
-  }, []);
+  }, [pushEnabled]);
 
   useEffect(() => {
     let cancelled = false;

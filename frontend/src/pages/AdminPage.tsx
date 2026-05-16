@@ -42,6 +42,9 @@ import { usePermissions } from "../hooks/usePermissions";
 import toast from "react-hot-toast";
 import AdminPageHeader from "../components/AdminPageHeader";
 import { getTheme } from "../theme";
+import { useUserPreferences } from "../context/UserPreferencesContext";
+import { translate, translateWithParams } from "../i18n";
+import { getI18nLocale } from "../i18n/runtime";
 
 interface Stats {
   total: number;
@@ -70,6 +73,7 @@ function ReportsOverviewBlock({
   data: AdminReportsOverview;
   isDarkTheme: boolean;
 }) {
+  const { t } = useUserPreferences();
   const theme = getTheme(isDarkTheme);
   return (
     <div
@@ -77,14 +81,14 @@ function ReportsOverviewBlock({
       style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
     >
       <h2 className="mb-3 text-lg font-semibold" style={{ color: theme.text }}>
-        Обзор платформы
+        {t("admin.dashboard.overviewTitle")}
       </h2>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
-          ["Пользователи", data.total_users],
-          ["Ожидают одобрения", data.pending_users],
-          ["Курсы", data.total_courses],
-          ["На проверке", data.submissions_pending_grade],
+          [t("admin.dashboard.statUsers"), data.total_users],
+          [t("admin.dashboard.statPending"), data.pending_users],
+          [t("admin.dashboard.statCourses"), data.total_courses],
+          [t("admin.dashboard.statSubmissions"), data.submissions_pending_grade],
         ].map(([label, value]) => (
           <div key={String(label)} className="rounded-lg border p-3" style={{ borderColor: theme.border }}>
             <p className="text-xs" style={{ color: theme.text2 }}>
@@ -101,10 +105,10 @@ function ReportsOverviewBlock({
           <table className="w-full text-sm">
             <thead style={{ color: theme.text2 }}>
               <tr>
-                <th className="py-2 text-left">Курс</th>
-                <th className="py-2 text-left">Преподаватель</th>
-                <th className="py-2 text-left">Студентов</th>
-                <th className="py-2 text-left">Заданий</th>
+                <th className="py-2 text-left">{t("admin.dashboard.colCourse")}</th>
+                <th className="py-2 text-left">{t("admin.dashboard.colTeacher")}</th>
+                <th className="py-2 text-left">{t("admin.dashboard.colStudents")}</th>
+                <th className="py-2 text-left">{t("admin.dashboard.colAssignments")}</th>
               </tr>
             </thead>
             <tbody>
@@ -188,13 +192,17 @@ function StatCard({ title, value, trend, trendUp, icon: Icon, isDarkTheme = true
   );
 }
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, t: (key: string) => string) {
   const styles = {
     pending: "bg-yellow-500/20 text-yellow-400",
     active: "bg-green-500/20 text-green-400",
     blocked: "bg-red-500/20 text-red-400",
   };
-  const labels = { pending: "Ожидает", active: "Активен", blocked: "Заблокирован" };
+  const labels = {
+    pending: t("admin.dashboard.statusPending"),
+    active: t("admin.dashboard.statusActive"),
+    blocked: t("admin.dashboard.statusBlocked"),
+  };
   const style = styles[status as keyof typeof styles] || styles.pending;
   const label = labels[status as keyof typeof labels] || status;
   return (
@@ -205,6 +213,8 @@ function getStatusBadge(status: string) {
 }
 
 export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
+  const { t, tp, language } = useUserPreferences();
+  const dateLocale = language === "en" ? "en-US" : "ru-RU";
   const [activeTab, setActiveTab] = useState("overview");
   const { hasPermission } = usePermissions();
   const [loading, setLoading] = useState(true);
@@ -257,55 +267,53 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
       setActiveRepositories(repoData);
       setReportsOverview(reports);
 
-      // Check system metrics and add notifications if needed
+      const loc = getI18nLocale();
+      const justNow = translate(loc, "time.justNow");
+
       if (sysMetrics) {
         const newNotifications: Notification[] = [];
-        
-        // Check disk usage
+
         if (sysMetrics.disk_percent >= 85) {
           newNotifications.push({
             id: `disk-${Date.now()}`,
-            type: sysMetrics.disk_percent >= 95 ? 'critical' : 'warning',
-            title: 'Диск переполнен',
-            message: `Использовано ${sysMetrics.disk_percent}% дискового пространства`,
-            timestamp: 'только что',
-            category: 'server',
+            type: sysMetrics.disk_percent >= 95 ? "critical" : "warning",
+            title: translate(loc, "admin.dashboard.alertDiskFull"),
+            message: translateWithParams(loc, "admin.dashboard.alertDiskFullMsg", { n: sysMetrics.disk_percent }),
+            timestamp: justNow,
+            category: "server",
           });
         }
-        
-        // Check memory usage
+
         if (sysMetrics.memory_percent >= 90) {
           newNotifications.push({
             id: `mem-${Date.now()}`,
-            type: 'critical',
-            title: 'Высокая загрузка RAM',
-            message: `Использовано ${sysMetrics.memory_percent}% оперативной памяти`,
-            timestamp: 'только что',
-            category: 'server',
+            type: "critical",
+            title: translate(loc, "admin.dashboard.alertRamHigh"),
+            message: translateWithParams(loc, "admin.dashboard.alertRamHighMsg", { n: sysMetrics.memory_percent }),
+            timestamp: justNow,
+            category: "server",
           });
         }
-        
-        // Check CPU usage
+
         if (sysMetrics.cpu_percent >= 95) {
           newNotifications.push({
             id: `cpu-${Date.now()}`,
-            type: 'warning',
-            title: 'Высокая загрузка CPU',
-            message: `CPU загружен на ${sysMetrics.cpu_percent}%`,
-            timestamp: 'только что',
-            category: 'server',
+            type: "warning",
+            title: translate(loc, "admin.dashboard.alertCpuHigh"),
+            message: translateWithParams(loc, "admin.dashboard.alertCpuHighMsg", { n: sysMetrics.cpu_percent }),
+            timestamp: justNow,
+            category: "server",
           });
         }
-        
-        // Check service status
+
         if (svcStatus && !svcStatus.git) {
           newNotifications.push({
             id: `git-${Date.now()}`,
-            type: 'critical',
-            title: 'Git сервис недоступен',
-            message: 'Gitea не отвечает на запросы',
-            timestamp: 'только что',
-            category: 'git',
+            type: "critical",
+            title: translate(loc, "admin.dashboard.alertGitDown"),
+            message: translate(loc, "admin.dashboard.alertGitDownMsg"),
+            timestamp: justNow,
+            category: "git",
           });
         }
         
@@ -345,32 +353,35 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
       const backups = await getBackups();
       setBackupInfo(backups);
       // Add notification
+      const loc = getI18nLocale();
+      const justNow = translate(loc, "time.justNow");
       const newNotification: Notification = {
         id: Date.now().toString(),
-        type: 'success',
-        title: 'Бэкап создан',
-        message: `Файл: ${result.file}`,
-        timestamp: 'только что',
-        category: 'server',
+        type: "success",
+        title: translate(loc, "admin.dashboard.backupCreatedTitle"),
+        message: translateWithParams(loc, "admin.dashboard.backupCreatedMsg", { file: result.file }),
+        timestamp: justNow,
+        category: "server",
       };
       setNotifications((prev) => [newNotification, ...prev]);
-      toast.success("Бэкап успешно создан!");
+      toast.success(t("admin.dashboard.backupSuccess"));
     } catch (err) {
-      // Add error notification
+      const loc = getI18nLocale();
+      const justNow = translate(loc, "time.justNow");
       const errorNotification: Notification = {
         id: Date.now().toString(),
-        type: 'critical',
-        title: 'Ошибка бэкапа',
-        message: err instanceof Error ? err.message : "Не удалось создать бэкап",
-        timestamp: 'только что',
-        category: 'server',
+        type: "critical",
+        title: translate(loc, "admin.dashboard.backupErrorTitle"),
+        message: err instanceof Error ? err.message : t("admin.dashboard.backupFailed"),
+        timestamp: justNow,
+        category: "server",
       };
       setNotifications((prev) => [errorNotification, ...prev]);
-      toast.error(err instanceof Error ? err.message : "Ошибка создания бэкапа");
+      toast.error(err instanceof Error ? err.message : t("admin.dashboard.backupError"));
     } finally {
       setBackupLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load();
@@ -403,14 +414,14 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   const formatTrend = (current: number, previous: number) => {
     const diff = current - previous;
     const sign = diff >= 0 ? "+" : "";
-    return `${sign}${diff} за неделю`;
+    return tp("admin.dashboard.trendWeek", { sign, n: diff });
   };
 
   const statCards = [
-    { title: "Всего пользователей", value: stats.total.toLocaleString(), trend: formatTrend(currentNew, prevNew), trendUp: currentNew >= prevNew, icon: Users },
-    { title: "Активных", value: stats.active.toLocaleString(), trend: formatTrend(currentActive, prevActive), trendUp: currentActive >= prevActive, icon: GitBranch },
-    { title: "Ожидают", value: stats.pending.toLocaleString(), trend: formatTrend(currentPending, prevPending), trendUp: currentPending >= prevPending, icon: TrendingUp },
-    { title: "Заблокировано", value: stats.blocked.toLocaleString(), trend: formatTrend(currentBlocked, prevBlocked), trendUp: currentBlocked >= prevBlocked, icon: Clock },
+    { title: t("admin.dashboard.cardTotal"), value: stats.total.toLocaleString(), trend: formatTrend(currentNew, prevNew), trendUp: currentNew >= prevNew, icon: Users },
+    { title: t("admin.dashboard.cardActive"), value: stats.active.toLocaleString(), trend: formatTrend(currentActive, prevActive), trendUp: currentActive >= prevActive, icon: GitBranch },
+    { title: t("admin.dashboard.cardPending"), value: stats.pending.toLocaleString(), trend: formatTrend(currentPending, prevPending), trendUp: currentPending >= prevPending, icon: TrendingUp },
+    { title: t("admin.dashboard.cardBlocked"), value: stats.blocked.toLocaleString(), trend: formatTrend(currentBlocked, prevBlocked), trendUp: currentBlocked >= prevBlocked, icon: Clock },
   ];
 
   const theme = getTheme(isDarkTheme);
@@ -422,7 +433,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
         <div className="mb-8">
           <AdminPageHeader
             isDarkTheme={isDarkTheme}
-            title="Панель администратора"
+            title={t("admin.dashboard.title")}
             subtitle={`API: ${systemStatus.api === "online" ? "● Online" : "● Offline"} | DB: ${systemStatus.db === "online" ? "● Online" : "● Offline"}`}
             actions={
               <>
@@ -432,14 +443,14 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                   style={{ backgroundColor: theme.bg2, borderColor: theme.border, color: theme.text2 }}
                 >
                   <Download className="h-4 w-4" />
-                  Экспорт отчёта
+                  {t("admin.dashboard.exportReport")}
                 </button>
                 <button
                   type="button"
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded-lg text-sm font-medium text-white hover:bg-blue-700 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
-                  Новый курс
+                  {t("admin.dashboard.newCourse")}
                 </button>
               </>
             }
@@ -465,30 +476,30 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
             <div className="p-5 flex items-center justify-between border-b"
             style={{ borderColor: theme.border }}>
               <h2 className="text-lg font-semibold transition-colors"
-              style={{ color: theme.text }}>Новые пользователи</h2>
+              style={{ color: theme.text }}>{t("admin.dashboard.newUsers")}</h2>
               <Link to="/users" className="group text-sm flex items-center gap-1 font-medium"
               style={{ color: theme.accent }}>
-                Все <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                {t("admin.dashboard.viewAll")} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>
             <div className="p-5">
               {loading ? (
                 <div className="text-sm text-center py-8"
-                style={{ color: theme.text2 }}>Загрузка...</div>
+                style={{ color: theme.text2 }}>{t("common.loading")}</div>
               ) : (
                 <table className="w-auto">
                   <thead>
                     <tr className="text-left">
                       <th className="pb-3 pr-8 text-xs font-semibold uppercase tracking-wider"
-                      style={{ color: theme.text2 }}>Имя</th>
+                      style={{ color: theme.text2 }}>{t("admin.dashboard.colName")}</th>
                       <th className="pb-3 pr-8 text-xs font-semibold uppercase tracking-wider"
-                      style={{ color: theme.text2 }}>Группа</th>
+                      style={{ color: theme.text2 }}>{t("admin.dashboard.colGroup")}</th>
                       <th className="pb-3 pr-8 text-xs font-semibold uppercase tracking-wider"
-                      style={{ color: theme.text2 }}>Роль</th>
+                      style={{ color: theme.text2 }}>{t("admin.dashboard.colRole")}</th>
                       <th className="pb-3 pr-8 text-xs font-semibold uppercase tracking-wider"
-                      style={{ color: theme.text2 }}>Дата</th>
+                      style={{ color: theme.text2 }}>{t("admin.dashboard.colDate")}</th>
                       <th className="pb-3 text-xs font-semibold uppercase tracking-wider text-left"
-                      style={{ color: theme.text2 }}>Статус</th>
+                      style={{ color: theme.text2 }}>{t("admin.dashboard.colStatus")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y"
@@ -508,24 +519,24 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                         <td className="py-3 pr-8 first:rounded-l-lg last:rounded-r-lg">
                           <span className="text-sm capitalize"
                           style={{ color: theme.text3 }}>
-                            {user.role === "admin" ? "Админ" : user.role === "teacher" ? "Препод" : user.role === "laborant" ? "Лаборант" : "Студент"}
+                            {user.role === "admin" ? t("admin.users.roleShortAdmin") : user.role === "teacher" ? t("admin.users.roleShortTeacher") : user.role === "laborant" ? t("admin.users.roleShortLaborant") : t("admin.users.roleShortStudent")}
                           </span>
                         </td>
                         <td className="py-3 pr-8 text-sm first:rounded-l-lg last:rounded-r-lg"
                         style={{ color: theme.text3 }}>
                           {user.created_at && !isNaN(new Date(user.created_at).getTime())
-                            ? new Date(user.created_at).toLocaleDateString("ru-RU")
+                            ? new Date(user.created_at).toLocaleDateString(dateLocale)
                             : "—"}
                         </td>
                         <td className="py-3 text-left first:rounded-l-lg last:rounded-r-lg">
-                          {getStatusBadge(user.is_blocked ? "blocked" : "active")}
+                          {getStatusBadge(user.is_blocked ? "blocked" : user.is_pending ? "pending" : "active", t)}
                         </td>
                       </tr>
                     ))}
                     {users.length === 0 && (
                       <tr>
                         <td colSpan={5} className="py-8 text-center text-sm"
-                        style={{ color: theme.text2 }}>Нет данных</td>
+                        style={{ color: theme.text2 }}>{t("admin.dashboard.noData")}</td>
                       </tr>
                     )}
                   </tbody>
@@ -540,7 +551,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
             <div className="p-5 flex items-center justify-between border-b"
             style={{ borderColor: theme.border }}>
               <h2 className="text-lg font-semibold transition-colors"
-              style={{ color: theme.text }}>Активные репозитории</h2>
+              style={{ color: theme.text }}>{t("admin.dashboard.activeRepos")}</h2>
               <div className="relative repo-dropdown-container">
                 <button
                   onClick={() => setShowRepoDropdown(!showRepoDropdown)}
@@ -558,20 +569,20 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                         style={{ color: theme.text2 }}>
                           <Plus className="h-4 w-4"
                           style={{ color: theme.text3 }} />
-                          Создать репозиторий
+                          {t("admin.dashboard.createRepo")}
                         </button>
                       )}
                       <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors"
                       style={{ color: theme.text2 }}>
                         <Search className="h-4 w-4"
                         style={{ color: theme.text3 }} />
-                        Поиск проекта
+                        {t("admin.dashboard.searchProject")}
                       </button>
                       <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors"
                       style={{ color: theme.text2 }}>
                         <Filter className="h-4 w-4"
                         style={{ color: theme.text3 }} />
-                        Фильтр по кафедре
+                        {t("admin.dashboard.filterFaculty")}
                       </button>
                       <div className="h-px mx-1"
                       style={{ backgroundColor: theme.border + '80' }} />
@@ -581,7 +592,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                         style={{ color: theme.text2 }}>
                         <RotateCcw className="h-4 w-4"
                         style={{ color: theme.text3 }} />
-                        Обновить список
+                        {t("admin.dashboard.refreshList")}
                       </button>
                     </div>
                   </div>
@@ -597,7 +608,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                 ) : activeRepositories.length === 0 ? (
                   <div className="text-center py-8"
                   style={{ color: theme.text2 }}>
-                    Нет активных репозиториев
+                    {t("admin.dashboard.noActiveRepos")}
                   </div>
                 ) : (
                   activeRepositories.map((repo) => (
@@ -609,7 +620,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                         <p className="text-sm font-medium truncate"
                         style={{ color: theme.text }}>{repo.name}</p>
                         <p className="text-xs"
-                        style={{ color: theme.text2 }}>{repo.author} • {repo.commits} коммитов</p>
+                        style={{ color: theme.text2 }}>{repo.author} • {tp("admin.dashboard.commitsCount", { n: repo.commits })}</p>
                       </div>
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${repo.is_public ? isDarkTheme ? "text-green-400 bg-green-500/20" : "text-green-700 bg-green-100" : isDarkTheme ? "text-gray-300 bg-gray-500/20" : "text-gray-700 bg-gray-100"}`}>
                         {repo.is_public ? "Public" : "Private"}
@@ -630,7 +641,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
             <div className="p-5 flex items-center justify-between border-b"
             style={{ borderColor: theme.border }}>
               <h2 className="text-lg font-semibold transition-colors"
-              style={{ color: theme.text }}>Уведомления</h2>
+              style={{ color: theme.text }}>{t("admin.dashboard.notifications")}</h2>
               {notifications.length > 0 && (
                 <button
                   onClick={clearAllNotifications}
@@ -638,7 +649,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                   style={{ color: theme.text2 }}
                 >
                   <X className="h-3 w-3" />
-                  Очистить все
+                  {t("admin.dashboard.clearAll")}
                 </button>
               )}
             </div>
@@ -647,7 +658,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                 <div className="flex flex-col items-center justify-center py-12"
                 style={{ color: theme.text3 }}>
                   <BellOff className="h-10 w-10 mb-3 opacity-50" />
-                  <p className="text-sm">Уведомлений пока нет</p>
+                  <p className="text-sm">{t("admin.dashboard.noNotifications")}</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -693,7 +704,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
             <div className="p-5 border-b"
             style={{ borderColor: theme.border }}>
               <h2 className="text-lg font-semibold transition-colors"
-              style={{ color: theme.text }}>Коммиты по кафедрам</h2>
+              style={{ color: theme.text }}>{t("admin.dashboard.commitsByFaculty")}</h2>
             </div>
             <div className="p-5">
               <div className="space-y-4 mb-6">
@@ -704,7 +715,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                 ) : facultyStats.length === 0 ? (
                   <div className="text-center py-8"
                   style={{ color: theme.text2 }}>
-                    Нет данных о коммитах
+                    {t("admin.dashboard.noCommitData")}
                   </div>
                 ) : (
                   facultyStats.map((dept) => (
@@ -730,13 +741,13 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                 style={{ color: theme.text }}>
                   <GitPullRequest className="h-4 w-4"
                   style={{ color: theme.text2 }} />
-                  Code Review в очереди
+                  {t("admin.dashboard.codeReviewQueue")}
                 </h3>
                 <div className="space-y-2">
                   {[
-                    { name: "ist21/lab-db-pet...", pr: "3 PR", icon: AlertOctagon, iconColor: "text-red-500", status: "Срочно", statusClass: isDarkTheme ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-700" },
-                    { name: "is22/networks-l...", pr: "1 PR", icon: Clock, iconColor: "text-yellow-500", status: "Сегодня", statusClass: isDarkTheme ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-700" },
-                    { name: "kuz/os-course-2026", pr: "7 PR", icon: CheckCircle2, iconColor: "text-green-500", status: "Норм", statusClass: isDarkTheme ? "bg-green-500/20 text-green-400" : "bg-green-100 text-green-700" },
+                    { name: "ist21/lab-db-pet...", pr: "3 PR", icon: AlertOctagon, iconColor: "text-red-500", status: t("admin.dashboard.urgent"), statusClass: isDarkTheme ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-700" },
+                    { name: "is22/networks-l...", pr: "1 PR", icon: Clock, iconColor: "text-yellow-500", status: t("admin.dashboard.today"), statusClass: isDarkTheme ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-700" },
+                    { name: "kuz/os-course-2026", pr: "7 PR", icon: CheckCircle2, iconColor: "text-green-500", status: t("admin.dashboard.normal"), statusClass: isDarkTheme ? "bg-green-500/20 text-green-400" : "bg-green-100 text-green-700" },
                   ].map((item) => (
                     <div key={item.name} className="flex items-center justify-between rounded-xl p-3 transition-colors"
                     style={{ backgroundColor: theme.bg4 }}>
@@ -746,7 +757,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                           <p className="text-sm font-medium truncate"
                           style={{ color: theme.text }}>{item.name}</p>
                           <p className="text-xs"
-                          style={{ color: theme.text2 }}>{item.pr} на ревью</p>
+                          style={{ color: theme.text2 }}>{tp("admin.dashboard.prOnReview", { pr: item.pr })}</p>
                         </div>
                       </div>
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${item.statusClass}`}>{item.status}</span>
@@ -763,7 +774,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
             <div className="p-5 border-b"
             style={{ borderColor: theme.border }}>
               <h2 className="text-lg font-semibold transition-colors"
-              style={{ color: theme.text }}>Состояние системы</h2>
+              style={{ color: theme.text }}>{t("admin.dashboard.systemState")}</h2>
             </div>
             <div className="p-5">
               {/* Progress bars */}
@@ -771,7 +782,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                 {metrics ? [
                   { label: "CPU", value: Math.round(metrics.cpu_percent), color: "bg-blue-500" },
                   { label: "RAM", value: Math.round(metrics.memory_percent), color: "bg-green-500" },
-                  { label: "Диск", value: Math.round(metrics.disk_percent), color: "bg-red-500" },
+                  { label: t("admin.dashboard.disk"), value: Math.round(metrics.disk_percent), color: "bg-red-500" },
                 ].map((metric) => (
                   <div key={metric.label}>
                     <div className="flex items-center justify-between mb-1">
@@ -787,15 +798,15 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                   </div>
                 )) : (
                   <div className="text-sm"
-                  style={{ color: theme.text2 }}>Загрузка метрик...</div>
+                  style={{ color: theme.text2 }}>{t("admin.dashboard.loadingMetrics")}</div>
                 )}
               </div>
 
               {/* Service status */}
               <div className="space-y-3 mb-6">
                 {[
-                  { icon: GitBranch, label: "Git сервис", status: serviceStatus?.git ? "Online" : "Offline", statusColor: serviceStatus?.git ? isDarkTheme ? "text-green-400" : "text-green-600" : isDarkTheme ? "text-red-400" : "text-red-600" },
-                  { icon: Database, label: "БД (PostgreSQL)", status: serviceStatus?.db ? "Online" : "Offline", statusColor: serviceStatus?.db ? isDarkTheme ? "text-green-400" : "text-green-600" : isDarkTheme ? "text-red-400" : "text-red-600" },
+                  { icon: GitBranch, label: t("admin.dashboard.gitService"), status: serviceStatus?.git ? "Online" : "Offline", statusColor: serviceStatus?.git ? isDarkTheme ? "text-green-400" : "text-green-600" : isDarkTheme ? "text-red-400" : "text-red-600" },
+                  { icon: Database, label: t("admin.dashboard.dbLabel"), status: serviceStatus?.db ? "Online" : "Offline", statusColor: serviceStatus?.db ? isDarkTheme ? "text-green-400" : "text-green-600" : isDarkTheme ? "text-red-400" : "text-red-600" },
                   { icon: Mail, label: "API", status: serviceStatus?.api ? "Online" : "Offline", statusColor: serviceStatus?.api ? isDarkTheme ? "text-green-400" : "text-green-600" : isDarkTheme ? "text-red-400" : "text-red-600" },
                 ].map((svc) => (
                   <div key={svc.label} className="flex items-center justify-between">
@@ -817,11 +828,11 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                     <Cloud className="h-4 w-4"
                     style={{ color: theme.text2 }} />
                     <span className="text-sm"
-                    style={{ color: theme.text3 }}>Бэкап</span>
+                    style={{ color: theme.text3 }}>{t("admin.dashboard.backupLabel")}</span>
                   </div>
                   <span className="text-xs"
                   style={{ color: theme.text2 }}>
-                    {backupInfo?.last_backup || "Нет данных"}
+                    {backupInfo?.last_backup || t("admin.dashboard.noBackupData")}
                   </span>
                 </div>
               </div>
@@ -836,7 +847,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                   className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isDarkTheme ? "bg-[#2d2d2d] border-[#3d3d3d] text-gray-300 hover:bg-[#3d3d3d]" : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200"}`}
                 >
                   <RotateCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                  {loading ? "Обновление..." : "Обновить данные"}
+                  {loading ? t("admin.dashboard.refreshing") : t("admin.dashboard.refreshData")}
                 </button>
                 <button
                   type="button"
@@ -845,7 +856,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                   className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Database className={`h-4 w-4 ${backupLoading ? "animate-pulse" : ""}`} />
-                  {backupLoading ? "Создание..." : "Бэкап сейчас"}
+                  {backupLoading ? t("admin.dashboard.backupCreating") : t("admin.dashboard.backupNow")}
                 </button>
               </div>
             </div>

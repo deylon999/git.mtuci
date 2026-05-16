@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import AdminPageHeader from "../components/AdminPageHeader";
 import { getTodayStats, getHotRepos, getTopUsers, getHourlyActivity, getRecentActivity } from "../api/adminApi";
 import type { TodayStats, HotRepoStat, TopUserStat, HourlyActivity, ActivityItem } from "../api/types";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface ActivityPageProps {
   isDarkTheme?: boolean;
@@ -43,6 +44,8 @@ const EventIcons = {
 };
 
 export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) {
+  const { t, tp, language } = useUserPreferences();
+  const dateLocale = language === "en" ? "en-US" : "ru-RU";
   const colors = getColors(isDarkTheme);
   const [stats, setStats] = useState<TodayStats | null>(null);
   const [hotRepos, setHotRepos] = useState<HotRepoStat[]>([]);
@@ -62,7 +65,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
   // Helper to render trend indicator
   const renderTrend = (delta: number | undefined) => {
     if (delta === undefined || delta === 0) {
-      return <span style={{ fontSize: "10px", color: colors.textSecondary }}>— <span style={{ fontSize: "9px", color: colors.textMuted }}>к вчера</span></span>;
+      return <span style={{ fontSize: "10px", color: colors.textSecondary }}>— <span style={{ fontSize: "9px", color: colors.textMuted }}>{t("admin.activity.vsYesterday")}</span></span>;
     }
     const isPositive = delta > 0;
     const absValue = Math.abs(delta);
@@ -73,7 +76,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
     return (
       <span style={{ fontSize: "10px", color, fontWeight: 500 }}>
         {arrow} {sign}{absValue}{" "}
-        <span style={{ fontSize: "9px", color: colors.textMuted, fontWeight: 400 }}>к вчера</span>
+        <span style={{ fontSize: "9px", color: colors.textMuted, fontWeight: 400 }}>{t("admin.activity.vsYesterday")}</span>
       </span>
     );
   };
@@ -86,15 +89,15 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
 
   // Available users and event types for filters
   const eventTypes = [
-    { value: "", label: "Все типы" },
+    { value: "", label: t("admin.activity.filterAllTypes") },
     { value: "push", label: "Push" },
     { value: "commit", label: "Commit" },
     { value: "pull_request", label: "Pull Request" },
     { value: "pr_merge", label: "PR Merge" },
-    { value: "repo_created", label: "Создание репозитория" },
-    { value: "repo_deleted", label: "Удаление репозитория" },
+    { value: "repo_created", label: t("admin.activity.eventRepoCreated") },
+    { value: "repo_deleted", label: t("admin.activity.eventRepoDeleted") },
     { value: "fork", label: "Fork" },
-    { value: "login", label: "Вход в систему" },
+    { value: "login", label: t("admin.activity.eventLogin") },
   ];
 
   // Calculate date range (moved outside loadData to avoid recreating)
@@ -280,15 +283,38 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
     }
   };
 
+  const mapActivityTag = (tag: string) => {
+    const keys: Record<string, string> = {
+      Коммит: "admin.activity.typeCommit",
+      Commit: "admin.activity.typeCommit",
+      "Pull Request": "admin.activity.typePr",
+      PR: "admin.activity.typePr",
+      Push: "admin.activity.typePush",
+      Создание: "admin.activity.typeCreate",
+      Created: "admin.activity.typeCreate",
+      Форк: "admin.activity.typeFork",
+      Fork: "admin.activity.typeFork",
+      Merge: "admin.activity.typeMerge",
+      Удаление: "admin.activity.typeDelete",
+      Deleted: "admin.activity.typeDelete",
+    };
+    const key = keys[tag];
+    return key ? t(key) : tag;
+  };
+
   const getTagStyle = (type: string) => {
     switch (type) {
-      case "Коммит": return { background: `${colors.accent2}10`, color: colors.accent2 };
+      case "Коммит":
+      case "Commit": return { background: `${colors.accent2}10`, color: colors.accent2 };
       case "Pull Request": return { background: `${colors.teal}10`, color: colors.teal };
       case "Push": return { background: `${colors.success}10`, color: colors.success };
-      case "Создание": return { background: `${colors.purple}10`, color: colors.purple };
-      case "Форк": return { background: `${colors.warning}10`, color: colors.warning };
+      case "Создание":
+      case "Created": return { background: `${colors.purple}10`, color: colors.purple };
+      case "Форк":
+      case "Fork": return { background: `${colors.warning}10`, color: colors.warning };
       case "Merge": return { background: `${colors.violet}10`, color: colors.violet };
-      case "Удаление": return { background: `${colors.danger}10`, color: colors.danger };
+      case "Удаление":
+      case "Deleted": return { background: `${colors.danger}10`, color: colors.danger };
       default: return { background: `${colors.accent2}10`, color: colors.accent2 };
     }
   };
@@ -298,47 +324,47 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <div style={{ fontSize: "20px", fontWeight: 600, color: colors.textPrimary }}>Активность</div>
-          <div style={{ fontSize: "12px", color: colors.textSecondary, marginTop: "3px" }}>Лента всех событий платформы в реальном времени</div>
+          <div style={{ fontSize: "20px", fontWeight: 600, color: colors.textPrimary }}>{t("admin.activity.title")}</div>
+          <div style={{ fontSize: "12px", color: colors.textSecondary, marginTop: "3px" }}>{t("admin.activity.subtitleFull")}</div>
         </div>
         <button style={{
           display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "12px", fontWeight: 500,
           padding: "7px 14px", borderRadius: "7px", border: `0.5px solid ${colors.border}`,
           background: colors.cardBg, color: colors.textPrimary, cursor: "pointer"
         }}>
-          <Download size={14} /> Экспорт
+          <Download size={14} /> {t("admin.activity.export")}
         </button>
       </div>
 
       {/* Stats Row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
         {loading ? (
-          <div style={{ gridColumn: "span 4", textAlign: "center", color: colors.textSecondary }}>Загрузка...</div>
+          <div style={{ gridColumn: "span 4", textAlign: "center", color: colors.textSecondary }}>{t("admin.activity.loading")}</div>
         ) : stats ? (
           <>
             <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: "10px", padding: "14px 16px" }}>
-              <div style={{ fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>Событий сегодня</div>
+              <div style={{ fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>{t("admin.activity.statEventsToday")}</div>
               <div style={{ fontSize: "22px", fontWeight: 600, color: colors.textPrimary }}>{stats.total_events}</div>
               <div style={{ marginTop: "3px" }}>{renderTrend(stats.total_events_delta)}</div>
             </div>
             <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: "10px", padding: "14px 16px" }}>
-              <div style={{ fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>Коммитов</div>
+              <div style={{ fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>{t("admin.activity.statCommits")}</div>
               <div style={{ fontSize: "22px", fontWeight: 600, color: colors.textPrimary }}>{stats.commits}</div>
               <div style={{ marginTop: "3px" }}>{renderTrend(stats.commits_delta)}</div>
             </div>
             <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: "10px", padding: "14px 16px" }}>
-              <div style={{ fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>Активных пользователей</div>
+              <div style={{ fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>{t("admin.activity.statActiveUsers")}</div>
               <div style={{ fontSize: "22px", fontWeight: 600, color: colors.textPrimary }}>{stats.active_users}</div>
               <div style={{ marginTop: "3px" }}>{renderTrend(stats.active_users_delta)}</div>
             </div>
             <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: "10px", padding: "14px 16px" }}>
-              <div style={{ fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>Новых репозиториев</div>
+              <div style={{ fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>{t("admin.activity.statNewRepos")}</div>
               <div style={{ fontSize: "22px", fontWeight: 600, color: colors.textPrimary }}>{stats.new_repositories}</div>
               <div style={{ marginTop: "3px" }}>{renderTrend(stats.new_repositories_delta)}</div>
             </div>
           </>
         ) : (
-          <div style={{ gridColumn: "span 4", textAlign: "center", color: colors.textSecondary }}>Ошибка загрузки</div>
+          <div style={{ gridColumn: "span 4", textAlign: "center", color: colors.textSecondary }}>{t("admin.activity.loadError")}</div>
         )}
       </div>
 
@@ -358,7 +384,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               <Search size={13} color={colors.textMuted} />
               <input
                 type="text"
-                placeholder="Поиск по событиям, пользователям, репо..."
+                placeholder={t("admin.activity.searchPlaceholder")}
                 value={searchQuery}
                 onChange={(e) => handleFilterChange(setSearchQuery, e.target.value)}
                 style={{
@@ -398,7 +424,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                 background: colors.pageBg, color: colors.textPrimary, cursor: "pointer", fontFamily: "inherit"
               }}
             >
-              <option value="">Все пользователи</option>
+              <option value="">{t("admin.activity.filterAllUsers")}</option>
               {topUsers.map(user => (
                 <option key={user.user_id} value={user.user_id}>{user.user_name}</option>
               ))}
@@ -411,10 +437,10 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                 background: colors.pageBg, color: colors.textPrimary, cursor: "pointer", fontFamily: "inherit"
               }}
             >
-              <option value="today">Сегодня</option>
-              <option value="week">За неделю</option>
-              <option value="month">За месяц</option>
-              <option value="all">Все время</option>
+              <option value="today">{t("admin.activity.periodToday")}</option>
+              <option value="week">{t("admin.activity.periodWeek")}</option>
+              <option value="month">{t("admin.activity.periodMonth")}</option>
+              <option value="all">{t("admin.activity.periodAll")}</option>
             </select>
           </div>
 
@@ -424,7 +450,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               padding: "8px 16px", background: colors.cardBg2, borderBottom: `0.5px solid ${colors.border}`,
               fontSize: "11px", fontWeight: 600, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em"
             }}>
-              Сегодня — {new Date().toLocaleDateString("ru-RU")}
+              {tp("admin.activity.todayHeader", { date: new Date().toLocaleDateString(dateLocale) })}
             </div>
 
             {activities.map((activity: ActivityItem) => {
@@ -450,13 +476,13 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: "12px", color: colors.textPrimary, lineHeight: 1.5 }}>
                       <strong style={{ fontWeight: 600 }}>{activity.user}</strong>
-                      {activity.type === "commit" && " сделал коммит в "}
-                      {activity.type === "pr" && " открыл Pull Request в "}
-                      {activity.type === "push" && " запушил "}
-                      {activity.type === "create" && " создал "}
-                      {activity.type === "fork" && " форкнул "}
-                      {activity.type === "merge" && " смёрджил "}
-                      {activity.type === "delete" && " удалил репозиторий "}
+                      {activity.type === "commit" && t("admin.activity.actionCommit")}
+                      {activity.type === "pr" && t("admin.activity.actionPr")}
+                      {activity.type === "push" && t("admin.activity.actionPush")}
+                      {activity.type === "create" && t("admin.activity.actionCreate")}
+                      {activity.type === "fork" && t("admin.activity.actionFork")}
+                      {activity.type === "merge" && t("admin.activity.actionMerge")}
+                      {activity.type === "delete" && t("admin.activity.actionDelete")}
                       <span style={{ color: colors.accent2, fontFamily: "monospace", fontSize: "11px" }}>{activity.repo}</span>
                       {activity.message && activity.type !== "push" && activity.type !== "delete" && (
                         <span style={{ color: colors.textSecondary, fontStyle: "italic", fontSize: "11px" }}> — «{activity.message}»</span>
@@ -466,7 +492,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                       )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "3px" }}>
-                      <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "5px", fontWeight: 500, ...tagStyle }}>{activity.tag}</span>
+                      <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "5px", fontWeight: 500, ...tagStyle }}>{mapActivityTag(activity.tag)}</span>
                       <span style={{ fontSize: "10px", color: colors.textMuted }}>{activity.time}</span>
                     </div>
                   </div>
@@ -480,7 +506,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               padding: "10px 14px", borderTop: `0.5px solid ${colors.border}`, fontSize: "11px", color: colors.textSecondary
             }}>
               {/* Left: Count */}
-              <span>Показано {activities.length} из {totalActivities}</span>
+              <span>{tp("admin.activity.shownOf", { shown: activities.length, total: totalActivities })}</span>
               
               {/* Center: Page buttons */}
               <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
@@ -512,7 +538,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               
               {/* Right: Page size selector */}
               <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                <span>По</span>
+                <span>{t("admin.activity.perPage")}</span>
                 <select
                   value={pageSize}
                   onChange={(e) => { setPageSize(Number(e.target.value)); setPageOffset(0); }}
@@ -539,7 +565,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               fontWeight: 600, color: colors.textPrimary, display: "flex", alignItems: "center", justifyContent: "space-between",
               background: colors.cardBg2
             }}>
-              Активность по часам <span style={{ fontSize: "10px", color: colors.textSecondary, fontWeight: 400 }}>Сегодня</span>
+              {t("admin.activity.activityByHour")} <span style={{ fontSize: "10px", color: colors.textSecondary, fontWeight: 400 }}>{t("admin.activity.today")}</span>
             </div>
             <div style={{ padding: "12px 14px 6px", height: "120px", position: "relative" }}>
               {/* Tooltip */}
@@ -642,7 +668,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                         boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
                       }}>
                         <div style={{ fontWeight: 600 }}>{String(tooltip.hour).padStart(2, "0")}:00</div>
-                        <div style={{ opacity: 0.8 }}>{tooltip.count} событий</div>
+                        <div style={{ opacity: 0.8 }}>{tp("admin.activity.eventsCount", { n: tooltip.count })}</div>
                       </div>
                     )}
                   </>
@@ -658,7 +684,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               fontWeight: 600, color: colors.textPrimary, display: "flex", alignItems: "center", justifyContent: "space-between",
               background: colors.cardBg2
             }}>
-              Топ пользователей <span style={{ fontSize: "10px", color: colors.textSecondary, fontWeight: 400 }}>По коммитам</span>
+              {t("admin.activity.topUsers")} <span style={{ fontSize: "10px", color: colors.textSecondary, fontWeight: 400 }}>{t("admin.activity.byCommits")}</span>
             </div>
             {topUsers.map((user, i) => (
               <div key={i} style={{
@@ -691,11 +717,11 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               fontWeight: 600, color: colors.textPrimary, display: "flex", alignItems: "center", justifyContent: "space-between",
               background: colors.cardBg2
             }}>
-              <span>Горячие репо</span>
+              <span>{t("admin.activity.hotRepos")}</span>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "10px", color: colors.textSecondary, fontWeight: 400 }}>По событиям</span>
+                <span style={{ fontSize: "10px", color: colors.textSecondary, fontWeight: 400 }}>{t("admin.activity.byEvents")}</span>
                 <div 
-                  title="Рейтинг репозиториев по количеству действий за последние 24 часа"
+                  title={t("admin.activity.hotReposHint")}
                   style={{ cursor: "help", display: "flex", alignItems: "center" }}
                 >
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ stroke: colors.textMuted, strokeWidth: 1.5 }}>
@@ -707,7 +733,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
             </div>
             {hotRepos.length === 0 ? (
               <div style={{ padding: "16px 14px", fontSize: "12px", color: colors.textSecondary, textAlign: "center" }}>
-                Сегодня пока затишье
+                {t("admin.activity.quietToday")}
               </div>
             ) : (
               hotRepos.slice(0, 5).map((repo, i) => (
@@ -756,7 +782,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                     </svg>
                   )}
                   <span style={{ flex: 1, color: colors.textPrimary, fontFamily: "monospace", fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{repo.name}</span>
-                  <span style={{ color: colors.textSecondary, fontSize: "11px", whiteSpace: "nowrap" }}>{repo.events} событие</span>
+                  <span style={{ color: colors.textSecondary, fontSize: "11px", whiteSpace: "nowrap" }}>{tp("admin.activity.eventsCount", { n: repo.events })}</span>
                 </a>
               ))
             )}

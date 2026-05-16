@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Shield, Users, Database, Bell, Globe, Mail } from "lucide-react";
 import AdminPageHeader from "../components/AdminPageHeader";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface AdminSettingsPageProps {
   isDarkTheme?: boolean;
@@ -20,6 +21,7 @@ const getColors = (isDarkTheme: boolean) => ({
 });
 
 export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettingsPageProps) {
+  const { t } = useUserPreferences();
   const [systemSettings, setSystemSettings] = useState(() => {
     const saved = localStorage.getItem("adminSystemSettings");
     return saved ? JSON.parse(saved) : {
@@ -101,7 +103,7 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
       `}</style>
 
       <div style={{ backgroundColor: colors.pageBg, minHeight: "100%", padding: "16px" }}>
-        <AdminPageHeader isDarkTheme={isDarkTheme} title="Настройки" />
+        <AdminPageHeader isDarkTheme={isDarkTheme} title={t("admin.settings.title")} />
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {/* Системные настройки */}
@@ -129,10 +131,10 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               </div>
               <div>
                 <h3 style={{ color: colors.textPrimary, fontSize: "16px", fontWeight: "600", margin: 0 }}>
-                  Системные настройки
+                  {t("admin.settings.systemSection")}
                 </h3>
                 <p style={{ color: colors.textSecondary, fontSize: "12px", margin: "2px 0 0 0" }}>
-                  Основные параметры системы
+                  {t("admin.settings.systemSectionHint")}
                 </p>
               </div>
             </div>
@@ -149,10 +151,10 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               }}>
                 <div>
                   <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    Открытая регистрация
+                    {t("admin.settings.openRegistration")}
                   </div>
                   <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    Разрешить новым пользователям регистрироваться
+                    {t("admin.settings.openRegistrationHint")}
                   </div>
                 </div>
                 <div 
@@ -172,10 +174,10 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               }}>
                 <div>
                   <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    Верификация email
+                    {t("admin.settings.emailVerification")}
                   </div>
                   <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    Требовать подтверждение email при регистрации
+                    {t("admin.settings.emailVerificationHint")}
                   </div>
                 </div>
                 <div 
@@ -195,10 +197,10 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               }}>
                 <div>
                   <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    Авто-одобрение пользователей
+                    {t("admin.settings.autoApprove")}
                   </div>
                   <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    Автоматически одобрять новых пользователей
+                    {t("admin.settings.autoApproveHint")}
                   </div>
                 </div>
                 <div 
@@ -219,10 +221,10 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               }}>
                 <div>
                   <div style={{ color: systemSettings.maintenanceMode ? "#ef4444" : colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    Режим обслуживания
+                    {t("admin.settings.maintenanceMode")}
                   </div>
                   <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    Отключить доступ для обычных пользователей
+                    {t("admin.settings.maintenanceModeHint")}
                   </div>
                 </div>
                 <div 
@@ -258,10 +260,10 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               </div>
               <div>
                 <h3 style={{ color: colors.textPrimary, fontSize: "16px", fontWeight: "600", margin: 0 }}>
-                  Пользователи и лимиты
+                  {t("admin.settings.usersLimits")}
                 </h3>
                 <p style={{ color: colors.textSecondary, fontSize: "12px", margin: "2px 0 0 0" }}>
-                  Управление лимитами и сессиями
+                  {t("admin.settings.usersLimitsHint")}
                 </p>
               </div>
             </div>
@@ -269,7 +271,7 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
               <div>
                 <label style={{ color: colors.textSecondary, fontSize: "12px", display: "block", marginBottom: "4px" }}>
-                  Максимальное количество пользователей
+                  {t("admin.settings.maxUsers")}
                 </label>
                 <input
                   type="number"
@@ -280,7 +282,7 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               </div>
               <div>
                 <label style={{ color: colors.textSecondary, fontSize: "12px", display: "block", marginBottom: "4px" }}>
-                  Тайм-аут сессии (часы)
+                  {t("admin.settings.sessionTimeout")}
                 </label>
                 <input
                   type="number"
@@ -317,10 +319,10 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               </div>
               <div>
                 <h3 style={{ color: colors.textPrimary, fontSize: "16px", fontWeight: "600", margin: 0 }}>
-                  Уведомления администратора
+                  {t("admin.settings.adminNotifications")}
                 </h3>
                 <p style={{ color: colors.textSecondary, fontSize: "12px", margin: "2px 0 0 0" }}>
-                  Настройка системных уведомлений
+                  {t("admin.settings.adminNotificationsHint")}
                 </p>
               </div>
             </div>
@@ -337,10 +339,10 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               }}>
                 <div>
                   <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    Новые пользователи
+                    {t("admin.settings.notifyNewUsers")}
                   </div>
                   <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    Уведомлять о регистрации новых пользователей
+                    {t("admin.settings.notifyNewUsersHint")}
                   </div>
                 </div>
                 <div 
@@ -360,10 +362,10 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               }}>
                 <div>
                   <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    Ошибки системы
+                    {t("admin.settings.notifySystemErrors")}
                   </div>
                   <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    Уведомлять о критических ошибках
+                    {t("admin.settings.notifySystemErrorsHint")}
                   </div>
                 </div>
                 <div 
@@ -383,10 +385,10 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               }}>
                 <div>
                   <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    Оповещения безопасности
+                    {t("admin.settings.notifySecurity")}
                   </div>
                   <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    Уведомлять о подозрительной активности
+                    {t("admin.settings.notifySecurityHint")}
                   </div>
                 </div>
                 <div 
@@ -406,10 +408,10 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               }}>
                 <div>
                   <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    Ежедневные отчёты
+                    {t("admin.settings.notifyDailyReports")}
                   </div>
                   <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    Отправлять ежедневный сводный отчёт
+                    {t("admin.settings.notifyDailyReportsHint")}
                   </div>
                 </div>
                 <div 
@@ -445,10 +447,10 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               </div>
               <div>
                 <h3 style={{ color: colors.textPrimary, fontSize: "16px", fontWeight: "600", margin: 0 }}>
-                  Настройки email
+                  {t("admin.settings.emailSettings")}
                 </h3>
                 <p style={{ color: colors.textSecondary, fontSize: "12px", margin: "2px 0 0 0" }}>
-                  Конфигурация почтового сервера
+                  {t("admin.settings.emailSettingsHint")}
                 </p>
               </div>
             </div>
@@ -456,7 +458,7 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <div>
                 <label style={{ color: colors.textSecondary, fontSize: "12px", display: "block", marginBottom: "4px" }}>
-                  SMTP сервер
+                  {t("admin.settings.smtpServer")}
                 </label>
                 <input
                   type="text"
@@ -467,7 +469,7 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div>
                   <label style={{ color: colors.textSecondary, fontSize: "12px", display: "block", marginBottom: "4px" }}>
-                    Порт
+                    {t("admin.settings.port")}
                   </label>
                   <input
                     type="number"
@@ -477,7 +479,7 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
                 </div>
                 <div>
                   <label style={{ color: colors.textSecondary, fontSize: "12px", display: "block", marginBottom: "4px" }}>
-                    Отправитель
+                    {t("admin.settings.sender")}
                   </label>
                   <input
                     type="email"

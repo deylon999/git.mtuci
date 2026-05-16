@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 import AvatarCropper from "./AvatarCropper";
 
 interface AvatarUploadModalProps {
@@ -86,6 +87,7 @@ export default function AvatarUploadModal({
   onConfirm,
   isUploading,
 }: AvatarUploadModalProps) {
+  const { t } = useUserPreferences();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [cropData, setCropData] = useState({ x: 0, y: 0, zoom: 1 });
   const [isProcessing, setIsProcessing] = useState(false);
@@ -144,11 +146,9 @@ export default function AvatarUploadModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-        <h2 className="mb-4 text-xl font-semibold text-gray-900">Настройка аватарки</h2>
+        <h2 className="mb-4 text-xl font-semibold text-gray-900">{t("core.avatar.title")}</h2>
 
-        <p className="mb-4 text-sm text-gray-600 text-center">
-          Перетаскивайте изображение и меняйте масштаб, чтобы выбрать область
-        </p>
+        <p className="mb-4 text-sm text-gray-600 text-center">{t("core.avatar.hint")}</p>
 
         {/* Interactive Cropper */}
         <div className="mb-6">
@@ -156,7 +156,7 @@ export default function AvatarUploadModal({
             <AvatarCropper imageUrl={previewUrl} onCropChange={setCropData} />
           ) : (
             <div className="flex h-64 items-center justify-center text-gray-400">
-              <span className="text-sm">Загрузка...</span>
+              <span className="text-sm">{t("core.avatar.uploading")}</span>
             </div>
           )}
         </div>
@@ -168,14 +168,18 @@ export default function AvatarUploadModal({
             disabled={isUploading || isProcessing}
             className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
           >
-            Отмена
+            {t("common.cancel")}
           </button>
           <button
             onClick={handleConfirm}
             disabled={isUploading || !previewUrl || isProcessing}
             className="flex-1 rounded-lg bg-[#372579] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#2a1c5e] disabled:opacity-60"
           >
-            {isProcessing ? "Обработка..." : isUploading ? "Загрузка..." : "Сохранить"}
+            {isProcessing
+              ? t("core.avatar.processing")
+              : isUploading
+                ? t("core.avatar.uploading")
+                : t("common.save")}
           </button>
         </div>
       </div>

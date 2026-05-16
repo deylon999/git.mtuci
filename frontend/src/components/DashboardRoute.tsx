@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { getMe } from "../api/authApi";
 import DashboardPage from "../pages/DashboardPage";
+import TeacherDashboardPage from "../pages/teacher/TeacherDashboardPage";
 
 type Props = {
   isDarkTheme?: boolean;
@@ -29,6 +30,9 @@ export default function DashboardRoute({ isDarkTheme = false }: Props) {
   }
   if (role === "admin") {
     return <Navigate to="/admin" replace />;
+  }
+  if (role === "teacher" || role === "laborant") {
+    return <TeacherDashboardPage isDarkTheme={isDarkTheme} />;
   }
   return <DashboardPage isDarkTheme={isDarkTheme} />;
 }

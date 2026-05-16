@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
-import { useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { getToken } from "./api/client";
 import { Toaster } from "react-hot-toast";
 import AuthRequired from "./components/AuthRequired";
 import AdminRequired from "./components/AdminRequired";
@@ -12,6 +12,7 @@ import Sidebar from "./components/Sidebar";
 import Footer from "./components/Footer";
 import { PendingCountProvider } from "./context/PendingCountContext";
 import { StudentNavCountsProvider } from "./context/StudentNavCountsContext";
+import { UserPreferencesProvider, useUserPreferences } from "./context/UserPreferencesContext";
 import { getTheme } from "./theme";
 import { pageGutterClass } from "./layout/pageLayout";
 import StudentRepositoryLayout from "./layouts/StudentRepositoryLayout";
@@ -41,6 +42,11 @@ const StudentAssignmentsPage = lazy(() => import("./pages/StudentAssignmentsPage
 const StudentGradesPage = lazy(() => import("./pages/StudentGradesPage"));
 const StudentForksPage = lazy(() => import("./pages/StudentForksPage"));
 const TeacherGradingQueuePage = lazy(() => import("./pages/TeacherGradingQueuePage"));
+const TeacherCoursesPage = lazy(() => import("./pages/teacher/TeacherCoursesPage"));
+const TeacherStudentsPage = lazy(() => import("./pages/teacher/TeacherStudentsPage"));
+const TeacherCodeReviewPage = lazy(() => import("./pages/teacher/TeacherCodeReviewPage"));
+const TeacherTemplatesPage = lazy(() => import("./pages/teacher/TeacherTemplatesPage"));
+const TeacherActivityPage = lazy(() => import("./pages/teacher/TeacherActivityPage"));
 const StudentRepositoryCommitsPage = lazy(() => import("./pages/StudentRepositoryCommitsPage"));
 const StudentRepositorySectionPage = lazy(() => import("./pages/StudentRepositorySectionPage"));
 
@@ -49,11 +55,6 @@ const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"
 const ADMIN_PATHS = ["/admin", "/users", "/roles", "/admin/forks", "/admin/activity", "/admin/monitoring", "/admin/settings", "/repositories", "/logs", "/dashboard"];
 
 export default function App() {
-  const location = useLocation();
-  const isAuthPage = AUTH_PATHS.includes(location.pathname);
-  const isAdminPage = ADMIN_PATHS.some(path => location.pathname.startsWith(path));
-
-  // Theme state
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
     const saved = localStorage.getItem("theme");
     return saved ? saved === "dark" : false;
@@ -63,11 +64,38 @@ export default function App() {
     localStorage.setItem("theme", isDarkTheme ? "dark" : "light");
   }, [isDarkTheme]);
 
-  const toggleTheme = () => setIsDarkTheme(prev => !prev);
+  return (
+    <UserPreferencesProvider isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme}>
+      <AppShell isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme} />
+    </UserPreferencesProvider>
+  );
+}
+
+function AppShell({
+  isDarkTheme,
+  setIsDarkTheme,
+}: {
+  isDarkTheme: boolean;
+  setIsDarkTheme: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  const location = useLocation();
+  const isAuthPage = AUTH_PATHS.includes(location.pathname);
+  const { persistTheme, t } = useUserPreferences();
+
+  if (!isAuthPage && !getToken()) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  const toggleTheme = () => {
+    setIsDarkTheme((prev) => {
+      const next = !prev;
+      localStorage.setItem("theme", next ? "dark" : "light");
+      void persistTheme(next ? "dark" : "light");
+      return next;
+    });
+  };
 
   const theme = getTheme(isDarkTheme);
-  const appBgStyle = { backgroundColor: theme.bg };
-  const mainBgStyle = { backgroundColor: theme.bg2 };
 
   return (
     <PendingCountProvider>
@@ -78,7 +106,7 @@ export default function App() {
         {!isAuthPage ? <Sidebar isDarkTheme={isDarkTheme} /> : null}
         <div className="flex flex-1 flex-col min-h-0">
           <main className={`flex-1 overflow-y-auto py-6 ${pageGutterClass}`} style={{ backgroundColor: theme.bg2 }}>
-            <Suspense fallback={<div className="text-sm" style={{ color: theme.text3 }}>Loading...</div>}>
+            <Suspense fallback={<div className="text-sm" style={{ color: theme.text3 }}>{t("common.loading")}</div>}>
               <Routes>
                 <Route path="/" element={<RoleBasedHomeRedirect />} />
                 <Route path="/home" element={<HomeRoute isDarkTheme={isDarkTheme} />} />
@@ -131,9 +159,14 @@ export default function App() {
                   <Route path="/repositories/new" element={<StudentCreateRepoPage isDarkTheme={isDarkTheme} />} />
                   <Route path="/repositories/forks" element={<StudentForksPage isDarkTheme={isDarkTheme} />} />
                   <Route path="/grades" element={<StudentGradesPage isDarkTheme={isDarkTheme} />} />
-                  <Route path="/grading-queue" element={<TeacherGradingQueuePage isDarkTheme={isDarkTheme} />} />
-                  <Route path="/submissions" element={<CoursesPage />} />
-                  <Route path="/students" element={<CoursesPage />} />
+                  <Route path="/grading-queue" element={<Navigate to="/teacher/code-review" replace />} />
+                  <Route path="/teacher/courses" element={<TeacherCoursesPage isDarkTheme={isDarkTheme} />} />
+                  <Route path="/teacher/students" element={<TeacherStudentsPage isDarkTheme={isDarkTheme} />} />
+                  <Route path="/teacher/code-review" element={<TeacherCodeReviewPage isDarkTheme={isDarkTheme} />} />
+                  <Route path="/teacher/templates" element={<TeacherTemplatesPage isDarkTheme={isDarkTheme} />} />
+                  <Route path="/teacher/activity" element={<TeacherActivityPage isDarkTheme={isDarkTheme} />} />
+                  <Route path="/submissions" element={<Navigate to="/teacher/code-review" replace />} />
+                  <Route path="/students" element={<Navigate to="/teacher/students" replace />} />
                   <Route path="/settings" element={<SettingsPage isDarkTheme={isDarkTheme} onToggleTheme={toggleTheme} />} />
                   <Route element={<AdminRequired />}>
                     <Route path="/admin" element={<AdminPage isDarkTheme={isDarkTheme} />} />

@@ -2,6 +2,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import RepoFileBrowser from "../components/RepoFileBrowser";
 import RepoSectionShell from "../components/repo/RepoSectionShell";
 import { useStudentRepoWorkspace, type StudentRepoMeta } from "../hooks/useStudentRepoWorkspace";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getTheme } from "../theme";
 
 interface BrowseState extends Partial<StudentRepoMeta> {
@@ -19,11 +20,12 @@ export default function StudentRepositoryBrowsePage({ isDarkTheme = false }: Stu
   const location = useLocation();
   const stateMeta = location.state as BrowseState | null;
   const { meta, summary, loading } = useStudentRepoWorkspace(repoId, stateMeta);
+  const { t } = useUserPreferences();
 
   if (!repoId || loading && !meta) {
     return (
       <div className="flex items-center justify-center py-20 text-sm" style={{ color: theme.text2 }}>
-        Загрузка репозитория…
+        {t("repo.section.loading")}
       </div>
     );
   }

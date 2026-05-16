@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Construction } from "lucide-react";
 import { getTheme } from "../theme";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface FeaturePlaceholderProps {
   isDarkTheme?: boolean;
@@ -17,6 +18,7 @@ export default function FeaturePlaceholder({
   hint,
   icon,
 }: FeaturePlaceholderProps) {
+  const { t } = useUserPreferences();
   const theme = getTheme(isDarkTheme);
 
   return (
@@ -42,7 +44,7 @@ export default function FeaturePlaceholder({
             className="mb-2 inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
             style={{ backgroundColor: `${theme.warning}22`, color: theme.warning }}
           >
-            Скоро
+            {t("featurePlaceholder.soon")}
           </span>
           <h1 className="text-xl font-bold mb-2" style={{ color: theme.text }}>
             {title}

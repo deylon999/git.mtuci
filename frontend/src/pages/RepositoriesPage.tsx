@@ -14,6 +14,7 @@ import {
 import { CustomCheckbox } from "../components/CustomCheckbox";
 import { API_URL } from "../api/client";
 import { getAdminRepositories } from "../api/adminApi";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface Repository {
   id: string;
@@ -64,16 +65,16 @@ const languageColors: Record<string, string> = {
   SQL: "#6b7280",
 };
 
-function getTypeBadge(type: Repository["repo_type"]) {
+function getTypeBadge(type: Repository["repo_type"], t: (key: string) => string) {
   const styles = {
     public: "bg-emerald-500/15 text-emerald-400",
     private: "bg-gray-500/15 text-gray-400",
     course: "bg-blue-500/15 text-blue-400",
   };
   const labels = {
-    public: "Публичный",
-    private: "Приватный",
-    course: "Курсовой",
+    public: t("repo.visibility.public"),
+    private: t("repo.visibility.private"),
+    course: t("repo.visibility.course"),
   };
   return (
     <span
@@ -93,7 +94,12 @@ function getInitials(fullName: string | null): string {
   return fullName.slice(0, 2).toUpperCase();
 }
 
-function formatDate(dateStr: string): string {
+function formatDate(
+  dateStr: string,
+  t: (key: string) => string,
+  tp: (key: string, params?: Record<string, string | number | null | undefined>) => string,
+  dateLocale: string,
+): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -101,12 +107,12 @@ function formatDate(dateStr: string): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return "Только что";
-  if (diffMins < 60) return `${diffMins} мин назад`;
-  if (diffHours < 24) return `${diffHours} часа назад`;
-  if (diffDays === 1) return "Вчера";
-  if (diffDays < 7) return `${diffDays} дня назад`;
-  return date.toLocaleDateString("ru-RU");
+  if (diffMins < 1) return t("repo.repositories.justNow");
+  if (diffMins < 60) return tp("repo.repositories.minutesAgo", { n: diffMins });
+  if (diffHours < 24) return tp("repo.repositories.hoursAgo", { n: diffHours });
+  if (diffDays === 1) return t("repo.repositories.yesterday");
+  if (diffDays < 7) return tp("repo.repositories.daysAgo", { n: diffDays });
+  return date.toLocaleDateString(dateLocale);
 }
 
 function Dropdown({ label, value, options, onChange, isDarkTheme = true }: {
@@ -175,6 +181,8 @@ interface RepositoriesPageProps {
 }
 
 export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPageProps) {
+  const { t, tp, language } = useUserPreferences();
+  const dateLocale = language === "en" ? "en-US" : "ru-RU";
   // Data states
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [stats, setStats] = useState<OverviewStats | null>(null);
@@ -290,25 +298,25 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
     if (!stats) return [];
     const blockedCount = repositories.filter((r) => r.is_blocked).length; // Approximate
     return [
-      { label: "Всего репо", value: stats.total_repositories, color: isDarkTheme ? "text-white" : "text-gray-900" },
-      { label: "Публичных", value: stats.repositories_by_type.public, color: "text-emerald-400" },
-      { label: "Приватных", value: stats.repositories_by_type.private, color: "text-gray-400" },
-      { label: "Курсовых", value: stats.repositories_by_type.course, color: "text-blue-400" },
-      { label: "Заблокированных", value: blockedCount, color: "text-red-400" },
+      { label: t("repo.repositories.statTotal"), value: stats.total_repositories, color: isDarkTheme ? "text-white" : "text-gray-900" },
+      { label: t("repo.repositories.statPublic"), value: stats.repositories_by_type.public, color: "text-emerald-400" },
+      { label: t("repo.repositories.statPrivate"), value: stats.repositories_by_type.private, color: "text-gray-400" },
+      { label: t("repo.repositories.statCourse"), value: stats.repositories_by_type.course, color: "text-blue-400" },
+      { label: t("repo.repositories.statBlocked"), value: blockedCount, color: "text-red-400" },
     ];
   };
 
   const typeOptions = [
-    { value: "", label: "Все типы" },
-    { value: "public", label: "Публичный" },
-    { value: "private", label: "Приватный" },
-    { value: "course", label: "Курсовой" },
+    { value: "", label: t("repo.repositories.filterAllTypes") },
+    { value: "public", label: t("repo.visibility.public") },
+    { value: "private", label: t("repo.visibility.private") },
+    { value: "course", label: t("repo.visibility.course") },
   ];
 
   const blockedOptions = [
-    { value: "", label: "Все статусы" },
-    { value: "false", label: "Активные" },
-    { value: "true", label: "Заблокированные" },
+    { value: "", label: t("repo.repositories.filterAllStatuses") },
+    { value: "false", label: t("repo.repositories.filterActive") },
+    { value: "true", label: t("repo.repositories.filterBlocked") },
   ];
 
   const limitOptions = [
@@ -325,13 +333,13 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
     return (
       <div className={`h-full flex items-center justify-center ${isDarkTheme ? "bg-[#0f0f10] text-white" : "bg-gray-50 text-gray-900"}`}>
         <div className="text-center">
-          <p className="text-red-400 mb-2">Ошибка загрузки</p>
+          <p className="text-red-400 mb-2">{t("repo.repositories.loadError")}</p>
           <p className={isDarkTheme ? "text-[#8b949e]" : "text-gray-500"}>{error}</p>
           <button
             onClick={fetchRepositories}
             className="mt-4 px-4 py-2 bg-blue-600 rounded-lg text-sm"
           >
-            Повторить
+            {t("repo.repositories.retry")}
           </button>
         </div>
       </div>
@@ -360,17 +368,17 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <h1 className={`text-2xl font-bold ${textPrimary}`}>Все репозитории</h1>
-            <span className={`text-sm ${textSecondary}`}>{totalCount} репозиториев</span>
+            <h1 className={`text-2xl font-bold ${textPrimary}`}>{t("repo.repositories.title")}</h1>
+            <span className={`text-sm ${textSecondary}`}>{tp("repo.repositories.reposCount", { n: totalCount })}</span>
           </div>
           <div className="flex items-center gap-3">
             <button className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${btnBg} ${btnText} ${btnTextHover}`}>
               <Download className="h-4 w-4" />
-              Экспорт CSV
+              {t("repo.repositories.exportCsv")}
             </button>
             <button className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium text-white transition-all">
               <Plus className="h-4 w-4" />
-              Создать репо
+              {t("repo.repositories.createRepo")}
             </button>
           </div>
         </div>
@@ -392,20 +400,20 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
               <Search className={`absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 ${tableHeaderText}`} />
               <input
                 type="text"
-                placeholder="Поиск по наз..."
+                placeholder={t("repo.repositories.searchPlaceholder")}
                 className={`w-64 pl-10 pr-4 py-1.5 ${inputBg} rounded-lg text-sm ${inputText} ${inputPlaceholder} focus:outline-none focus:border-[#484f58] transition-colors`}
               />
             </div>
             <div className="flex items-center gap-2">
               <Dropdown
-                label="Все типы"
+                label={t("repo.repositories.filterAllTypes")}
                 value={typeFilter}
                 options={typeOptions}
                 onChange={setTypeFilter}
                 isDarkTheme={isDarkTheme}
               />
               <Dropdown
-                label="Все статусы"
+                label={t("repo.repositories.filterAllStatuses")}
                 value={blockedFilter}
                 options={blockedOptions}
                 onChange={setBlockedFilter}
@@ -416,7 +424,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
           {selectedRepos.size > 0 && (
             <button className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm transition-colors">
               <Trash2 className="h-4 w-4" />
-              Удалить выбранные
+              {t("repo.repositories.deleteSelected")}
             </button>
           )}
         </div>
@@ -430,22 +438,22 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
                   <CustomCheckbox checked={selectAll} onChange={toggleSelectAll} isDarkTheme={isDarkTheme} />
                 </th>
                 <th className={`py-3 px-4 text-left text-xs font-medium ${tableHeaderText} uppercase tracking-wider`}>
-                  Репозиторий
+                  {t("repo.repositories.colRepository")}
                 </th>
                 <th className={`py-3 px-4 text-left text-xs font-medium ${tableHeaderText} uppercase tracking-wider`}>
-                  Тип
+                  {t("admin.repositories.colType")}
                 </th>
                 <th className={`py-3 px-4 text-left text-xs font-medium ${tableHeaderText} uppercase tracking-wider`}>
-                  Язык
+                  {t("repo.repositories.colLanguage")}
                 </th>
                 <th className={`py-3 px-4 text-left text-xs font-medium ${tableHeaderText} uppercase tracking-wider`}>
-                  Владелец
+                  {t("admin.repositories.colOwner")}
                 </th>
                 <th className={`py-3 px-4 text-left text-xs font-medium ${tableHeaderText} uppercase tracking-wider`}>
-                  Коммиты
+                  {t("repo.repositories.colCommits")}
                 </th>
                 <th className={`py-3 px-4 text-left text-xs font-medium ${tableHeaderText} uppercase tracking-wider`}>
-                  Статус
+                  {t("admin.repositories.colStatus")}
                 </th>
                 <th className="w-10 py-3 px-4"></th>
               </tr>
@@ -460,7 +468,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
               ) : repositories.length === 0 ? (
                 <tr>
                   <td colSpan={8} className={`py-12 text-center ${tableHeaderText}`}>
-                    Репозитории не найдены
+                    {t("repo.repositories.notFound")}
                   </td>
                 </tr>
               ) : (
@@ -485,14 +493,14 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
                           <p className={`font-medium text-sm ${inputText}`}>
                             {repo.name}
                             {repo.is_blocked && (
-                              <span className="ml-2 text-red-400 text-xs">(заблокирован)</span>
+                              <span className="ml-2 text-red-400 text-xs">{t("repo.repositories.blockedSuffix")}</span>
                             )}
                           </p>
                           <p className={`text-xs ${tableHeaderText}`}>{repo.gitea_repo_name || repo.name}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-4">{getTypeBadge(repo.repo_type)}</td>
+                    <td className="py-3 px-4">{getTypeBadge(repo.repo_type, t)}</td>
                     <td className="py-3 px-4">
                       {repo.language ? (
                         <div className="flex items-center gap-2">
@@ -527,12 +535,12 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
                         ) : repo.is_blocked ? (
                           <>
                             <Lock className="h-3 w-3" />
-                            Заблокирован
+                            {t("repo.repositories.statusBlocked")}
                           </>
                         ) : (
                           <>
                             <Unlock className="h-3 w-3" />
-                            Активен
+                            {t("repo.repositories.statusActive")}
                           </>
                         )}
                       </button>
@@ -552,7 +560,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
         {/* Pagination */}
         <div className="flex items-center justify-between mt-4">
           <p className={`text-sm ${tableHeaderText}`}>
-            Показано {repositories.length} из {totalCount}
+            {tp("repo.repositories.shownOf", { shown: repositories.length, total: totalCount })}
           </p>
           <div className="flex items-center gap-2">
             {currentPage > 1 && (
@@ -576,7 +584,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-sm ${tableHeaderText}`}>По</span>
+            <span className={`text-sm ${tableHeaderText}`}>{t("repo.repositories.perPage")}</span>
             <select
               value={limit}
               onChange={(e) => {
@@ -591,7 +599,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
                 </option>
               ))}
             </select>
-            <span className={`text-sm ${tableHeaderText}`}>на странице</span>
+            <span className={`text-sm ${tableHeaderText}`}>{t("repo.repositories.onPage")}</span>
           </div>
         </div>
       </div>

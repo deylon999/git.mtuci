@@ -5,6 +5,7 @@ import { getCourses } from "../api/coursesApi";
 import { getTeacherDashboard, type TeacherDashboard } from "../api/teacherDashboardApi";
 import { getTheme } from "../theme";
 import type { UserRead, Course as CourseType } from "../api/types";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface Activity {
   id: string;
@@ -31,12 +32,6 @@ interface StudentRating {
   points: number;
 }
 
-const mockActivities: Activity[] = [
-  { id: "1", text: "Сдал лаб. работу №3 (оценка 85)", type: "submission" },
-  { id: "2", text: "Новый комментарий от преподавателя", type: "comment" },
-  { id: "3", text: "Дедлайн через 2 дня: Лаб. №4", type: "deadline" },
-];
-
 interface CourseDisplay {
   id: string;
   name: string;
@@ -44,21 +39,21 @@ interface CourseDisplay {
 }
 
 const mockCourses: CourseDisplay[] = [
-  { id: "1", name: "Базы данных", rating: 4 },
-  { id: "2", name: "Web разработка", rating: 3 },
-  { id: "3", name: "Python продвин.", rating: 5 },
+  { id: "1", name: "Databases", rating: 4 },
+  { id: "2", name: "Web Development", rating: 3 },
+  { id: "3", name: "Advanced Python", rating: 5 },
 ];
 
 const mockDeadlines: Deadline[] = [
-  { id: "1", time: "17:00", title: "Лаб. №3", urgency: "today" },
-  { id: "2", time: "23:59", title: "Тест по БД", urgency: "tomorrow" },
-  { id: "3", time: "", title: "Курсовая", urgency: "later" },
+  { id: "1", time: "17:00", title: "Lab #3", urgency: "today" },
+  { id: "2", time: "23:59", title: "DB Test", urgency: "tomorrow" },
+  { id: "3", time: "", title: "Term paper", urgency: "later" },
 ];
 
 const mockRatings: StudentRating[] = [
-  { id: "1", name: "Петров И.", points: 450 },
-  { id: "2", name: "Иванов А.", points: 420 },
-  { id: "3", name: "Сидоров К.", points: 380 },
+  { id: "1", name: "Petrov I.", points: 450 },
+  { id: "2", name: "Ivanov A.", points: 420 },
+  { id: "3", name: "Sidorov K.", points: 380 },
 ];
 
 function getActivityIcon(type: Activity["type"]) {
@@ -82,14 +77,17 @@ function StarRating({ rating, theme }: { rating: number; theme: any }) {
   );
 }
 
-function getUrgencyLabel(urgency: Deadline["urgency"]) {
+function getUrgencyLabel(
+  urgency: Deadline["urgency"],
+  t: (key: string) => string,
+) {
   switch (urgency) {
     case "today":
-      return "Сегодня";
+      return t("admin.home.deadlineToday");
     case "tomorrow":
-      return "Завтра";
+      return t("admin.home.deadlineTomorrow");
     case "later":
-      return "Через 3 дня";
+      return t("admin.home.deadlineLater");
   }
 }
 
@@ -109,6 +107,12 @@ interface HomePageProps {
 }
 
 export default function HomePage({ isDarkTheme = false }: HomePageProps) {
+  const { t, tp } = useUserPreferences();
+  const mockActivities: Activity[] = [
+    { id: "1", text: t("admin.home.activitySubmission"), type: "submission" },
+    { id: "2", text: t("admin.home.activityComment"), type: "comment" },
+    { id: "3", text: t("admin.home.activityDeadline"), type: "deadline" },
+  ];
   const [user, setUser] = useState<UserRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedCourse, setSelectedCourse] = useState<string>("all");
@@ -161,19 +165,21 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
       {/* Приветствие */}
       <div className="mb-6">
         <h1 className="text-2xl font-semibold" style={{ color: theme.text }}>
-          👋 Привет, {loading ? "..." : user?.full_name || user?.email || "Иван"}!
+          {tp("admin.home.greeting", {
+            name: loading ? "..." : user?.full_name || user?.email || t("admin.home.defaultName"),
+          })}
         </h1>
       </div>
 
       {isTeacherLike && teacherDash ? (
         <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
           {[
-            ["Курсы", teacherDash.courses_count],
-            ["Студентов", teacherDash.students_total],
-            ["Заданий", teacherDash.assignments_total],
-            ["На проверке", teacherDash.pending_grading],
-            ["Сдач за неделю", teacherDash.submissions_this_week],
-            ["Просрочено", teacherDash.overdue_assignments],
+            [t("admin.home.statCourses"), teacherDash.courses_count],
+            [t("admin.home.statStudents"), teacherDash.students_total],
+            [t("admin.home.statAssignments"), teacherDash.assignments_total],
+            [t("admin.home.statPending"), teacherDash.pending_grading],
+            [t("admin.home.statSubmissionsWeek"), teacherDash.submissions_this_week],
+            [t("admin.home.statOverdue"), teacherDash.overdue_assignments],
           ].map(([label, value]) => (
             <div
               key={String(label)}
@@ -198,7 +204,7 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
             className="inline-flex rounded-lg px-4 py-2 text-sm font-medium text-white"
             style={{ backgroundColor: theme.accent }}
           >
-            Очередь проверки ({teacherDash?.pending_grading ?? 0})
+            {tp("admin.home.gradingQueue", { n: teacherDash?.pending_grading ?? 0 })}
           </Link>
         </div>
       ) : null}
@@ -211,7 +217,7 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
           <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold transition-colors" style={{ color: theme.text }}>📊 Активность за неделю</h2>
+                <h2 className="text-lg font-semibold transition-colors" style={{ color: theme.text }}>{t("admin.home.activityWeek")}</h2>
               </div>
               <select
                 value={selectedCourse}
@@ -219,11 +225,11 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
                 className="rounded-md border px-3 py-1.5 text-sm outline-none focus:border-[#372579] focus:ring-1 focus:ring-[#372579] transition-colors"
                 style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
               >
-                <option value="all">Все курсы ▼</option>
+                <option value="all">{t("admin.home.allCoursesOption")}</option>
                 {coursesLoading ? (
-                  <option disabled>Загрузка...</option>
+                  <option disabled>{t("admin.home.loadingCoursesOption")}</option>
                 ) : courses.length === 0 ? (
-                  <option disabled>Нет курсов</option>
+                  <option disabled>{t("admin.home.noCoursesOption")}</option>
                 ) : (
                   courses.map((course) => (
                     <option key={course.id} value={course.id}>
@@ -248,7 +254,7 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
 
           {/* Последние действия */}
           <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
-            <h2 className="mb-3 text-lg font-semibold transition-colors" style={{ color: theme.text }}>🔥 Последние действия</h2>
+            <h2 className="mb-3 text-lg font-semibold transition-colors" style={{ color: theme.text }}>{t("admin.home.recentActions")}</h2>
             <ul className="space-y-2">
               {mockActivities.map((activity) => (
                 <li key={activity.id} className="flex items-start gap-2 text-sm transition-colors" style={{ color: theme.text2 }}>
@@ -261,11 +267,11 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
 
           {/* Активные курсы */}
           <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
-            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>📚 Активные курсы</h2>
+            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>{t("admin.home.activeCourses")}</h2>
             {coursesLoading ? (
-              <div className="text-sm transition-colors" style={{ color: theme.text2 }}>Загрузка курсов...</div>
+              <div className="text-sm transition-colors" style={{ color: theme.text2 }}>{t("admin.home.loadingCoursesList")}</div>
             ) : courses.length === 0 ? (
-              <div className="text-sm transition-colors" style={{ color: theme.text2 }}>Нет доступных курсов</div>
+              <div className="text-sm transition-colors" style={{ color: theme.text2 }}>{t("admin.home.noCoursesAvailable")}</div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {courses.map((course) => (
@@ -275,7 +281,7 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
                     style={{ backgroundColor: theme.bg2, borderColor: theme.border }}
                   >
                     <div className="mb-2 text-sm font-medium transition-colors" style={{ color: theme.text }}>{course.title}</div>
-                    <div className="text-xs transition-colors" style={{ color: theme.text2 }}>{course.description || "Без описания"}</div>
+                    <div className="text-xs transition-colors" style={{ color: theme.text2 }}>{course.description || t("admin.courses.noDescription")}</div>
                   </div>
                 ))}
               </div>
@@ -287,12 +293,12 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
         <div className="space-y-6">
           {/* Дедлайны */}
           <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
-            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>📅 Дедлайны</h2>
+            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>{t("admin.home.deadlines")}</h2>
             <ul className="space-y-3">
               {mockDeadlines.map((deadline) => (
                 <li key={deadline.id} className="border-l-2 pl-3 transition-colors" style={{ borderColor: theme.border }}>
                   <div className="text-xs transition-colors" style={{ color: getUrgencyColor(deadline.urgency, theme) }}>
-                    {getUrgencyLabel(deadline.urgency)} {deadline.time}
+                    {getUrgencyLabel(deadline.urgency, t)} {deadline.time}
                   </div>
                   <div className="text-sm transition-colors" style={{ color: theme.text2 }}>{deadline.title}</div>
                 </li>
@@ -302,7 +308,7 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
 
           {/* Рейтинг */}
           <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
-            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>🏆 Рейтинг</h2>
+            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>{t("admin.home.rating")}</h2>
             <ul className="space-y-2">
               {mockRatings.map((student, index) => (
                 <li key={student.id} className="flex items-center justify-between text-sm">
@@ -318,8 +324,8 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
 
           {/* Советы */}
           <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg2, borderColor: theme.border }}>
-            <h2 className="mb-3 text-lg font-semibold transition-colors" style={{ color: theme.text }}>💡 Советы</h2>
-            <p className="text-sm italic transition-colors" style={{ color: theme.text2 }}>"Не забудь push"</p>
+            <h2 className="mb-3 text-lg font-semibold transition-colors" style={{ color: theme.text }}>{t("admin.home.tips")}</h2>
+            <p className="text-sm italic transition-colors" style={{ color: theme.text2 }}>&quot;{t("admin.home.pushReminder")}&quot;</p>
           </div>
         </div>
       </div>

@@ -5,9 +5,12 @@ import {
   Eye,
   FolderGit2,
   GitBranch,
+  GitFork,
   Github,
   GitCommit,
   GitPullRequest,
+  LayoutGrid,
+  List,
   Loader2,
   Pencil,
   Plus,
@@ -16,12 +19,18 @@ import {
   Trash2,
 } from "lucide-react";
 import CreateRepositoryModal from "../components/CreateRepositoryModal";
+import DeleteRepositoryDialog from "../components/DeleteRepositoryDialog";
+import EditRepositoryModal from "../components/EditRepositoryModal";
 import {
   deleteStudentRepository,
+  getStudentForks,
   getStudentRepositories,
   type StudentRepositoriesStats,
   type StudentRepositoryItem,
 } from "../api/studentDashboardApi";
+import { useUserPreferences } from "../context/UserPreferencesContext";
+import { pluralWord } from "../i18n/plural";
+import type { Locale } from "../i18n";
 import { formatRelativeTime } from "../utils/formatRelativeTime";
 import { getTheme } from "../theme";
 
@@ -57,36 +66,9 @@ function avatarStyle(id: string) {
   return AVATAR_PALETTE[hash];
 }
 
-function pluralCommits(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return "коммитов";
-  if (mod10 === 1) return "коммит";
-  if (mod10 >= 2 && mod10 <= 4) return "коммита";
-  return "коммитов";
-}
-
-function pluralRepos(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return "репозиториев";
-  if (mod10 === 1) return "репозиторий";
-  if (mod10 >= 2 && mod10 <= 4) return "репозитория";
-  return "репозиториев";
-}
-
-function formatCommitCount(count: number, approx: boolean): string {
+function formatCommitCount(count: number, approx: boolean, locale: Locale): string {
   const suffix = approx ? "+" : "";
-  return `${count}${suffix} ${pluralCommits(count)}`;
-}
-
-function pluralForks(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return "форков";
-  if (mod10 === 1) return "форк";
-  if (mod10 >= 2 && mod10 <= 4) return "форка";
-  return "форков";
+  return `${count}${suffix} ${pluralWord(locale, "student.plural.commits", count)}`;
 }
 
 function capitalizeLanguage(lang: string): string {
@@ -107,6 +89,7 @@ interface StudentRepositoriesPageProps {
 
 export default function StudentRepositoriesPage({ isDarkTheme = false }: StudentRepositoriesPageProps) {
   const theme = getTheme(isDarkTheme);
+  const { t, tp, language } = useUserPreferences();
   const location = useLocation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -120,16 +103,21 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
   const [createOpen, setCreateOpen] = useState(false);
   const [copyId, setCopyId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [forkPaths, setForkPaths] = useState<Set<string>>(new Set());
+  const [editRepo, setEditRepo] = useState<StudentRepositoryItem | null>(null);
+  const [deleteRepo, setDeleteRepo] = useState<StudentRepositoryItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getStudentRepositories();
+      const [data, forks] = await Promise.all([getStudentRepositories(), getStudentForks(200)]);
       setStats(data.stats);
       setRepos(data.repositories);
+      setForkPaths(new Set(forks.map((f) => f.fork_repo_path)));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось загрузить репозитории");
+      setError(e instanceof Error ? e.message : t("student.errors.loadRepos"));
     } finally {
       setLoading(false);
     }
@@ -189,16 +177,17 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
     }
   };
 
-  const handleDelete = async (repo: StudentRepositoryItem) => {
-    const repoId = repo.repository_id ?? repo.id;
-    if (!repo.can_delete) return;
-    if (!window.confirm(`Удалить репозиторий «${repo.name}»? Это действие нельзя отменить.`)) return;
-    setDeletingId(repo.id);
+  const confirmDelete = async () => {
+    if (!deleteRepo) return;
+    const repoId = deleteRepo.repository_id ?? deleteRepo.id;
+    if (!deleteRepo.can_delete) return;
+    setDeletingId(deleteRepo.id);
     try {
       await deleteStudentRepository(repoId);
+      setDeleteRepo(null);
       await load();
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Не удалось удалить репозиторий");
+      window.alert(e instanceof Error ? e.message : t("student.errors.deleteRepo"));
     } finally {
       setDeletingId(null);
     }
@@ -212,13 +201,16 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold" style={{ color: theme.text }}>
-            Мои репозитории
+            {t("student.repos.title")}
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: theme.text2 }}>
             {loading
-              ? "Загрузка…"
+              ? t("common.loading")
               : stats
-                ? `${stats.total} ${pluralRepos(stats.total)} · ${stats.total_commits} ${pluralCommits(stats.total_commits)} всего`
+                ? tp("student.repos.subtitleStats", {
+                    repos: `${stats.total} ${pluralWord(language, "student.plural.repos", stats.total)}`,
+                    commits: `${stats.total_commits} ${pluralWord(language, "student.plural.commits", stats.total_commits)}`,
+                  })
                 : "—"}
           </p>
         </div>
@@ -226,12 +218,12 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
           <button
             type="button"
             disabled
-            title="Скоро"
+            title={t("featurePlaceholder.soon")}
             className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium opacity-50 cursor-not-allowed"
             style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text }}
           >
             <Github className="h-3.5 w-3.5" />
-            Импорт из GitHub
+            {t("student.repos.importGithub")}
           </button>
           <button
             type="button"
@@ -244,7 +236,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
             }}
           >
             <Plus className="h-3.5 w-3.5" />
-            Создать репозиторий
+            {t("student.repos.create")}
           </button>
         </div>
       </div>
@@ -261,30 +253,30 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
         {[
           {
-            label: "Всего репозиториев",
+            label: t("student.repos.statTotal"),
             value: stats?.total ?? "—",
             sub:
               stats && stats.repos_week_delta > 0
-                ? `+${stats.repos_week_delta} на этой неделе`
+                ? tp("student.repos.reposWeekDelta", { n: stats.repos_week_delta })
                 : stats
-                  ? "Без новых на этой неделе"
+                  ? t("student.repos.reposNoNewWeek")
                   : "",
           },
           {
-            label: "Публичных",
+            label: t("student.repos.statPublic"),
             value: stats?.public_count ?? "—",
-            sub: "Видны всем",
+            sub: t("student.repos.statPublicSub"),
             color: theme.success,
           },
           {
-            label: "Приватных / курсовых",
+            label: t("student.repos.statPrivate"),
             value: stats ? stats.private_count + stats.course_count : "—",
-            sub: "Личные и по заданиям",
+            sub: t("student.repos.statPrivateSub"),
           },
           {
-            label: "Коммитов за неделю",
+            label: t("student.repos.statCommitsWeek"),
             value: stats?.commits_week ?? "—",
-            sub: `Среднее ${avgCommitsPerDay}/день`,
+            sub: tp("student.repos.statCommitsAvg", { avg: avgCommitsPerDay }),
             color: theme.accent2,
           },
         ].map((card) => (
@@ -319,7 +311,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по названию, языку, описанию…"
+            placeholder={t("student.repos.searchPlaceholder")}
             className="w-full bg-transparent text-xs outline-none"
             style={{ color: theme.text }}
           />
@@ -331,10 +323,10 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
           className="rounded-lg border px-2 py-1.5 text-xs"
           style={{ backgroundColor: theme.bg, borderColor: theme.border, color: theme.text }}
         >
-          <option value="all">Все типы</option>
-          <option value="public">Публичный</option>
-          <option value="private">Приватный</option>
-          <option value="course">Курсовой / задание</option>
+          <option value="all">{t("student.repos.filterAllTypes")}</option>
+          <option value="public">{t("student.repos.visibilityPublic")}</option>
+          <option value="private">{t("student.repos.visibilityPrivate")}</option>
+          <option value="course">{t("student.repos.visibilityCourse")}</option>
         </select>
         <select
           value={langFilter}
@@ -342,7 +334,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
           className="rounded-lg border px-2 py-1.5 text-xs"
           style={{ backgroundColor: theme.bg, borderColor: theme.border, color: theme.text }}
         >
-          <option value="all">Все языки</option>
+          <option value="all">{t("student.repos.filterAllLangs")}</option>
           {languages.map((lang) => (
             <option key={lang} value={lang}>
               {lang}
@@ -355,17 +347,44 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
           className="rounded-lg border px-2 py-1.5 text-xs"
           style={{ backgroundColor: theme.bg, borderColor: theme.border, color: theme.text }}
         >
-          <option value="activity">Сортировка: активность</option>
-          <option value="date">По дате</option>
-          <option value="commits">По коммитам</option>
-          <option value="name">По имени</option>
+          <option value="activity">{t("student.repos.sortActivity")}</option>
+          <option value="date">{t("student.repos.sortDate")}</option>
+          <option value="commits">{t("student.repos.sortCommits")}</option>
+          <option value="name">{t("student.repos.sortName")}</option>
         </select>
+        <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: theme.border }}>
+          <button
+            type="button"
+            onClick={() => setViewMode("grid")}
+            className="px-2 py-1.5"
+            style={{
+              backgroundColor: viewMode === "grid" ? theme.bg4 : theme.bg,
+              color: viewMode === "grid" ? theme.text : theme.text2,
+            }}
+            title={t("student.repos.viewGrid")}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            className="px-2 py-1.5 border-l"
+            style={{
+              borderColor: theme.border,
+              backgroundColor: viewMode === "list" ? theme.bg4 : theme.bg,
+              color: viewMode === "list" ? theme.text : theme.text2,
+            }}
+            title={t("student.repos.viewList")}
+          >
+            <List className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-16 text-sm" style={{ color: theme.text2 }}>
           <Loader2 className="h-5 w-5 animate-spin" />
-          Загрузка репозиториев…
+          {t("student.repos.loading")}
         </div>
       ) : filtered.length === 0 && repos.length === 0 ? (
         <div
@@ -374,10 +393,10 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
         >
           <FolderGit2 className="h-10 w-10" style={{ color: theme.text3 }} />
           <p className="text-sm font-medium" style={{ color: theme.text2 }}>
-            Пока нет репозиториев
+            {t("student.repos.empty")}
           </p>
           <p className="text-xs max-w-sm" style={{ color: theme.text3 }}>
-            Создайте личный репозиторий или откройте задание в курсе — репозиторий появится здесь автоматически.
+            {t("student.repos.emptyHint")}
           </p>
           <button
             type="button"
@@ -390,14 +409,21 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
             }}
           >
             <Plus className="h-3.5 w-3.5" />
-            Создать репозиторий
+            {t("student.repos.create")}
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div
+          className={
+            viewMode === "grid"
+              ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"
+              : "flex flex-col gap-2"
+          }
+        >
           {filtered.map((repo) => {
             const av = avatarStyle(repo.id);
             const badge = visibilityBadge(repo.visibility, repo.source);
+            const isFork = repo.gitea_path ? forkPaths.has(repo.gitea_path) : false;
             const langKey = (repo.language ?? "").toLowerCase();
             const langColor = LANG_COLORS[langKey] ?? theme.text3;
             const webUrl = repo.gitea_web_url;
@@ -424,7 +450,9 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                       openCodeBrowser();
                     }
                   }}
-                  className="flex h-full flex-col gap-2.5 rounded-xl border p-4 transition-colors hover:border-opacity-80 cursor-pointer"
+                  className={`flex h-full gap-2.5 rounded-xl border p-4 transition-colors hover:border-opacity-80 cursor-pointer ${
+                    viewMode === "list" ? "flex-row items-center" : "flex-col"
+                  }`}
                   style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = theme.accent2;
@@ -440,26 +468,37 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                     >
                       {repoInitials(repo.name)}
                     </div>
-                    <span
-                      className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium"
-                      style={{
-                        backgroundColor:
-                          badge.variant === "ok"
-                            ? `${theme.success}20`
-                            : badge.variant === "info"
-                              ? `${theme.accent}20`
-                              : theme.bg4,
-                        color:
-                          badge.variant === "ok"
-                            ? theme.success
-                            : badge.variant === "info"
-                              ? theme.accent2
-                              : theme.text2,
-                        border: badge.variant === "gray" ? `1px solid ${theme.border}` : undefined,
-                      }}
-                    >
-                      {badge.label}
-                    </span>
+                    <div className="flex flex-wrap gap-1 justify-end">
+                      {isFork ? (
+                        <span
+                          className="inline-flex items-center gap-0.5 rounded-md px-2 py-0.5 text-[10px] font-medium"
+                          style={{ backgroundColor: `${theme.accent}20`, color: theme.accent2 }}
+                        >
+                          <GitFork className="h-2.5 w-2.5" />
+                          Fork
+                        </span>
+                      ) : null}
+                      <span
+                        className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium"
+                        style={{
+                          backgroundColor:
+                            badge.variant === "ok"
+                              ? `${theme.success}20`
+                              : badge.variant === "info"
+                                ? `${theme.accent}20`
+                                : theme.bg4,
+                          color:
+                            badge.variant === "ok"
+                              ? theme.success
+                              : badge.variant === "info"
+                                ? theme.accent2
+                                : theme.text2,
+                          border: badge.variant === "gray" ? `1px solid ${theme.border}` : undefined,
+                        }}
+                      >
+                        {badge.label}
+                      </span>
+                    </div>
                   </div>
 
                   <div>
@@ -498,7 +537,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                       </span>
                       {copyId === repo.id ? (
                         <span className="text-[10px] shrink-0" style={{ color: theme.success }}>
-                          Скопировано
+                          {t("common.copied")}
                         </span>
                       ) : null}
                     </button>
@@ -517,13 +556,13 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                     {repo.commits_count != null ? (
                       <span className="inline-flex items-center gap-1">
                         <GitCommit className="h-3 w-3" />
-                        {formatCommitCount(repo.commits_count, repo.commits_count_approx)}
+                        {formatCommitCount(repo.commits_count, repo.commits_count_approx, language)}
                       </span>
                     ) : null}
                     {repo.forks_count != null && repo.forks_count > 0 ? (
                       <span className="inline-flex items-center gap-1">
                         <GitBranch className="h-3 w-3" />
-                        {repo.forks_count} {pluralForks(repo.forks_count)}
+                        {repo.forks_count} {pluralWord(language, "student.plural.forks", repo.forks_count)}
                       </span>
                     ) : null}
                     {repo.open_pr_count != null && repo.open_pr_count > 0 ? (
@@ -536,7 +575,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                       <span className="inline-flex items-center gap-1">
                         <Star className="h-3 w-3" />
                         {repo.stars_count}{" "}
-                        {repo.stars_count === 1 ? "звезда" : repo.stars_count < 5 ? "звезды" : "звёзд"}
+                        {pluralWord(language, "student.plural.stars", repo.stars_count)}
                       </span>
                     ) : null}
                   </div>
@@ -546,7 +585,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                     style={{ borderColor: theme.border }}
                   >
                     <span className="text-[10px]" style={{ color: theme.text3 }}>
-                      {formatRelativeTime(repo.updated_at)}
+                      {formatRelativeTime(repo.updated_at, new Date(), language)}
                     </span>
                     <div className="flex gap-1" onClick={(e) => e.preventDefault()}>
                       <button
@@ -557,7 +596,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                         }}
                         className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
                         style={{ borderColor: theme.border, color: theme.text2 }}
-                        title="Просмотр файлов"
+                        title={t("student.repos.viewFiles")}
                       >
                         <Eye className="h-3.5 w-3.5" />
                       </button>
@@ -567,10 +606,24 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                           onClick={(e) => e.stopPropagation()}
                           className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
                           style={{ borderColor: theme.border, color: theme.text2 }}
-                          title="Перейти к заданию"
+                          title={t("student.repos.goToAssignment")}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Link>
+                      ) : repo.repository_id && repo.source === "personal" ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setEditRepo(repo);
+                          }}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
+                          style={{ borderColor: theme.border, color: theme.text2 }}
+                          title={t("common.edit")}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
                       ) : webUrl ? (
                         <a
                           href={`${webUrl}/settings`}
@@ -579,7 +632,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                           onClick={(e) => e.stopPropagation()}
                           className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
                           style={{ borderColor: theme.border, color: theme.text2 }}
-                          title="Настройки репозитория"
+                          title={t("student.repos.giteaSettings")}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </a>
@@ -591,11 +644,11 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            void handleDelete(repo);
+                            setDeleteRepo(repo);
                           }}
                           className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors disabled:opacity-50"
                           style={{ borderColor: theme.border, color: theme.danger }}
-                          title="Удалить"
+                          title={t("common.delete")}
                         >
                           {deletingId === repo.id ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -623,10 +676,10 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
               <Plus className="h-5 w-5" style={{ color: theme.text3 }} />
             </div>
             <p className="text-xs font-medium" style={{ color: theme.text2 }}>
-              Создать репозиторий
+              {t("student.repos.create")}
             </p>
             <p className="text-[11px]" style={{ color: theme.text3 }}>
-              Начните новый проект
+              {t("student.repos.newProjectHint")}
             </p>
             <span
               className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-medium"
@@ -636,7 +689,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                 color: theme.success,
               }}
             >
-              + Создать
+              {t("student.repos.createShort")}
             </span>
           </button>
         </div>
@@ -644,7 +697,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
 
       {!loading && repos.length > 0 && filtered.length === 0 ? (
         <p className="text-sm text-center py-6" style={{ color: theme.text2 }}>
-          Ничего не найдено по фильтрам
+          {t("student.repos.noFilterMatch")}
         </p>
       ) : null}
 
@@ -655,6 +708,25 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
         onCreated={() => {
           void load();
         }}
+      />
+      {editRepo?.repository_id ? (
+        <EditRepositoryModal
+          isOpen
+          isDarkTheme={isDarkTheme}
+          repositoryId={editRepo.repository_id}
+          initialName={editRepo.name}
+          initialDescription={editRepo.description}
+          onClose={() => setEditRepo(null)}
+          onSaved={() => void load()}
+        />
+      ) : null}
+      <DeleteRepositoryDialog
+        isOpen={deleteRepo != null}
+        isDarkTheme={isDarkTheme}
+        repoName={deleteRepo?.name ?? ""}
+        loading={deletingId != null}
+        onClose={() => setDeleteRepo(null)}
+        onConfirm={() => void confirmDelete()}
       />
     </div>
   );

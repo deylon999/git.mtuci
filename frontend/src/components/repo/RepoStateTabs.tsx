@@ -1,4 +1,5 @@
 import type { ThemeColors } from "../../theme";
+import { useUserPreferences } from "../../context/UserPreferencesContext";
 
 interface RepoStateTabsProps {
   theme: ThemeColors;
@@ -6,16 +7,17 @@ interface RepoStateTabsProps {
   onChange: (state: string) => void;
 }
 
-const OPTIONS = [
-  { id: "open", label: "Открытые" },
-  { id: "closed", label: "Закрытые" },
-  { id: "all", label: "Все" },
-];
-
 export default function RepoStateTabs({ theme, value, onChange }: RepoStateTabsProps) {
+  const { t } = useUserPreferences();
+  const options = [
+    { id: "open", label: t("repo.tabs.open") },
+    { id: "closed", label: t("repo.tabs.closed") },
+    { id: "all", label: t("repo.tabs.all") },
+  ];
+
   return (
     <div className="inline-flex rounded-lg border p-0.5" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
-      {OPTIONS.map((opt) => {
+      {options.map((opt) => {
         const active = value === opt.id;
         return (
           <button

@@ -3,17 +3,14 @@ import { Download, Search } from "lucide-react";
 import AdminPageHeader from "../components/AdminPageHeader";
 import { getAdminForks, type AdminForkEvent } from "../api/adminApi";
 import { getTheme } from "../theme";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface ForksPageProps {
   isDarkTheme?: boolean;
 }
 
-const EVENT_LABEL: Record<AdminForkEvent["event_type"], string> = {
-  fork: "Форк",
-  repo_created: "Создание",
-};
-
 export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
+  const { t, tp, language } = useUserPreferences();
   const [events, setEvents] = useState<AdminForkEvent[]>([]);
   const [stats, setStats] = useState({
     total: 0,
@@ -26,6 +23,14 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "fork" | "repo_created">("all");
+
+  const eventLabel = useMemo(
+    (): Record<AdminForkEvent["event_type"], string> => ({
+      fork: t("admin.forks.eventFork"),
+      repo_created: t("admin.forks.eventCreated"),
+    }),
+    [t],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +48,7 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Ошибка загрузки");
+          setError(e instanceof Error ? e.message : t("admin.forks.loadError"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -53,7 +58,7 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [typeFilter]);
+  }, [typeFilter, t]);
 
   const filtered = useMemo(
     () =>
@@ -71,12 +76,28 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
   );
 
   const theme = getTheme(isDarkTheme);
+  const dateLocale = language === "en" ? "en-US" : "ru-RU";
+
+  const statCards = [
+    [t("admin.forks.statTotal"), stats.total],
+    [t("admin.forks.statForks"), stats.forks_count],
+    [t("admin.forks.statCreated"), stats.created_count],
+    [t("admin.forks.statToday"), stats.today_count],
+  ] as const;
+
+  const tableHeaders = [
+    t("admin.forks.colUser"),
+    t("admin.forks.colType"),
+    t("admin.forks.colSource"),
+    t("admin.forks.colTarget"),
+    t("admin.forks.colDate"),
+  ];
 
   return (
     <div className="h-full overflow-y-auto" style={{ backgroundColor: theme.bg, color: theme.text }}>
       <div className="mx-auto max-w-[2100px] px-6 py-6 pb-10">
         <div className="mb-4 flex items-start justify-between gap-4">
-          <AdminPageHeader isDarkTheme={isDarkTheme} title="Форки и клоны" />
+          <AdminPageHeader isDarkTheme={isDarkTheme} title={t("admin.forks.title")} />
           <div className="mt-1 flex gap-2">
             <button
               type="button"
@@ -84,20 +105,15 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
               style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text }}
             >
               <Download className="mr-1 inline h-3.5 w-3.5" />
-              Экспорт CSV
+              {t("admin.forks.exportCsv")}
             </button>
           </div>
         </div>
 
         <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {[
-            ["Всего событий", stats.total],
-            ["Форков", stats.forks_count],
-            ["Созданий репо", stats.created_count],
-            ["Сегодня", stats.today_count],
-          ].map(([title, value]) => (
+          {statCards.map(([title, value]) => (
             <div
-              key={String(title)}
+              key={title}
               className="rounded-xl border p-4"
               style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
             >
@@ -124,7 +140,7 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
                 onChange={(e) => setQuery(e.target.value)}
                 className="w-full bg-transparent text-sm outline-none"
                 style={{ color: theme.text }}
-                placeholder="Поиск по пользователю или репозиторию..."
+                placeholder={t("admin.forks.searchPlaceholder")}
               />
             </div>
             <select
@@ -133,24 +149,24 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
               className="h-8 rounded-md border px-2 text-xs"
               style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
             >
-              <option value="all">Все типы</option>
-              <option value="fork">Только форки</option>
-              <option value="repo_created">Только создания</option>
+              <option value="all">{t("admin.forks.filterAll")}</option>
+              <option value="fork">{t("admin.forks.filterForkOnly")}</option>
+              <option value="repo_created">{t("admin.forks.filterCreateOnly")}</option>
             </select>
             <span className="text-xs" style={{ color: theme.text2 }}>
-              Уникальных пользователей: {stats.unique_users}
+              {tp("admin.forks.uniqueUsers", { n: stats.unique_users })}
             </span>
           </div>
 
           {loading ? (
-            <p className="p-4 text-sm">Загрузка...</p>
+            <p className="p-4 text-sm">{t("common.loading")}</p>
           ) : error ? (
             <p className="p-4 text-sm text-red-500">{error}</p>
           ) : (
             <table className="w-full text-sm">
               <thead className="text-xs uppercase" style={{ color: theme.text2 }}>
                 <tr>
-                  {["Пользователь", "Тип", "Источник", "Результат", "Дата"].map((h) => (
+                  {tableHeaders.map((h) => (
                     <th key={h} className="px-3 py-3 text-left">
                       {h}
                     </th>
@@ -168,13 +184,13 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
                     </td>
                     <td className="px-3 py-3">
                       <span className="rounded-full bg-[#1f6feb]/20 px-2 py-1 text-xs text-[#58a6ff]">
-                        {EVENT_LABEL[row.event_type]}
+                        {eventLabel[row.event_type]}
                       </span>
                     </td>
                     <td className="px-3 py-3">{row.source_repo || "—"}</td>
                     <td className="px-3 py-3">{row.target_repo || "—"}</td>
                     <td className="px-3 py-3" style={{ color: theme.text2 }}>
-                      {new Date(row.created_at).toLocaleString("ru-RU")}
+                      {new Date(row.created_at).toLocaleString(dateLocale)}
                     </td>
                   </tr>
                 ))}

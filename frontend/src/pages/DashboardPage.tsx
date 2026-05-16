@@ -11,9 +11,12 @@ import {
   Plus,
 } from "lucide-react";
 import CreateRepositoryModal from "../components/CreateRepositoryModal";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 import { useStudentDashboardCore } from "../hooks/useStudentDashboardCore";
 import { formatRelativeTime } from "../utils/formatRelativeTime";
-import { pluralDeadlinesRu } from "../utils/studentDeadlines";
+import { pluralWord } from "../i18n/plural";
+import { pluralDeadlines } from "../utils/studentDeadlines";
+import { formatTodayLong } from "../utils/studentDeadlineGroups";
 import { getTheme, type ThemeColors } from "../theme";
 
 const COURSE_AVATAR_PALETTE = [
@@ -229,6 +232,7 @@ function courseScoreColor(variant: string, theme: ThemeColors) {
 
 export default function DashboardPage({ isDarkTheme = false }: DashboardPageProps) {
   const theme = getTheme(isDarkTheme);
+  const { t, tp, language } = useUserPreferences();
   const {
     loading,
     error,
@@ -252,11 +256,11 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
   const stats = useMemo(() => {
     if (!kpi) {
       return [
-        { label: "Моих репозиториев", value: "—", sub: "…", icon: "repo" as const, highlight: false },
-        { label: "Коммитов за неделю", value: "—", sub: "…", icon: "commits" as const, highlight: false },
-        { label: "Активных курсов", value: "—", sub: "…", icon: "courses" as const, highlight: false },
+        { label: t("student.dashboard.statRepos"), value: "—", sub: "…", icon: "repo" as const, highlight: false },
+        { label: t("student.dashboard.statCommitsWeek"), value: "—", sub: "…", icon: "commits" as const, highlight: false },
+        { label: t("student.dashboard.statCoursesActive"), value: "—", sub: "…", icon: "courses" as const, highlight: false },
         {
-          label: "Дедлайнов сегодня",
+          label: t("student.dashboard.statDeadlinesToday"),
           value: "—",
           sub: "…",
           icon: "deadline" as const,
@@ -265,18 +269,18 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
       ];
     }
     return [
-      { label: "Моих репозиториев", value: String(kpi.reposTotal), sub: kpi.reposWeekSub, icon: "repo" as const, highlight: false },
-      { label: "Коммитов за неделю", value: String(kpi.commitsWeek), sub: kpi.commitsWeekSub, icon: "commits" as const, highlight: false },
-      { label: "Активных курсов", value: String(kpi.coursesActive), sub: kpi.coursesSub, icon: "courses" as const, highlight: false },
+      { label: t("student.dashboard.statRepos"), value: String(kpi.reposTotal), sub: kpi.reposWeekSub, icon: "repo" as const, highlight: false },
+      { label: t("student.dashboard.statCommitsWeek"), value: String(kpi.commitsWeek), sub: kpi.commitsWeekSub, icon: "commits" as const, highlight: false },
+      { label: t("student.dashboard.statCoursesActive"), value: String(kpi.coursesActive), sub: kpi.coursesSub, icon: "courses" as const, highlight: false },
       {
-        label: "Дедлайнов сегодня",
+        label: t("student.dashboard.statDeadlinesToday"),
         value: String(kpi.deadlinesToday),
         sub: kpi.deadlinesTodaySub,
         icon: "deadline" as const,
         highlight: kpi.deadlinesToday > 0,
       },
     ];
-  }, [kpi]);
+  }, [kpi, t]);
 
   const weekProgress = useMemo(() => {
     if (!activitySummary) {
@@ -291,11 +295,13 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
     };
   }, [activitySummary]);
 
-  const welcomeName = loading ? "…" : firstName || "студент";
-  const groupLine = groupName ? `Группа ${groupName}` : "Группа не указана";
+  const welcomeName = loading ? "…" : firstName || t("student.dashboard.studentFallback");
+  const groupLine = groupName
+    ? tp("student.dashboard.groupLine", { name: groupName })
+    : t("student.dashboard.groupMissing");
   const deadlinesLine = loading
-    ? "Загрузка дедлайнов…"
-    : `Сегодня ${deadlinesToday} ${pluralDeadlinesRu(deadlinesToday)}`;
+    ? t("student.deadline.loading")
+    : tp("student.deadline.todayCount", { n: deadlinesToday, word: pluralDeadlines(deadlinesToday, language) });
 
   return (
     <div className="w-full flex flex-col gap-3.5">
@@ -312,16 +318,39 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
         </div>
       ) : null}
 
+      {!loading && deadlinesToday > 0 ? (
+        <div
+          className="flex items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium"
+          style={{
+            backgroundColor: `${theme.danger}14`,
+            borderColor: `${theme.danger}55`,
+            color: theme.danger,
+          }}
+        >
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          <span>
+            {tp("student.deadline.todayCount", {
+              n: deadlinesToday,
+              word: pluralDeadlines(deadlinesToday, language),
+            })}
+            {deadlinesTodaySub ? ` — ${deadlinesTodaySub}` : ""}
+          </span>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold" style={{ color: theme.text }}>
-            👋 Привет, {welcomeName}!
+            {tp("student.dashboard.greeting", { name: welcomeName })}
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: theme.text2 }}>
             {groupLine} · {deadlinesLine}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
+          <p className="text-xs capitalize" style={{ color: theme.text3 }}>
+            {formatTodayLong(new Date(), language)}
+          </p>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -334,23 +363,23 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
               }}
             >
               <Plus className="h-3.5 w-3.5" />
-              Новый репозиторий
+              {t("student.dashboard.newRepo")}
             </button>
             <button
               type="button"
-              title="Импорт из GitHub — скоро"
+              title={t("student.dashboard.importGithubTitle")}
               onClick={() => setGithubHint(true)}
               disabled
               className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white opacity-60 cursor-not-allowed"
               style={{ backgroundColor: theme.accent }}
             >
               <Github className="h-3.5 w-3.5" />
-              Импорт из GitHub
+              {t("student.dashboard.importGithub")}
             </button>
           </div>
           {githubHint ? (
             <p className="text-[10px]" style={{ color: theme.text2 }}>
-              Импорт из GitHub появится в следующем обновлении
+              {t("student.dashboard.importGithubHint")}
             </p>
           ) : null}
         </div>
@@ -385,10 +414,10 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(280px,22rem)] 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,24rem)] gap-3.5">
         <div className="flex flex-col gap-3.5 min-w-0">
           <Card theme={theme}>
-            <CardHead title="Моя активность" subtitle="За последние 7 дней" theme={theme} />
+            <CardHead title={t("student.dashboard.activityTitle")} subtitle={t("student.dashboard.activitySubtitle")} theme={theme} />
             <div className="p-4">
               <div className="flex items-center justify-between text-sm mb-1.5">
-                <span style={{ color: theme.text }}>Прогресс недели</span>
+                <span style={{ color: theme.text }}>{t("student.dashboard.weekProgress")}</span>
                 <span className="font-semibold" style={{ color: theme.accent2 }}>
                   {loading ? "…" : `${weekProgress.percent}%`}
                 </span>
@@ -401,10 +430,10 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
                 {[
-                  { val: loading ? "…" : weekProgress.commits, label: "Коммитов" },
-                  { val: loading ? "…" : weekProgress.prsOpen, label: "PR открыто" },
-                  { val: loading ? "…" : weekProgress.submitted, label: "Сдано", color: theme.success },
-                  { val: loading ? "…" : weekProgress.inReview, label: "На ревью", color: theme.warning },
+                  { val: loading ? "…" : weekProgress.commits, label: t("student.dashboard.commits") },
+                  { val: loading ? "…" : weekProgress.prsOpen, label: t("student.dashboard.prsOpen") },
+                  { val: loading ? "…" : weekProgress.submitted, label: t("student.dashboard.submitted"), color: theme.success },
+                  { val: loading ? "…" : weekProgress.inReview, label: t("student.dashboard.inReview"), color: theme.warning },
                 ].map((item) => (
                   <div key={item.label} className="rounded-lg py-2 text-center" style={{ backgroundColor: theme.bg2 }}>
                     <p className="text-base font-semibold" style={{ color: item.color ?? theme.text }}>
@@ -420,13 +449,13 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
           </Card>
 
           <Card theme={theme}>
-            <CardHead title="Мои репозитории" theme={theme} action={{ label: "Все →", to: "/repositories" }} />
+            <CardHead title={t("student.dashboard.reposTitle")} theme={theme} action={{ label: t("student.dashboard.viewAll"), to: "/repositories" }} />
             {loading ? (
-              <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>Загрузка…</div>
+              <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>{t("common.loading")}</div>
             ) : recentRepos.length === 0 ? (
               <div className="px-3.5 py-6 text-center">
                 <p className="text-sm mb-2" style={{ color: theme.text2 }}>
-                  Нет репозиториев
+                  {t("student.dashboard.noRepos")}
                 </p>
                 <button
                   type="button"
@@ -439,7 +468,7 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
                   }}
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Создать репозиторий
+                  {t("student.dashboard.createRepo")}
                 </button>
               </div>
             ) : (
@@ -479,11 +508,12 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
                   {repo.commits_count != null ? (
                     <p className="text-xs" style={{ color: theme.text2 }}>
                       {repo.commits_count}
-                      {repo.commits_count >= 100 ? "+" : ""} коммитов
+                      {repo.commits_count >= 100 ? "+" : ""}{" "}
+                      {pluralWord(language, "student.plural.commits", repo.commits_count)}
                     </p>
                   ) : null}
                   <p className="text-[10px]" style={{ color: theme.text3 }}>
-                    {formatRelativeTime(repo.updated_at)}
+                    {formatRelativeTime(repo.updated_at, new Date(), language)}
                   </p>
                 </div>
                 <Badge variant={repo.visibility === "public" ? "ok" : "gray"} theme={theme}>
@@ -497,14 +527,14 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
           </Card>
 
           <Card theme={theme}>
-            <CardHead title="Последние действия" theme={theme} />
+            <CardHead title={t("student.dashboard.activityFeedTitle")} theme={theme} />
             {loading ? (
               <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>
-                Загрузка…
+                {t("common.loading")}
               </div>
             ) : activityFeed.length === 0 ? (
               <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>
-                Пока нет событий
+                {t("student.dashboard.noActivity")}
               </div>
             ) : (
               activityFeed.map((act) => {
@@ -546,14 +576,14 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
 
         <div className="flex flex-col gap-3.5">
           <Card theme={theme}>
-            <CardHead title="Дедлайны" theme={theme} action={{ label: "Все →", to: "/assignments" }} />
+            <CardHead title={t("student.dashboard.deadlinesTitle")} theme={theme} action={{ label: t("student.dashboard.viewAll"), to: "/assignments" }} />
             {loading ? (
               <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>
-                Загрузка…
+                {t("common.loading")}
               </div>
             ) : deadlines.length === 0 ? (
               <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>
-                Нет предстоящих дедлайнов
+                {t("student.dashboard.noUpcomingDeadlines")}
               </div>
             ) : (
               deadlines.slice(0, 8).map((dl) => (
@@ -589,11 +619,11 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
           </Card>
 
           <Card theme={theme}>
-            <CardHead title="Мои курсы" theme={theme} />
+            <CardHead title={t("student.dashboard.coursesTitle")} theme={theme} />
             {loading ? (
-              <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>Загрузка…</div>
+              <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>{t("common.loading")}</div>
             ) : courses.length === 0 ? (
-              <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>Нет курсов</div>
+              <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>{t("student.dashboard.noCourses")}</div>
             ) : (
               courses.map((course) => {
                 const avatar = courseAvatarStyle(course.id);
@@ -615,7 +645,7 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
                     {course.title}
                   </p>
                   <p className="text-[10px]" style={{ color: theme.text2 }}>
-                    {course.teacher_name} · {course.assignments_count} заданий
+                    {course.teacher_name} · {tp("student.dashboard.assignmentsCount", { n: course.assignments_count })}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
@@ -623,7 +653,7 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
                     {course.score ?? "—"}
                   </p>
                   <p className="text-[10px]" style={{ color: theme.text2 }}>
-                    из {course.score_max}
+                    {tp("student.dashboard.scoreOf", { max: course.score_max })}
                   </p>
                 </div>
               </Link>
@@ -634,22 +664,22 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
 
           <Card theme={theme}>
             <CardHead
-              title="Рейтинг в группе"
+              title={t("student.dashboard.rankingTitle")}
               subtitle={groupRanking?.group_name ?? groupName ?? undefined}
               theme={theme}
             />
             <div className="p-3.5">
               {loading ? (
                 <p className="text-sm text-center py-4" style={{ color: theme.text2 }}>
-                  Загрузка…
+                  {t("common.loading")}
                 </p>
               ) : !groupRanking?.group_name ? (
                 <p className="text-sm text-center py-4" style={{ color: theme.text2 }}>
-                  Укажите группу в профиле, чтобы видеть рейтинг
+                  {t("student.dashboard.rankingSetGroup")}
                 </p>
               ) : groupRanking.your_place == null ? (
                 <p className="text-sm text-center py-4" style={{ color: theme.text2 }}>
-                  В группе пока нет оценок для рейтинга
+                  {t("student.dashboard.rankingNoGrades")}
                 </p>
               ) : (
                 <>
@@ -662,10 +692,10 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-medium" style={{ color: theme.text }}>
-                        {groupRanking.your_name ?? firstName} (Вы)
+                        {groupRanking.your_name ?? firstName} {t("student.dashboard.you")}
                       </p>
                       <p className="text-[10px]" style={{ color: theme.text2 }}>
-                        {groupRanking.your_points ?? 0} очков
+                        {tp("student.dashboard.points", { n: groupRanking.your_points ?? 0 })}
                       </p>
                     </div>
                     {groupRanking.top_percent_label ? (
@@ -703,7 +733,9 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
                         >
                           {row.name}
                         </span>
-                        <span style={{ color: row.is_you ? theme.accent2 : theme.text2 }}>{row.points} очков</span>
+                        <span style={{ color: row.is_you ? theme.accent2 : theme.text2 }}>
+                          {tp("student.dashboard.points", { n: row.points })}
+                        </span>
                       </li>
                     ))}
                   </ul>

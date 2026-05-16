@@ -5,6 +5,10 @@ export interface NotificationSettings {
   push: boolean;
   assignments: boolean;
   grades: boolean;
+  teacher_pr_submitted?: boolean;
+  teacher_pr_stale?: boolean;
+  teacher_deadline_missed?: boolean;
+  teacher_daily_digest?: boolean;
 }
 
 export interface UserSettings {

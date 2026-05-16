@@ -7,6 +7,7 @@ import { globalSearch } from "../api/searchApi";
 import { getServiceStatus } from "../api/adminApi";
 import { getTheme } from "../theme";
 import NotificationBell from "./NotificationBell";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 import type { UserRole } from "../api/types";
 
 // Status indicator component
@@ -41,6 +42,7 @@ interface AdminHeaderProps {
 
 export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: AdminHeaderProps) {
   const navigate = useNavigate();
+  const { t } = useUserPreferences();
 
   const [userName, setUserName] = useState("Admin");
   const [userRole, setUserRole] = useState<UserRole | null>(null);
@@ -169,7 +171,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Поиск по системе..."
+                placeholder={t("header.searchAdmin")}
                 className="w-full h-9 pl-10 pr-4 rounded-lg text-sm outline-none transition-all duration-200 border focus:ring-2 focus:ring-blue-500/50"
                 style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
               />
@@ -180,8 +182,8 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
           <div className="flex items-center gap-2">
             {/* System Status */}
             <div className="hidden xl:flex items-center gap-3 mr-2">
-              <StatusIndicator status={systemStatus.api} label="API" isDarkTheme={isDarkTheme} />
-              <StatusIndicator status={systemStatus.database} label="БД" isDarkTheme={isDarkTheme} />
+              <StatusIndicator status={systemStatus.api} label={t("header.apiStatus")} isDarkTheme={isDarkTheme} />
+              <StatusIndicator status={systemStatus.database} label={t("header.dbStatus")} isDarkTheme={isDarkTheme} />
             </div>
 
             {/* Theme Toggle */}
@@ -189,7 +191,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
               onClick={onToggleTheme}
               className="flex items-center justify-center w-9 h-9 rounded-lg transition-colors mr-1"
               style={{ color: theme.text2 }}
-              title={isDarkTheme ? "Переключить на светлую тему" : "Переключить на темную тему"}
+              title={isDarkTheme ? t("header.themeToLight") : t("header.themeToDark")}
             >
               {isDarkTheme ? (
                 <Sun className="h-5 w-5" />
@@ -221,7 +223,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
                 )}
                 <div className="hidden md:flex flex-col items-start">
                   <span className="text-sm font-medium leading-tight transition-colors" style={{ color: theme.text }}>{userName}</span>
-                  <span className="text-[10px] leading-tight transition-colors" style={{ color: theme.text2 }}>Администратор</span>
+                  <span className="text-[10px] leading-tight transition-colors" style={{ color: theme.text2 }}>{t("roles.admin")}</span>
                 </div>
                 <ChevronDown className={`h-4 w-4 transition-transform ${profileMenuOpen ? "rotate-180" : ""}`} style={{ color: theme.text2 }} />
               </button>
@@ -241,7 +243,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
                     style={{ color: theme.text2 }}
                   >
                     <User className="h-4 w-4" />
-                    Профиль
+                    {t("header.profile")}
                   </Link>
 
                   <Link
@@ -251,7 +253,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
                     style={{ color: theme.text2 }}
                   >
                     <Shield className="h-4 w-4" />
-                    Настройки безопасности
+                    {t("header.securitySettings")}
                   </Link>
 
                   <Link
@@ -261,7 +263,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
                     style={{ color: theme.text2 }}
                   >
                     <Activity className="h-4 w-4" />
-                    Мониторинг
+                    {t("header.monitoring")}
                   </Link>
 
                   <div className="border-t my-1" style={{ borderColor: theme.border }} />
@@ -272,7 +274,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
                     style={{ color: theme.danger }}
                   >
                     <LogOut className="h-4 w-4" />
-                    Выйти
+                    {t("header.logout")}
                   </button>
                 </div>
               )}

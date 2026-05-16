@@ -28,6 +28,7 @@ import { displayLanguageLabel } from "../utils/codeLanguage";
 import RepoCreateFileModal from "./repo/RepoCreateFileModal";
 import RepoNavTabs from "./repo/RepoNavTabs";
 import RepoProjectSidebar from "./repo/RepoProjectSidebar";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 import { formatRelativeTime } from "../utils/formatRelativeTime";
 import { getTheme, type ThemeColors } from "../theme";
 
@@ -165,6 +166,8 @@ export default function RepoFileBrowser({
   externalSummaryLoading,
 }: RepoFileBrowserProps) {
   const theme = getTheme(isDarkTheme);
+  const { t, tp, language } = useUserPreferences();
+  const sortLocale = language === "en" ? "en" : "ru";
 
   const [branch, setBranch] = useState("main");
   const [branches, setBranches] = useState<{ name: string; is_default: boolean }[]>([]);
@@ -274,16 +277,16 @@ export default function RepoFileBrowser({
       setEntries(
         [...list].sort((a, b) => {
           if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-          return a.name.localeCompare(b.name, "ru");
+          return a.name.localeCompare(b.name, sortLocale);
         }),
       );
     } catch (e) {
       setEntries([]);
-      setDirError(e instanceof Error ? e.message : "Не удалось загрузить файлы");
+      setDirError(e instanceof Error ? e.message : t("repo.browser.loadFilesFailed"));
     } finally {
       setDirLoading(false);
     }
-  }, [repoId, currentPath, branch]);
+  }, [repoId, currentPath, branch, t, sortLocale]);
 
   useEffect(() => {
     void refreshDirectory();
@@ -338,7 +341,7 @@ export default function RepoFileBrowser({
       const res = await getStudentRepoFileContent(repoId, filepath, branch);
       setFileContent(res.content);
     } catch (e) {
-      setFileError(e instanceof Error ? e.message : "Не удалось открыть файл");
+      setFileError(e instanceof Error ? e.message : t("repo.browser.openFileFailed"));
     } finally {
       setFileLoading(false);
     }
@@ -469,8 +472,8 @@ export default function RepoFileBrowser({
         >
           <GitBranch className="h-3 w-3" style={{ color: theme.success }} />
           <span>
-            {filteredEntries.length} в каталоге
-            {localFilter ? ` (отфильтровано из ${entries.length})` : ""}
+            {tp("repo.browser.entriesInDir", { n: filteredEntries.length })}
+            {localFilter ? tp("repo.browser.filteredFrom", { total: entries.length }) : ""}
           </span>
         </div>
       )}
@@ -479,23 +482,23 @@ export default function RepoFileBrowser({
         className="hidden sm:grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto] gap-3 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide border-b"
         style={{ borderColor: theme.border, color: theme.text3, backgroundColor: theme.bg }}
       >
-        <span>Имя</span>
-        <span>Последний коммит</span>
-        <span className="text-right">Обновлено</span>
+        <span>{t("repo.browser.colName")}</span>
+        <span>{t("repo.browser.colLastCommit")}</span>
+        <span className="text-right">{t("repo.browser.colUpdated")}</span>
       </div>
       <div
         className="sm:hidden grid grid-cols-[1fr_auto] gap-4 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide border-b"
         style={{ borderColor: theme.border, color: theme.text3, backgroundColor: theme.bg }}
       >
-        <span>Имя</span>
-        <span className="text-right">Обновлено</span>
+        <span>{t("repo.browser.colName")}</span>
+        <span className="text-right">{t("repo.browser.colUpdated")}</span>
       </div>
 
       <div>
         {dirLoading ? (
           <div className="flex items-center justify-center gap-2 py-14 text-sm" style={{ color: theme.text2 }}>
             <Loader2 className="h-5 w-5 animate-spin" />
-            Загрузка…
+            {t("repo.browser.loading")}
           </div>
         ) : dirError ? (
           <p className="px-4 py-10 text-sm" style={{ color: theme.danger }}>
@@ -503,7 +506,11 @@ export default function RepoFileBrowser({
           </p>
         ) : filteredEntries.length === 0 ? (
           <p className="px-4 py-10 text-sm text-center" style={{ color: theme.text2 }}>
-            {localFilter ? "Нет совпадений в этой папке" : isRepoHome ? "Репозиторий пуст" : "Папка пуста"}
+            {localFilter
+              ? t("repo.browser.noMatchesInFolder")
+              : isRepoHome
+                ? t("repo.browser.emptyRepo")
+                : t("repo.browser.emptyFolder")}
           </p>
         ) : (
           filteredEntries.map((entry) => {
@@ -580,7 +587,7 @@ export default function RepoFileBrowser({
           {readmeLoading ? (
             <div className="flex items-center gap-2 text-sm" style={{ color: theme.text2 }}>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Загружаем README…
+              {t("repo.browser.loadingReadme")}
             </div>
           ) : readmeContent ? (
             <RepoMarkdown content={readmeContent} theme={theme} />
@@ -627,7 +634,7 @@ export default function RepoFileBrowser({
         {fileLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-sm" style={{ color: theme.text2 }}>
             <Loader2 className="h-5 w-5 animate-spin" />
-            Читаем файл…
+            {t("repo.browser.readingFile")}
           </div>
         ) : fileError ? (
           <p className="px-4 py-8 text-sm" style={{ color: theme.danger }}>
@@ -639,7 +646,7 @@ export default function RepoFileBrowser({
           </div>
         ) : isBinaryLikePath(selectedFile!) ? (
           <p className="px-4 py-8 text-sm" style={{ color: theme.text2 }}>
-            Бинарный файл — просмотр и линтер недоступны. Скачайте через Gitea или git clone.
+            {t("repo.browser.binaryPreviewUnavailable")}
           </p>
         ) : (
           <RepoMonacoViewer

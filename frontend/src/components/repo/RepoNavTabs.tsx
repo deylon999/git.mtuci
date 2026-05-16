@@ -7,6 +7,7 @@ import {
   Settings,
 } from "lucide-react";
 import type { ThemeColors } from "../../theme";
+import { useUserPreferences } from "../../context/UserPreferencesContext";
 
 export type RepoNavTabId = "code" | "issues" | "pulls" | "wiki" | "settings";
 
@@ -20,12 +21,13 @@ interface RepoNavTabsProps {
 
 const TABS: {
   id: RepoNavTabId;
-  label: string;
+  labelKey?: string;
+  label?: string;
   icon: typeof Code2;
   segment: string;
   countKey?: "issues" | "pulls";
 }[] = [
-  { id: "code", label: "Код", icon: Code2, segment: "code" },
+  { id: "code", labelKey: "repo.tabs.code", icon: Code2, segment: "code" },
   { id: "issues", label: "Issues", icon: CircleDot, segment: "issues", countKey: "issues" },
   { id: "pulls", label: "Pull requests", icon: GitPullRequest, segment: "pulls", countKey: "pulls" },
   { id: "wiki", label: "Wiki", icon: BookOpen, segment: "wiki" },
@@ -39,6 +41,7 @@ export default function RepoNavTabs({
   openIssuesCount,
   openPrCount,
 }: RepoNavTabsProps) {
+  const { t } = useUserPreferences();
   const counts: Record<string, number | null | undefined> = {
     issues: openIssuesCount,
     pulls: openPrCount,
@@ -48,7 +51,7 @@ export default function RepoNavTabs({
     <nav
       className="flex flex-wrap items-center gap-0 border-b overflow-x-auto"
       style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}
-      aria-label="Разделы репозитория"
+      aria-label={t("repo.tabs.sectionsAria")}
     >
       {TABS.map((tab) => {
         const Icon = tab.icon;
@@ -79,7 +82,7 @@ export default function RepoNavTabs({
             }}
           >
             <Icon className="h-4 w-4 shrink-0" />
-            {tab.label}
+            {tab.labelKey ? t(tab.labelKey) : tab.label}
             {badge}
           </Link>
         );

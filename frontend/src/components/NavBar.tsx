@@ -5,6 +5,7 @@ import { getMe, invalidateMeCache } from "../api/authApi";
 import { getTheme } from "../theme";
 import { pageGutterClass } from "../layout/pageLayout";
 import type { UserRole } from "../api/types";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface NavBarProps {
   isDarkTheme?: boolean;
@@ -13,6 +14,7 @@ interface NavBarProps {
 
 export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarProps) {
   const navigate = useNavigate();
+  const { t } = useUserPreferences();
   const [userName, setUserName] = useState("User");
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -108,7 +110,7 @@ export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarPro
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Поиск..."
+              placeholder={t("admin.navbar.search")}
               className="w-full rounded-md px-3 py-1.5 pl-9 text-sm outline-none transition border focus:ring-2 focus:ring-blue-500/50"
               style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
             />
@@ -135,7 +137,7 @@ export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarPro
               >
                 {/* ЗАМЕНИ src НА ИКОНКУ КУРСОВ */}
                 <img src="/icon-courses.png" alt="" className="h-5 w-5" />
-                Курсы
+                {t("admin.navbar.courses")}
               </Link>
               <Link
                 to="/dashboard"
@@ -144,7 +146,7 @@ export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarPro
               >
                 {/* ЗАМЕНИ src НА ИКОНКУ ДАШБОРДА */}
                 <img src="/icon-dashboard.png" alt="" className="h-5 w-5" />
-                Дашборд
+                {t("admin.navbar.dashboard")}
               </Link>
             </nav>
           )}
@@ -154,7 +156,7 @@ export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarPro
             onClick={handleToggleTheme}
             className="flex h-8 w-8 items-center justify-center rounded-full transition"
             style={{ backgroundColor: theme.bg3, color: theme.text }}
-            title={isDarkTheme ? "Светлая тема" : "Темная тема"}
+            title={isDarkTheme ? t("header.themeToLight") : t("header.themeToDark")}
           >
             {isDarkTheme ? "🌙" : "☀️"}
           </button>
@@ -190,7 +192,7 @@ export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarPro
           {menuOpen && (
             <div className="absolute right-0 mt-1 w-48 rounded-md border py-1 shadow-lg" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
               <div className="border-b px-4 py-2 text-sm" style={{ borderColor: theme.border, color: theme.text2 }}>
-                Вошли как <span className="font-medium" style={{ color: theme.text }}>{userName}</span>
+                {t("admin.navbar.loggedInAs")} <span className="font-medium" style={{ color: theme.text }}>{userName}</span>
               </div>
               <Link
                 to="/profile"
@@ -198,7 +200,7 @@ export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarPro
                 style={{ color: theme.text2, backgroundColor: theme.hoverBg }}
                 onClick={() => setMenuOpen(false)}
               >
-                Профиль
+                {t("admin.navbar.profile")}
               </Link>
               <div className="border-t my-1" style={{ borderColor: theme.border }}></div>
               <button
@@ -206,7 +208,7 @@ export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarPro
                 className="w-full px-4 py-2 text-left text-sm transition-colors"
                 style={{ color: theme.danger, backgroundColor: theme.hoverBg }}
               >
-                Выйти
+                {t("admin.navbar.logout")}
               </button>
             </div>
           )}

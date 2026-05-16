@@ -45,6 +45,7 @@ from app.services.assignment_service import (
     list_assignments_for_student,
     list_assignments_for_teacher,
 )
+from app.services.notification_service import notify_grade_posted
 from app.services.course_service import (
     create_course,
     delete_teacher_course,
@@ -799,6 +800,14 @@ async def grade_submission_endpoint(
     if last_commit_at and not submission.submitted_at:
         submission.submitted_at = last_commit_at
 
+    await session.flush()
+    await notify_grade_posted(
+        session,
+        student=student,
+        assignment=assignment,
+        course_title=course.title,
+        submission=submission,
+    )
     await session.commit()
     await session.refresh(submission)
 

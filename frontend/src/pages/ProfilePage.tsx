@@ -3,41 +3,59 @@ import type { FormEvent } from "react";
 import { changeMyPassword, getMe, uploadAvatarWithMode } from "../api/authApi";
 import { getMyRepositories } from "../api/repositoriesApi";
 import { getMyCommits, getTotalUsers, getLogs } from "../api/adminApi";
+import {
+  getStudentActivityFeed,
+  getStudentActivitySummary,
+  getStudentGroupRanking,
+  getStudentRepositories,
+  type StudentActivityFeedItem,
+  type StudentActivitySummary,
+  type StudentGroupRanking,
+} from "../api/studentDashboardApi";
+import { getTeacherDashboardFull, getTeacherStudents } from "../api/teacherDashboardApi";
 import { getTheme } from "../theme";
 import type { UserRead, LogEntry } from "../api/types";
 import AvatarUploadModal from "../components/AvatarUploadModal";
 import { Mail } from "lucide-react";
+import { useUserPreferences } from "../context/UserPreferencesContext";
+import { pluralWord } from "../i18n/plural";
+import type { Locale } from "../i18n";
 
 interface ProfilePageProps {
   isDarkTheme?: boolean;
 }
 
-// Helper для форматирования последнего входа
-function formatLastLogin(dateStr: string | null): string {
+function formatLastLogin(
+  dateStr: string | null,
+  tp: (key: string, params?: Record<string, string | number | null | undefined>) => string,
+  dateLocale: string,
+): string {
   if (!dateStr) return "—";
 
   const date = new Date(dateStr);
   const now = new Date();
-
-  // Compare dates in Moscow timezone
   const moscowDate = new Date(date.toLocaleString("en-US", { timeZone: "Europe/Moscow" }));
   const moscowNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Moscow" }));
-  const isToday = moscowDate.getDate() === moscowNow.getDate() &&
-                  moscowDate.getMonth() === moscowNow.getMonth() &&
-                  moscowDate.getFullYear() === moscowNow.getFullYear();
+  const isToday =
+    moscowDate.getDate() === moscowNow.getDate() &&
+    moscowDate.getMonth() === moscowNow.getMonth() &&
+    moscowDate.getFullYear() === moscowNow.getFullYear();
 
-  const timeStr = date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
+  const timeStr = date.toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
 
   if (isToday) {
-    return `Сегодня, ${timeStr}`;
+    return tp("admin.profile.todayAt", { time: timeStr });
   }
 
-  const dateStr_formatted = date.toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" });
-  return `${dateStr_formatted}, ${timeStr}`;
+  const dateFormatted = date.toLocaleDateString(dateLocale, { timeZone: "Europe/Moscow" });
+  return `${dateFormatted}, ${timeStr}`;
 }
 
-// Helper для форматирования времени действия
-function formatActionTime(dateStr: string): string {
+function formatActionTime(
+  dateStr: string,
+  t: (key: string) => string,
+  tp: (key: string, params?: Record<string, string | number | null | undefined>) => string,
+): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -45,33 +63,51 @@ function formatActionTime(dateStr: string): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return "Только что";
-  if (diffMins < 60) return `${diffMins} мин назад`;
-  if (diffHours < 24) return `${diffHours} час${diffHours > 1 ? (diffHours < 5 ? "а" : "ов") : ""} назад`;
-  if (diffDays === 1) return "Вчера";
-  return `${diffDays} дн${diffDays > 1 ? (diffDays < 5 ? "я" : "ей") : ""} назад`;
+  if (diffMins < 1) return t("admin.profile.justNow");
+  if (diffMins < 60) return tp("admin.profile.minutesAgo", { n: diffMins });
+  if (diffHours < 24) return tp("admin.profile.hoursAgo", { n: diffHours });
+  if (diffDays === 1) return t("admin.profile.yesterday");
+  return tp("admin.profile.daysAgo", { n: diffDays });
 }
 
-// Helper для получения описания действия из лога
-function getActionDescription(log: LogEntry): { title: string; subtitle: string } {
+function getActionDescription(log: LogEntry, t: (key: string) => string): { title: string; subtitle: string } {
   const sourceLabels: Record<string, string> = {
-    auth: "Авторизация",
-    repositories: "Репозитории",
-    webhooks: "Webhooks",
-    admin: "Админка",
+    auth: t("admin.profile.logAuth"),
+    repositories: t("admin.profile.logRepositories"),
+    webhooks: t("admin.profile.logWebhooks"),
+    admin: t("admin.profile.logAdmin"),
     gitea: "Gitea",
-    permissions: "Права доступа",
-    courses: "Курсы",
+    permissions: t("admin.profile.logPermissions"),
+    courses: t("admin.profile.logCourses"),
   };
 
   const title = log.message || sourceLabels[log.source] || log.source;
-  const subtitle = log.level === "ERROR" ? "Ошибка" : log.level === "WARNING" ? "Предупреждение" : "Успешно";
+  const subtitle =
+    log.level === "ERROR"
+      ? t("admin.profile.logError")
+      : log.level === "WARNING"
+        ? t("admin.profile.logWarning")
+        : t("admin.profile.logSuccess");
 
   return { title, subtitle };
 }
 
+function roleLabel(role: string | undefined, t: (key: string) => string): string {
+  if (role === "admin") return t("admin.profile.roleAdmin");
+  if (role === "teacher") return t("admin.profile.roleTeacher");
+  if (role === "laborant") return t("admin.profile.roleLaborant");
+  if (role === "student") return t("admin.profile.roleStudent");
+  return t("admin.profile.roleUser");
+}
+
+function countLabel(locale: Locale, prefix: string, n: number): string {
+  return pluralWord(locale, `admin.profile.${prefix}`, n);
+}
+
 
 export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
+  const { t, tp, language } = useUserPreferences();
+  const dateLocale = language === "en" ? "en-US" : "ru-RU";
   const [me, setMe] = useState<UserRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +120,11 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [stats, setStats] = useState({ repositories: 0, commits: 0, users: 0 });
   const [recentActions, setRecentActions] = useState<LogEntry[]>([]);
+  const [studentSummary, setStudentSummary] = useState<StudentActivitySummary | null>(null);
+  const [studentFeed, setStudentFeed] = useState<StudentActivityFeedItem[]>([]);
+  const [groupRanking, setGroupRanking] = useState<StudentGroupRanking | null>(null);
+  const [teacherDepartment, setTeacherDepartment] = useState<string | null>(null);
+  const [teacherAverageGrade, setTeacherAverageGrade] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -108,7 +149,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
         fileInputRef.current.value = "";
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить аватар");
+      setError(err instanceof Error ? err.message : t("admin.profile.avatarLoadError"));
     } finally {
       setAvatarLoading(false);
     }
@@ -127,23 +168,65 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
     async function loadMe() {
       setLoading(true);
       try {
-        const [meData, repos, myCommits, totalUsers, logsData] = await Promise.all([
-          getMe(),
-          getMyRepositories().catch(() => []),
-          getMyCommits().catch(() => ({ commits: 0, repositories: 0 })),
-          getTotalUsers().catch(() => ({ total_users: 0 })),
-          getLogs({ date_from: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() }, { limit: 10, offset: 0 }).catch(() => ({ logs: [], total: 0 })),
-        ]);
-        if (!cancelled) {
-          setMe(meData);
-          setStats({
-            repositories: repos.length,
-            commits: myCommits.commits,
-            users: totalUsers.total_users,
-          });
-          // Filter logs for current user
-          const userLogs = logsData.logs.filter(log => log.user_id === meData.id).slice(0, 5);
-          setRecentActions(userLogs);
+        const meData = await getMe();
+        if (cancelled) return;
+        setMe(meData);
+
+        if (meData.role === "teacher" || meData.role === "laborant") {
+          const [dash, studentsSummary] = await Promise.all([
+            getTeacherDashboardFull().catch(() => null),
+            getTeacherStudents(1).catch(() => null),
+          ]);
+          if (!cancelled && dash) {
+            setTeacherDepartment(dash.department);
+            setTeacherAverageGrade(studentsSummary?.average_grade ?? null);
+            setStats({
+              repositories: dash.active_courses_count,
+              commits: dash.pending_grading,
+              users: dash.students_total,
+            });
+            setRecentActions([]);
+          }
+        } else if (meData.role === "student") {
+          const [reposData, summary, feed, ranking] = await Promise.all([
+            getStudentRepositories().catch(() => null),
+            getStudentActivitySummary().catch(() => null),
+            getStudentActivityFeed(8).catch(() => []),
+            getStudentGroupRanking().catch(() => null),
+          ]);
+          if (!cancelled) {
+            setStats({
+              repositories: reposData?.stats.total ?? 0,
+              commits: summary?.commits ?? 0,
+              users: summary?.submitted ?? 0,
+            });
+            setStudentSummary(summary);
+            setStudentFeed(feed);
+            setGroupRanking(ranking);
+            setRecentActions([]);
+          }
+        } else {
+          const [repos, myCommits, totalUsers, logsData] = await Promise.all([
+            getMyRepositories().catch(() => []),
+            getMyCommits().catch(() => ({ commits: 0, repositories: 0 })),
+            getTotalUsers().catch(() => ({ total_users: 0 })),
+            getLogs(
+              { date_from: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
+              { limit: 10, offset: 0 },
+            ).catch(() => ({ logs: [], total: 0 })),
+          ]);
+          if (!cancelled) {
+            setStats({
+              repositories: repos.length,
+              commits: myCommits.commits,
+              users: totalUsers.total_users,
+            });
+            const userLogs = logsData.logs.filter((log) => log.user_id === meData.id).slice(0, 5);
+            setRecentActions(userLogs);
+            setStudentSummary(null);
+            setStudentFeed([]);
+            setGroupRanking(null);
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -159,11 +242,11 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
     setSuccess(null);
 
     if (newPassword !== repeatNewPassword) {
-      setError("Новые пароли не совпадают.");
+      setError(t("admin.profile.passwordMismatch"));
       return;
     }
     if (newPassword.length < 8) {
-      setError("Новый пароль должен быть не короче 8 символов.");
+      setError(t("admin.profile.passwordTooShort"));
       return;
     }
 
@@ -173,24 +256,25 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
       setOldPassword("");
       setNewPassword("");
       setRepeatNewPassword("");
-      setSuccess("Пароль успешно изменен.");
+      setSuccess(t("admin.profile.passwordChanged"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось сменить пароль");
+      setError(err instanceof Error ? err.message : t("admin.profile.passwordChangeError"));
     } finally {
       setSaving(false);
     }
   }
 
-  // Бейдж роли
   const roleBadge = me?.role === "admin"
-    ? { text: "Администратор", bg: "rgba(239, 68, 68, 0.2)", color: "#ef4444" }
+    ? { text: t("admin.profile.roleAdmin"), bg: "rgba(239, 68, 68, 0.2)", color: "#ef4444" }
     : me?.role === "teacher"
-    ? { text: "Преподаватель", bg: "rgba(37, 99, 235, 0.2)", color: "#2563eb" }
+    ? { text: t("admin.profile.roleTeacher"), bg: "rgba(37, 99, 235, 0.2)", color: "#2563eb" }
     : me?.role === "laborant"
-    ? { text: "Лаборант", bg: "rgba(168, 85, 247, 0.2)", color: "#a855f7" }
-    : { text: "Студент", bg: "rgba(34, 197, 94, 0.2)", color: "#22c55e" };
+    ? { text: t("admin.profile.roleLaborant"), bg: "rgba(168, 85, 247, 0.2)", color: "#a855f7" }
+    : { text: t("admin.profile.roleStudent"), bg: "rgba(34, 197, 94, 0.2)", color: "#22c55e" };
 
   const theme = getTheme(isDarkTheme);
+  const isStudent = me?.role === "student";
+  const isTeacher = me?.role === "teacher" || me?.role === "laborant";
 
   return (
     <>
@@ -209,15 +293,15 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
       {/* Заголовок */}
       <div style={{ marginBottom: "16px" }}>
         <h1 style={{ color: theme.text, fontSize: "24px", fontWeight: "700", marginBottom: "4px" }}>
-          Профиль
+          {t("admin.profile.title")}
         </h1>
         <p style={{ color: theme.text2, fontSize: "12px" }}>
-          Управление аккаунтом и настройки безопасности
+          {t("admin.profile.subtitle")}
         </p>
       </div>
 
       {loading ? (
-        <div style={{ color: theme.text2 }}>Загрузка...</div>
+        <div style={{ color: theme.text2 }}>{t("common.loading")}</div>
       ) : me ? (
         <>
         {/* Две колонки */}
@@ -281,7 +365,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                   onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
                   onMouseLeave={(e) => (e.currentTarget.style.opacity = "0")}
                 >
-                  <span style={{ fontSize: "10px", color: "#fff" }}>Изменить</span>
+                  <span style={{ fontSize: "10px", color: "#fff" }}>{t("admin.profile.editAvatar")}</span>
                 </div>
               </div>
               {/* Скрытый input для загрузки */}
@@ -342,7 +426,9 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                   {stats.repositories}
                 </div>
                 <div style={{ color: theme.text2, fontSize: "10px" }}>
-                  {stats.repositories === 1 ? "Репозиторий" : stats.repositories >= 2 && stats.repositories <= 4 ? "Репозитория" : "Репозиториев"}
+                  {isTeacher
+                    ? t("admin.profile.coursesMany")
+                    : countLabel(language, "repo", stats.repositories)}
                 </div>
               </div>
 
@@ -354,10 +440,14 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 textAlign: "center"
               }}>
                 <div style={{ color: theme.text, fontSize: "18px", fontWeight: "700", marginBottom: "2px" }}>
-                  {stats.users}
+                  {isStudent ? (studentSummary?.submitted ?? stats.users) : stats.users}
                 </div>
                 <div style={{ color: theme.text2, fontSize: "10px" }}>
-                  {stats.users === 1 ? "Пользователь" : stats.users >= 2 && stats.users <= 4 ? "Пользователя" : "Пользователей"}
+                  {isStudent
+                    ? t("admin.profile.worksSubmitted")
+                    : isTeacher
+                      ? t("admin.profile.studentsMany")
+                      : countLabel(language, "user", stats.users)}
                 </div>
               </div>
 
@@ -372,7 +462,9 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                   {stats.commits}
                 </div>
                 <div style={{ color: theme.text2, fontSize: "10px" }}>
-                  {stats.commits === 1 ? "Коммит" : stats.commits >= 2 && stats.commits <= 4 && stats.commits !== 0 ? "Коммита" : "Коммитов"}
+                  {isTeacher
+                    ? t("admin.profile.pendingReview")
+                    : countLabel(language, "commit", stats.commits)}
                 </div>
               </div>
             </div>
@@ -394,10 +486,10 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
               marginBottom: "12px"
             }}>
               <h4 style={{ color: theme.text, fontSize: "12px", fontWeight: "600", margin: 0 }}>
-                ИНФОРМАЦИЯ
+                {t("admin.profile.infoSection")}
               </h4>
               <span style={{ color: theme.text2, fontSize: "10px" }}>
-                Только чтение
+                {t("admin.profile.readOnly")}
               </span>
             </div>
 
@@ -411,7 +503,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 padding: "8px 0",
                 borderBottom: `1px solid ${theme.border}`
               }}>
-                <span style={{ color: theme.text2, fontSize: "11px" }}>Имя</span>
+                <span style={{ color: theme.text2, fontSize: "11px" }}>{t("admin.profile.fieldName")}</span>
                 <span style={{ color: theme.text, fontSize: "11px" }}>{me?.full_name || "-"}</span>
               </div>
 
@@ -435,11 +527,37 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 padding: "8px 0",
                 borderBottom: `1px solid ${theme.border}`
               }}>
-                <span style={{ color: theme.text2, fontSize: "11px" }}>Роль</span>
+                <span style={{ color: theme.text2, fontSize: "11px" }}>{t("admin.profile.fieldRole")}</span>
                 <span style={{ color: theme.text, fontSize: "11px" }}>
-                  {me?.role === "admin" ? "Администратор" : "Пользователь"}
+                  {roleLabel(me?.role, t)}
                 </span>
               </div>
+
+              {isTeacher && teacherDepartment ? (
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "8px 0",
+                  borderBottom: `1px solid ${theme.border}`,
+                }}>
+                  <span style={{ color: theme.text2, fontSize: "11px" }}>{t("admin.profile.fieldDepartment")}</span>
+                  <span style={{ color: theme.text, fontSize: "11px" }}>{teacherDepartment}</span>
+                </div>
+              ) : null}
+
+              {isTeacher && teacherAverageGrade != null ? (
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "8px 0",
+                  borderBottom: `1px solid ${theme.border}`,
+                }}>
+                  <span style={{ color: theme.text2, fontSize: "11px" }}>{t("admin.profile.fieldAvgGrade")}</span>
+                  <span style={{ color: theme.text, fontSize: "11px" }}>{teacherAverageGrade}</span>
+                </div>
+              ) : null}
 
               {/* Дата регистрации */}
               <div style={{ 
@@ -449,8 +567,8 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 padding: "8px 0",
                 borderBottom: `1px solid ${theme.border}`
               }}>
-                <span style={{ color: theme.text2, fontSize: "11px" }}>Дата регистрации</span>
-                <span style={{ color: theme.text, fontSize: "11px" }}>{me?.created_at ? new Date(me.created_at).toLocaleDateString("ru-RU") : "—"}</span>
+                <span style={{ color: theme.text2, fontSize: "11px" }}>{t("admin.profile.registeredAt")}</span>
+                <span style={{ color: theme.text, fontSize: "11px" }}>{me?.created_at ? new Date(me.created_at).toLocaleDateString(dateLocale) : "—"}</span>
               </div>
 
               {/* Последний вход */}
@@ -461,8 +579,8 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 padding: "8px 0",
                 borderBottom: `1px solid ${theme.border}`
               }}>
-                <span style={{ color: theme.text2, fontSize: "11px" }}>Последний вход</span>
-                <span style={{ color: theme.text, fontSize: "11px" }}>{formatLastLogin(me?.last_login || null)}</span>
+                <span style={{ color: theme.text2, fontSize: "11px" }}>{t("admin.profile.lastLogin")}</span>
+                <span style={{ color: theme.text, fontSize: "11px" }}>{formatLastLogin(me?.last_login || null, tp, dateLocale)}</span>
               </div>
 
               {/* Статус */}
@@ -472,17 +590,61 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 alignItems: "center",
                 padding: "8px 0 0 0"
               }}>
-                <span style={{ color: theme.text2, fontSize: "11px" }}>Статус</span>
+                <span style={{ color: theme.text2, fontSize: "11px" }}>{t("admin.profile.fieldStatus")}</span>
                 <span style={{
                   color: me?.is_blocked ? "#ef4444" : "#22c55e",
                   fontSize: "11px",
                   fontWeight: "500"
                 }}>
-                  {me?.is_blocked ? "Заблокирован" : "Активен"}
+                  {me?.is_blocked ? t("admin.profile.statusBlocked") : t("admin.profile.statusActive")}
                 </span>
               </div>
             </div>
           </div>
+
+          {isStudent && groupRanking ? (
+            <div
+              style={{
+                backgroundColor: theme.bg3,
+                border: `1px solid ${theme.border}`,
+                borderRadius: "12px",
+                padding: "16px 20px",
+              }}
+            >
+              <h4 style={{ color: theme.text, fontSize: "12px", fontWeight: "600", margin: "0 0 8px 0" }}>
+                {t("admin.profile.groupRankingTitle")} {groupRanking.group_name ? `· ${groupRanking.group_name}` : ""}
+              </h4>
+              {groupRanking.your_place != null ? (
+                <p style={{ color: theme.text2, fontSize: "11px", marginBottom: "8px" }}>
+                  {t("admin.profile.groupPlace")}: <strong style={{ color: theme.text }}>{groupRanking.your_place}</strong>
+                  {groupRanking.your_points != null ? ` · ${groupRanking.your_points} ${t("admin.profile.groupPoints")}` : ""}
+                  {groupRanking.top_percent_label ? ` · ${groupRanking.top_percent_label}` : ""}
+                </p>
+              ) : (
+                <p style={{ color: theme.text2, fontSize: "11px", marginBottom: "8px" }}>
+                  {t("admin.profile.rankingUnavailable")}
+                </p>
+              )}
+              {groupRanking.entries.slice(0, 5).map((e) => (
+                <div
+                  key={e.student_id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: "11px",
+                    padding: "3px 0",
+                    color: e.is_you ? theme.accent2 : theme.text2,
+                    fontWeight: e.is_you ? 600 : 400,
+                  }}
+                >
+                  <span>
+                    {e.place}. {e.name}
+                  </span>
+                  <span>{e.points}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
           </div>
 
           {/* Правая колонка — обёртка */}
@@ -495,19 +657,19 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
               padding: "20px"
             }}>
               <h3 style={{ color: theme.text, fontSize: "16px", fontWeight: "600", marginBottom: "16px" }}>
-                Смена пароля
+                {t("admin.profile.changePasswordTitle")}
               </h3>
 
               <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <div>
                 <label style={{ color: theme.text2, fontSize: "12px", display: "block", marginBottom: "4px" }}>
-                  Старый пароль
+                  {t("admin.profile.oldPasswordLabel")}
                 </label>
                 <input
                   type="password"
                   value={oldPassword}
                   onChange={(e) => setOldPassword(e.target.value)}
-                  placeholder="Введите текущий пароль"
+                  placeholder={t("admin.profile.currentPassword")}
                   style={{
                     width: "100%",
                     backgroundColor: theme.inputBg,
@@ -524,13 +686,13 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
 
               <div>
                 <label style={{ color: theme.text2, fontSize: "12px", display: "block", marginBottom: "4px" }}>
-                  Новый пароль
+                  {t("admin.profile.newPasswordLabel")}
                 </label>
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Минимум 8 символов"
+                  placeholder={t("admin.profile.newPasswordMin")}
                   style={{
                     width: "100%",
                     backgroundColor: theme.inputBg,
@@ -547,13 +709,13 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
 
               <div>
                 <label style={{ color: theme.text2, fontSize: "12px", display: "block", marginBottom: "4px" }}>
-                  Повторите новый пароль
+                  {t("admin.profile.repeatPassword")}
                 </label>
                 <input
                   type="password"
                   value={repeatNewPassword}
                   onChange={(e) => setRepeatNewPassword(e.target.value)}
-                  placeholder="Повторите новый пароль"
+                  placeholder={t("admin.profile.repeatPassword")}
                   style={{
                     width: "100%",
                     backgroundColor: theme.inputBg,
@@ -610,7 +772,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                     opacity: saving ? 0.7 : 1,
                   }}
                 >
-                  {saving ? "Смена..." : "Сменить пароль"}
+                  {saving ? t("admin.profile.changingPassword") : t("admin.profile.changePassword")}
                 </button>
                 <button
                   type="button"
@@ -632,7 +794,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                     cursor: "pointer",
                   }}
                 >
-                  Отмена
+                  {t("common.cancel")}
                 </button>
               </div>
             </form>
@@ -653,22 +815,59 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
               marginBottom: "12px"
             }}>
               <h4 style={{ color: theme.text, fontSize: "12px", fontWeight: "600", margin: 0 }}>
-                ПОСЛЕДНИЕ ДЕЙСТВИЯ
+                {isStudent ? t("admin.profile.activitySection") : t("admin.profile.actionsSection")}
               </h4>
               <span style={{ color: theme.text2, fontSize: "10px" }}>
-                Последние 24 часа
+                {isStudent ? t("admin.profile.activityFeed") : t("admin.profile.last24h")}
               </span>
             </div>
 
             {/* Список действий */}
             <div style={{ display: "flex", flexDirection: "column" }}>
-              {recentActions.length === 0 ? (
+              {isStudent ? (
+                studentFeed.length === 0 ? (
+                  <div style={{ color: theme.text2, fontSize: "11px", padding: "8px 0" }}>
+                    {t("admin.profile.noEvents")}
+                  </div>
+                ) : (
+                  studentFeed.map((item, index) => {
+                    const isLast = index === studentFeed.length - 1;
+                    const row = (
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "8px",
+                          padding: "8px 0",
+                          borderBottom: isLast ? "none" : `1px solid ${theme.border}`,
+                        }}
+                      >
+                        <div style={{ fontSize: "11px", color: theme.text }}>
+                          {item.text}
+                          {item.bold ? <strong style={{ color: theme.accent2 }}> {item.bold}</strong> : null}
+                          {item.text_after ?? ""}
+                        </div>
+                        <span style={{ color: theme.text2, fontSize: "10px", whiteSpace: "nowrap" }}>
+                          {item.time_label}
+                        </span>
+                      </div>
+                    );
+                    return item.href ? (
+                      <a key={item.id} href={item.href} style={{ textDecoration: "none", color: "inherit" }}>
+                        {row}
+                      </a>
+                    ) : (
+                      <div key={item.id}>{row}</div>
+                    );
+                  })
+                )
+              ) : recentActions.length === 0 ? (
                 <div style={{ color: theme.text2, fontSize: "11px", padding: "8px 0" }}>
-                  Нет действий за последние 24 часа
+                  {t("admin.profile.noActions24h")}
                 </div>
               ) : (
                 recentActions.map((action, index) => {
-                  const { title, subtitle } = getActionDescription(action);
+                  const { title, subtitle } = getActionDescription(action, t);
                   const isLast = index === recentActions.length - 1;
                   return (
                     <div
@@ -686,7 +885,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                         <div style={{ color: theme.text2, fontSize: "10px" }}>{subtitle}</div>
                       </div>
                       <span style={{ color: theme.text2, fontSize: "10px" }}>
-                        {formatActionTime(action.created_at)}
+                        {formatActionTime(action.created_at, t, tp)}
                       </span>
                     </div>
                   );

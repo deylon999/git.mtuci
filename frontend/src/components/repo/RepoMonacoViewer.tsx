@@ -5,6 +5,10 @@ import { AlertCircle, CheckCircle2, CircleDashed, Loader2 } from "lucide-react";
 import { lintStudentRepoFile, type StudentRepoLintDiagnostic } from "../../api/studentDashboardApi";
 import { displayLanguageLabel, monacoLanguageFromPath, usesServerLint } from "../../utils/codeLanguage";
 import type { ThemeColors } from "../../theme";
+import { tr } from "../../utils/i18nLabels";
+import { pluralWord } from "../../i18n/plural";
+import { getI18nLocale } from "../../i18n/runtime";
+import { useUserPreferences } from "../../context/UserPreferencesContext";
 
 interface RepoMonacoViewerProps {
   repoId: string;
@@ -55,15 +59,18 @@ function applyMarkers(
 }
 
 function stateFromCounts(errors: number, warnings: number, skipped?: string | null): LintBarState {
+  const locale = getI18nLocale();
   if (skipped) {
     return { tone: "muted", label: skipped, errors: 0, warnings: 0 };
   }
   if (errors > 0) {
+    const errWord = pluralWord(locale, "repo.lint.error", errors);
+    const warnPart = warnings
+      ? ` · ${warnings} ${pluralWord(locale, "repo.lint.warning", warnings)}`
+      : "";
     return {
       tone: "error",
-      label: `${errors} ${errors === 1 ? "ошибка" : errors < 5 ? "ошибки" : "ошибок"}${
-        warnings ? ` · ${warnings} предупр.` : ""
-      }`,
+      label: `${errors} ${errWord}${warnPart}`,
       errors,
       warnings,
     };
@@ -71,12 +78,12 @@ function stateFromCounts(errors: number, warnings: number, skipped?: string | nu
   if (warnings > 0) {
     return {
       tone: "warn",
-      label: `${warnings} ${warnings === 1 ? "предупреждение" : "предупреждений"}`,
+      label: `${warnings} ${pluralWord(locale, "repo.lint.warning", warnings)}`,
       errors: 0,
       warnings,
     };
   }
-  return { tone: "ok", label: "Замечаний нет", errors: 0, warnings: 0 };
+  return { tone: "ok", label: tr("repo.lint.noIssues"), errors: 0, warnings: 0 };
 }
 
 function LintStatusBar({ theme, state, languageLabel }: { theme: ThemeColors; state: LintBarState; languageLabel: string }) {
@@ -128,6 +135,7 @@ export default function RepoMonacoViewer({
   isDarkTheme = false,
   theme,
 }: RepoMonacoViewerProps) {
+  const { t } = useUserPreferences();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
   const [lintBar, setLintBar] = useState<LintBarState>({ tone: "idle", label: "—", errors: 0, warnings: 0 });
@@ -152,17 +160,17 @@ export default function RepoMonacoViewer({
     if (!usesServerLint(filepath) || !editorRef.current || !monacoRef.current) {
       return;
     }
-    setLintBar({ tone: "loading", label: "Проверяем файл…", errors: 0, warnings: 0 });
+    setLintBar({ tone: "loading", label: t("repo.lint.checking"), errors: 0, warnings: 0 });
     try {
       const res = await lintStudentRepoFile(repoId, filepath, content);
       applyMarkers(editorRef.current, monacoRef.current, res.diagnostics, "mtuci-lint");
       const errors = res.diagnostics.filter((d) => d.severity === "error").length;
       const warnings = res.diagnostics.length - errors;
       setLintBar(
-        stateFromCounts(errors, warnings, res.skipped ? res.message ?? "Проверка пропущена" : null),
+        stateFromCounts(errors, warnings, res.skipped ? res.message ?? t("repo.lint.checkSkipped") : null),
       );
     } catch {
-      setLintBar({ tone: "muted", label: "Линтер недоступен", errors: 0, warnings: 0 });
+      setLintBar({ tone: "muted", label: t("repo.lint.linterUnavailable"), errors: 0, warnings: 0 });
     }
   }, [repoId, filepath, content]);
 
@@ -181,7 +189,7 @@ export default function RepoMonacoViewer({
     if (usesServerLint(filepath)) {
       void runServerLint();
     } else {
-      setLintBar({ tone: "loading", label: "Проверяем файл…", errors: 0, warnings: 0 });
+      setLintBar({ tone: "loading", label: t("repo.lint.checking"), errors: 0, warnings: 0 });
       requestAnimationFrame(() => updateFromMarkers(monaco, editorInstance));
     }
 
@@ -193,8 +201,8 @@ export default function RepoMonacoViewer({
 
   useEffect(() => {
     if (!usesServerLint(filepath)) return;
-    const t = window.setTimeout(() => void runServerLint(), 300);
-    return () => window.clearTimeout(t);
+    const timer = window.setTimeout(() => void runServerLint(), 300);
+    return () => window.clearTimeout(timer);
   }, [filepath, content, runServerLint]);
 
   return (
@@ -207,7 +215,7 @@ export default function RepoMonacoViewer({
         onMount={handleMount}
         loading={
           <div className="flex items-center justify-center py-16 text-sm" style={{ color: theme.text2 }}>
-            Редактор…
+            {t("repo.monaco.loading")}
           </div>
         }
         options={{

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ClipboardCheck, Loader2, Search } from "lucide-react";
 import { getTeacherGradingQueue, type TeacherGradingQueueItem } from "../api/teacherDashboardApi";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getTheme } from "../theme";
 
 interface TeacherGradingQueuePageProps {
@@ -10,6 +11,7 @@ interface TeacherGradingQueuePageProps {
 
 export default function TeacherGradingQueuePage({ isDarkTheme = false }: TeacherGradingQueuePageProps) {
   const theme = getTheme(isDarkTheme);
+  const { t, tp } = useUserPreferences();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<TeacherGradingQueueItem[]>([]);
@@ -25,7 +27,7 @@ export default function TeacherGradingQueuePage({ isDarkTheme = false }: Teacher
         if (!cancelled) setItems(rows);
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Не удалось загрузить очередь");
+          setError(e instanceof Error ? e.message : t("teacher.errors.queueLoadFailed"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -59,9 +61,9 @@ export default function TeacherGradingQueuePage({ isDarkTheme = false }: Teacher
             <ClipboardCheck className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-2xl font-semibold">Очередь проверки</h1>
+            <h1 className="text-2xl font-semibold">{t("teacher.gradingQueue.title")}</h1>
             <p className="text-sm" style={{ color: theme.text2 }}>
-              Работы, ожидающие оценки
+              {t("teacher.gradingQueue.subtitle")}
             </p>
           </div>
         </div>
@@ -71,7 +73,7 @@ export default function TeacherGradingQueuePage({ isDarkTheme = false }: Teacher
           style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         >
           <p className="text-sm">
-            В очереди: <span className="font-semibold">{items.length}</span>
+            {t("teacher.gradingQueue.inQueue")} <span className="font-semibold">{items.length}</span>
           </p>
         </div>
 
@@ -83,7 +85,7 @@ export default function TeacherGradingQueuePage({ isDarkTheme = false }: Teacher
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Студент, курс или задание..."
+            placeholder={t("teacher.gradingQueue.searchPlaceholder")}
             className="w-full bg-transparent text-sm outline-none"
             style={{ color: theme.text }}
           />
@@ -92,7 +94,7 @@ export default function TeacherGradingQueuePage({ isDarkTheme = false }: Teacher
         {loading ? (
           <div className="flex items-center gap-2 text-sm" style={{ color: theme.text2 }}>
             <Loader2 className="h-4 w-4 animate-spin" />
-            Загрузка...
+            {t("teacher.gradingQueue.loading")}
           </div>
         ) : error ? (
           <p className="text-sm" style={{ color: theme.danger }}>
@@ -100,7 +102,7 @@ export default function TeacherGradingQueuePage({ isDarkTheme = false }: Teacher
           </p>
         ) : filtered.length === 0 ? (
           <p className="text-sm" style={{ color: theme.text2 }}>
-            Нет работ, ожидающих проверки
+            {t("teacher.gradingQueue.empty")}
           </p>
         ) : (
           <div className="space-y-2">
@@ -119,7 +121,7 @@ export default function TeacherGradingQueuePage({ isDarkTheme = false }: Teacher
                     </p>
                     {item.repo_name ? (
                       <p className="mt-1 text-xs" style={{ color: theme.text2 }}>
-                        Репозиторий: {item.repo_name}
+                        {tp("teacher.gradingQueue.repository", { name: item.repo_name })}
                       </p>
                     ) : null}
                   </div>

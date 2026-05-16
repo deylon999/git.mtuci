@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface AvatarCropperProps {
   imageUrl: string;
@@ -7,6 +8,7 @@ interface AvatarCropperProps {
 }
 
 export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = true }: AvatarCropperProps) {
+  const { t } = useUserPreferences();
   const [zoom, setZoom] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -176,7 +178,7 @@ export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = tr
       {/* Controls */}
       <div className="w-full max-w-xs space-y-3">
         <div className="flex items-center gap-3">
-          <span className={`text-xs ${textSecondary}`}>Масштаб:</span>
+          <span className={`text-xs ${textSecondary}`}>{t("core.avatar.scale")}</span>
           <input
             type="range"
             min="0.1"
@@ -190,7 +192,7 @@ export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = tr
         </div>
         
         <p className={`text-xs ${textSecondary} text-center`}>
-          Перетаскивайте изображение и меняйте масштаб. Белый круг показывает итоговую аватарку.
+          {t("core.avatar.cropHint")}
         </p>
       </div>
     </div>

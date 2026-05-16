@@ -34,26 +34,12 @@ import {
 import { getMe, updateAssistantGrading } from "../api/authApi";
 import toast from "react-hot-toast";
 import AdminPageHeader from "../components/AdminPageHeader";
+import { useUserPreferences } from "../context/UserPreferencesContext";
+import { pluralWord } from "../i18n/plural";
 
 type RoleType = "admin" | "teacher" | "student" | "laborant";
 type PermissionLevel = "read" | "write" | "delete" | "none";
 
-// Russian pluralization helper
-function pluralizeUsers(count: number): string {
-  const lastDigit = count % 10;
-  const lastTwoDigits = count % 100;
-  
-  if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
-    return "пользователей";
-  }
-  if (lastDigit === 1) {
-    return "пользователь";
-  }
-  if (lastDigit >= 2 && lastDigit <= 4) {
-    return "пользователя";
-  }
-  return "пользователей";
-}
 
 interface Permission {
   id: string;
@@ -82,7 +68,7 @@ const iconMap: Record<string, React.ElementType> = {
   Settings,
 };
 
-function getLevelBadge(level: PermissionLevel, isDarkTheme: boolean) {
+function getLevelBadge(level: PermissionLevel, isDarkTheme: boolean, t: (key: string) => string) {
   const styles = {
     read: isDarkTheme ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700",
     write: isDarkTheme ? "bg-[#252525] text-[#ccd0d4]" : "bg-gray-100 text-gray-900",
@@ -90,10 +76,10 @@ function getLevelBadge(level: PermissionLevel, isDarkTheme: boolean) {
     none: isDarkTheme ? "bg-[#2d2d2d] text-[#6e7681]" : "bg-gray-200 text-gray-500",
   };
   const labels = {
-    read: "Чтение",
-    write: "Запись",
-    delete: "Удаление",
-    none: "Нет",
+    read: t("admin.roles.read"),
+    write: t("admin.roles.write"),
+    delete: t("admin.roles.delete"),
+    none: t("admin.roles.none"),
   };
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${styles[level]}`}>
@@ -121,6 +107,23 @@ interface RolesPageProps {
 }
 
 export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
+  const { t, tp, language } = useUserPreferences();
+  const dateLocale = language === "en" ? "en-US" : "ru-RU";
+
+  const mapCategoryTitle = (title: string) => {
+    const keys: Record<string, string> = {
+      "РЕПОЗИТОРИИ": "admin.roles.sectionRepos",
+      "ПОЛЬЗОВАТЕЛИ И ГРУППЫ": "admin.roles.sectionUsers",
+      "ОЦЕНКИ И ЗАДАНИЯ": "admin.roles.sectionGrades",
+      "СИСТЕМА": "admin.roles.sectionSystem",
+      REPOSITORIES: "admin.roles.sectionRepos",
+      "USERS & GROUPS": "admin.roles.sectionUsers",
+      "GRADES & ASSIGNMENTS": "admin.roles.sectionGrades",
+      SYSTEM: "admin.roles.sectionSystem",
+    };
+    const key = keys[title];
+    return key ? t(key) : title;
+  };
   const [selectedRole, setSelectedRole] = useState<RoleType>("admin");
   const [categories, setCategories] = useState<PermissionCategoryState[]>([]);
   const [initialCategories, setInitialCategories] = useState<PermissionCategoryState[]>([]);
@@ -194,7 +197,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
         // Map API categories to component format with icons
         const mappedCategories: PermissionCategoryState[] = permsData.map((cat) => {
           const iconMap: Record<string, React.ElementType> = {
-            "РЕПОЗИТОРИИ": GitBranch,
+            "REPOS": GitBranch,
             "ПОЛЬЗОВАТЕЛИ И ГРУППЫ": Users,
             "ОЦЕНКИ И ЗАДАНИЯ": GraduationCap,
             "СИСТЕМА": Settings,
@@ -250,17 +253,17 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
     try {
       if (assistant.trusted) {
         await untrustLaborant(id);
-        toast.success("Лаборант убран из доверенных");
+        toast.success(t("admin.roles.laborantRemoved"));
       } else {
         await trustLaborant(id);
-        toast.success("Лаборант добавлен в доверенные");
+        toast.success(t("admin.roles.laborantAdded"));
       }
       // Update local state
       setAssistants((prev) =>
         prev.map((a) => (a.id === id ? { ...a, trusted: !a.trusted } : a))
       );
     } catch (error) {
-      toast.error("Ошибка при изменении доверия");
+      toast.error(t("admin.roles.trustError"));
       console.error(error);
     } finally {
       setTogglingId(null);
@@ -283,10 +286,10 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
       console.log("Save result:", result);
       // Update initial state to reflect saved changes
       setInitialCategories(categories);
-      toast.success("Права доступа сохранены");
+      toast.success(t("admin.roles.permissionsSaved"));
     } catch (error) {
       console.error("Save error:", error);
-      toast.error("Ошибка при сохранении прав. Проверьте консоль (F12)");
+      toast.error(t("admin.roles.permissionsSaveError"));
     }
   };
 
@@ -303,10 +306,10 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
         permissions: cat.permissions,
       }));
       setCategories(mappedCategories);
-      toast.success("Права сброшены по умолчанию");
+      toast.success(t("admin.roles.permissionsReset"));
     } catch (error) {
       console.error("Reset error:", error);
-      toast.error("Ошибка при сбросе прав. Проверьте консоль (F12)");
+      toast.error(t("admin.roles.permissionsResetError"));
     }
   };
 
@@ -351,8 +354,8 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
         {/* Header */}
         <AdminPageHeader
           isDarkTheme={isDarkTheme}
-          title="Роли и доступ"
-          subtitle={`${roles.length} ролей`}
+          title={t("admin.roles.title")}
+          subtitle={tp("admin.roles.rolesCount", { n: roles.length })}
         />
 
         {/* Role Cards */}
@@ -375,7 +378,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                 </div>
                 <h3 className={`text-base font-semibold mb-1 ${roleCardText}`}>{role.name}</h3>
                 <p className={`text-xs mb-3 line-clamp-2 ${roleCardDesc}`}>{role.description}</p>
-                <p className={`text-sm ${roleCardCount}`}>{role.user_count} {pluralizeUsers(role.user_count)}</p>
+                <p className={`text-sm ${roleCardCount}`}>{role.user_count} {pluralWord(language, "admin.roles.users", role.user_count)}</p>
               </button>
             );
           })}
@@ -386,7 +389,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
           {/* Left Column - Role Selection */}
           <div className={`rounded-xl border p-5 ${cardBg}`}>
             <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${headerText}`}>
-              Выбрать роль для редактирования
+              {t("admin.roles.selectRole")}
             </h2>
             <div className="space-y-2">
               {roles.map((role) => {
@@ -405,15 +408,15 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                     </div>
                     <div className="flex-1 text-left">
                       <p className={`text-sm font-medium ${textPrimary}`}>{role.name}</p>
-                      <p className={`text-xs ${textSecondary}`}>{role.user_count} {pluralizeUsers(role.user_count)}</p>
+                      <p className={`text-xs ${textSecondary}`}>{role.user_count} {pluralWord(language, "admin.roles.users", role.user_count)}</p>
                     </div>
                     {isSelected ? (
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${activeBadge}`}>
-                        Выбрана
+                        {t("admin.roles.selected")}
                       </span>
                     ) : role.is_system ? (
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${systemBadge}`}>
-                        Системная
+                        {t("admin.roles.systemRole")}
                       </span>
                     ) : null}
                   </button>
@@ -426,9 +429,9 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
           <div className={`rounded-xl border p-5 shadow-sm ${cardBg}`}>
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <h2 className={`text-lg font-semibold ${textPrimary}`}>{currentRole?.name || "Роль"}</h2>
+                <h2 className={`text-lg font-semibold ${textPrimary}`}>{currentRole?.name || t("admin.roles.roleFallback")}</h2>
                 <span className={textSecondary}>—</span>
-                <span className={textTertiary}>права доступа</span>
+                <span className={textTertiary}>{t("admin.roles.accessRights")}</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -437,7 +440,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition-colors disabled:opacity-50 ${resetBtn}`}
                 >
                   <RotateCcw className="h-4 w-4" />
-                  Сбросить
+                  {t("admin.roles.reset")}
                 </button>
                 <button
                   onClick={handleSave}
@@ -447,7 +450,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                   }`}
                 >
                   <Save className="h-4 w-4" />
-                  Сохранить
+                  {t("admin.roles.save")}
                 </button>
               </div>
             </div>
@@ -461,7 +464,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                     <div className="flex items-center gap-2 mb-4">
                       <CategoryIcon className={`h-4 w-4 ${sectionHeader}`} />
                       <h3 className={`text-xs font-semibold uppercase tracking-wider ${sectionHeader}`}>
-                        {category.title}
+                        {mapCategoryTitle(category.title)}
                       </h3>
                     </div>
                     <div className="space-y-3">
@@ -475,7 +478,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                             <p className={`text-xs ${textSecondary}`}>{permission.description}</p>
                           </div>
                           <div className="flex items-center gap-3">
-                            {getLevelBadge(permission.level, isDarkTheme)}
+                            {getLevelBadge(permission.level, isDarkTheme, t)}
                             <Toggle
                               checked={permission.enabled}
                               onChange={() => togglePermission(categoryIndex, permissionIndex)}
@@ -501,7 +504,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                       <div className="flex items-center gap-2">
                         <History className={`h-4 w-4 ${sectionHeader}`} />
                         <span className={`text-sm font-medium ${textPrimary}`}>
-                          История изменений прав
+                          {t("admin.roles.permissionHistory")}
                         </span>
                       </div>
                       {showAuditLogs ? (
@@ -519,7 +522,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                           </div>
                         ) : auditLogs.length === 0 ? (
                           <p className={`text-sm text-center py-4 ${textSecondary}`}>
-                            Нет записей для этой роли
+                            {t("admin.roles.noHistory")}
                           </p>
                         ) : (
                           auditLogs.map((log) => (
@@ -532,7 +535,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                                   {log.actor_name}
                                 </span>
                                 <span className={`text-xs ${textSecondary}`}>
-                                  {new Date(log.created_at).toLocaleString("ru-RU")}
+                                  {new Date(log.created_at).toLocaleString(dateLocale)}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 text-xs">
@@ -540,8 +543,8 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                                   {log.target_role}
                                 </span>
                                 <span className={textSecondary}>
-                                  {log.action === "save_batch" ? "изменил права" :
-                                   log.action === "reset" ? "сбросил права" : log.action}
+                                  {log.action === "save_batch" ? t("admin.roles.changedPermissions") :
+                                   log.action === "reset" ? t("admin.roles.resetPermissions") : log.action}
                                 </span>
                               </div>
                             </div>
@@ -561,15 +564,15 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                     <div className="flex items-center gap-2 mb-4">
                       <Users className={`h-4 w-4 ${sectionHeader}`} />
                       <h3 className={`text-xs font-semibold uppercase tracking-wider ${sectionHeader}`}>
-                        УПРАВЛЕНИЕ АССИСТЕНТАМИ
+                        {t("admin.roles.assistantManagement")}
                       </h3>
                     </div>
 
                     <div className={`p-4 rounded-lg ${assistantHeader}`}>
                       <div className="flex items-center justify-between mb-4">
                         <div>
-                          <p className={`text-sm font-medium ${textPrimary}`}>Разрешить лаборантам проверку моих курсов</p>
-                          <p className={`text-xs ${textSecondary}`}>Доверенные лаборанты смогут выставлять оценки</p>
+                          <p className={`text-sm font-medium ${textPrimary}`}>{t("admin.roles.allowAssistantGrading")}</p>
+                          <p className={`text-xs ${textSecondary}`}>{t("admin.roles.allowAssistantGradingHint")}</p>
                         </div>
                         <Toggle
                           checked={allowAssistantGrading}
@@ -578,9 +581,9 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                             setAllowAssistantGrading(newValue);
                             try {
                               await updateAssistantGrading(newValue);
-                              toast.success(newValue ? "Лаборантам разрешена проверка" : "Лаборантам запрещена проверка");
+                              toast.success(newValue ? t("admin.roles.assistantGradingAllowed") : t("admin.roles.assistantGradingDenied"));
                             } catch (error) {
-                              toast.error("Ошибка при сохранении настройки");
+                              toast.error(t("admin.roles.settingSaveError"));
                               setAllowAssistantGrading(!newValue); // Revert on error
                             }
                           }}
@@ -591,7 +594,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                       {allowAssistantGrading && (
                         <div className={`mt-4 pt-4 border-t ${dividerColor}`}>
                           <p className={`text-xs mb-3 ${textTertiary}`}>
-                            Только выбранные лаборанты смогут выставлять оценки и менять статусы работ в ваших курсах
+                            {t("admin.roles.assistantHint")}
                           </p>
                           <div className="space-y-2">
                             {assistants.map((assistant) => (
@@ -607,7 +610,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className={`text-xs ${assistant.trusted ? trustedText : untrustedText}`}>
-                                    {assistant.trusted ? "Доверенный" : "Не доверенный"}
+                                    {assistant.trusted ? t("admin.roles.trusted") : t("admin.roles.notTrusted")}
                                   </span>
                                   <Toggle
                                     checked={assistant.trusted}

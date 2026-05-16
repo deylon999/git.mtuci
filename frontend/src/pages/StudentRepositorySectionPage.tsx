@@ -23,6 +23,7 @@ import {
 import { formatRelativeTime } from "../utils/formatRelativeTime";
 import { getTheme, type ThemeColors } from "../theme";
 import type { RepoNavTabId } from "../components/repo/RepoNavTabs";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface StudentRepositorySectionPageProps {
   isDarkTheme?: boolean;
@@ -70,6 +71,7 @@ function EmptyState({
 }
 
 function IssueRow({ theme, item }: { theme: ThemeColors; item: StudentRepoIssue }) {
+  const { t } = useUserPreferences();
   const open = item.state === "open";
   return (
     <li
@@ -100,7 +102,7 @@ function IssueRow({ theme, item }: { theme: ThemeColors; item: StudentRepoIssue 
         </p>
         <p className="text-xs mt-1.5 flex flex-wrap gap-x-2 gap-y-1" style={{ color: theme.text3 }}>
           {item.author_name ? <span>{item.author_name}</span> : null}
-          {item.updated_at ? <span>обновлено {formatRelativeTime(item.updated_at)}</span> : null}
+          {item.updated_at ? <span>{t("repo.section.updated").replace("{time}", formatRelativeTime(item.updated_at))}</span> : null}
           {item.comments_count > 0 ? (
             <span className="inline-flex items-center gap-1">
               <MessageSquare className="h-3 w-3" />
@@ -169,6 +171,7 @@ function PullRow({ theme, item }: { theme: ThemeColors; item: StudentRepoPull })
 }
 
 function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
+  const { t } = useUserPreferences();
   const [state, setState] = useState("open");
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<StudentRepoIssue[]>([]);
@@ -214,14 +217,14 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
       {loading && page === 1 ? (
         <div className="flex justify-center py-14 gap-2 text-sm" style={{ color: theme.text2 }}>
           <Loader2 className="h-5 w-5 animate-spin" />
-          Загрузка…
+          {t("repo.section.loadingShort")}
         </div>
       ) : items.length === 0 ? (
         <EmptyState
           theme={theme}
           icon={<CircleDot className="h-6 w-6" />}
-          title="Нет issues"
-          hint="Создайте issue в Gitea или выберите другой фильтр."
+          title={t("repo.section.noIssuesTitle")}
+          hint={t("repo.section.noIssuesHint")}
         />
       ) : (
         <ul>
@@ -238,7 +241,7 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
             className="text-sm font-medium hover:underline"
             style={{ color: theme.accent2 }}
           >
-            Загрузить ещё
+            {t("repo.section.loadMore")}
           </button>
         </div>
       ) : null}
@@ -247,6 +250,7 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
 }
 
 function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
+  const { t } = useUserPreferences();
   const [state, setState] = useState("open");
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<StudentRepoPull[]>([]);
@@ -298,8 +302,8 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
         <EmptyState
           theme={theme}
           icon={<GitPullRequest className="h-6 w-6" />}
-          title="Нет pull requests"
-          hint="Создайте ветку, внесите изменения и откройте pull request в этот репозиторий."
+          title={t("repo.section.noPrTitle")}
+          hint={t("repo.section.noPrHint")}
         />
       ) : (
         <ul>
@@ -316,7 +320,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
             className="text-sm font-medium hover:underline"
             style={{ color: theme.accent2 }}
           >
-            Загрузить ещё
+            {t("repo.section.loadMore")}
           </button>
         </div>
       ) : null}
@@ -325,6 +329,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
 }
 
 function WikiPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
+  const { t } = useUserPreferences();
   const [pages, setPages] = useState<StudentRepoWikiPage[]>([]);
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
   const [content, setContent] = useState("");
@@ -395,8 +400,8 @@ function WikiPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
         <EmptyState
           theme={theme}
           icon={<BookOpen className="h-6 w-6" />}
-          title="Wiki не настроена"
-          hint="Включите wiki в настройках репозитория и создайте первую страницу в Gitea — она появится здесь."
+          title={t("repo.section.wikiEmptyTitle")}
+          hint={t("repo.section.wikiEmptyHint")}
         />
       </PanelCard>
     );
@@ -410,7 +415,7 @@ function WikiPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
           style={{ borderColor: theme.border, backgroundColor: theme.bg }}
         >
           <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide" style={{ color: theme.text3 }}>
-            Страницы
+            {t("repo.section.wikiPages")}
           </p>
           {pages.map((p) => {
             const active = p.slug === activeSlug;
@@ -440,7 +445,7 @@ function WikiPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
             <RepoMarkdown content={content} theme={theme} />
           ) : (
             <p className="text-sm" style={{ color: theme.text3 }}>
-              Пустая страница
+              {t("repo.section.emptyPage")}
             </p>
           )}
         </div>

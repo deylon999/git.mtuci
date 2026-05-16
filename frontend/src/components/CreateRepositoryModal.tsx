@@ -7,6 +7,7 @@ import {
   type RepositoryVisibility,
 } from "../api/repositoriesApi";
 import { getTheme } from "../theme";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface CreateRepositoryModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export default function CreateRepositoryModal({
   onClose,
   onCreated,
 }: CreateRepositoryModalProps) {
+  const { t } = useUserPreferences();
   const theme = getTheme(isDarkTheme);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -36,14 +38,14 @@ export default function CreateRepositoryModal({
     if (!isOpen) return;
     let cancelled = false;
     getRepositoryCreateTemplates()
-      .then((t) => {
-        if (!cancelled) setTemplates(t);
+      .then((data) => {
+        if (!cancelled) setTemplates(data);
       })
       .catch(() => {
         if (!cancelled) {
           setTemplates({
-            gitignores: [{ id: "", label: "Без .gitignore" }],
-            licenses: [{ id: "", label: "Без лицензии" }],
+            gitignores: [{ id: "", label: t("repo.create.noGitignore") }],
+            licenses: [{ id: "", label: t("repo.create.noLicense") }],
           });
         }
       });
@@ -74,11 +76,11 @@ export default function CreateRepositoryModal({
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("Укажите имя репозитория");
+      setError(t("repo.errors.nameRequired"));
       return;
     }
     if (!/^[a-zA-Z0-9._-]+$/.test(trimmed)) {
-      setError("Имя: только латиница, цифры, точка, дефис и подчёркивание");
+      setError(t("repo.errors.nameInvalid"));
       return;
     }
 
@@ -97,7 +99,7 @@ export default function CreateRepositoryModal({
       onCreated();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось создать репозиторий");
+      setError(err instanceof Error ? err.message : t("repo.errors.createFailed"));
     } finally {
       setLoading(false);
     }
@@ -120,10 +122,10 @@ export default function CreateRepositoryModal({
         >
           <div>
             <h2 className="text-lg font-semibold" style={{ color: theme.text }}>
-              Создать репозиторий
+              {t("repo.create.title")}
             </h2>
             <p className="mt-0.5 text-sm" style={{ color: theme.text2 }}>
-              Настройте видимость и начальное содержимое, как при создании на GitHub.
+              {t("repo.create.subtitle")}
             </p>
           </div>
           <button
@@ -132,7 +134,7 @@ export default function CreateRepositoryModal({
             disabled={loading}
             className="rounded-md p-1"
             style={{ color: theme.text2 }}
-            aria-label="Закрыть"
+            aria-label={t("common.close")}
           >
             <X className="h-5 w-5" />
           </button>
@@ -141,7 +143,7 @@ export default function CreateRepositoryModal({
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           <label className="block">
             <span className="mb-1 block text-sm font-medium" style={{ color: theme.text }}>
-              Имя репозитория <span style={{ color: theme.danger }}>*</span>
+              {t("repo.create.nameLabel")} <span style={{ color: theme.danger }}>*</span>
             </span>
             <input
               type="text"
@@ -160,13 +162,13 @@ export default function CreateRepositoryModal({
 
           <label className="block">
             <span className="mb-1 block text-sm font-medium" style={{ color: theme.text }}>
-              Описание
+              {t("repo.create.description")}
             </span>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              placeholder="Кратко, о чём проект"
+              placeholder={t("repo.create.descriptionPlaceholder")}
               className="w-full resize-none rounded-lg border px-3 py-2 text-sm outline-none"
               style={{
                 backgroundColor: theme.bg2,
@@ -178,26 +180,26 @@ export default function CreateRepositoryModal({
 
           <fieldset>
             <legend className="mb-2 text-sm font-medium" style={{ color: theme.text }}>
-              Видимость <span style={{ color: theme.danger }}>*</span>
+              {t("repo.create.visibilityLegend")} <span style={{ color: theme.danger }}>*</span>
             </legend>
             <p className="mb-3 text-xs" style={{ color: theme.text2 }}>
-              Кто может видеть репозиторий и отправлять в него коммиты.
+              {t("repo.create.visibilityHint")}
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               <VisibilityCard
                 selected={visibility === "public"}
                 onSelect={() => setVisibility("public")}
                 icon={<Globe className="h-4 w-4" />}
-                title="Публичный"
-                hint="Виден всем в организации"
+                title={t("repo.create.publicTitle")}
+                hint={t("repo.create.publicHint")}
                 theme={theme}
               />
               <VisibilityCard
                 selected={visibility === "private"}
                 onSelect={() => setVisibility("private")}
                 icon={<Lock className="h-4 w-4" />}
-                title="Приватный"
-                hint="Только вы и приглашённые"
+                title={t("repo.create.privateTitle")}
+                hint={t("repo.create.privateHint")}
                 theme={theme}
               />
             </div>
@@ -208,7 +210,7 @@ export default function CreateRepositoryModal({
             style={{ borderColor: theme.border, backgroundColor: theme.bg2 }}
           >
             <p className="text-sm font-medium" style={{ color: theme.text }}>
-              Начальная конфигурация
+              {t("repo.create.initialConfig")}
             </p>
 
             <label className="flex cursor-pointer gap-3">
@@ -221,10 +223,10 @@ export default function CreateRepositoryModal({
               <span>
                 <span className="flex items-center gap-1.5 text-sm font-medium" style={{ color: theme.text }}>
                   <BookOpen className="h-4 w-4" style={{ color: theme.text2 }} />
-                  Добавить README
+                  {t("repo.create.addReadme")}
                 </span>
                 <span className="mt-0.5 block text-xs" style={{ color: theme.text2 }}>
-                  README — описание проекта на главной странице репозитория.
+                  {t("repo.create.readmeHint")}
                 </span>
               </span>
             </label>
@@ -232,10 +234,10 @@ export default function CreateRepositoryModal({
             <label className="block">
               <span className="mb-1 flex items-center gap-1.5 text-sm font-medium" style={{ color: theme.text }}>
                 <FileCode className="h-4 w-4" style={{ color: theme.text2 }} />
-                Добавить .gitignore
+                {t("repo.create.addGitignore")}
               </span>
               <span className="mb-2 block text-xs" style={{ color: theme.text2 }}>
-                Указывает Git, какие файлы не отслеживать (сборки, зависимости, секреты).
+                {t("repo.create.gitignoreHint")}
               </span>
               <select
                 value={gitignore}
@@ -247,7 +249,7 @@ export default function CreateRepositoryModal({
                   color: theme.text,
                 }}
               >
-                {(templates?.gitignores ?? [{ id: "", label: "Загрузка…" }]).map((opt) => (
+                {(templates?.gitignores ?? [{ id: "", label: t("repo.create.loadingTemplates") }]).map((opt) => (
                   <option key={opt.id || "none"} value={opt.id}>
                     {opt.label}
                   </option>
@@ -258,10 +260,10 @@ export default function CreateRepositoryModal({
             <label className="block">
               <span className="mb-1 flex items-center gap-1.5 text-sm font-medium" style={{ color: theme.text }}>
                 <Scale className="h-4 w-4" style={{ color: theme.text2 }} />
-                Добавить лицензию
+                {t("repo.create.addLicense")}
               </span>
               <span className="mb-2 block text-xs" style={{ color: theme.text2 }}>
-                Лицензия описывает, как другие могут использовать ваш код.
+                {t("repo.create.licenseHint")}
               </span>
               <select
                 value={license}
@@ -273,7 +275,7 @@ export default function CreateRepositoryModal({
                   color: theme.text,
                 }}
               >
-                {(templates?.licenses ?? [{ id: "", label: "Загрузка…" }]).map((opt) => (
+                {(templates?.licenses ?? [{ id: "", label: t("repo.create.loadingTemplates") }]).map((opt) => (
                   <option key={opt.id || "none"} value={opt.id}>
                     {opt.label}
                   </option>
@@ -300,7 +302,7 @@ export default function CreateRepositoryModal({
             className="flex-1 rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-60"
             style={{ borderColor: theme.border, color: theme.text }}
           >
-            Отмена
+            {t("common.cancel")}
           </button>
           <button
             type="submit"
@@ -309,7 +311,7 @@ export default function CreateRepositoryModal({
             style={{ backgroundColor: theme.accent }}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Создать репозиторий
+            {loading ? t("repo.create.submitting") : t("repo.create.submit")}
           </button>
         </div>
       </form>

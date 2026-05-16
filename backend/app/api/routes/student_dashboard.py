@@ -14,6 +14,8 @@ from app.schemas.student_dashboard import (
     StudentDeadlineDetailRead,
     StudentForkItemRead,
     StudentGradesSummaryRead,
+    StudentGitCloneTokenRegenerateRead,
+    StudentGitCloneTokenStatusRead,
     StudentGroupRankingRead,
     StudentRecentRepositoryRead,
     StudentRepositoriesRead,
@@ -53,7 +55,9 @@ from app.services.student_dashboard_service import (
     get_student_deadlines,
     get_student_forks,
     get_student_grades,
+    get_student_git_clone_token_status,
     get_student_group_ranking,
+    regenerate_student_git_clone_token,
     get_student_recent_repositories,
     get_student_repositories,
     list_student_repository_files,
@@ -107,6 +111,27 @@ async def student_forks(
 ) -> list[StudentForkItemRead]:
     _require_student(current_user)
     return await get_student_forks(session, student_id=current_user.id, limit=limit)
+
+
+@router.post("/forks/sync")
+async def student_fork_sync(
+    repo_path: str = Query(..., min_length=3, max_length=300),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    _require_student(current_user)
+    from app.services.student_forks_service import merge_fork_upstream
+    from app.utils.gitea_user import resolve_gitea_username
+
+    owner = resolve_gitea_username(current_user)
+    if not repo_path.startswith(f"{owner}/"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your fork")
+    repo_name = repo_path.split("/", 1)[1]
+    try:
+        await merge_fork_upstream(owner, repo_name)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return {"status": "ok"}
 
 
 @router.get("/assignments", response_model=list[StudentAssignmentListItemRead])
@@ -531,3 +556,25 @@ async def student_group_ranking(
         group_name=current_user.group_name,
         student_full_name=current_user.full_name,
     )
+
+
+@router.get("/git-clone-token", response_model=StudentGitCloneTokenStatusRead)
+async def student_git_clone_token_status(
+    current_user: User = Depends(get_current_user),
+) -> StudentGitCloneTokenStatusRead:
+    _require_student(current_user)
+    data = await get_student_git_clone_token_status(current_user)
+    return StudentGitCloneTokenStatusRead.model_validate(data)
+
+
+@router.post("/git-clone-token/regenerate", response_model=StudentGitCloneTokenRegenerateRead)
+async def student_git_clone_token_regenerate(
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentGitCloneTokenRegenerateRead:
+    _require_student(current_user)
+    try:
+        data = await regenerate_student_git_clone_token(session, current_user)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return StudentGitCloneTokenRegenerateRead.model_validate(data)

@@ -15,17 +15,23 @@ import {
   FolderPlus,
   ClipboardList,
   ClipboardCheck,
+  GraduationCap,
+  Activity,
+  FolderGit2,
+  Plus,
 } from "lucide-react";
+import { getTeacherDashboard } from "../api/teacherDashboardApi";
 import { getMe } from "../api/authApi";
 import { getUserStats, getSystemMetrics, getServiceStatus } from "../api/adminApi";
 import { usePendingCount } from "../context/PendingCountContext";
 import { useStudentNavCountsOptional } from "../context/StudentNavCountsContext";
 import { getTheme } from "../theme";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 import type { UserRole } from "../api/types";
 
 interface MenuItem {
   path: string;
-  label: string;
+  labelKey: string;
   icon: React.ElementType;
   badge?: {
     text: string;
@@ -34,76 +40,106 @@ interface MenuItem {
 }
 
 interface MenuSection {
-  title: string;
+  titleKey: string;
   items: MenuItem[];
+}
+
+function buildAdminMenu(): MenuSection[] {
+  return [
+    { titleKey: "sidebar.overview", items: [{ path: "/admin", labelKey: "sidebar.dashboard", icon: LayoutGrid }] },
+    {
+      titleKey: "sidebar.users",
+      items: [
+        { path: "/users", labelKey: "sidebar.allUsers", icon: Users },
+        { path: "/roles", labelKey: "sidebar.roles", icon: Briefcase },
+      ],
+    },
+    {
+      titleKey: "sidebar.repositories",
+      items: [
+        { path: "/repositories", labelKey: "sidebar.allRepositories", icon: FileText },
+        { path: "/admin/forks", labelKey: "sidebar.forks", icon: GitFork },
+        { path: "/admin/activity", labelKey: "sidebar.activity", icon: TrendingUp },
+      ],
+    },
+    {
+      titleKey: "sidebar.system",
+      items: [
+        { path: "/logs", labelKey: "sidebar.logs", icon: FileCode },
+        { path: "/admin/monitoring", labelKey: "sidebar.monitoring", icon: Clock },
+        { path: "/admin/settings", labelKey: "sidebar.settings", icon: Settings },
+      ],
+    },
+  ];
+}
+
+function buildTeacherMenu(): MenuSection[] {
+  return [
+    { titleKey: "sidebar.main", items: [{ path: "/dashboard", labelKey: "sidebar.dashboard", icon: LayoutGrid }] },
+    {
+      titleKey: "sidebar.myCourses",
+      items: [
+        { path: "/teacher/courses", labelKey: "sidebar.allCourses", icon: BookOpen },
+        { path: "/courses", labelKey: "sidebar.createCourse", icon: Plus },
+      ],
+    },
+    {
+      titleKey: "sidebar.students",
+      items: [
+        { path: "/teacher/students", labelKey: "sidebar.allStudents", icon: GraduationCap },
+        { path: "/teacher/code-review", labelKey: "sidebar.codeReview", icon: ClipboardCheck },
+      ],
+    },
+    {
+      titleKey: "sidebar.repositories",
+      items: [
+        { path: "/teacher/templates", labelKey: "sidebar.templateRepos", icon: FolderGit2 },
+        { path: "/teacher/activity", labelKey: "sidebar.studentActivity", icon: Activity },
+      ],
+    },
+    {
+      titleKey: "sidebar.account",
+      items: [
+        { path: "/profile", labelKey: "sidebar.profile", icon: Users },
+        { path: "/settings", labelKey: "sidebar.settings", icon: Settings },
+      ],
+    },
+  ];
+}
+
+function buildStudentMenu(): MenuSection[] {
+  return [
+    { titleKey: "sidebar.main", items: [{ path: "/dashboard", labelKey: "sidebar.dashboard", icon: LayoutGrid }] },
+    {
+      titleKey: "sidebar.myRepositories",
+      items: [
+        { path: "/repositories", labelKey: "sidebar.allRepositories", icon: FileText },
+        { path: "/repositories/new", labelKey: "sidebar.createRepo", icon: FolderPlus },
+        { path: "/repositories/forks", labelKey: "sidebar.forks", icon: GitFork },
+      ],
+    },
+    {
+      titleKey: "sidebar.study",
+      items: [
+        { path: "/courses", labelKey: "sidebar.myCoursesStudent", icon: BookOpen },
+        { path: "/assignments", labelKey: "sidebar.assignments", icon: ClipboardList },
+        { path: "/deadlines", labelKey: "sidebar.deadlines", icon: Clock },
+        { path: "/grades", labelKey: "sidebar.grades", icon: TrendingUp },
+      ],
+    },
+    {
+      titleKey: "sidebar.account",
+      items: [
+        { path: "/profile", labelKey: "sidebar.profile", icon: Users },
+        { path: "/settings", labelKey: "sidebar.settings", icon: Settings },
+      ],
+    },
+  ];
 }
 
 interface SidebarProps {
   isDarkTheme?: boolean;
 }
-
-const adminMenuSections: MenuSection[] = [
-  {
-    title: "ОБЗОР",
-    items: [
-      { path: "/admin", label: "Дашборд", icon: LayoutGrid },
-    ],
-  },
-  {
-    title: "ПОЛЬЗОВАТЕЛИ",
-    items: [
-      { path: "/users", label: "Все пользователи", icon: Users },
-      { path: "/roles", label: "Роли и доступ", icon: Briefcase },
-    ],
-  },
-  {
-    title: "РЕПОЗИТОРИИ",
-    items: [
-      { path: "/repositories", label: "Все репозитории", icon: FileText },
-      { path: "/admin/forks", label: "Форки и клоны", icon: GitFork },
-      { path: "/admin/activity", label: "Активность", icon: TrendingUp },
-    ],
-  },
-  {
-    title: "СИСТЕМА",
-    items: [
-      { path: "/logs", label: "Логи", icon: FileCode },
-      { path: "/admin/monitoring", label: "Мониторинг", icon: Clock },
-      { path: "/admin/settings", label: "Настройки", icon: Settings },
-    ],
-  },
-];
-
-const studentMenuSections: MenuSection[] = [
-  {
-    title: "ГЛАВНОЕ",
-    items: [{ path: "/dashboard", label: "Дашборд", icon: LayoutGrid }],
-  },
-  {
-    title: "МОИ РЕПОЗИТОРИИ",
-    items: [
-      { path: "/repositories", label: "Все репозитории", icon: FileText },
-      { path: "/repositories/new", label: "Создать репо", icon: FolderPlus },
-      { path: "/repositories/forks", label: "Форки", icon: GitFork },
-    ],
-  },
-  {
-    title: "УЧЁБА",
-    items: [
-      { path: "/courses", label: "Мои курсы", icon: BookOpen },
-      { path: "/assignments", label: "Задания", icon: ClipboardList },
-      { path: "/deadlines", label: "Дедлайны", icon: Clock },
-      { path: "/grades", label: "Оценки", icon: TrendingUp },
-    ],
-  },
-  {
-    title: "АККАУНТ",
-    items: [
-      { path: "/profile", label: "Профиль", icon: Users },
-      { path: "/settings", label: "Настройки", icon: Settings },
-    ],
-  },
-];
 
 export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   console.log("[Sidebar] Component rendering");
@@ -112,6 +148,8 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   const { pendingCount, setPendingCount } = usePendingCount();
   const studentNav = useStudentNavCountsOptional();
   const [hasSystemIssues, setHasSystemIssues] = useState(false);
+  const [teacherPending, setTeacherPending] = useState(0);
+  const { t } = useUserPreferences();
   const theme = getTheme(isDarkTheme);
 
   useEffect(() => {
@@ -140,6 +178,21 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (userRole !== "teacher" && userRole !== "laborant") return;
+    let cancelled = false;
+    void getTeacherDashboard()
+      .then((d) => {
+        if (!cancelled) setTeacherPending(d.pending_grading);
+      })
+      .catch(() => {
+        if (!cancelled) setTeacherPending(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userRole]);
 
   // Load pending users count for admin
   useEffect(() => {
@@ -217,20 +270,21 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   };
 
   const menuSections = useMemo(() => {
-    if (userRole === "admin") return adminMenuSections;
+    if (userRole === "admin") return buildAdminMenu();
     if (userRole === "teacher" || userRole === "laborant") {
-      return [
-        ...studentMenuSections.slice(0, 1),
-        {
-          title: "ПРОВЕРКА",
-          items: [{ path: "/grading-queue", label: "Очередь проверки", icon: ClipboardCheck }],
-        },
-        ...studentMenuSections.slice(1),
-      ];
+      return buildTeacherMenu().map((section) => ({
+        ...section,
+        items: section.items.map((item) => {
+          if (item.path === "/teacher/code-review" && teacherPending > 0) {
+            return { ...item, badge: { text: String(teacherPending), variant: "red" as const } };
+          }
+          return item;
+        }),
+      }));
     }
-    if (userRole !== "student") return studentMenuSections;
+    if (userRole !== "student") return buildStudentMenu();
     const sidebar = studentNav?.sidebar;
-    return studentMenuSections.map((section) => ({
+    return buildStudentMenu().map((section) => ({
       ...section,
       items: section.items.map((item) => {
         let badge = item.badge;
@@ -243,14 +297,14 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
         return { ...item, badge };
       }),
     }));
-  }, [userRole, studentNav?.sidebar]);
+  }, [userRole, studentNav?.sidebar, teacherPending, t]);
 
   // While loading, show nothing or student menu to avoid flashing admin menu
   if (userRole === null) {
     console.log("[Sidebar] Role is null, showing loading state");
     return (
       <aside className={`w-[260px] flex-shrink-0 h-full border-r`} style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
-        <div className={`p-4 text-sm`} style={{ color: theme.text2 }}>Loading...</div>
+        <div className={`p-4 text-sm`} style={{ color: theme.text2 }}>{t("common.loading")}</div>
       </aside>
     );
   }
@@ -261,9 +315,9 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
     <aside className={`w-[260px] flex-shrink-0 h-full border-r`} style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
       <nav className="p-4">
         {menuSections.map((section) => (
-          <div key={section.title} className="mb-6">
+          <div key={section.titleKey} className="mb-6">
             <h3 className={`text-xs font-semibold uppercase tracking-wider mb-2 px-3`} style={{ color: theme.text2 }}>
-              {section.title}
+              {t(section.titleKey)}
             </h3>
             <ul className="space-y-1">
               {section.items.map((item) => {
@@ -285,7 +339,7 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
                     >
                       <div className="flex items-center gap-3">
                         <Icon className={`h-5 w-5`} style={{ color: active ? theme.accent : theme.text3 }} />
-                        <span>{item.label}</span>
+                        <span>{t(item.labelKey)}</span>
                       </div>
                       {/* Pending users badge for "Все пользователи" */}
                       {item.path === "/users" && pendingCount > 0 && (
@@ -306,7 +360,7 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
                           {item.badge.text}
                         </span>
                       )}
-                      {item.label === "Мониторинг" && hasSystemIssues && (
+                      {item.path === "/admin/monitoring" && hasSystemIssues && (
                         <AlertCircle className="h-4 w-4 text-orange-500" />
                       )}
                     </Link>

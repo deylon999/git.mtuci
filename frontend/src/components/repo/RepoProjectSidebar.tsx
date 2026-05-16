@@ -14,6 +14,8 @@ import {
   Tag,
 } from "lucide-react";
 import type { StudentRepoSummary } from "../../api/studentDashboardApi";
+import { useUserPreferences } from "../../context/UserPreferencesContext";
+import { pluralWord } from "../../i18n/plural";
 import { formatRelativeTime } from "../../utils/formatRelativeTime";
 import type { ThemeColors } from "../../theme";
 
@@ -38,29 +40,17 @@ const LANG_COLORS: Record<string, string> = {
   css: "#563d7c",
 };
 
-function formatCreatedOn(iso: string | null | undefined): string | null {
+function formatCreatedOn(iso: string | null | undefined, dateLocale: string): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+  return d.toLocaleDateString(dateLocale, { day: "numeric", month: "long", year: "numeric" });
 }
 
 function formatSizeKb(kb: number | null | undefined): string | null {
   if (kb == null) return null;
   if (kb < 1024) return `${kb} KB`;
   return `${(kb / 1024).toFixed(1)} MB`;
-}
-
-function pluralCommits(n: number, approx: boolean): string {
-  const suffix = approx ? "+" : "";
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  let word = "коммитов";
-  if (mod100 < 11 || mod100 > 14) {
-    if (mod10 === 1) word = "коммит";
-    else if (mod10 >= 2 && mod10 <= 4) word = "коммита";
-  }
-  return `${n}${suffix} ${word}`;
 }
 
 function StatRow({
@@ -157,9 +147,24 @@ export default function RepoProjectSidebar({
   onGoToReadme,
   onOpenLicense,
 }: RepoProjectSidebarProps) {
+  const { t, tp, language } = useUserPreferences();
+  const dateLocale = language === "en" ? "en-US" : "ru-RU";
   const lang = summary?.language?.toLowerCase() ?? "";
   const langColor = LANG_COLORS[lang] ?? theme.accent2;
-  const createdLabel = formatCreatedOn(summary?.created_at ?? summary?.updated_at);
+  const createdLabel = formatCreatedOn(summary?.created_at ?? summary?.updated_at, dateLocale);
+  const commitLabel = (n: number, approx: boolean) => {
+    const suffix = approx ? "+" : "";
+    const word = pluralWord(n, {
+      one: t("repo.sidebar.commitOne"),
+      few: t("repo.sidebar.commitFew"),
+      many: t("repo.sidebar.commitMany"),
+    });
+    return `${n}${suffix} ${word}`;
+  };
+  const branchWord = (n: number) =>
+    pluralWord(n, { one: t("repo.sidebar.branchOne"), few: t("repo.sidebar.branchMany"), many: t("repo.sidebar.branchMany") });
+  const tagWord = (n: number) =>
+    pluralWord(n, { one: t("repo.sidebar.tagOne"), few: t("repo.sidebar.tagMany"), many: t("repo.sidebar.tagMany") });
   const sizeLabel = formatSizeKb(summary?.size_kb);
   const links = summary?.gitea_links;
   const branch = activeBranch ?? summary?.default_branch ?? "main";
@@ -171,14 +176,14 @@ export default function RepoProjectSidebar({
     >
       <div className="px-4 py-3 border-b" style={{ borderColor: theme.border }}>
         <h2 className="text-sm font-semibold" style={{ color: theme.text }}>
-          Информация о проекте
+          {t("repo.sidebar.projectInfo")}
         </h2>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-12 text-sm" style={{ color: theme.text2 }}>
           <Loader2 className="h-4 w-4 animate-spin" />
-          Загрузка…
+          {t("repo.sidebar.loading")}
         </div>
       ) : (
         <div className="px-4 py-3 flex flex-col gap-4">
@@ -209,14 +214,14 @@ export default function RepoProjectSidebar({
             </p>
           ) : (
             <p className="text-sm italic" style={{ color: theme.text3 }}>
-              Нет описания
+              {t("repo.sidebar.noDescription")}
             </p>
           )}
 
           {summary?.language ? (
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: theme.text3 }}>
-                Языки
+                {t("repo.sidebar.languages")}
               </p>
               <div className="h-2 w-full rounded-full overflow-hidden" style={{ backgroundColor: theme.bg4 }}>
                 <div className="h-full rounded-full" style={{ width: "100%", backgroundColor: langColor }} />
@@ -232,7 +237,7 @@ export default function RepoProjectSidebar({
 
           <div className="border-t pt-3 space-y-0.5" style={{ borderColor: theme.border }}>
             <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: theme.text3 }}>
-              Репозиторий
+              {t("repo.sidebar.repository")}
             </p>
             {summary?.commits_count != null ? (
               repoId ? (
@@ -243,13 +248,13 @@ export default function RepoProjectSidebar({
                   style={{ color: theme.accent2 }}
                 >
                   <GitCommit className="h-4 w-4" />
-                  {pluralCommits(summary.commits_count, summary.commits_count_approx)}
+                  {commitLabel(summary.commits_count, summary.commits_count_approx)}
                 </Link>
               ) : (
                 <StatRow
                   theme={theme}
                   icon={<GitCommit className="h-4 w-4" />}
-                  label={pluralCommits(summary.commits_count, summary.commits_count_approx)}
+                  label={commitLabel(summary.commits_count, summary.commits_count_approx)}
                   href={links?.commits}
                 />
               )
@@ -257,16 +262,12 @@ export default function RepoProjectSidebar({
             <StatRow
               theme={theme}
               icon={<GitBranch className="h-4 w-4" />}
-              label={`${summary?.branches_count ?? 1} ${
-                (summary?.branches_count ?? 1) === 1 ? "ветка" : "веток"
-              }`}
+              label={`${summary?.branches_count ?? 1} ${branchWord(summary?.branches_count ?? 1)}`}
             />
             <StatRow
               theme={theme}
               icon={<Tag className="h-4 w-4" />}
-              label={`${summary?.tags_count ?? 0} ${
-                (summary?.tags_count ?? 0) === 1 ? "тег" : "тегов"
-              }`}
+              label={`${summary?.tags_count ?? 0} ${tagWord(summary?.tags_count ?? 0)}`}
             />
             {summary?.open_issues_count != null ? (
               <StatRow
@@ -292,7 +293,7 @@ export default function RepoProjectSidebar({
           {(summary?.has_readme || summary?.license_path) && (
             <div className="border-t pt-3 flex flex-col gap-1" style={{ borderColor: theme.border }}>
               <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: theme.text3 }}>
-                Файлы
+                {t("repo.sidebar.files")}
               </p>
               {summary.has_readme ? (
                 <button
@@ -322,7 +323,7 @@ export default function RepoProjectSidebar({
           {createdLabel ? (
             <div className="border-t pt-3" style={{ borderColor: theme.border }}>
               <p className="text-xs font-semibold mb-1" style={{ color: theme.text }}>
-                Создан
+                {t("repo.sidebar.created")}
               </p>
               <p className="flex items-center gap-2 text-sm" style={{ color: theme.text2 }}>
                 <Calendar className="h-3.5 w-3.5 shrink-0" />
@@ -330,7 +331,7 @@ export default function RepoProjectSidebar({
               </p>
               {summary?.updated_at ? (
                 <p className="text-[11px] mt-1" style={{ color: theme.text3 }}>
-                  Обновлён {formatRelativeTime(summary.updated_at)}
+                  {tp("repo.sidebar.updatedAt", { time: formatRelativeTime(summary.updated_at) })}
                 </p>
               ) : null}
             </div>
@@ -347,7 +348,7 @@ export default function RepoProjectSidebar({
                 color: theme.accent2,
               }}
             >
-              Вся история коммитов
+              {t("repo.sidebar.fullCommitHistory")}
             </Link>
           ) : null}
 
@@ -355,7 +356,7 @@ export default function RepoProjectSidebar({
             <div className="border-t pt-3" style={{ borderColor: theme.border }}>
               <p className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: theme.text }}>
                 <GitCommit className="h-3.5 w-3.5" />
-                Недавние коммиты
+                {t("repo.sidebar.recentCommits")}
               </p>
               <ul className="flex flex-col gap-2.5">
                 {summary.recent_commits.map((c) => (

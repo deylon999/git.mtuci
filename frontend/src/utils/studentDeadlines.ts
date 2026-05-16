@@ -1,4 +1,7 @@
 import type { Assignment, Course } from "../api/types";
+import { pluralWord } from "../i18n/plural";
+import { translate, translateWithParams, type Locale } from "../i18n";
+import { getI18nLocale } from "../i18n/runtime";
 
 export type DeadlineUrgency = "danger" | "warning" | "info" | "muted";
 
@@ -13,6 +16,10 @@ export interface StudentDeadlineItem {
   urgency: DeadlineUrgency;
 }
 
+function localeTag(locale: Locale): string {
+  return locale === "en" ? "en-US" : "ru-RU";
+}
+
 function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -25,38 +32,34 @@ function addDays(d: Date, days: number): Date {
   return x;
 }
 
-function formatTime(d: Date): string {
-  return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+function formatTime(d: Date, locale: Locale): string {
+  return d.toLocaleTimeString(localeTag(locale), { hour: "2-digit", minute: "2-digit" });
 }
 
-function pluralDays(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${n} день`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} дня`;
-  return `${n} дней`;
+function pluralDaysPhrase(n: number, locale: Locale): string {
+  const word = pluralWord(locale, "student.plural.days", n);
+  return locale === "en" && n === 1 ? word : `${n} ${word}`;
 }
 
-export function formatDeadlineLabel(deadline: Date, now = new Date()): string {
+export function formatDeadlineLabel(deadline: Date, now = new Date(), locale = getI18nLocale()): string {
   const today = startOfDay(now);
   const tomorrow = addDays(today, 1);
-  const dayAfterTomorrow = addDays(today, 2);
   const d = startOfDay(deadline);
 
   if (d.getTime() === today.getTime()) {
-    return `Сегодня ${formatTime(deadline)}`;
+    return translateWithParams(locale, "student.deadline.todayAt", { time: formatTime(deadline, locale) });
   }
   if (d.getTime() === tomorrow.getTime()) {
-    return `Завтра ${formatTime(deadline)}`;
+    return translateWithParams(locale, "student.deadline.tomorrowAt", { time: formatTime(deadline, locale) });
   }
 
   const diffMs = d.getTime() - today.getTime();
   const diffDays = Math.round(diffMs / (24 * 60 * 60 * 1000));
   if (diffDays >= 2 && diffDays <= 7) {
-    return `Через ${pluralDays(diffDays)}`;
+    return translateWithParams(locale, "student.deadline.inDays", { days: pluralDaysPhrase(diffDays, locale) });
   }
 
-  return deadline.toLocaleString("ru-RU", {
+  return deadline.toLocaleString(localeTag(locale), {
     day: "numeric",
     month: "short",
     hour: "2-digit",
@@ -82,18 +85,18 @@ export function isDeadlineToday(deadline: Date, now = new Date()): boolean {
   return startOfDay(deadline).getTime() === startOfDay(now).getTime();
 }
 
-export function pluralDeadlinesRu(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return "дедлайн";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "дедлайна";
-  return "дедлайнов";
+export function pluralDeadlines(count: number, locale = getI18nLocale()): string {
+  return pluralWord(locale, "student.plural.deadlines", count);
 }
 
-/** Имя из ФИО: в формате «Фамилия Имя …» берём вторую часть, не фамилию. */
-export function firstNameFromFullName(fullName: string): string {
+/** @deprecated Use pluralDeadlines(count, locale) */
+export function pluralDeadlinesRu(count: number): string {
+  return pluralDeadlines(count, "ru");
+}
+
+export function firstNameFromFullName(fullName: string, locale = getI18nLocale()): string {
   const trimmed = fullName.trim();
-  if (!trimmed) return "студент";
+  if (!trimmed) return translate(locale, "student.dashboard.studentFallback");
 
   const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length === 1) return parts[0];
@@ -105,6 +108,7 @@ export function buildDeadlinesFromCourses(
   courses: Course[],
   assignmentsByCourse: Map<string, Assignment[]>,
   now = new Date(),
+  locale = getI18nLocale(),
 ): StudentDeadlineItem[] {
   const items: StudentDeadlineItem[] = [];
 
@@ -121,7 +125,7 @@ export function buildDeadlinesFromCourses(
         name: a.title,
         course: course.title,
         deadline,
-        timeLabel: formatDeadlineLabel(deadline, now),
+        timeLabel: formatDeadlineLabel(deadline, now, locale),
         urgency: getDeadlineUrgency(deadline, now),
       });
     }
@@ -135,15 +139,19 @@ export function countDeadlinesToday(items: StudentDeadlineItem[], now = new Date
   return items.filter((item) => isDeadlineToday(item.deadline, now)).length;
 }
 
-export function deadlinesTodaySubtitles(items: StudentDeadlineItem[], now = new Date()): string {
+export function deadlinesTodaySubtitles(
+  items: StudentDeadlineItem[],
+  now = new Date(),
+  locale = getI18nLocale(),
+): string {
   const today = items.filter((item) => isDeadlineToday(item.deadline, now));
   if (today.length === 0) {
     const next = items[0];
-    if (!next) return "На сегодня нет";
-    return `Ближайший: ${next.name}`;
+    if (!next) return translate(locale, "student.deadline.noneToday");
+    return translateWithParams(locale, "student.deadline.nextPrefix", { name: next.name });
   }
   return today
     .slice(0, 2)
     .map((d) => d.name)
-    .join(" и ");
+    .join(locale === "en" ? " and " : " и ");
 }

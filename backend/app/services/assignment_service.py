@@ -10,6 +10,7 @@ from app.models.assignment import Assignment
 from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
 from app.models.user import User, UserRole
+from app.services.notification_service import notify_new_assignment_for_students
 from app.services.student_repository_service import ensure_student_repository
 
 
@@ -84,6 +85,13 @@ async def create_assignment(
 
     await session.commit()
     await session.refresh(assignment)
+    await notify_new_assignment_for_students(
+        session,
+        assignment=assignment,
+        course_title=course.title,
+        student_ids=enrolled_student_ids,
+    )
+    await session.commit()
     return assignment
 
 

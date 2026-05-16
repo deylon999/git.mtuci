@@ -6,6 +6,7 @@ import RepoProjectSidebar from "./RepoProjectSidebar";
 import type { StudentRepoSummary } from "../../api/studentDashboardApi";
 import type { StudentRepoMeta } from "../../hooks/useStudentRepoWorkspace";
 import type { ThemeColors } from "../../theme";
+import { useUserPreferences } from "../../context/UserPreferencesContext";
 
 interface RepoSectionShellProps {
   theme: ThemeColors;
@@ -42,7 +43,7 @@ export default function RepoSectionShell({
         style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text2 }}
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        К репозиториям
+        {t("repo.shell.backToRepos")}
       </Link>
 
       <div

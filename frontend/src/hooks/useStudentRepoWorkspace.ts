@@ -6,6 +6,7 @@ import {
   type StudentRepoSummary,
 } from "../api/studentDashboardApi";
 import { getCachedRepoWorkspace, setCachedRepoWorkspace } from "../utils/repoWorkspaceCache";
+import { tr } from "../utils/i18nLabels";
 
 export interface StudentRepoMeta {
   name: string;
@@ -79,7 +80,7 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
         }
       } catch (e) {
         if (cancelled) return;
-        const msg = e instanceof Error ? e.message : "Не удалось загрузить репозиторий";
+        const msg = e instanceof Error ? e.message : tr("repo.errors.workspaceLoadFailed");
         if (msg.includes("404") && /not found|не найден/i.test(msg)) {
           navigate("/repositories", { replace: true });
           return;

@@ -5,6 +5,7 @@ import RepoSectionShell from "../components/repo/RepoSectionShell";
 import { getStudentRepoCommits } from "../api/studentDashboardApi";
 import { useStudentRepoWorkspace, type StudentRepoMeta } from "../hooks/useStudentRepoWorkspace";
 import { formatRelativeTime } from "../utils/formatRelativeTime";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getTheme } from "../theme";
 
 interface BrowseState extends Partial<StudentRepoMeta> {
@@ -23,6 +24,7 @@ export default function StudentRepositoryCommitsPage({ isDarkTheme = false }: St
   const location = useLocation();
   const stateMeta = location.state as BrowseState | null;
   const { meta, summary, loading } = useStudentRepoWorkspace(repoId, stateMeta);
+  const { t, tp } = useUserPreferences();
 
   const [branch, setBranch] = useState(stateMeta?.branch ?? "main");
   const [commits, setCommits] = useState<
@@ -72,7 +74,7 @@ export default function StudentRepositoryCommitsPage({ isDarkTheme = false }: St
       meta={meta}
       summary={summary}
       loading={loading}
-      subtitle={`История коммитов · ветка ${branch}`}
+      subtitle={tp("repo.commits.subtitle", { branch })}
     >
       <div
         className="rounded-xl border overflow-hidden"
@@ -81,11 +83,11 @@ export default function StudentRepositoryCommitsPage({ isDarkTheme = false }: St
         {commitsLoading && page === 1 ? (
           <div className="flex justify-center gap-2 py-16 text-sm" style={{ color: theme.text2 }}>
             <Loader2 className="h-5 w-5 animate-spin" />
-            Загрузка коммитов…
+            {t("repo.commits.loading")}
           </div>
         ) : commits.length === 0 ? (
           <p className="py-16 text-center text-sm" style={{ color: theme.text2 }}>
-            Коммитов пока нет
+            {t("repo.commits.empty")}
           </p>
         ) : (
           <ul>
@@ -118,7 +120,7 @@ export default function StudentRepositoryCommitsPage({ isDarkTheme = false }: St
               className="text-sm font-medium hover:underline"
               style={{ color: theme.accent2 }}
             >
-              Загрузить ещё
+              {t("repo.commits.loadMore")}
             </button>
           </div>
         ) : null}

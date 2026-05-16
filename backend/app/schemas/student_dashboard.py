@@ -323,6 +323,20 @@ class StudentGroupRankingRead(BaseModel):
     entries: list[StudentGroupRankingEntryRead] = Field(default_factory=list)
 
 
+class StudentGitCloneTokenStatusRead(BaseModel):
+    configured: bool
+    masked_token: str | None = None
+    gitea_username: str | None = None
+
+
+class StudentGitCloneTokenRegenerateRead(BaseModel):
+    token: str
+    gitea_username: str
+    note: str = (
+        "Сохраните токен — он показывается один раз. Используйте в URL git clone для приватных репозиториев."
+    )
+
+
 class StudentGradeCourseRead(BaseModel):
     course_id: UUID
     title: str
@@ -356,8 +370,14 @@ class StudentGradesSummaryRead(BaseModel):
 
 
 class StudentForkItemRead(BaseModel):
-    id: UUID
-    event_type: str = Field(description="fork | repo_created")
-    source_repo: str
-    target_repo: str | None = None
-    created_at: datetime
+    id: str
+    name: str
+    fork_repo_path: str
+    parent_repo_path: str | None = None
+    parent_web_url: str | None = None
+    gitea_web_url: str | None = None
+    ahead_by: int | None = None
+    behind_by: int | None = None
+    open_pr_count: int | None = None
+    sync_status: str = "unknown"
+    updated_at: datetime | None = None

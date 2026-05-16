@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import type { ThemeColors } from "../../theme";
+import { useUserPreferences } from "../../context/UserPreferencesContext";
 
 interface RepoCreateFileModalProps {
   theme: ThemeColors;
@@ -19,6 +20,7 @@ export default function RepoCreateFileModal({
   onClose,
   onSubmit,
 }: RepoCreateFileModalProps) {
+  const { t } = useUserPreferences();
   const [path, setPath] = useState(defaultPath);
   const [content, setContent] = useState("");
   const [message, setMessage] = useState("Add file via MTUCI");
@@ -40,7 +42,7 @@ export default function RepoCreateFileModal({
     e.preventDefault();
     const cleaned = path.trim().replace(/^\/+/, "");
     if (!cleaned) {
-      setError("Укажите путь к файлу");
+      setError(t("repo.errors.filePathRequired"));
       return;
     }
     setSaving(true);
@@ -49,7 +51,7 @@ export default function RepoCreateFileModal({
       await onSubmit({ path: cleaned, content, message: message.trim() || `Add ${cleaned}` });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось создать файл");
+      setError(err instanceof Error ? err.message : t("repo.errors.createFileFailed"));
     } finally {
       setSaving(false);
     }
@@ -69,21 +71,21 @@ export default function RepoCreateFileModal({
       >
         <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: theme.border }}>
           <h3 className="text-sm font-semibold" style={{ color: theme.text }}>
-            Новый файл
+            {t("repo.createFile.title")}
           </h3>
-          <button type="button" onClick={onClose} className="p-1 rounded hover:opacity-80" aria-label="Закрыть">
+          <button type="button" onClick={onClose} className="p-1 rounded hover:opacity-80" aria-label={t("common.close")}>
             <X className="h-4 w-4" style={{ color: theme.text2 }} />
           </button>
         </div>
         <div className="px-4 py-4 flex flex-col gap-3 overflow-y-auto">
           <label className="flex flex-col gap-1 text-xs" style={{ color: theme.text2 }}>
-            Ветка
+            {t("repo.createFile.branch")}
             <span className="font-mono text-sm px-2 py-1.5 rounded border" style={{ borderColor: theme.border, color: theme.text }}>
               {branch}
             </span>
           </label>
           <label className="flex flex-col gap-1 text-xs" style={{ color: theme.text2 }}>
-            Путь к файлу
+            {t("repo.createFile.pathLabel")}
             <input
               value={path}
               onChange={(e) => setPath(e.target.value)}
@@ -97,7 +99,7 @@ export default function RepoCreateFileModal({
             />
           </label>
           <label className="flex flex-col gap-1 text-xs" style={{ color: theme.text2 }}>
-            Сообщение коммита
+            {t("repo.createFile.commitMessage")}
             <input
               value={message}
               onChange={(e) => setMessage(e.target.value)}
@@ -106,7 +108,7 @@ export default function RepoCreateFileModal({
             />
           </label>
           <label className="flex flex-col gap-1 text-xs flex-1 min-h-[120px]" style={{ color: theme.text2 }}>
-            Содержимое
+            {t("repo.createFile.content")}
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
@@ -131,7 +133,7 @@ export default function RepoCreateFileModal({
             className="rounded-lg border px-3 py-1.5 text-xs font-medium"
             style={{ borderColor: theme.border, color: theme.text2 }}
           >
-            Отмена
+            {t("common.cancel")}
           </button>
           <button
             type="submit"
@@ -140,7 +142,7 @@ export default function RepoCreateFileModal({
             style={{ backgroundColor: theme.accent, color: "#fff" }}
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-            Создать
+            {t("repo.createFile.submit")}
           </button>
         </div>
       </form>

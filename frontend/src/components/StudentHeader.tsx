@@ -8,18 +8,21 @@ import { getTheme } from "../theme";
 import { pageGutterClass } from "../layout/pageLayout";
 import { getDefaultRouteForRole } from "../utils/defaultRoute";
 import NotificationBell from "./NotificationBell";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 import type { UserRole } from "../api/types";
 
-function roleLabel(role: UserRole | null): string {
+function roleLabel(role: UserRole | null, t: (key: string) => string): string {
   switch (role) {
     case "student":
-      return "Студент";
+      return t("roles.student");
     case "teacher":
-      return "Преподаватель";
+      return t("roles.teacher");
     case "laborant":
-      return "Лаборант";
+      return t("roles.laborant");
+    case "admin":
+      return t("roles.admin");
     default:
-      return "Пользователь";
+      return t("roles.user");
   }
 }
 
@@ -30,8 +33,9 @@ interface StudentHeaderProps {
 
 export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: StudentHeaderProps) {
   const navigate = useNavigate();
+  const { t } = useUserPreferences();
 
-  const [userName, setUserName] = useState("Пользователь");
+  const [userName, setUserName] = useState(() => t("roles.user"));
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [homeHref, setHomeHref] = useState("/dashboard");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -44,14 +48,14 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
       try {
         const me = await getMe();
         if (!cancelled) {
-          setUserName(me.full_name || me.email || "Пользователь");
+          setUserName(me.full_name || me.email || t("roles.user"));
           setUserRole(me.role);
           setHomeHref(getDefaultRouteForRole(me.role));
           setAvatarUrl(me.avatar_url ? `${me.avatar_url}?t=${Date.now()}` : null);
         }
       } catch {
         if (!cancelled) {
-          setUserName("Пользователь");
+          setUserName(t("roles.user"));
           setUserRole(null);
           setAvatarUrl(null);
         }
@@ -62,7 +66,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
     const handleAvatarUpdate = (e: CustomEvent) => {
       const userData = e.detail;
       if (userData) {
-        setUserName(userData.full_name || userData.email || "Пользователь");
+        setUserName(userData.full_name || userData.email || t("roles.user"));
         setUserRole(userData.role);
         setHomeHref(getDefaultRouteForRole(userData.role));
         setAvatarUrl(userData.avatar_url ? `${userData.avatar_url}?t=${Date.now()}` : null);
@@ -74,7 +78,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
       cancelled = true;
       window.removeEventListener("avatarUpdated", handleAvatarUpdate as EventListener);
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -132,7 +136,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Поиск по курсам и заданиям…"
+                placeholder={t("header.searchStudent")}
                 className="w-full h-9 pl-10 pr-4 rounded-lg text-sm outline-none border focus:ring-2 focus:ring-blue-500/50"
                 style={{
                   backgroundColor: theme.inputBg,
@@ -149,7 +153,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
               onClick={onToggleTheme}
               className="flex items-center justify-center w-9 h-9 rounded-lg transition-colors"
               style={{ color: theme.text2 }}
-              title={isDarkTheme ? "Переключить на светлую тему" : "Переключить на тёмную тему"}
+              title={isDarkTheme ? t("header.themeToLight") : t("header.themeToDark")}
             >
               {isDarkTheme ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
@@ -187,7 +191,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
                     {userName}
                   </span>
                   <span className="text-[10px] leading-tight" style={{ color: theme.text2 }}>
-                    {roleLabel(userRole)}
+                    {roleLabel(userRole, t)}
                   </span>
                 </div>
                 <ChevronDown
@@ -206,7 +210,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
                       {userName}
                     </p>
                     <p className="text-xs truncate" style={{ color: theme.text2 }}>
-                      {roleLabel(userRole)}
+                      {roleLabel(userRole, t)}
                     </p>
                   </div>
 
@@ -217,7 +221,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
                     style={{ color: theme.text2 }}
                   >
                     <User className="h-4 w-4" />
-                    Профиль
+                    {t("header.profile")}
                   </Link>
 
                   <div className="border-t my-1" style={{ borderColor: theme.border }} />
@@ -229,7 +233,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
                     style={{ color: theme.danger }}
                   >
                     <LogOut className="h-4 w-4" />
-                    Выйти
+                    {t("header.logout")}
                   </button>
                 </div>
               ) : null}

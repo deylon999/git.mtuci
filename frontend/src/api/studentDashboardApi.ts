@@ -115,6 +115,28 @@ export function getStudentGroupRanking(): Promise<StudentGroupRanking> {
   return apiRequest<StudentGroupRanking>("/students/me/group-ranking");
 }
 
+export interface StudentGitCloneTokenStatus {
+  configured: boolean;
+  masked_token: string | null;
+  gitea_username: string | null;
+}
+
+export interface StudentGitCloneTokenRegenerate {
+  token: string;
+  gitea_username: string;
+  note: string;
+}
+
+export function getStudentGitCloneTokenStatus(): Promise<StudentGitCloneTokenStatus> {
+  return apiRequest<StudentGitCloneTokenStatus>("/students/me/git-clone-token");
+}
+
+export function regenerateStudentGitCloneToken(): Promise<StudentGitCloneTokenRegenerate> {
+  return apiRequest<StudentGitCloneTokenRegenerate>("/students/me/git-clone-token/regenerate", {
+    method: "POST",
+  });
+}
+
 export interface StudentDeadlineDetail extends StudentDeadlineDto {
   submitted: boolean;
 }
@@ -183,14 +205,27 @@ export function getStudentGrades(limit = 200): Promise<StudentGradesSummary> {
 
 export interface StudentForkItem {
   id: string;
-  event_type: "fork" | "repo_created";
-  source_repo: string;
-  target_repo: string | null;
-  created_at: string;
+  name: string;
+  fork_repo_path: string;
+  parent_repo_path: string | null;
+  parent_web_url: string | null;
+  gitea_web_url: string | null;
+  ahead_by: number | null;
+  behind_by: number | null;
+  open_pr_count: number | null;
+  sync_status: "up_to_date" | "ahead" | "behind" | "unknown" | string;
+  updated_at: string | null;
 }
 
 export function getStudentForks(limit = 100): Promise<StudentForkItem[]> {
   return apiRequest<StudentForkItem[]>(`/students/me/forks?limit=${limit}`);
+}
+
+export function syncStudentFork(repoPath: string): Promise<{ status: string }> {
+  const q = encodeURIComponent(repoPath);
+  return apiRequest<{ status: string }>(`/students/me/forks/sync?repo_path=${q}`, {
+    method: "POST",
+  });
 }
 
 export interface StudentRepositoriesStats {

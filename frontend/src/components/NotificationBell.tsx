@@ -4,20 +4,24 @@ import { Bell, Check, AlertTriangle, X } from "lucide-react";
 import { getTheme } from "../theme";
 import { useNotifications } from "../hooks/useNotifications";
 import type { Notification, NotificationType } from "../api/types";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
-function formatNotificationTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
+function useNotificationTimeFormatter() {
+  const { t, tp } = useUserPreferences();
+  return (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return "Только что";
-  if (diffMins < 60) return `${diffMins} мин назад`;
-  if (diffHours < 24) return `${diffHours} ч назад`;
-  if (diffDays === 1) return "Вчера";
-  return `${diffDays} дн назад`;
+    if (diffMins < 1) return t("time.justNow");
+    if (diffMins < 60) return tp("time.minutesAgo", { n: diffMins });
+    if (diffHours < 24) return tp("time.hoursAgo", { n: diffHours });
+    if (diffDays === 1) return t("time.yesterday");
+    return tp("time.daysAgo", { n: diffDays });
+  };
 }
 
 function NotificationIcon({ type, read }: { type: NotificationType; read: boolean }) {
@@ -40,6 +44,8 @@ interface NotificationBellProps {
 
 export default function NotificationBell({ isDarkTheme = false }: NotificationBellProps) {
   const navigate = useNavigate();
+  const { t, tp } = useUserPreferences();
+  const formatNotificationTime = useNotificationTimeFormatter();
   const theme = getTheme(isDarkTheme);
   const { notifications, unreadCount, refresh, markAsRead, markAllAsRead } = useNotifications();
   const [open, setOpen] = useState(false);
@@ -67,7 +73,7 @@ export default function NotificationBell({ isDarkTheme = false }: NotificationBe
         onClick={() => setOpen((v) => !v)}
         className="relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors"
         style={{ color: theme.text2 }}
-        aria-label="Уведомления"
+        aria-label={t("admin.notifications.ariaLabel")}
         aria-expanded={open}
       >
         <Bell className="h-5 w-5" />
@@ -92,10 +98,10 @@ export default function NotificationBell({ isDarkTheme = false }: NotificationBe
           >
             <div>
               <h3 className="text-sm font-semibold" style={{ color: theme.text }}>
-                Уведомления
+                {t("admin.notifications.title")}
               </h3>
               <p className="text-xs" style={{ color: theme.text2 }}>
-                {unreadCount} непрочитанных
+                {tp("admin.notifications.unread", { n: unreadCount })}
               </p>
             </div>
             {hasUnread ? (
@@ -104,7 +110,7 @@ export default function NotificationBell({ isDarkTheme = false }: NotificationBe
                 onClick={() => void markAllAsRead()}
                 className={`text-xs font-medium ${isDarkTheme ? "text-blue-400 hover:text-blue-300" : "text-blue-600 hover:text-blue-700"}`}
               >
-                Отметить все
+                {t("admin.notifications.markAll")}
               </button>
             ) : null}
           </div>
@@ -113,7 +119,7 @@ export default function NotificationBell({ isDarkTheme = false }: NotificationBe
             {notifications.length === 0 ? (
               <div className="px-4 py-8 text-center" style={{ color: theme.text2 }}>
                 <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Нет уведомлений</p>
+                <p className="text-sm">{t("admin.notifications.empty")}</p>
               </div>
             ) : (
               notifications.map((notification) => (

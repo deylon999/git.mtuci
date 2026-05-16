@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import type { FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { resetPassword } from "../api/authApi";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
+  const { t } = useUserPreferences();
   const [searchParams] = useSearchParams();
 
   // Read theme from localStorage (persisted across sessions)
@@ -55,17 +57,17 @@ export default function ResetPasswordPage() {
     setError(null);
 
     if (newPassword.length < 8) {
-      setError("Пароль должен содержать минимум 8 символов");
+      setError(t("auth.reset.passwordMinLength"));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError("Пароли не совпадают");
+      setError(t("auth.reset.passwordMismatch"));
       return;
     }
 
     if (!token) {
-      setError("Недействительная или отсутствующая ссылка для сброса пароля");
+      setError(t("auth.reset.invalidToken"));
       return;
     }
 
@@ -74,7 +76,7 @@ export default function ResetPasswordPage() {
       await resetPassword(token, newPassword);
       setSuccess(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reset password");
+      setError(err instanceof Error ? err.message : t("auth.reset.error"));
     } finally {
       setLoading(false);
     }
@@ -85,27 +87,27 @@ export default function ResetPasswordPage() {
       <div className={`w-full max-w-md rounded-xl border p-8 shadow-md ${cardBg} transition-colors`}>
         <div className="mb-6 text-center">
           <div className={`text-xl font-semibold ${brandText} transition-colors`}>GIT.MTUCI</div>
-          <h1 className={`mt-3 text-2xl font-semibold ${titleText} transition-colors`}>Новый пароль</h1>
-          <p className={`mt-1 text-sm ${subtitleText} transition-colors`}>Введите новый пароль для вашего аккаунта.</p>
+          <h1 className={`mt-3 text-2xl font-semibold ${titleText} transition-colors`}>{t("auth.reset.title")}</h1>
+          <p className={`mt-1 text-sm ${subtitleText} transition-colors`}>{t("auth.reset.subtitleAccount")}</p>
         </div>
 
         {success ? (
           <div className="space-y-4">
             <div className={`rounded-lg border p-4 text-sm ${successBg} transition-colors`}>
-              Пароль успешно изменен! Теперь вы можете войти с новым паролем.
+              {t("auth.reset.successDetail")}
             </div>
             <button
               type="button"
               onClick={() => navigate("/login")}
               className={`w-full rounded-lg px-3 py-2.5 font-medium transition ${primaryBtn}`}
             >
-              Войти в систему
+              {t("auth.reset.goToLogin")}
             </button>
           </div>
         ) : (
           <form onSubmit={onSubmit} className="space-y-4">
             <div>
-              <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>Новый пароль</label>
+              <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>{t("auth.reset.password")}</label>
               <input
                 className={`w-full rounded-lg border px-3 py-2.5 outline-none transition ${inputBg} ${inputFocus}`}
                 type="password"
@@ -114,12 +116,12 @@ export default function ResetPasswordPage() {
                 required
                 minLength={8}
                 autoComplete="new-password"
-                placeholder="Минимум 8 символов"
+                placeholder={t("auth.reset.placeholderMin")}
               />
             </div>
 
             <div>
-              <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>Подтвердите пароль</label>
+              <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>{t("auth.reset.confirmPassword")}</label>
               <input
                 className={`w-full rounded-lg border px-3 py-2.5 outline-none transition ${inputBg} ${inputFocus}`}
                 type="password"
@@ -128,7 +130,7 @@ export default function ResetPasswordPage() {
                 required
                 minLength={8}
                 autoComplete="new-password"
-                placeholder="Повторите пароль"
+                placeholder={t("auth.reset.placeholderRepeat")}
               />
             </div>
 
@@ -141,7 +143,7 @@ export default function ResetPasswordPage() {
               disabled={loading}
               className={`w-full rounded-lg px-3 py-2.5 font-medium transition disabled:opacity-60 ${primaryBtn}`}
             >
-              {loading ? "Сохранение..." : "Сохранить новый пароль"}
+              {loading ? t("auth.reset.submittingAlt") : t("auth.reset.submitSave")}
             </button>
 
             <button
@@ -149,7 +151,7 @@ export default function ResetPasswordPage() {
               onClick={() => navigate("/login")}
               className={`w-full rounded-lg border px-3 py-2.5 transition ${secondaryBtn}`}
             >
-              Отмена
+              {t("auth.reset.cancel")}
             </button>
           </form>
         )}

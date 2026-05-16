@@ -1,3 +1,5 @@
+import { useUserPreferences } from "../context/UserPreferencesContext";
+
 interface ConfirmModalProps {
   isOpen: boolean;
   title: string;
@@ -14,13 +16,17 @@ export default function ConfirmModal({
   isOpen,
   title,
   message,
-  confirmText = "Подтвердить",
-  cancelText = "Отмена",
+  confirmText,
+  cancelText,
   onConfirm,
   onCancel,
   isDangerous = false,
   isLoading = false,
 }: ConfirmModalProps) {
+  const { t } = useUserPreferences();
+  const resolvedConfirm = confirmText ?? t("common.confirm");
+  const resolvedCancel = cancelText ?? t("common.cancel");
+
   if (!isOpen) return null;
 
   return (
@@ -35,7 +41,7 @@ export default function ConfirmModal({
             disabled={isLoading}
             className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-60 dark:border-[#30363d] dark:bg-[#2a2a2a] dark:text-[#e6e6e6] dark:hover:bg-[#333333]"
           >
-            {cancelText}
+            {resolvedCancel}
           </button>
           <button
             onClick={onConfirm}
@@ -46,7 +52,7 @@ export default function ConfirmModal({
                 : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
-            {isLoading ? "Загрузка..." : confirmText}
+            {isLoading ? t("common.loading") : resolvedConfirm}
           </button>
         </div>
       </div>

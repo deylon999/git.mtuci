@@ -6,9 +6,11 @@ import { getToken } from "../api/client";
 import { login, getMe } from "../api/authApi";
 import { getDefaultRouteForRole } from "../utils/defaultRoute";
 import { getTheme } from "../theme";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { t } = useUserPreferences();
 
   // Read theme from localStorage (persisted across sessions)
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
@@ -59,7 +61,7 @@ export default function LoginPage() {
       const me = await getMe({ force: true });
       navigate(getDefaultRouteForRole(me.role), { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось войти");
+      setError(err instanceof Error ? err.message : t("auth.login.error"));
     } finally {
       setLoading(false);
     }
@@ -70,13 +72,13 @@ export default function LoginPage() {
       <div className="w-full max-w-md rounded-xl border p-8 shadow-md" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
         <div className="mb-6 text-center">
           <div className="text-xl font-semibold" style={{ color: theme.accent }}>GIT.MTUCI</div>
-          <h1 className="mt-3 text-2xl font-semibold" style={{ color: theme.text }}>Вход в систему</h1>
-          <p className="mt-1 text-sm" style={{ color: theme.text2 }}>Войдите, чтобы просматривать курсы и задания.</p>
+          <h1 className="mt-3 text-2xl font-semibold" style={{ color: theme.text }}>{t("auth.login.title")}</h1>
+          <p className="mt-1 text-sm" style={{ color: theme.text2 }}>{t("auth.login.subtitle")}</p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium transition-colors" style={{ color: theme.text2 }}>Эл. почта</label>
+            <label className="mb-1 block text-sm font-medium transition-colors" style={{ color: theme.text2 }}>{t("auth.login.email")}</label>
             <input
               className="w-full rounded-lg border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
@@ -89,7 +91,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium transition-colors" style={{ color: theme.text2 }}>Пароль</label>
+            <label className="mb-1 block text-sm font-medium transition-colors" style={{ color: theme.text2 }}>{t("auth.login.password")}</label>
             <div className="relative">
               <input
                 className="w-full rounded-lg border px-3 py-2.5 pr-10 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
@@ -123,14 +125,14 @@ export default function LoginPage() {
                   className="rounded text-blue-600 focus:ring-blue-500"
                   style={{ borderColor: theme.border }}
                 />
-                Запомнить меня
+                {t("auth.login.remember")}
               </label>
               <Link
                 to="/forgot-password"
                 className="text-sm transition hover:underline"
                 style={{ color: theme.accent }}
               >
-                Забыли пароль?
+                {t("auth.login.forgot")}
               </Link>
             </div>
           </div>
@@ -145,7 +147,7 @@ export default function LoginPage() {
             className="w-full rounded-lg px-3 py-2.5 font-medium transition disabled:opacity-60"
             style={{ backgroundColor: theme.accent, color: '#fff' }}
           >
-            {loading ? "Вход…" : "Войти"}
+            {loading ? t("auth.login.submitting") : t("auth.login.submit")}
           </button>
 
           <button
@@ -154,7 +156,7 @@ export default function LoginPage() {
             className="w-full rounded-lg border px-3 py-2.5 transition"
             style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text }}
           >
-            Регистрация
+            {t("auth.login.register")}
           </button>
         </form>
       </div>

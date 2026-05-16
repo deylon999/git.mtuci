@@ -23,6 +23,7 @@ import type {
   SubmissionStatusRead,
   UserRead,
 } from "../api/types";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 type ViewState = {
   file: RepoFile | null;
@@ -52,6 +53,7 @@ function getInitials(fullName: string) {
 }
 
 export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: AssignmentPageProps) {
+  const { t, tp } = useUserPreferences();
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
     if (isDarkThemeProp !== undefined) return isDarkThemeProp;
     const saved = localStorage.getItem("theme");
@@ -130,7 +132,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
   });
 
   const headerTitle = useMemo(() => {
-    if (!assignment) return "Задание";
+    if (!assignment) return t("repo.assignment.defaultTitle");
     return assignment.title;
   }, [assignment]);
 
@@ -176,7 +178,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
           setCourse(courses.find((c) => c.id === courseId) ?? null);
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Ошибка загрузки");
+        if (!cancelled) setError(err instanceof Error ? err.message : t("repo.errors.loadFailed"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -203,7 +205,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
         setCommits(commitsRes);
         setFiles(filesRes);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Ошибка загрузки");
+        if (!cancelled) setError(err instanceof Error ? err.message : t("repo.errors.loadFailed"));
       }
     }
 
@@ -233,7 +235,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
         }
       } catch (err) {
         if (!cancelled) {
-          setSubmissionsError(err instanceof Error ? err.message : "Не удалось загрузить сдачи");
+          setSubmissionsError(err instanceof Error ? err.message : t("repo.errors.submissionsLoadFailed"));
         }
       } finally {
         if (!cancelled) setSubmissionsLoading(false);
@@ -258,7 +260,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
         if (cancelled) return;
         setMyGrade(data);
       } catch (err) {
-        if (!cancelled) setMyGradeError(err instanceof Error ? err.message : "Не удалось загрузить оценку");
+        if (!cancelled) setMyGradeError(err instanceof Error ? err.message : t("repo.errors.gradeLoadFailed"));
       } finally {
         if (!cancelled) setMyGradeLoading(false);
       }
@@ -286,7 +288,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
         file: f,
         loading: false,
         content: null,
-        error: err instanceof Error ? err.message : "Не удалось загрузить файл",
+        error: err instanceof Error ? err.message : t("repo.errors.fileLoadFailed"),
       });
     }
   }
@@ -298,7 +300,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
     const parsed = Number(gradeRaw);
     const gradeMax = course?.grade_max ?? 100;
     if (!Number.isInteger(parsed) || parsed < 0 || parsed > gradeMax) {
-      setSubmissionsError(`Оценка должна быть целым числом от 0 до ${gradeMax}.`);
+      setSubmissionsError(tp("repo.assignment.gradeIntError", { max: gradeMax }));
       return;
     }
 
@@ -313,7 +315,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
       setGradeInputs((prev) => ({ ...prev, [studentId]: String(updated.grade ?? "") }));
       setCommentInputs((prev) => ({ ...prev, [studentId]: updated.comment ?? "" }));
     } catch (err) {
-      setSubmissionsError(err instanceof Error ? err.message : "Не удалось сохранить оценку");
+      setSubmissionsError(err instanceof Error ? err.message : t("repo.errors.gradeSaveFailed"));
     } finally {
       setSavingGradeFor(null);
     }
@@ -322,11 +324,11 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
   async function onComparePlagiarism() {
     if (!courseId || !assignmentId) return;
     if (!selectedStudent1Id || !selectedStudent2Id) {
-      setPlagiarismError("Выберите двух студентов для сравнения.");
+      setPlagiarismError(t("repo.errors.selectTwoStudents"));
       return;
     }
     if (selectedStudent1Id === selectedStudent2Id) {
-      setPlagiarismError("Нужно выбрать двух разных студентов.");
+      setPlagiarismError(t("repo.errors.selectDifferentStudents"));
       return;
     }
 
@@ -339,7 +341,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
       });
       setPlagiarism(result);
     } catch (err) {
-      setPlagiarismError(err instanceof Error ? err.message : "Не удалось сравнить работы");
+      setPlagiarismError(err instanceof Error ? err.message : t("repo.errors.compareFailed"));
     } finally {
       setPlagiarismLoading(false);
     }
@@ -384,11 +386,11 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
     <div className={`mx-auto max-w-7xl px-4 ${pageBg} min-h-screen py-4`}>
       <div className={`mb-3 text-sm ${textSecondary}`}>
         <Link to="/courses" className={`${breadcrumbText} ${breadcrumbHover}`}>
-          Курсы
+          {t("repo.assignment.coursesBreadcrumb")}
         </Link>
         <span className={`mx-2 ${separatorColor}`}>&gt;</span>
         <Link to={`/courses/${courseId}`} className={`${breadcrumbText} ${breadcrumbHover}`}>
-          {course?.title || "Курс"}
+          {course?.title || t("repo.assignment.courseFallback")}
         </Link>
         <span className={`mx-2 ${separatorColor}`}>&gt;</span>
         <span className={`font-medium ${textPrimary}`}>{headerTitle}</span>
@@ -399,23 +401,23 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
         {assignment?.description ? <div className={`mt-2 text-sm ${textSecondary}`}>{assignment.description}</div> : null}
         {assignment?.deadline ? (
           <div className={`mt-3 inline-flex rounded-full px-3 py-1 text-sm ${deadlineBadge}`}>
-            Дедлайн: <span className="ml-1 font-medium">{formatDate(assignment.deadline)}</span>
+            {t("repo.assignment.deadline")} <span className="ml-1 font-medium">{formatDate(assignment.deadline)}</span>
           </div>
         ) : null}
         {assignment && assignment.late_penalty_periods.length > 0 ? (
           <div className={`mt-3 rounded-lg border ${penaltyBox} p-3 text-sm`}>
-            <div className={`mb-1 font-medium ${textPrimary}`}>Штрафы за просрочку</div>
+            <div className={`mb-1 font-medium ${textPrimary}`}>{t("repo.assignment.penaltiesTitle")}</div>
             {sortedPenaltyPeriods.map((p, idx) => (
                 <div key={`${p.weeks}-${idx}`} className={textSecondary}>
-                  До {p.weeks} недели → макс. {p.max_grade}
+                  {tp("repo.assignment.penaltyWeek", { weeks: p.weeks, grade: p.max_grade })}
                 </div>
               ))}
-            <div className={textPrimary}>Позже → макс. 0</div>
+            <div className={textPrimary}>{t("repo.assignment.penaltyLater")}</div>
           </div>
         ) : null}
       </div>
 
-      {loading ? <div className={`text-sm ${textSecondary}`}>Загрузка…</div> : null}
+      {loading ? <div className={`text-sm ${textSecondary}`}>{t("common.loading")}</div> : null}
       {error ? (
         <div className={`rounded-md border p-3 text-sm ${errorBox}`}>
           {error}
@@ -424,13 +426,13 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
 
       {me?.role === "teacher" ? (
         <div className={`mb-4 rounded-xl border ${cardBorder} ${cardBg} p-4 shadow-md`}>
-          <div className={`mb-2 text-sm font-semibold ${textPrimary}`}>Репозиторий студента для просмотра файлов и коммитов</div>
+          <div className={`mb-2 text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.studentRepoHint")}</div>
           <select
             value={selectedRepoStudentId}
             onChange={(e) => setSelectedRepoStudentId(e.target.value)}
             className={`w-full max-w-md rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 ${inputBg} ${textPrimary}`}
           >
-            <option value="">Выберите студента</option>
+            <option value="">{t("repo.assignment.selectStudent")}</option>
             {submissions.map((s) => (
               <option key={`repo-${s.student_id}`} value={s.student_id}>
                 {s.student_full_name}
@@ -442,13 +444,13 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
 
       <div className="mb-4 flex flex-wrap gap-2">
         <button type="button" className={tabButtonClass("commits")} onClick={() => setActiveTab("commits")}>
-          Коммиты
+          {t("repo.assignment.tabCommits")}
         </button>
         <button type="button" className={tabButtonClass("files")} onClick={() => setActiveTab("files")}>
-          Файлы
+          {t("repo.assignment.tabFiles")}
         </button>
         <button type="button" className={tabButtonClass("grading")} onClick={() => setActiveTab("grading")}>
-          {me?.role === "student" ? "Моя оценка" : "Оценивание"}
+          {me?.role === "student" ? t("repo.assignment.myGrade") : t("repo.assignment.grading")}
         </button>
         {me?.role === "teacher" ? (
           <button
@@ -456,14 +458,14 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
             className={tabButtonClass("plagiarism")}
             onClick={() => setActiveTab("plagiarism")}
           >
-            Антиплагиат
+            {t("repo.assignment.tabPlagiarism")}
           </button>
         ) : null}
       </div>
 
       {activeTab === "commits" ? (
         <div className={`rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
-          <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>История коммитов</div>
+          <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.commitsHistory")}</div>
           <div className="space-y-4">
             {commits.map((c) => (
               <div key={c.sha} className="relative pl-6">
@@ -480,14 +482,14 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                 </div>
               </div>
             ))}
-            {!loading && commits.length === 0 ? <div className={`text-sm ${textSecondary}`}>Коммитов пока нет.</div> : null}
+            {!loading && commits.length === 0 ? <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.noCommits")}</div> : null}
           </div>
         </div>
       ) : null}
 
       {activeTab === "files" ? (
         <div className={`rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
-          <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>Файлы (дерево)</div>
+          <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.filesTree")}</div>
           <div className="space-y-2">
             {sortedFiles.map((f) => (
                 <div
@@ -508,7 +510,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                       onClick={() => onViewFile(f)}
                       className={`rounded-lg px-3 py-1 text-sm transition ${buttonPrimary}`}
                     >
-                      Открыть
+                      {t("repo.assignment.open")}
                     </button>
                   ) : (
                     <div className={`text-xs ${textTertiary}`}>—</div>
@@ -516,7 +518,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                 </div>
               ))}
 
-            {!loading && files.length === 0 ? <div className={`text-sm ${textSecondary}`}>Файлов не найдено.</div> : null}
+            {!loading && files.length === 0 ? <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.noFiles")}</div> : null}
           </div>
         </div>
       ) : null}
@@ -524,7 +526,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
       {me?.role === "teacher" && activeTab === "plagiarism" ? (
         <div className={`rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div className={`text-lg font-semibold ${textPrimary}`}>AI антиплагиат</div>
+            <div className={`text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.plagiarismTitle")}</div>
           </div>
 
           <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
@@ -533,7 +535,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
               onChange={(e) => setSelectedStudent1Id(e.target.value)}
               className={`w-full rounded-md border ${inputBorder} px-3 py-2 text-sm ${inputBg} ${textPrimary}`}
             >
-              <option value="">Студент 1</option>
+              <option value="">{t("repo.assignment.student1")}</option>
               {submissions.map((s) => (
                 <option key={`s1-${s.student_id}`} value={s.student_id}>
                   {s.student_full_name}
@@ -545,7 +547,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
               onChange={(e) => setSelectedStudent2Id(e.target.value)}
               className={`w-full rounded-md border ${inputBorder} px-3 py-2 text-sm ${inputBg} ${textPrimary}`}
             >
-              <option value="">Студент 2</option>
+              <option value="">{t("repo.assignment.student2")}</option>
               {submissions.map((s) => (
                 <option key={`s2-${s.student_id}`} value={s.student_id}>
                   {s.student_full_name}
@@ -558,7 +560,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
               disabled={plagiarismLoading || submissions.length < 2}
               className={`rounded-lg px-3 py-2 text-sm transition disabled:opacity-60 ${buttonPrimary}`}
             >
-              {plagiarismLoading ? "Сравнение..." : "Сравнить"}
+              {plagiarismLoading ? t("repo.assignment.comparing") : t("repo.assignment.compare")}
             </button>
           </div>
 
@@ -585,12 +587,12 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                         <div className={`text-3xl font-bold ${textPrimary}`}>
                           {(plagiarism.similarity * 100).toFixed(1)}%
                         </div>
-                        <div className={`text-xs ${textTertiary}`}>Схожесть</div>
+                        <div className={`text-xs ${textTertiary}`}>{t("repo.assignment.similarity")}</div>
                       </div>
                     </div>
                   </div>
                   <div className={`mt-3 text-sm ${textSecondary}`}>
-                    Вердикт:{" "}
+                    {t("repo.assignment.verdict")}{" "}
                     <span className={`rounded px-2 py-0.5 text-xs ${verdictClass(plagiarism.verdict)}`}>
                       {plagiarism.verdict}
                     </span>
@@ -606,7 +608,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                         </div>
                         <div className="min-w-0">
                           <div className={`truncate text-sm font-semibold ${textPrimary}`}>
-                            {selectedStudent1?.student_full_name ?? "Студент 1"}
+                            {selectedStudent1?.student_full_name ?? t("repo.assignment.student1")}
                           </div>
                         </div>
                       </div>
@@ -625,7 +627,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                         </div>
                         <div className="min-w-0">
                           <div className={`truncate text-sm font-semibold ${textPrimary}`}>
-                            {selectedStudent2?.student_full_name ?? "Студент 2"}
+                            {selectedStudent2?.student_full_name ?? t("repo.assignment.student2")}
                           </div>
                         </div>
                       </div>
@@ -633,7 +635,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                   </div>
 
                   <div>
-                    <div className={`text-sm font-semibold ${textPrimary}`}>Совпадающие AST элементы</div>
+                    <div className={`text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.matchingAst")}</div>
                     {plagiarism.common_features.length > 0 ? (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {plagiarism.common_features.map((feature) => (
@@ -646,26 +648,26 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                         ))}
                       </div>
                     ) : (
-                      <div className={`mt-2 text-sm ${textSecondary}`}>Совпадающих AST элементов не найдено.</div>
+                      <div className={`mt-2 text-sm ${textSecondary}`}>{t("repo.assignment.noMatchingAst")}</div>
                     )}
                   </div>
 
                   <div className={`rounded-lg border ${cardBorder} ${cardBg} p-3`}>
                     <div className="mb-3 grid items-center gap-3 md:grid-cols-[1fr_auto_1fr]">
                       <div className={`text-sm font-semibold ${textPrimary}`}>
-                        {selectedStudent1?.student_full_name ?? "Студент 1"}
+                        {selectedStudent1?.student_full_name ?? t("repo.assignment.student1")}
                       </div>
                       <div className={`text-center text-xs font-semibold ${textSecondary}`}>
                         {(plagiarism.similarity * 100).toFixed(1)}%
                       </div>
                       <div className={`text-right text-sm font-semibold ${textPrimary}`}>
-                        {selectedStudent2?.student_full_name ?? "Студент 2"}
+                        {selectedStudent2?.student_full_name ?? t("repo.assignment.student2")}
                       </div>
                     </div>
                     <div className="grid gap-3 lg:grid-cols-2">
                       <div className={`overflow-hidden rounded-md border ${cardBorder}`}>
                         <div className={`border-b px-3 py-2 text-sm font-semibold ${codeHeader}`}>
-                          {selectedStudent1?.student_full_name ?? "Студент 1"}
+                          {selectedStudent1?.student_full_name ?? t("repo.assignment.student1")}
                         </div>
                         <div className={`max-h-[420px] overflow-auto font-mono text-xs ${inputBg}`}>
                           {plagiarism.lines1.map((row, idx) => (
@@ -683,7 +685,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                       </div>
                       <div className={`overflow-hidden rounded-md border ${cardBorder}`}>
                         <div className={`border-b px-3 py-2 text-sm font-semibold ${codeHeader}`}>
-                          {selectedStudent2?.student_full_name ?? "Студент 2"}
+                          {selectedStudent2?.student_full_name ?? t("repo.assignment.student2")}
                         </div>
                         <div className={`max-h-[420px] overflow-auto font-mono text-xs ${inputBg}`}>
                           {plagiarism.lines2.map((row, idx) => (
@@ -711,8 +713,8 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
 
       {me?.role === "teacher" && activeTab === "grading" ? (
         <div className={`rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
-          <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>Оценивание студентов</div>
-          {submissionsLoading ? <div className={`text-sm ${textSecondary}`}>Загрузка сдач…</div> : null}
+          <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.gradeStudents")}</div>
+          {submissionsLoading ? <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.loadingSubmissions")}</div> : null}
           {submissionsError ? (
             <div className={`mb-3 rounded-md border p-3 text-sm ${errorBox}`}>
               {submissionsError}
@@ -729,14 +731,14 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                       s.status === "submitted" ? (isDarkTheme ? "bg-green-900/30 text-green-300" : "bg-green-100 text-green-800") : (isDarkTheme ? "bg-gray-800 text-gray-300" : "bg-gray-100 text-gray-700")
                     }`}
                   >
-                    {s.status === "submitted" ? "Сдано" : "Не сдано"}
+                    {s.status === "submitted" ? t("repo.assignment.submitted") : t("repo.assignment.notSubmitted")}
                   </div>
                   <div className={`text-xs ${textTertiary}`}>
-                    Последний коммит: {s.last_commit_at ? formatDate(s.last_commit_at) : "—"}
+                    {t("repo.assignment.lastCommit")} {s.last_commit_at ? formatDate(s.last_commit_at) : "—"}
                   </div>
                 </div>
 
-                <div className={`mt-3 text-xs ${textTertiary}`}>Оценка (0 — {course?.grade_max ?? 100})</div>
+                <div className={`mt-3 text-xs ${textTertiary}`}>{tp("repo.assignment.gradeRange", { max: course?.grade_max ?? 100 })}</div>
                 <div className="mt-1 grid gap-2 md:grid-cols-[140px_1fr_auto]">
                   <input
                     type="number"
@@ -762,7 +764,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                         [s.student_id]: e.target.value,
                       }))
                     }
-                    placeholder="Комментарий"
+                    placeholder={t("repo.assignment.commentPlaceholder")}
                     className={`w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 ${inputBg} ${textPrimary}`}
                   />
                   <button
@@ -771,19 +773,19 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                     disabled={savingGradeFor === s.student_id}
                     className={`rounded-lg px-3 py-2 text-sm transition disabled:opacity-60 ${buttonPrimary}`}
                   >
-                    {savingGradeFor === s.student_id ? "Сохранение..." : "Сохранить"}
+                    {savingGradeFor === s.student_id ? t("repo.assignment.saving") : t("repo.assignment.save")}
                   </button>
                 </div>
 
                 <div className={`mt-2 text-xs ${textTertiary}`}>
-                  Оригинальная: {s.grade ?? "—"} | Штраф: -{(s.penalty_points ?? 0).toFixed(1)} | Итоговая:{" "}
-                  {s.final_grade !== null ? s.final_grade.toFixed(1) : "—"} | Оценено:{" "}
+                  {t("repo.assignment.originalGrade")} {s.grade ?? "—"} | {t("repo.assignment.penalty")} -{(s.penalty_points ?? 0).toFixed(1)} | {t("repo.assignment.finalGrade")}{" "}
+                  {s.final_grade !== null ? s.final_grade.toFixed(1) : "—"} | {t("repo.assignment.gradedAt")}{" "}
                   {s.graded_at ? formatDate(s.graded_at) : "—"}
                 </div>
               </div>
             ))}
             {!submissionsLoading && submissions.length === 0 ? (
-              <div className={`text-sm ${textSecondary}`}>В этом курсе пока нет студентов.</div>
+              <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.noStudentsInCourse")}</div>
             ) : null}
           </div>
         </div>
@@ -791,8 +793,8 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
 
       {me?.role === "student" && activeTab === "grading" ? (
         <div className={`rounded-xl border ${cardBorder} ${cardBg} p-4 shadow-md`}>
-          <div className={`mb-2 text-lg font-semibold ${textPrimary}`}>Моя оценка</div>
-          {myGradeLoading ? <div className={`text-sm ${textSecondary}`}>Загрузка…</div> : null}
+          <div className={`mb-2 text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.myGrade")}</div>
+          {myGradeLoading ? <div className={`text-sm ${textSecondary}`}>{t("common.loading")}</div> : null}
           {myGradeError ? (
             <div className={`rounded-md border p-3 text-sm ${errorBox}`}>
               {myGradeError}
@@ -802,31 +804,33 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
             <div>
               <div className="mb-2">
                 {myGrade.grade === null ? (
-                  <div className={`text-sm ${textSecondary}`}>Статус сдачи будет рассчитан после выставления оценки.</div>
+                  <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.gradePendingHint")}</div>
                 ) : myGrade.weeks_late > 0 ? (
                   <div className={`text-sm ${isDarkTheme ? "text-red-400" : "text-red-700"}`}>
-                    Просрочено на {myGrade.weeks_late} нед., максимальная оценка теперь{" "}
-                    {myGrade.late_max_grade !== null ? myGrade.late_max_grade : 0}
+                    {tp("repo.assignment.weeksLate", {
+                      n: myGrade.weeks_late,
+                      max: myGrade.late_max_grade !== null ? myGrade.late_max_grade : 0,
+                    })}
                   </div>
                 ) : (
-                  <div className={`text-sm ${isDarkTheme ? "text-green-400" : "text-green-700"}`}>Сдано вовремя ✓</div>
+                  <div className={`text-sm ${isDarkTheme ? "text-green-400" : "text-green-700"}`}>{t("repo.assignment.onTime")}</div>
                 )}
               </div>
               {myGrade.grade !== null ? (
                 <div className="text-base font-medium">
-                  Моя оценка: {myGrade.grade} / {myGrade.grade_max}
+                  {t("repo.assignment.myGrade")}: {myGrade.grade} / {myGrade.grade_max}
                 </div>
               ) : (
-                <div className={`text-sm ${textSecondary}`}>Оценка еще не выставлена</div>
+                <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.gradeNotSet")}</div>
               )}
               {myGrade.final_grade !== null ? (
                 <div className={`mt-1 text-base font-semibold ${isDarkTheme ? "text-purple-400" : "text-purple-700"}`}>
-                  Итоговая с учетом штрафа: {myGrade.final_grade.toFixed(1)} / {myGrade.grade_max}
+                  {tp("repo.assignment.gradeWithPenalty", { grade: myGrade.final_grade.toFixed(1), max: myGrade.grade_max })}
                 </div>
               ) : null}
               {myGrade.comment ? (
                 <div className={`mt-2 rounded-md border ${cardBorder} ${isDarkTheme ? "bg-[#1f2937]" : "bg-gray-50"} p-3 text-sm ${textSecondary}`}>
-                  Комментарий преподавателя: {myGrade.comment}
+                  {tp("repo.assignment.teacherComment", { comment: myGrade.comment })}
                 </div>
               ) : null}
             </div>
@@ -839,7 +843,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
           <div className={`w-full max-w-3xl rounded-lg p-4 shadow-lg ${modalBg}`}>
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <div className={`text-lg font-semibold ${textPrimary}`}>Файл: {view.file.name}</div>
+                <div className={`text-lg font-semibold ${textPrimary}`}>{tp("repo.assignment.fileTitle", { name: view.file.name })}</div>
                 <div className={`mt-1 text-xs ${textTertiary}`}>
                   {view.file.type} • {view.file.size ?? 0} bytes
                 </div>
@@ -850,12 +854,12 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                 }
                 className={`rounded-md border px-3 py-1 text-sm transition ${isDarkTheme ? "border-[#30363d] hover:bg-[#2d2d2d]" : "border-gray-300 hover:bg-gray-50"} ${inputBg} ${textPrimary}`}
               >
-                Закрыть
+                {t("repo.assignment.close")}
               </button>
             </div>
 
             {view.loading ? (
-              <div className={`text-sm ${textSecondary}`}>Загрузка файла…</div>
+              <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.loadingFile")}</div>
             ) : view.error ? (
               <div className={`rounded-md border p-3 text-sm ${errorBox}`}>
                 {view.error}

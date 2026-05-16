@@ -11,6 +11,8 @@ import {
   Webhook,
 } from "lucide-react";
 import type { StudentRepoSummary } from "../../api/studentDashboardApi";
+import { useUserPreferences } from "../../context/UserPreferencesContext";
+import { pluralWord } from "../../i18n/plural";
 import type { StudentRepoMeta } from "../../hooks/useStudentRepoWorkspace";
 import type { ThemeColors } from "../../theme";
 
@@ -54,6 +56,7 @@ function PlaceholderBlock({
 }
 
 export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettingsPanelProps) {
+  const { t, tp } = useUserPreferences();
   const [section, setSection] = useState<SettingsSectionId>("general");
   const [copied, setCopied] = useState(false);
   const cloneUrl = meta?.cloneUrl ?? "";
@@ -70,7 +73,15 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
   };
 
   const branchCount = summary?.branches_count ?? 1;
+  const branchWord = pluralWord(branchCount, {
+    one: t("repo.sidebar.branchOne"),
+    few: t("repo.sidebar.branchMany"),
+    many: t("repo.sidebar.branchMany"),
+  });
   const defaultBranch = summary?.default_branch ?? "main";
+  const ownerName = meta?.giteaPath?.split("/")[0] ?? "—";
+  const visibilityValue =
+    meta?.visibility === "public" ? t("repo.settings.yes") : t("repo.settings.no");
 
   return (
     <div
@@ -154,7 +165,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                 </div>
                 {copied ? (
                   <p className="text-[11px] mt-1" style={{ color: theme.success }}>
-                    Скопировано
+                    {t("repo.settings.copied")}
                   </p>
                 ) : null}
               </PlaceholderBlock>
@@ -170,12 +181,11 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
             </h2>
             <PlaceholderBlock theme={theme} title="Access">
               <p className="text-sm" style={{ color: theme.text2 }}>
-                Управление соавторами и командами появится в следующей версии. Сейчас доступ определяется
-                владельцем репозитория в Gitea.
+                {t("repo.settings.collaboratorsHint")}
               </p>
               <p className="text-xs mt-2 flex items-center gap-1.5" style={{ color: theme.text3 }}>
                 <Lock className="h-3.5 w-3.5" />
-                Владелец: {meta?.giteaPath?.split("/")[0] ?? "—"}
+                {tp("repo.settings.ownerLabel", { name: ownerName })}
               </p>
             </PlaceholderBlock>
           </>
@@ -193,9 +203,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
             </PlaceholderBlock>
             <PlaceholderBlock theme={theme} title="Branch rules">
               <p className="text-sm" style={{ color: theme.text2 }}>
-                Защита веток и правила merge — в разработке. Сейчас в репозитории{" "}
-                <strong style={{ color: theme.text }}>{branchCount}</strong>{" "}
-                {branchCount === 1 ? "ветка" : "веток"}.
+                {tp("repo.settings.branchProtection", { count: branchCount, word: branchWord })}
               </p>
             </PlaceholderBlock>
           </>
@@ -208,8 +216,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
             </h2>
             <PlaceholderBlock theme={theme} title="Active hooks">
               <p className="text-sm" style={{ color: theme.text2 }}>
-                Webhook на push настраивается платформой MTUCI автоматически при создании репозитория.
-                Ручное управление хуками будет добавлено позже.
+                {t("repo.settings.webhookNote")}
               </p>
               <p className="text-xs mt-2 font-mono" style={{ color: theme.text3 }}>
                 POST → /webhooks/gitea
@@ -225,8 +232,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
             </h2>
             <PlaceholderBlock theme={theme} title="SSH keys">
               <p className="text-sm" style={{ color: theme.text2 }}>
-                Добавление deploy keys для CI/CD планируется. Используйте HTTPS clone URL или личный SSH-ключ
-                Gitea.
+                {t("repo.settings.deployKeysNote")}
               </p>
             </PlaceholderBlock>
           </>
@@ -241,11 +247,11 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
               <ul className="text-sm space-y-2" style={{ color: theme.text2 }}>
                 <li className="flex items-center gap-2">
                   <Globe className="h-3.5 w-3.5 shrink-0" />
-                  Публичный доступ: {meta?.visibility === "public" ? "да" : "нет"}
+                  {tp("repo.settings.publicAccess", { value: visibilityValue })}
                 </li>
                 <li className="flex items-center gap-2">
                   <Shield className="h-3.5 w-3.5 shrink-0" />
-                  Сканирование уязвимостей — скоро
+                  {t("repo.settings.vulnScanSoon")}
                 </li>
               </ul>
             </PlaceholderBlock>

@@ -8,6 +8,10 @@ class NotificationSettingsRead(BaseModel):
     push: bool = True
     assignments: bool = True
     grades: bool = True
+    teacher_pr_submitted: bool = True
+    teacher_pr_stale: bool = True
+    teacher_deadline_missed: bool = True
+    teacher_daily_digest: bool = False
 
 
 class UserSettingsRead(BaseModel):

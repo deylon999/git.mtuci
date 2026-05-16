@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { getMe } from "../api/authApi";
 import CoursesPage from "../pages/CoursesPage";
 import StudentCoursesPage from "../pages/StudentCoursesPage";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface CoursesRouteProps {
   isDarkTheme?: boolean;
 }
 
 export default function CoursesRoute({ isDarkTheme = false }: CoursesRouteProps) {
+  const { t } = useUserPreferences();
   const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
@@ -25,7 +27,7 @@ export default function CoursesRoute({ isDarkTheme = false }: CoursesRouteProps)
   }, []);
 
   if (role === null) {
-    return <div className="text-sm text-slate-500">Загрузка…</div>;
+    return <div className="text-sm text-slate-500">{t("coursesRoute.loading")}</div>;
   }
 
   if (role === "student") {

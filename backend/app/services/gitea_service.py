@@ -183,24 +183,114 @@ async def verify_gitea_access_token(token: str) -> bool:
         return False
 
 
-async def create_gitea_user_access_token(
-    username: str,
-    *,
-    name: str = MTUCI_GITEA_CLONE_TOKEN_NAME,
-) -> str:
-    """Create PAT for a Gitea user (admin API). Token value returned only once."""
+async def list_gitea_user_access_tokens(username: str) -> list[dict[str, Any]]:
+    """List PAT metadata for a user (admin API). Values are not returned."""
     base_url = settings.GITEA_URL.rstrip("/")
+    owner = gitea_owner_path(username)
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await _gitea_request(
             client,
-            "POST",
-            f"{base_url}/api/v1/users/{gitea_owner_path(username)}/tokens",
-            headers={"Content-Type": "application/json"},
-            json={
-                "name": name,
-                "scopes": ["read:repository", "write:repository", "read:user"],
-            },
+            "GET",
+            f"{base_url}/api/v1/users/{owner}/tokens",
         )
+    if resp.status_code == 404:
+        return []
+    if resp.status_code != 200:
+        raise RuntimeError(f"Gitea list tokens failed: {resp.status_code} {resp.text[:300]}")
+    data = resp.json()
+    return data if isinstance(data, list) else []
+
+
+async def delete_gitea_user_access_token_by_name(
+    username: str,
+    *,
+    name: str = MTUCI_GITEA_CLONE_TOKEN_NAME,
+) -> None:
+    """Remove existing PAT with the given name so a fresh token can be issued."""
+    await delete_gitea_clone_tokens_for_user(username)
+
+
+async def delete_gitea_clone_tokens_for_user(username: str) -> None:
+    """Delete all MTUCI clone tokens (legacy fixed name and newer suffixed names)."""
+    base_url = settings.GITEA_URL.rstrip("/")
+    owner = gitea_owner_path(username)
+    prefix = MTUCI_GITEA_CLONE_TOKEN_NAME
+    async with httpx.AsyncClient(timeout=30) as client:
+        # Gitea accepts token id or name in DELETE path — clear legacy fixed name first.
+        for legacy_name in (prefix,):
+            resp = await _gitea_request(
+                client,
+                "DELETE",
+                f"{base_url}/api/v1/users/{owner}/tokens/{quote(legacy_name, safe='')}",
+            )
+            if resp.status_code not in (200, 204, 404):
+                logger.warning(
+                    "Gitea delete token by name %r: HTTP %s %s",
+                    legacy_name,
+                    resp.status_code,
+                    (resp.text or "")[:200],
+                )
+    try:
+        tokens = await list_gitea_user_access_tokens(username)
+    except RuntimeError:
+        return
+    async with httpx.AsyncClient(timeout=30) as client:
+        for tok in tokens:
+            if not isinstance(tok, dict):
+                continue
+            token_name = str(tok.get("name") or "")
+            if token_name != prefix and not token_name.startswith(f"{prefix}-"):
+                continue
+            token_id = tok.get("id")
+            if token_id is None:
+                continue
+            resp = await _gitea_request(
+                client,
+                "DELETE",
+                f"{base_url}/api/v1/users/{owner}/tokens/{token_id}",
+            )
+            if resp.status_code not in (200, 204, 404):
+                raise RuntimeError(
+                    f"Gitea delete token failed: {resp.status_code} {resp.text[:300]}"
+                )
+
+
+def _new_gitea_clone_token_name() -> str:
+    import uuid
+
+    return f"{MTUCI_GITEA_CLONE_TOKEN_NAME}-{uuid.uuid4().hex[:10]}"
+
+
+async def create_gitea_user_access_token(
+    username: str,
+    *,
+    name: str | None = None,
+) -> str:
+    """Create PAT for a Gitea user (admin API). Token value returned only once."""
+    await delete_gitea_clone_tokens_for_user(username)
+    token_name = (name or "").strip() or _new_gitea_clone_token_name()
+    base_url = settings.GITEA_URL.rstrip("/")
+    owner = gitea_owner_path(username)
+    payload = {
+        "name": token_name,
+        "scopes": ["read:repository", "write:repository", "read:user"],
+    }
+
+    async def _post_token() -> httpx.Response:
+        async with httpx.AsyncClient(timeout=30) as client:
+            return await _gitea_request(
+                client,
+                "POST",
+                f"{base_url}/api/v1/users/{owner}/tokens",
+                headers={"Content-Type": "application/json"},
+                json=payload,
+            )
+
+    resp = await _post_token()
+    if resp.status_code not in (200, 201) and "already" in resp.text.lower():
+        await delete_gitea_clone_tokens_for_user(username)
+        payload["name"] = _new_gitea_clone_token_name()
+        resp = await _post_token()
     if resp.status_code not in (200, 201):
         raise RuntimeError(f"Gitea create token failed: {resp.status_code} {resp.text[:300]}")
     data = resp.json()

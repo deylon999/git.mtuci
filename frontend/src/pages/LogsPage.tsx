@@ -4,6 +4,7 @@ import { useLogsFilters, useLogsPagination, useLogsData, useLogsStats, useDeboun
 import { exportLogs, deleteOldLogs } from "../api/adminApi";
 import ConfirmModal from "../components/ConfirmModal";
 import type { LogEntry } from "../api/types";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface LogsPageProps {
   isDarkTheme?: boolean;
@@ -83,6 +84,7 @@ const LogRow = memo(function LogRow({
 });
 
 export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
+  const { t, tp } = useUserPreferences();
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -210,7 +212,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Export failed:", error);
-      alert("Не удалось экспортировать логи");
+      alert(t("admin.logs.exportFailed"));
     } finally {
       setIsExporting(false);
     }
@@ -220,11 +222,11 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
     setIsDeleting(true);
     try {
       const result = await deleteOldLogs(1); // Delete logs older than 1 day for testing
-      alert(`Удалено ${result.deleted_count} записей`);
+      alert(tp("admin.logs.deletedCount", { n: result.deleted_count }));
       refetchLogs();
     } catch (error) {
       console.error("Delete failed:", error);
-      alert("Не удалось удалить старые логи");
+      alert(t("admin.logs.deleteFailed"));
     } finally {
       setIsDeleting(false);
       setShowDeleteModal(false);
@@ -254,8 +256,8 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
         {/* Page Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-lg font-semibold">Логи</h1>
-            <p className={`text-xs ${textMuted} mt-0.5`}>Системные события, ошибки и аудит действий</p>
+            <h1 className="text-lg font-semibold">{t("admin.logs.title")}</h1>
+            <p className={`text-xs ${textMuted} mt-0.5`}>{t("admin.logs.subtitle")}</p>
           </div>
           <div className="flex gap-2">
             <button
@@ -264,14 +266,14 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border ${cardBg} ${hoverBg} transition-colors disabled:opacity-60`}
             >
               <Download className="w-3.5 h-3.5" />
-              {isExporting ? "Экспорт..." : "Экспорт"}
+              {isExporting ? t("admin.logs.exporting") : t("admin.logs.export")}
             </button>
             <button
               onClick={() => setShowDeleteModal(true)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border bg-red-500/10 text-red-500 border-red-500/30 hover:bg-red-500/20 transition-colors`}
             >
               <Trash2 className="w-3.5 h-3.5" />
-              Очистить старые
+              {t("admin.logs.deleteOld")}
             </button>
           </div>
         </div>
@@ -279,24 +281,24 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
         {/* Stats */}
         <div className="grid grid-cols-4 gap-2.5 mb-4">
           <div style={{ background: cardBg2, border: `1px solid ${borderColor}`, borderRadius: "10px", padding: "14px 16px" }}>
-            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>Всего записей</div>
+            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>{t("admin.logs.statTotal")}</div>
             <div style={{ fontSize: "22px", fontWeight: 600, color: textMain }}>{stats?.total ?? "-"}</div>
-            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>За всё время</div>
+            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>{t("admin.logs.periodAllTime")}</div>
           </div>
           <div style={{ background: cardBg2, border: `1px solid ${borderColor}`, borderRadius: "10px", padding: "14px 16px" }}>
-            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>Ошибок сегодня</div>
+            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>{t("admin.logs.statErrorsToday")}</div>
             <div style={{ fontSize: "22px", fontWeight: 600, color: "#e24b4a" }}>{stats?.errors_today ?? "-"}</div>
-            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>За сегодня</div>
+            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>{t("admin.logs.periodToday")}</div>
           </div>
           <div style={{ background: cardBg2, border: `1px solid ${borderColor}`, borderRadius: "10px", padding: "14px 16px" }}>
-            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>Предупреждений</div>
+            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>{t("admin.logs.statWarnings")}</div>
             <div style={{ fontSize: "22px", fontWeight: 600, color: "#f59e0b" }}>{stats?.warnings_today ?? "-"}</div>
-            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>За сегодня</div>
+            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>{t("admin.logs.periodToday")}</div>
           </div>
           <div style={{ background: cardBg2, border: `1px solid ${borderColor}`, borderRadius: "10px", padding: "14px 16px" }}>
-            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>Успешных запросов</div>
+            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>{t("admin.logs.statSuccess")}</div>
             <div style={{ fontSize: "22px", fontWeight: 600, color: "#4caf50" }}>{stats?.success_today ?? "-"}</div>
-            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>За сегодня</div>
+            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>{t("admin.logs.periodToday")}</div>
           </div>
         </div>
 
@@ -307,7 +309,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Поиск по сообщению, пользователю, IP..."
+              placeholder={t("admin.logs.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className={`bg-transparent border-none outline-none text-xs flex-1 ${textMain} placeholder-gray-500`}
@@ -319,7 +321,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
             onChange={(e) => handleFilterChange(() => setLevel(e.target.value as any))}
             className={`px-2 py-1.5 rounded-lg border text-xs cursor-pointer ${inputBg} ${textMain}`}
           >
-            <option value="">Все уровни</option>
+            <option value="">{t("admin.logs.allLevels")}</option>
             <option value="ERROR">ERROR</option>
             <option value="WARNING">WARN</option>
             <option value="INFO">INFO</option>
@@ -330,7 +332,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
             onChange={(e) => handleFilterChange(() => setSource(e.target.value as any))}
             className={`px-2 py-1.5 rounded-lg border text-xs cursor-pointer ${inputBg} ${textMain}`}
           >
-            <option value="">Все источники</option>
+            <option value="">{t("admin.logs.allSources")}</option>
             <option value="auth">auth</option>
             <option value="repositories">repositories</option>
             <option value="webhooks">webhooks</option>
@@ -344,10 +346,10 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
             onChange={(e) => handleFilterChange(() => setTimeFilter(e.target.value as any))}
             className={`px-2 py-1.5 rounded-lg border text-xs cursor-pointer ${inputBg} ${textMain}`}
           >
-            <option value="today">Сегодня</option>
-            <option value="hour">За час</option>
-            <option value="week">За неделю</option>
-            <option value="month">За месяц</option>
+            <option value="today">{t("admin.logs.periodToday")}</option>
+            <option value="hour">{t("admin.logs.periodHour")}</option>
+            <option value="week">{t("admin.logs.periodWeek")}</option>
+            <option value="month">{t("admin.logs.periodMonth")}</option>
           </select>
           <div className={`w-px h-5 ${isDarkTheme ? "bg-[#30363d]" : "bg-gray-300"}`}></div>
           <select
@@ -355,8 +357,8 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
             onChange={(e) => handleFilterChange(() => setSort(e.target.value as any))}
             className={`px-2 py-1.5 rounded-lg border text-xs cursor-pointer ${inputBg} ${textMain}`}
           >
-            <option value="desc">Новые сначала</option>
-            <option value="asc">Старые сначала</option>
+            <option value="desc">{t("admin.logs.sortNewFirst")}</option>
+            <option value="asc">{t("admin.logs.sortOldFirst")}</option>
           </select>
         </div>
 
@@ -364,7 +366,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
         <div className={`rounded-xl border overflow-hidden ${cardBg}`}>
           {logsLoading ? (
             <div className="flex items-center justify-center py-12">
-              <span className={`text-sm ${textMuted}`}>Загрузка...</span>
+              <span className={`text-sm ${textMuted}`}>{t("common.loading")}</span>
             </div>
           ) : logsError ? (
             <div className="flex flex-col items-center justify-center py-12">
@@ -374,20 +376,20 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
           ) : logs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <FileX className={`w-12 h-12 ${textMuted} mb-3`} />
-              <span className={`text-sm ${textMuted}`}>Логов не найдено</span>
+              <span className={`text-sm ${textMuted}`}>{t("admin.logs.empty")}</span>
             </div>
           ) : (
             <>
               <table className="w-full border-collapse">
                 <thead>
                   <tr className={`border-b ${isDarkTheme ? "border-[#30363d]" : "border-gray-200"}`}>
-                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[120px]`}>Время</th>
-                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[90px]`}>Уровень</th>
-                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[110px]`}>Источник</th>
-                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[160px]`}>Пользователь</th>
-                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted}`}>Сообщение</th>
+                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[120px]`}>{t("admin.logs.colTime")}</th>
+                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[90px]`}>{t("admin.logs.colLevel")}</th>
+                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[110px]`}>{t("admin.logs.colModule")}</th>
+                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[160px]`}>{t("admin.logs.colUser")}</th>
+                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted}`}>{t("admin.logs.colMessage")}</th>
                     <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[110px]`}>IP</th>
-                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[70px]`}>Статус</th>
+                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[70px]`}>{t("admin.logs.colStatus")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -411,7 +413,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
 
               {/* Pagination */}
               <div className={`flex items-center justify-between px-4 py-3 border-t ${isDarkTheme ? "border-[#2d2d2d]" : "border-gray-200"} text-sm ${textMuted}`}>
-                <span>Показано {logs.length} из {total}</span>
+                <span>{tp("admin.logs.shownOf", { shown: logs.length, total })}</span>
                 <div className="flex items-center gap-2">
                   {page > 1 && (
                     <button
@@ -434,7 +436,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
                   )}
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span>По</span>
+                  <span>{t("admin.logs.perPage")}</span>
                   <select
                     value={limit}
                     onChange={(e) => {
@@ -447,7 +449,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
                     <option value={25}>25</option>
                     <option value={50}>50</option>
                   </select>
-                  <span>на странице</span>
+                  <span>{t("admin.logs.onPage")}</span>
                 </div>
               </div>
             </>
@@ -458,10 +460,10 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
       {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={showDeleteModal}
-        title="Удалить старые логи"
-        message="Удалить записи старше 1 дня? Это действие необратимо."
-        confirmText="Удалить"
-        cancelText="Отмена"
+        title={t("admin.logs.deleteTitle")}
+        message={t("admin.logs.deleteMessage")}
+        confirmText={t("admin.logs.deleteConfirmBtn")}
+        cancelText={t("common.cancel")}
         onConfirm={handleDeleteOldLogs}
         onCancel={() => setShowDeleteModal(false)}
         isDangerous={true}

@@ -1,3 +1,4 @@
+import { tr } from "../utils/i18nLabels";
 import { apiRequest } from "./client";
 import type {
   Assignment,
@@ -223,7 +224,7 @@ export async function exportCourseGradesCsv(courseId: string): Promise<void> {
       },
     },
   );
-  if (!res.ok) throw new Error("Не удалось экспортировать ведомость");
+  if (!res.ok) throw new Error(tr("core.errors.exportGradesFailed"));
   const blob = await res.blob();
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");

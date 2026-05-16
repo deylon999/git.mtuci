@@ -9,13 +9,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.activity_log import ActivityLog, ActivityType
 from app.models.assignment import Assignment
 from app.models.course import Course
+from app.models.course_enrollment import CourseEnrollment
 from app.models.notification import Notification
 from app.models.repository import Repository
 from app.models.role_permissions import TrustedAssistant
 from app.models.submission import Submission
 from app.models.user import User, UserRole
+from app.services.email_service import send_notification_email
+from app.services.notification_delivery import deliver_notification, upsert_notification
+from app.services.notification_prefs import STALE_REVIEW_HOURS, notification_prefs_from_user
 from app.services.notification_realtime import push_notifications_updated
 from app.services.student_dashboard_service import _load_student_assignment_context, _start_of_day, _submission_points
+from app.services.user_settings_service import set_last_digest_at
 
 
 async def _repo_pulls_href(session: AsyncSession, repo_name: str | None) -> str:
@@ -37,45 +42,61 @@ async def _repo_pulls_href(session: AsyncSession, repo_name: str | None) -> str:
     return f"/repositories/{repo_id}/pulls" if repo_id else "/repositories"
 
 
-async def _upsert_notification(
+async def notify_new_assignment_for_students(
     session: AsyncSession,
     *,
-    user_id: UUID,
-    dedupe_key: str,
-    title: str,
-    message: str,
-    ntype: str,
-    href: str | None = None,
-    created_at: datetime | None = None,
-) -> bool:
-    result = await session.execute(
-        select(Notification).where(
-            Notification.user_id == user_id,
-            Notification.dedupe_key == dedupe_key,
-        )
-    )
-    if result.scalar_one_or_none():
-        return False
-
-    session.add(
-        Notification(
-            user_id=user_id,
-            dedupe_key=dedupe_key,
-            title=title,
-            message=message,
-            type=ntype,
+    assignment: Assignment,
+    course_title: str,
+    student_ids: list[UUID],
+) -> int:
+    if not student_ids:
+        return 0
+    result = await session.execute(select(User).where(User.id.in_(student_ids)))
+    students = list(result.scalars().all())
+    href = f"/courses/{assignment.course_id}/assignments/{assignment.id}"
+    created = 0
+    for student in students:
+        if await deliver_notification(
+            session,
+            student,
+            category="assignments",
+            dedupe_key=f"assignment-new:{assignment.id}",
+            title="Новое задание",
+            message=f"{assignment.title} · {course_title}",
+            ntype="info",
             href=href,
-            read=False,
-            created_at=created_at or datetime.now(timezone.utc),
-        )
+            created_at=assignment.created_at,
+        ):
+            created += 1
+    return created
+
+
+async def notify_grade_posted(
+    session: AsyncSession,
+    *,
+    student: User,
+    assignment: Assignment,
+    course_title: str,
+    submission: Submission,
+) -> bool:
+    href = f"/courses/{assignment.course_id}/assignments/{assignment.id}"
+    return await deliver_notification(
+        session,
+        student,
+        category="grades",
+        dedupe_key=f"grade:{submission.id}",
+        title="Новая оценка",
+        message=f"{assignment.title} · {course_title}: {_submission_points(submission)} баллов",
+        ntype="success",
+        href=href,
+        created_at=submission.graded_at,
     )
-    return True
 
 
 async def _sync_teacher_course_notifications(
     session: AsyncSession,
     *,
-    user_id: UUID,
+    user: User,
     course_ids: list[UUID],
     course_by_id: dict[UUID, Course],
     since: datetime,
@@ -106,9 +127,10 @@ async def _sync_teacher_course_notifications(
             course_title = course.title if course else "—"
             href = f"/courses/{assignment.course_id}/assignments/{assignment.id}"
             student_name = student.full_name or student.email or "Студент"
-            if await _upsert_notification(
+            if await deliver_notification(
                 session,
-                user_id=user_id,
+                user,
+                category="teacher_pr_submitted",
                 dedupe_key=f"submission-new:{sub.id}",
                 title="Новая сдача работы",
                 message=f"{student_name} · {assignment.title} ({course_title})",
@@ -118,26 +140,177 @@ async def _sync_teacher_course_notifications(
             ):
                 created += 1
 
+        stale_before = now - timedelta(hours=STALE_REVIEW_HOURS)
+        stale_result = await session.execute(
+            select(Submission, Assignment, User)
+            .join(Assignment, Submission.assignment_id == Assignment.id)
+            .join(User, Submission.student_id == User.id)
+            .where(
+                Submission.assignment_id.in_(assignment_ids),
+                Submission.submitted_at.isnot(None),
+                Submission.submitted_at <= stale_before,
+                Submission.graded_at.is_(None),
+            )
+        )
+        for sub, assignment, student in stale_result.all():
+            course = course_by_id.get(assignment.course_id)
+            course_title = course.title if course else "—"
+            href = f"/courses/{assignment.course_id}/assignments/{assignment.id}"
+            student_name = student.full_name or student.email or "Студент"
+            hours = max(0, int((now - sub.submitted_at).total_seconds() // 3600))
+            if await deliver_notification(
+                session,
+                user,
+                category="teacher_pr_stale",
+                dedupe_key=f"submission-stale:{sub.id}",
+                title="Работа без проверки >24ч",
+                message=f"{student_name} · {assignment.title} ({course_title}) — {hours} ч",
+                ntype="warning",
+                href=href,
+                created_at=now,
+            ):
+                created += 1
+
     for assignment in assignments:
-        if assignment.deadline < _start_of_day(now) or assignment.deadline > now + timedelta(days=7):
+        if assignment.deadline >= now:
             continue
         course = course_by_id.get(assignment.course_id)
         course_title = course.title if course else "—"
-        days_left = (_start_of_day(assignment.deadline) - _start_of_day(now)).days
         href = f"/courses/{assignment.course_id}/assignments/{assignment.id}"
-        if await _upsert_notification(
-            session,
-            user_id=user_id,
-            dedupe_key=f"teacher-deadline:{assignment.id}",
-            title="Дедлайн задания",
-            message=f"{assignment.title} · {course_title} — через {max(days_left, 0)} дн.",
-            ntype="error" if days_left <= 1 else "warning",
-            href=href,
-            created_at=now,
-        ):
-            created += 1
+
+        enrolled_result = await session.execute(
+            select(CourseEnrollment.student_id).where(CourseEnrollment.course_id == assignment.course_id)
+        )
+        enrolled_ids = list(enrolled_result.scalars().all())
+        if not enrolled_ids:
+            continue
+
+        submitted_result = await session.execute(
+            select(Submission.student_id).where(
+                Submission.assignment_id == assignment.id,
+                Submission.submitted_at.isnot(None),
+            )
+        )
+        submitted_ids = set(submitted_result.scalars().all())
+
+        for student_id in enrolled_ids:
+            if student_id in submitted_ids:
+                continue
+            student_result = await session.execute(select(User).where(User.id == student_id))
+            student = student_result.scalar_one_or_none()
+            student_name = (
+                (student.full_name or student.email or "Студент") if student else "Студент"
+            )
+            if await deliver_notification(
+                session,
+                user,
+                category="teacher_deadline_missed",
+                dedupe_key=f"teacher-missed:{assignment.id}:{student_id}",
+                title="Просрочен дедлайн",
+                message=f"{student_name} не сдал · {assignment.title} ({course_title})",
+                ntype="error",
+                href=href,
+                created_at=now,
+            ):
+                created += 1
 
     return created
+
+
+async def _maybe_send_teacher_daily_digest(
+    session: AsyncSession,
+    *,
+    user: User,
+    course_ids: list[UUID],
+) -> bool:
+    prefs = notification_prefs_from_user(user)
+    if not prefs.teacher_daily_digest or not prefs.email or not user.email:
+        return False
+
+    now = datetime.now(timezone.utc)
+    if prefs.last_digest_at and (now - prefs.last_digest_at) < timedelta(hours=24):
+        return False
+
+    pending_review = 0
+    stale_count = 0
+    missed_count = 0
+
+    if course_ids:
+        assignments_result = await session.execute(
+            select(Assignment.id).where(Assignment.course_id.in_(course_ids))
+        )
+        assignment_ids = list(assignments_result.scalars().all())
+        if assignment_ids:
+            pending_review = int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(Submission)
+                    .where(
+                        Submission.assignment_id.in_(assignment_ids),
+                        Submission.submitted_at.isnot(None),
+                        Submission.graded_at.is_(None),
+                    )
+                )
+                or 0
+            )
+            stale_before = now - timedelta(hours=STALE_REVIEW_HOURS)
+            stale_count = int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(Submission)
+                    .where(
+                        Submission.assignment_id.in_(assignment_ids),
+                        Submission.submitted_at.isnot(None),
+                        Submission.submitted_at <= stale_before,
+                        Submission.graded_at.is_(None),
+                    )
+                )
+                or 0
+            )
+
+        assignments_past = await session.execute(
+            select(Assignment).where(
+                Assignment.course_id.in_(course_ids),
+                Assignment.deadline < now,
+            )
+        )
+        for assignment in assignments_past.scalars().all():
+            enrolled_result = await session.execute(
+                select(func.count()).select_from(CourseEnrollment).where(
+                    CourseEnrollment.course_id == assignment.course_id
+                )
+            )
+            total_enrolled = int(enrolled_result.scalar() or 0)
+            submitted_result = await session.execute(
+                select(func.count())
+                .select_from(Submission)
+                .where(
+                    Submission.assignment_id == assignment.id,
+                    Submission.submitted_at.isnot(None),
+                )
+            )
+            submitted = int(submitted_result.scalar() or 0)
+            missed_count += max(0, total_enrolled - submitted)
+
+    lines = [
+        f"Работ на проверке: {pending_review}",
+        f"Без проверки >{STALE_REVIEW_HOURS} ч: {stale_count}",
+        f"Просроченных сдач (студенты): {missed_count}",
+    ]
+    send_notification_email(
+        user.email,
+        subject="MTUCI — ежедневный дайджест",
+        title="Сводка за день",
+        message="\n".join(lines),
+        action_path="/teacher/grading",
+    )
+
+    user.preferences = set_last_digest_at(
+        user.preferences if isinstance(user.preferences, dict) else None,
+        now,
+    )
+    session.add(user)
+    return True
 
 
 async def sync_user_notifications(
@@ -148,9 +321,15 @@ async def sync_user_notifications(
     role: UserRole,
 ) -> int:
     """Create notification rows for recent events (idempotent via dedupe_key)."""
+    user = await session.get(User, user_id)
+    if not user:
+        return 0
+
     now = datetime.now(timezone.utc)
     since_grades = now - timedelta(days=30)
+    since_new_assignments = now - timedelta(days=14)
     created = 0
+    teacher_course_ids: list[UUID] = []
 
     if role == UserRole.student:
         ctx = await _load_student_assignment_context(session, student_id=user_id, group_name=group_name)
@@ -160,10 +339,28 @@ async def sync_user_notifications(
             course_title = ctx.course_title_by_id.get(assignment.course_id, "—")
             href = f"/courses/{assignment.course_id}/assignments/{assignment.id}"
 
-            if sub and sub.graded_at and sub.graded_at >= since_grades:
-                if await _upsert_notification(
+            if (
+                assignment.created_at >= since_new_assignments
+                and assignment.start_date <= now
+            ):
+                if await deliver_notification(
                     session,
-                    user_id=user_id,
+                    user,
+                    category="assignments",
+                    dedupe_key=f"assignment-new:{assignment.id}",
+                    title="Новое задание",
+                    message=f"{assignment.title} · {course_title}",
+                    ntype="info",
+                    href=href,
+                    created_at=assignment.created_at,
+                ):
+                    created += 1
+
+            if sub and sub.graded_at and sub.graded_at >= since_grades:
+                if await deliver_notification(
+                    session,
+                    user,
+                    category="grades",
                     dedupe_key=f"grade:{sub.id}",
                     title="Новая оценка",
                     message=f"{assignment.title} · {course_title}: {_submission_points(sub)} баллов",
@@ -177,9 +374,10 @@ async def sync_user_notifications(
                 updated_at = sub.graded_at or sub.submitted_at
                 if updated_at and updated_at >= since_grades:
                     preview = sub.comment.strip()[:120]
-                    if await _upsert_notification(
+                    if await deliver_notification(
                         session,
-                        user_id=user_id,
+                        user,
+                        category="grades",
                         dedupe_key=f"teacher-comment:{sub.id}",
                         title="Комментарий преподавателя",
                         message=f"{assignment.title}: {preview}",
@@ -192,9 +390,10 @@ async def sync_user_notifications(
             if assignment.deadline >= _start_of_day(now) and assignment.deadline <= now + timedelta(days=7):
                 if sub is None or sub.submitted_at is None:
                     days_left = (_start_of_day(assignment.deadline) - _start_of_day(now)).days
-                    if await _upsert_notification(
+                    if await deliver_notification(
                         session,
-                        user_id=user_id,
+                        user,
+                        category="assignments",
                         dedupe_key=f"deadline:{assignment.id}",
                         title="Приближается дедлайн",
                         message=f"{assignment.title} · {course_title} — через {max(days_left, 0)} дн.",
@@ -208,10 +407,11 @@ async def sync_user_notifications(
         courses_result = await session.execute(select(Course).where(Course.teacher_id == user_id))
         courses = list(courses_result.scalars().all())
         course_by_id = {c.id: c for c in courses}
+        teacher_course_ids = list(course_by_id.keys())
         created += await _sync_teacher_course_notifications(
             session,
-            user_id=user_id,
-            course_ids=list(course_by_id.keys()),
+            user=user,
+            course_ids=teacher_course_ids,
             course_by_id=course_by_id,
             since=since_grades,
             now=now,
@@ -229,10 +429,11 @@ async def sync_user_notifications(
             courses_result = await session.execute(select(Course).where(Course.teacher_id.in_(teacher_ids)))
             courses = list(courses_result.scalars().all())
             course_by_id = {c.id: c for c in courses}
+            teacher_course_ids = list(course_by_id.keys())
             created += await _sync_teacher_course_notifications(
                 session,
-                user_id=user_id,
-                course_ids=list(course_by_id.keys()),
+                user=user,
+                course_ids=teacher_course_ids,
                 course_by_id=course_by_id,
                 since=since_grades,
                 now=now,
@@ -241,7 +442,7 @@ async def sync_user_notifications(
     if role == UserRole.admin:
         pending = await session.scalar(select(func.count()).select_from(User).where(User.is_pending.is_(True))) or 0
         if pending > 0:
-            if await _upsert_notification(
+            if await upsert_notification(
                 session,
                 user_id=user_id,
                 dedupe_key="admin:pending-users",
@@ -252,6 +453,7 @@ async def sync_user_notifications(
                 created_at=now,
             ):
                 created += 1
+                await push_notifications_updated(user_id)
 
     log_result = await session.execute(
         select(ActivityLog)
@@ -263,11 +465,13 @@ async def sync_user_notifications(
         .order_by(ActivityLog.created_at.desc())
         .limit(50)
     )
+    pr_category = "assignments" if role == UserRole.student else "teacher_pr_submitted"
     for log in log_result.scalars().all():
         href = await _repo_pulls_href(session, log.repo_name)
-        if await _upsert_notification(
+        if await deliver_notification(
             session,
-            user_id=user_id,
+            user,
+            category=pr_category,
             dedupe_key=f"pr-comment:{log.id}",
             title="Комментарий к Pull Request",
             message=log.message or f"Репозиторий {log.repo_name or ''}",
@@ -277,9 +481,11 @@ async def sync_user_notifications(
         ):
             created += 1
 
+    if role in (UserRole.teacher, UserRole.laborant) and teacher_course_ids:
+        if await _maybe_send_teacher_daily_digest(session, user=user, course_ids=teacher_course_ids):
+            created += 1
+
     await session.commit()
-    if created > 0:
-        await push_notifications_updated(user_id)
     return created
 
 
@@ -349,10 +555,15 @@ async def create_pr_comment_notification(
     comment_preview: str,
     activity_log_id: UUID,
 ) -> None:
+    user = await session.get(User, user_id)
+    if not user:
+        return
     href = await _repo_pulls_href(session, repo_name)
-    created = await _upsert_notification(
+    category = "assignments" if user.role == UserRole.student else "teacher_pr_submitted"
+    await deliver_notification(
         session,
-        user_id=user_id,
+        user,
+        category=category,
         dedupe_key=f"pr-comment:{activity_log_id}",
         title=f"Комментарий к PR #{pr_number}",
         message=f"{repo_name}: {comment_preview[:200]}",
@@ -360,5 +571,3 @@ async def create_pr_comment_notification(
         href=href,
     )
     await session.commit()
-    if created:
-        await push_notifications_updated(user_id)

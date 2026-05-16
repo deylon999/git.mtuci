@@ -1,23 +1,17 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { getToken } from "../api/client";
+import { clearToken, getToken } from "../api/client";
 import { getMe } from "../api/authApi";
 import { getDefaultRouteForRole } from "../utils/defaultRoute";
 
-type Props = {
-  fallbackPath?: string;
-};
-
-export default function RoleBasedHomeRedirect({
-  fallbackPath = "/home",
-}: Props) {
+export default function RoleBasedHomeRedirect() {
   const [target, setTarget] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function resolve() {
       if (!getToken()) {
-        if (!cancelled) setTarget(fallbackPath);
+        if (!cancelled) setTarget("/login");
         return;
       }
       try {
@@ -26,14 +20,15 @@ export default function RoleBasedHomeRedirect({
           setTarget(getDefaultRouteForRole(me.role));
         }
       } catch {
-        if (!cancelled) setTarget(fallbackPath);
+        clearToken();
+        if (!cancelled) setTarget("/login");
       }
     }
-    resolve();
+    void resolve();
     return () => {
       cancelled = true;
     };
-  }, [fallbackPath]);
+  }, []);
 
   if (!target) {
     return <div className="text-sm text-slate-500">Loading...</div>;
