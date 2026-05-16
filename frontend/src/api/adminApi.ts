@@ -150,6 +150,72 @@ export interface AdminRepositoriesQuery {
   is_blocked?: boolean;
 }
 
+export interface AdminForkEvent {
+  id: string;
+  event_type: "fork" | "repo_created";
+  user_id: string;
+  user_full_name: string;
+  user_login: string | null;
+  source_repo: string | null;
+  target_repo: string | null;
+  message: string | null;
+  created_at: string;
+}
+
+export interface AdminForkStats {
+  total: number;
+  forks_count: number;
+  created_count: number;
+  today_count: number;
+  unique_users: number;
+}
+
+export interface AdminForkEventsResponse {
+  stats: AdminForkStats;
+  events: AdminForkEvent[];
+}
+
+export interface AdminCourseSummary {
+  id: string;
+  title: string;
+  teacher_name: string;
+  students_count: number;
+  assignments_count: number;
+}
+
+export interface AdminReportsOverview {
+  total_users: number;
+  pending_users: number;
+  total_students: number;
+  total_teachers: number;
+  total_courses: number;
+  total_repositories: number;
+  submissions_pending_grade: number;
+  activity_today: number;
+  courses: AdminCourseSummary[];
+}
+
+export async function getAdminReportsOverview(): Promise<AdminReportsOverview> {
+  return apiRequest<AdminReportsOverview>("/admin/reports/overview");
+}
+
+export async function getAdminCoursesSummary(limit = 50): Promise<AdminCourseSummary[]> {
+  return apiRequest<AdminCourseSummary[]>(`/admin/courses?limit=${limit}`);
+}
+
+export async function getAdminForks(params?: {
+  limit?: number;
+  offset?: number;
+  event_type?: "fork" | "repo_created";
+}): Promise<AdminForkEventsResponse> {
+  const search = new URLSearchParams();
+  if (params?.limit != null) search.set("limit", String(params.limit));
+  if (params?.offset != null) search.set("offset", String(params.offset));
+  if (params?.event_type) search.set("event_type", params.event_type);
+  const qs = search.toString();
+  return apiRequest<AdminForkEventsResponse>(`/admin/forks${qs ? `?${qs}` : ""}`);
+}
+
 export async function getAdminRepositories(
   query: AdminRepositoriesQuery = {},
 ): Promise<AdminRepository[]> {

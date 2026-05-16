@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from fastapi import Path, Query
+from fastapi.responses import PlainTextResponse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +19,13 @@ from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
 from app.models.submission import Submission
 from app.models.user import User, UserRole
+from app.schemas.assignment_stats import AssignmentStatsRead
 from app.schemas.course import CourseCreateRequest, CourseEnrollmentRead, CourseRead
+from app.schemas.course_roster import (
+    CourseStudentRead,
+    EnrollByGroupRequest,
+    EnrollByGroupResult,
+)
 from app.schemas.assignment import (
     AssignmentCreateRequest,
     GradeSubmissionRequest,
@@ -51,6 +58,13 @@ from app.services.gitea_service import (
     list_repo_commits,
 )
 from app.services.plagiarism_service import check_assignment_plagiarism, compare_students_plagiarism
+from app.services.assignment_stats_service import get_assignment_stats
+from app.services.course_roster_service import (
+    enroll_group_to_course,
+    list_course_students,
+    unenroll_student_from_course,
+)
+from app.services.grades_export_service import build_course_grades_csv
 from app.services.student_repository_service import get_student_repo_name
 
 router = APIRouter(tags=["courses"])
@@ -245,6 +259,122 @@ async def enroll_student_endpoint(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
     return CourseEnrollmentRead.model_validate(enrollment)
+
+
+@router.get("/courses/{course_id}/students", response_model=list[CourseStudentRead])
+@require_permission("group_manage")
+async def list_course_students_endpoint(
+    course_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(get_current_user),
+) -> list[CourseStudentRead]:
+    if current_user.role != UserRole.teacher:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    course = await _get_course_or_404(session, course_id=course_id)
+    await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    return await list_course_students(session, course_id=course_id)
+
+
+@router.delete(
+    "/courses/{course_id}/enroll/{student_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+@require_permission("group_manage")
+async def unenroll_student_endpoint(
+    course_id: UUID,
+    student_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(get_current_user),
+) -> None:
+    if current_user.role != UserRole.teacher:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    try:
+        await unenroll_student_from_course(
+            session,
+            teacher_id=current_user.id,
+            course_id=course_id,
+            student_id=student_id,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post(
+    "/courses/{course_id}/enroll-by-group",
+    response_model=EnrollByGroupResult,
+    status_code=status.HTTP_201_CREATED,
+)
+@require_permission("group_manage")
+async def enroll_by_group_endpoint(
+    course_id: UUID,
+    payload: EnrollByGroupRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(get_current_user),
+) -> EnrollByGroupResult:
+    if current_user.role != UserRole.teacher:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    try:
+        return await enroll_group_to_course(
+            session,
+            teacher_id=current_user.id,
+            course_id=course_id,
+            group_name=payload.group_name,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/courses/{course_id}/grades/export",
+    response_class=PlainTextResponse,
+)
+@require_permission("grade_edit")
+async def export_course_grades_endpoint(
+    course_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(get_current_user),
+) -> PlainTextResponse:
+    if current_user.role != UserRole.teacher:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    course = await _get_course_or_404(session, course_id=course_id)
+    await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    try:
+        csv_body = await build_course_grades_csv(session, course_id=course_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return PlainTextResponse(
+        content=csv_body,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="grades-{course_id}.csv"'},
+    )
+
+
+@router.get(
+    "/courses/{course_id}/assignments/{assignment_id}/stats",
+    response_model=AssignmentStatsRead,
+)
+async def assignment_stats_endpoint(
+    course_id: UUID,
+    assignment_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(get_current_user),
+) -> AssignmentStatsRead:
+    if current_user.role != UserRole.teacher:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    course = await _get_course_or_404(session, course_id=course_id)
+    await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    try:
+        return await get_assignment_stats(
+            session,
+            course_id=course_id,
+            assignment_id=assignment_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.post(

@@ -22,7 +22,7 @@ export default function StudentRepositoryLayout({ isDarkTheme = false }: Student
   const { repoId } = useParams<{ repoId: string }>();
   const location = useLocation();
   const stateMeta = location.state as { name?: string } | null;
-  const { meta, summary, loading } = useStudentRepoWorkspace(repoId, stateMeta);
+  const { meta, summary, loading, error } = useStudentRepoWorkspace(repoId, stateMeta);
   const activeTab = tabFromPath(location.pathname);
 
   if (!repoId) return null;
@@ -31,7 +31,7 @@ export default function StudentRepositoryLayout({ isDarkTheme = false }: Student
 
   return (
     <StudentRepoWorkspaceContext.Provider
-      value={{ repoId, meta, summary, loading, activeTab }}
+      value={{ repoId, meta, summary, loading, error, activeTab }}
     >
       <RepoSectionShell
         theme={theme}
@@ -40,6 +40,7 @@ export default function StudentRepositoryLayout({ isDarkTheme = false }: Student
         meta={meta}
         summary={summary}
         loading={loading}
+        error={error}
         onGoToReadme={() => {
           document.getElementById("repo-readme")?.scrollIntoView({ behavior: "smooth" });
         }}

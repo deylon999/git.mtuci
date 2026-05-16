@@ -26,7 +26,17 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { AdminUserRead } from "../api/types";
-import { getAdminUsers, getSystemMetrics, getServiceStatus, getBackups, createBackup, getCommitsByFaculty, getActiveRepositories } from "../api/adminApi";
+import {
+  getAdminUsers,
+  getSystemMetrics,
+  getServiceStatus,
+  getBackups,
+  createBackup,
+  getCommitsByFaculty,
+  getActiveRepositories,
+  getAdminReportsOverview,
+  type AdminReportsOverview,
+} from "../api/adminApi";
 import type { SystemMetrics, ServiceStatus, BackupInfo, FacultyCommitsStat, ActiveRepositoryStat } from "../api/types";
 import { usePermissions } from "../hooks/usePermissions";
 import toast from "react-hot-toast";
@@ -51,6 +61,71 @@ interface StatCardProps {
 
 interface AdminPageProps {
   isDarkTheme?: boolean;
+}
+
+function ReportsOverviewBlock({
+  data,
+  isDarkTheme,
+}: {
+  data: AdminReportsOverview;
+  isDarkTheme: boolean;
+}) {
+  const theme = getTheme(isDarkTheme);
+  return (
+    <div
+      className="mb-6 rounded-xl border p-4"
+      style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
+    >
+      <h2 className="mb-3 text-lg font-semibold" style={{ color: theme.text }}>
+        Обзор платформы
+      </h2>
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[
+          ["Пользователи", data.total_users],
+          ["Ожидают одобрения", data.pending_users],
+          ["Курсы", data.total_courses],
+          ["На проверке", data.submissions_pending_grade],
+        ].map(([label, value]) => (
+          <div key={String(label)} className="rounded-lg border p-3" style={{ borderColor: theme.border }}>
+            <p className="text-xs" style={{ color: theme.text2 }}>
+              {label}
+            </p>
+            <p className="text-xl font-semibold" style={{ color: theme.text }}>
+              {value}
+            </p>
+          </div>
+        ))}
+      </div>
+      {data.courses.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead style={{ color: theme.text2 }}>
+              <tr>
+                <th className="py-2 text-left">Курс</th>
+                <th className="py-2 text-left">Преподаватель</th>
+                <th className="py-2 text-left">Студентов</th>
+                <th className="py-2 text-left">Заданий</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.courses.map((c) => (
+                <tr key={c.id} className="border-t" style={{ borderColor: theme.border }}>
+                  <td className="py-2" style={{ color: theme.text }}>
+                    {c.title}
+                  </td>
+                  <td className="py-2" style={{ color: theme.text2 }}>
+                    {c.teacher_name}
+                  </td>
+                  <td className="py-2">{c.students_count}</td>
+                  <td className="py-2">{c.assignments_count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 interface Notification {
@@ -148,6 +223,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   const [showRepoDropdown, setShowRepoDropdown] = useState(false);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [reportsOverview, setReportsOverview] = useState<AdminReportsOverview | null>(null);
 
   const clearAllNotifications = () => {
     setNotifications([]);
@@ -158,13 +234,14 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
     setFacultyStatsLoading(true);
     setActiveRepositoriesLoading(true);
     try {
-      const [list, sysMetrics, svcStatus, backups, facultyData, repoData] = await Promise.all([
+      const [list, sysMetrics, svcStatus, backups, facultyData, repoData, reports] = await Promise.all([
         getAdminUsers(),
         getSystemMetrics().catch(() => null),
         getServiceStatus().catch(() => null),
         getBackups().catch(() => null),
         getCommitsByFaculty().catch(() => []),
         getActiveRepositories(5).catch(() => []),
+        getAdminReportsOverview().catch(() => null),
       ]);
       setUsers(list);
       setStats({
@@ -178,6 +255,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
       setBackupInfo(backups);
       setFacultyStats(facultyData);
       setActiveRepositories(repoData);
+      setReportsOverview(reports);
 
       // Check system metrics and add notifications if needed
       if (sysMetrics) {
@@ -374,6 +452,10 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
             <StatCard key={stat.title} {...stat} isDarkTheme={isDarkTheme} />
           ))}
         </div>
+
+        {reportsOverview ? (
+          <ReportsOverviewBlock data={reportsOverview} isDarkTheme={isDarkTheme} />
+        ) : null}
 
         {/* Bottom Row - 2 Columns */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-6">

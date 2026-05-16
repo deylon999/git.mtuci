@@ -14,6 +14,7 @@ import {
   BookOpen,
   FolderPlus,
   ClipboardList,
+  ClipboardCheck,
 } from "lucide-react";
 import { getMe } from "../api/authApi";
 import { getUserStats, getSystemMetrics, getServiceStatus } from "../api/adminApi";
@@ -217,6 +218,16 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
 
   const menuSections = useMemo(() => {
     if (userRole === "admin") return adminMenuSections;
+    if (userRole === "teacher" || userRole === "laborant") {
+      return [
+        ...studentMenuSections.slice(0, 1),
+        {
+          title: "ПРОВЕРКА",
+          items: [{ path: "/grading-queue", label: "Очередь проверки", icon: ClipboardCheck }],
+        },
+        ...studentMenuSections.slice(1),
+      ];
+    }
     if (userRole !== "student") return studentMenuSections;
     const sidebar = studentNav?.sidebar;
     return studentMenuSections.map((section) => ({

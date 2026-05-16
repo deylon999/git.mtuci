@@ -8,8 +8,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      gitea:
-        condition: service_healthy
+      gitea-bootstrap:
+        condition: service_completed_successfully
     env_file:
       - ./backend/.env
     environment:
@@ -54,6 +54,40 @@ services:
       timeout: 10s
       retries: 30
       start_period: 60s
+
+  gitea-bootstrap:
+    image: gitea/gitea:1.22.1
+    container_name: mtuci-gitea-bootstrap
+    restart: "no"
+    depends_on:
+      gitea:
+        condition: service_healthy
+    volumes:
+      - gitea_data:/data
+    environment:
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__database__DB_TYPE=postgres
+      - GITEA__database__HOST=postgres:5432
+      - GITEA__database__NAME=mtuci_app
+      - GITEA__database__USER=mtuci
+      - GITEA__database__PASSWD=mtuci
+      - GITEA_ADMIN_USERNAME=gitea_admin
+      - GITEA_ADMIN_PASSWORD=admin12345
+      - GITEA_ADMIN_EMAIL=admin@gitea.local
+    user: git
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if gitea admin user list 2>/dev/null | awk 'NR>1 {print $$2}' | grep -qx "$${GITEA_ADMIN_USERNAME:-gitea_admin}"; then
+          echo "[gitea-bootstrap] admin already exists"
+          exit 0
+        fi
+        echo "[gitea-bootstrap] creating $${GITEA_ADMIN_USERNAME:-gitea_admin} ..."
+        gitea admin user create \
+          --username "$${GITEA_ADMIN_USERNAME:-gitea_admin}" \
+          --password "$${GITEA_ADMIN_PASSWORD:-admin12345}" \
+          --email "$${GITEA_ADMIN_EMAIL:-admin@gitea.local}" \
+          --admin --must-change-password=false
 
   gitea:
     image: gitea/gitea:1.22.1

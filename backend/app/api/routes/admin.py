@@ -26,7 +26,11 @@ from app.models.repository import Repository, RepositoryType
 from app.models.activity_log import ActivityLog, ActivityType
 from app.models.system_log import SystemLog, LogLevel, LogSource
 from app.models.user import User, UserRole
+from app.schemas.admin_forks import AdminForkEventsRead
+from app.schemas.admin_reports import AdminCourseSummaryRead, AdminReportsOverviewRead
+from app.services.admin_reports_service import get_admin_reports_overview
 from app.schemas.repository import RepositoryRead
+from app.services.admin_forks_service import get_admin_fork_events
 from app.schemas.system_log import LogEntry, LogsResponse, LogsStats
 from app.schemas.user import (
     AdminResetPasswordRequest,
@@ -838,6 +842,44 @@ async def admin_list_repositories(
         repositories.append(RepositoryRead.model_validate(repo_dict))
 
     return repositories
+
+
+@router.get("/reports/overview", response_model=AdminReportsOverviewRead)
+@require_permission("settings_view")
+async def admin_reports_overview(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AdminReportsOverviewRead:
+    return await get_admin_reports_overview(session)
+
+
+@router.get("/courses", response_model=List[AdminCourseSummaryRead])
+@require_permission("settings_view")
+async def admin_list_courses_summary(
+    limit: int = Query(default=50, ge=1, le=200),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> List[AdminCourseSummaryRead]:
+    overview = await get_admin_reports_overview(session)
+    return overview.courses[:limit]
+
+
+@router.get("/forks", response_model=AdminForkEventsRead)
+@require_permission("repo_view")
+async def admin_fork_events(
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    event_type: Optional[str] = Query(default=None, description="fork | repo_created"),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AdminForkEventsRead:
+    """Fork and repository creation events from activity log."""
+    return await get_admin_fork_events(
+        session,
+        limit=limit,
+        offset=offset,
+        event_type=event_type,
+    )
 
 
 @router.post("/repositories/{repository_id}/toggle-block", response_model=RepositoryRead)

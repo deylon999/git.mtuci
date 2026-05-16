@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+from copy import deepcopy
+
+from app.models.user import User
+from app.schemas.user_settings import NotificationSettingsRead, UserSettingsRead, UserSettingsUpdate
+
+_DEFAULT: dict = {
+    "theme": "system",
+    "language": "ru",
+    "notifications": {
+        "email": True,
+        "push": True,
+        "assignments": True,
+        "grades": True,
+    },
+}
+
+
+def _merge_defaults(raw: dict | None) -> dict:
+    base = deepcopy(_DEFAULT)
+    if not raw:
+        return base
+    if isinstance(raw.get("theme"), str):
+        base["theme"] = raw["theme"]
+    if isinstance(raw.get("language"), str):
+        base["language"] = raw["language"]
+    notif = raw.get("notifications")
+    if isinstance(notif, dict):
+        for key in base["notifications"]:
+            if key in notif:
+                base["notifications"][key] = bool(notif[key])
+    return base
+
+
+def read_user_settings(user: User) -> UserSettingsRead:
+    data = _merge_defaults(user.preferences if isinstance(user.preferences, dict) else None)
+    return UserSettingsRead(
+        theme=data["theme"],
+        language=data["language"],
+        notifications=NotificationSettingsRead(**data["notifications"]),
+    )
+
+
+def apply_user_settings_update(user: User, payload: UserSettingsUpdate) -> dict:
+    data = _merge_defaults(user.preferences if isinstance(user.preferences, dict) else None)
+    if payload.theme is not None:
+        if payload.theme not in {"light", "dark", "system"}:
+            raise ValueError("Invalid theme")
+        data["theme"] = payload.theme
+    if payload.language is not None:
+        data["language"] = payload.language.strip() or "ru"
+    if payload.notifications is not None:
+        data["notifications"] = payload.notifications.model_dump()
+    return data

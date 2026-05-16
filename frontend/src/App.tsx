@@ -17,12 +17,7 @@ import { pageGutterClass } from "./layout/pageLayout";
 import StudentRepositoryLayout from "./layouts/StudentRepositoryLayout";
 import StudentRepoCodePanel from "./pages/student/StudentRepoCodePanel";
 import CoursesRoute from "./components/CoursesRoute";
-import {
-  StudentAssignmentsPage,
-  StudentCreateRepoPage,
-  StudentForksPage,
-  StudentGradesPage,
-} from "./pages/StudentStubPages";
+import StudentCreateRepoPage from "./pages/StudentCreateRepoPage";
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
@@ -42,6 +37,10 @@ const MonitoringPage = lazy(() => import("./pages/MonitoringPage"));
 const AdminSettingsPage = lazy(() => import("./pages/AdminSettingsPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const StudentDeadlinesPage = lazy(() => import("./pages/StudentDeadlinesPage"));
+const StudentAssignmentsPage = lazy(() => import("./pages/StudentAssignmentsPage"));
+const StudentGradesPage = lazy(() => import("./pages/StudentGradesPage"));
+const StudentForksPage = lazy(() => import("./pages/StudentForksPage"));
+const TeacherGradingQueuePage = lazy(() => import("./pages/TeacherGradingQueuePage"));
 const StudentRepositoryCommitsPage = lazy(() => import("./pages/StudentRepositoryCommitsPage"));
 const StudentRepositorySectionPage = lazy(() => import("./pages/StudentRepositorySectionPage"));
 
@@ -132,6 +131,7 @@ export default function App() {
                   <Route path="/repositories/new" element={<StudentCreateRepoPage isDarkTheme={isDarkTheme} />} />
                   <Route path="/repositories/forks" element={<StudentForksPage isDarkTheme={isDarkTheme} />} />
                   <Route path="/grades" element={<StudentGradesPage isDarkTheme={isDarkTheme} />} />
+                  <Route path="/grading-queue" element={<TeacherGradingQueuePage isDarkTheme={isDarkTheme} />} />
                   <Route path="/submissions" element={<CoursesPage />} />
                   <Route path="/students" element={<CoursesPage />} />
                   <Route path="/settings" element={<SettingsPage isDarkTheme={isDarkTheme} onToggleTheme={toggleTheme} />} />

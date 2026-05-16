@@ -20,8 +20,12 @@ from app.api.routes.webhooks import router as webhooks_router
 from app.api.routes.websocket import router as websocket_router
 from app.api.routes.activity import router as activity_router
 from app.api.routes.student_dashboard import router as student_dashboard_router
+from app.api.routes.teacher_dashboard import router as teacher_dashboard_router
+from app.api.routes.assistants_dashboard import router as assistants_dashboard_router
+from app.api.routes.search import router as search_router
 from app.api.routes.notifications import router as notifications_router
 from app.core.config import settings
+from app.services.gitea_service import check_gitea_api_access
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.core.logging_middleware import LoggingMiddleware
@@ -77,6 +81,9 @@ app.include_router(webhooks_router)
 app.include_router(websocket_router)
 app.include_router(activity_router)
 app.include_router(student_dashboard_router)
+app.include_router(teacher_dashboard_router)
+app.include_router(assistants_dashboard_router)
+app.include_router(search_router)
 app.include_router(notifications_router)
 
 # Development CORS:
@@ -144,4 +151,13 @@ async def create_super_admin_if_missing() -> None:
     except Exception as e:
         # Не валим старт сервиса из-за проблем с созданием админа.
         print(f"[startup] Failed to create super admin: {e}")
+
+
+@app.on_event("startup")
+async def verify_gitea_on_startup() -> None:
+    ok, message = await check_gitea_api_access()
+    if ok:
+        print(f"[startup] {message}")
+    else:
+        print(f"[startup] WARNING: {message}")
 

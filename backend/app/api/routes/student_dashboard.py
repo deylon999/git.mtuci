@@ -10,11 +10,17 @@ from app.schemas.student_dashboard import (
     StudentActivityFeedItemRead,
     StudentActivitySummaryRead,
     StudentDashboardStatsRead,
+    StudentAssignmentListItemRead,
     StudentDeadlineDetailRead,
+    StudentForkItemRead,
+    StudentGradesSummaryRead,
     StudentGroupRankingRead,
     StudentRecentRepositoryRead,
     StudentRepositoriesRead,
     StudentRepoBranchesRead,
+    StudentRepoCloneInfoRead,
+    StudentRepoLintBody,
+    StudentRepoLintRead,
     StudentRepoCommitsRead,
     StudentRepoIssuesRead,
     StudentRepoPullsRead,
@@ -26,11 +32,13 @@ from app.schemas.student_dashboard import (
     StudentRepoFileRead,
     StudentRepoFileSearchItemRead,
 )
+from app.services.code_lint_service import lint_file_content
 from app.services.gitea_service import GiteaAuthError
 from app.services.student_dashboard_service import (
     create_student_repository_file,
     delete_student_personal_repository,
     get_student_repository_branches,
+    get_student_repository_clone_info,
     get_student_repository_commits,
     get_student_repository_issues,
     get_student_repository_pulls,
@@ -41,12 +49,16 @@ from app.services.student_dashboard_service import (
     get_student_activity_feed,
     get_student_activity_summary,
     get_student_dashboard_stats,
+    get_student_assignments,
     get_student_deadlines,
+    get_student_forks,
+    get_student_grades,
     get_student_group_ranking,
     get_student_recent_repositories,
     get_student_repositories,
     list_student_repository_files,
     search_student_repository_files,
+    resolve_student_repo_gitea_target,
 )
 
 router = APIRouter(prefix="/students/me", tags=["student-dashboard"])
@@ -65,6 +77,46 @@ async def student_deadlines(
 ) -> list[StudentDeadlineDetailRead]:
     _require_student(current_user)
     return await get_student_deadlines(
+        session,
+        student_id=current_user.id,
+        group_name=current_user.group_name,
+        limit=limit,
+    )
+
+
+@router.get("/grades", response_model=StudentGradesSummaryRead)
+async def student_grades(
+    limit: int = Query(default=200, ge=1, le=500),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentGradesSummaryRead:
+    _require_student(current_user)
+    return await get_student_grades(
+        session,
+        student_id=current_user.id,
+        group_name=current_user.group_name,
+        limit=limit,
+    )
+
+
+@router.get("/forks", response_model=list[StudentForkItemRead])
+async def student_forks(
+    limit: int = Query(default=100, ge=1, le=200),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[StudentForkItemRead]:
+    _require_student(current_user)
+    return await get_student_forks(session, student_id=current_user.id, limit=limit)
+
+
+@router.get("/assignments", response_model=list[StudentAssignmentListItemRead])
+async def student_assignments(
+    limit: int = Query(default=200, ge=1, le=500),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[StudentAssignmentListItemRead]:
+    _require_student(current_user)
+    return await get_student_assignments(
         session,
         student_id=current_user.id,
         group_name=current_user.group_name,
@@ -132,6 +184,46 @@ async def student_repository_commits(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return StudentRepoCommitsRead.model_validate(data)
+
+
+@router.get("/repositories/{repo_item_id}/clone", response_model=StudentRepoCloneInfoRead)
+async def student_repository_clone_info(
+    repo_item_id: str,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoCloneInfoRead:
+    _require_student(current_user)
+    try:
+        data = await get_student_repository_clone_info(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return StudentRepoCloneInfoRead.model_validate(data)
+
+
+@router.post("/repositories/{repo_item_id}/lint", response_model=StudentRepoLintRead)
+async def student_repository_lint_file(
+    repo_item_id: str,
+    body: StudentRepoLintBody,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoLintRead:
+    _require_student(current_user)
+    try:
+        await resolve_student_repo_gitea_target(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    result = lint_file_content(body.path, body.content)
+    return StudentRepoLintRead.model_validate(result)
 
 
 @router.get("/repositories/{repo_item_id}/summary", response_model=StudentRepoSummaryRead)

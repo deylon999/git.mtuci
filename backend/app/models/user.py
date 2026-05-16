@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, String, ForeignKey
+from sqlalchemy import Boolean, DateTime, String, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import Enum as SAEnum
@@ -65,3 +65,4 @@ class User(Base):
         nullable=True,
         default=None,
     )
+    preferences: Mapped[dict | None] = mapped_column(JSON, nullable=True)

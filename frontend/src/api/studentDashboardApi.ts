@@ -123,6 +123,76 @@ export function getStudentDeadlines(limit = 100): Promise<StudentDeadlineDetail[
   return apiRequest<StudentDeadlineDetail[]>(`/students/me/deadlines?limit=${limit}`);
 }
 
+export type StudentAssignmentStatus = "pending" | "submitted" | "graded" | "overdue";
+
+export interface StudentAssignmentListItem {
+  id: string;
+  course_id: string;
+  course_title: string;
+  title: string;
+  description: string | null;
+  deadline: string;
+  start_date: string;
+  submitted: boolean;
+  grade: number | null;
+  final_grade: number | null;
+  grade_max: number;
+  status: StudentAssignmentStatus;
+  urgency: "danger" | "warning" | "info" | "muted";
+}
+
+export function getStudentAssignments(limit = 200): Promise<StudentAssignmentListItem[]> {
+  return apiRequest<StudentAssignmentListItem[]>(`/students/me/assignments?limit=${limit}`);
+}
+
+export interface StudentGradeCourse {
+  course_id: string;
+  title: string;
+  teacher_name: string;
+  grade_max: number;
+  average_score: number | null;
+  assignments_total: number;
+  assignments_graded: number;
+  assignments_submitted: number;
+}
+
+export interface StudentGradeItem {
+  assignment_id: string;
+  course_id: string;
+  course_title: string;
+  title: string;
+  grade: number | null;
+  final_grade: number | null;
+  grade_max: number;
+  status: StudentAssignmentStatus;
+  graded_at: string | null;
+  submitted_at: string | null;
+}
+
+export interface StudentGradesSummary {
+  overall_average: number | null;
+  graded_count: number;
+  pending_review: number;
+  courses: StudentGradeCourse[];
+  items: StudentGradeItem[];
+}
+
+export function getStudentGrades(limit = 200): Promise<StudentGradesSummary> {
+  return apiRequest<StudentGradesSummary>(`/students/me/grades?limit=${limit}`);
+}
+
+export interface StudentForkItem {
+  id: string;
+  event_type: "fork" | "repo_created";
+  source_repo: string;
+  target_repo: string | null;
+  created_at: string;
+}
+
+export function getStudentForks(limit = 100): Promise<StudentForkItem[]> {
+  return apiRequest<StudentForkItem[]>(`/students/me/forks?limit=${limit}`);
+}
+
 export interface StudentRepositoriesStats {
   total: number;
   public_count: number;
@@ -277,6 +347,45 @@ export function getStudentRepoSummary(repoId: string, branch?: string): Promise<
   return apiRequest<StudentRepoSummary>(
     `/students/me/repositories/${repoId}/summary${repoQuery({ branch })}`,
   );
+}
+
+export interface StudentRepoCloneInfo {
+  clone_url: string;
+  git_clone_command: string;
+  auth_required: boolean;
+  note: string | null;
+}
+
+export function getStudentRepoCloneInfo(repoId: string): Promise<StudentRepoCloneInfo> {
+  return apiRequest<StudentRepoCloneInfo>(`/students/me/repositories/${repoId}/clone`);
+}
+
+export interface StudentRepoLintDiagnostic {
+  line: number;
+  column: number;
+  end_line: number;
+  end_column: number;
+  message: string;
+  severity: string;
+}
+
+export interface StudentRepoLintResult {
+  language: string;
+  diagnostics: StudentRepoLintDiagnostic[];
+  linter: string;
+  skipped: boolean;
+  message: string | null;
+}
+
+export function lintStudentRepoFile(
+  repoId: string,
+  path: string,
+  content: string,
+): Promise<StudentRepoLintResult> {
+  return apiRequest<StudentRepoLintResult>(`/students/me/repositories/${repoId}/lint`, {
+    method: "POST",
+    body: { path, content },
+  });
 }
 
 export function searchStudentRepoFiles(

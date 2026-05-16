@@ -51,7 +51,17 @@ function getInitials(fullName: string) {
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }
 
-export default function AssignmentPage({ isDarkTheme = true }: AssignmentPageProps) {
+export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: AssignmentPageProps) {
+  const [isDarkTheme, setIsDarkTheme] = useState(() => {
+    if (isDarkThemeProp !== undefined) return isDarkThemeProp;
+    const saved = localStorage.getItem("theme");
+    return saved ? saved === "dark" : true;
+  });
+
+  useEffect(() => {
+    if (isDarkThemeProp === undefined) return;
+    setIsDarkTheme(isDarkThemeProp);
+  }, [isDarkThemeProp]);
   // Theme-based colors
   const pageBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-gray-50";
   const cardBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-gray-100";
@@ -120,7 +130,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
   });
 
   const headerTitle = useMemo(() => {
-    if (!assignment) return "Assignment";
+    if (!assignment) return "Задание";
     return assignment.title;
   }, [assignment]);
 
@@ -166,7 +176,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
           setCourse(courses.find((c) => c.id === courseId) ?? null);
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed");
+        if (!cancelled) setError(err instanceof Error ? err.message : "Ошибка загрузки");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -193,7 +203,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
         setCommits(commitsRes);
         setFiles(filesRes);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed");
+        if (!cancelled) setError(err instanceof Error ? err.message : "Ошибка загрузки");
       }
     }
 
@@ -223,7 +233,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
         }
       } catch (err) {
         if (!cancelled) {
-          setSubmissionsError(err instanceof Error ? err.message : "Failed to load submissions");
+          setSubmissionsError(err instanceof Error ? err.message : "Не удалось загрузить сдачи");
         }
       } finally {
         if (!cancelled) setSubmissionsLoading(false);
@@ -248,7 +258,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
         if (cancelled) return;
         setMyGrade(data);
       } catch (err) {
-        if (!cancelled) setMyGradeError(err instanceof Error ? err.message : "Failed to load grade");
+        if (!cancelled) setMyGradeError(err instanceof Error ? err.message : "Не удалось загрузить оценку");
       } finally {
         if (!cancelled) setMyGradeLoading(false);
       }
@@ -276,7 +286,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
         file: f,
         loading: false,
         content: null,
-        error: err instanceof Error ? err.message : "Failed to load file",
+        error: err instanceof Error ? err.message : "Не удалось загрузить файл",
       });
     }
   }
@@ -303,7 +313,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
       setGradeInputs((prev) => ({ ...prev, [studentId]: String(updated.grade ?? "") }));
       setCommentInputs((prev) => ({ ...prev, [studentId]: updated.comment ?? "" }));
     } catch (err) {
-      setSubmissionsError(err instanceof Error ? err.message : "Failed to save grade");
+      setSubmissionsError(err instanceof Error ? err.message : "Не удалось сохранить оценку");
     } finally {
       setSavingGradeFor(null);
     }
@@ -329,7 +339,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
       });
       setPlagiarism(result);
     } catch (err) {
-      setPlagiarismError(err instanceof Error ? err.message : "Failed to compare submissions");
+      setPlagiarismError(err instanceof Error ? err.message : "Не удалось сравнить работы");
     } finally {
       setPlagiarismLoading(false);
     }
@@ -389,7 +399,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
         {assignment?.description ? <div className={`mt-2 text-sm ${textSecondary}`}>{assignment.description}</div> : null}
         {assignment?.deadline ? (
           <div className={`mt-3 inline-flex rounded-full px-3 py-1 text-sm ${deadlineBadge}`}>
-            Deadline: <span className="ml-1 font-medium">{formatDate(assignment.deadline)}</span>
+            Дедлайн: <span className="ml-1 font-medium">{formatDate(assignment.deadline)}</span>
           </div>
         ) : null}
         {assignment && assignment.late_penalty_periods.length > 0 ? (
@@ -405,7 +415,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
         ) : null}
       </div>
 
-      {loading ? <div className={`text-sm ${textSecondary}`}>Loading...</div> : null}
+      {loading ? <div className={`text-sm ${textSecondary}`}>Загрузка…</div> : null}
       {error ? (
         <div className={`rounded-md border p-3 text-sm ${errorBox}`}>
           {error}
@@ -438,7 +448,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
           Файлы
         </button>
         <button type="button" className={tabButtonClass("grading")} onClick={() => setActiveTab("grading")}>
-          Оценивание
+          {me?.role === "student" ? "Моя оценка" : "Оценивание"}
         </button>
         {me?.role === "teacher" ? (
           <button
@@ -453,7 +463,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
 
       {activeTab === "commits" ? (
         <div className={`rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
-          <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>Commits timeline</div>
+          <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>История коммитов</div>
           <div className="space-y-4">
             {commits.map((c) => (
               <div key={c.sha} className="relative pl-6">
@@ -470,7 +480,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
                 </div>
               </div>
             ))}
-            {!loading && commits.length === 0 ? <div className={`text-sm ${textSecondary}`}>No commits found.</div> : null}
+            {!loading && commits.length === 0 ? <div className={`text-sm ${textSecondary}`}>Коммитов пока нет.</div> : null}
           </div>
         </div>
       ) : null}
@@ -498,7 +508,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
                       onClick={() => onViewFile(f)}
                       className={`rounded-lg px-3 py-1 text-sm transition ${buttonPrimary}`}
                     >
-                      View
+                      Открыть
                     </button>
                   ) : (
                     <div className={`text-xs ${textTertiary}`}>—</div>
@@ -506,7 +516,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
                 </div>
               ))}
 
-            {!loading && files.length === 0 ? <div className={`text-sm ${textSecondary}`}>No files found.</div> : null}
+            {!loading && files.length === 0 ? <div className={`text-sm ${textSecondary}`}>Файлов не найдено.</div> : null}
           </div>
         </div>
       ) : null}
@@ -575,7 +585,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
                         <div className={`text-3xl font-bold ${textPrimary}`}>
                           {(plagiarism.similarity * 100).toFixed(1)}%
                         </div>
-                        <div className={`text-xs ${textTertiary}`}>Similarity</div>
+                        <div className={`text-xs ${textTertiary}`}>Схожесть</div>
                       </div>
                     </div>
                   </div>
@@ -702,7 +712,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
       {me?.role === "teacher" && activeTab === "grading" ? (
         <div className={`rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
           <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>Оценивание студентов</div>
-          {submissionsLoading ? <div className={`text-sm ${textSecondary}`}>Loading submissions...</div> : null}
+          {submissionsLoading ? <div className={`text-sm ${textSecondary}`}>Загрузка сдач…</div> : null}
           {submissionsError ? (
             <div className={`mb-3 rounded-md border p-3 text-sm ${errorBox}`}>
               {submissionsError}
@@ -782,7 +792,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
       {me?.role === "student" && activeTab === "grading" ? (
         <div className={`rounded-xl border ${cardBorder} ${cardBg} p-4 shadow-md`}>
           <div className={`mb-2 text-lg font-semibold ${textPrimary}`}>Моя оценка</div>
-          {myGradeLoading ? <div className={`text-sm ${textSecondary}`}>Loading...</div> : null}
+          {myGradeLoading ? <div className={`text-sm ${textSecondary}`}>Загрузка…</div> : null}
           {myGradeError ? (
             <div className={`rounded-md border p-3 text-sm ${errorBox}`}>
               {myGradeError}
@@ -829,7 +839,7 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
           <div className={`w-full max-w-3xl rounded-lg p-4 shadow-lg ${modalBg}`}>
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <div className={`text-lg font-semibold ${textPrimary}`}>File: {view.file.name}</div>
+                <div className={`text-lg font-semibold ${textPrimary}`}>Файл: {view.file.name}</div>
                 <div className={`mt-1 text-xs ${textTertiary}`}>
                   {view.file.type} • {view.file.size ?? 0} bytes
                 </div>
@@ -840,12 +850,12 @@ export default function AssignmentPage({ isDarkTheme = true }: AssignmentPagePro
                 }
                 className={`rounded-md border px-3 py-1 text-sm transition ${isDarkTheme ? "border-[#30363d] hover:bg-[#2d2d2d]" : "border-gray-300 hover:bg-gray-50"} ${inputBg} ${textPrimary}`}
               >
-                Close
+                Закрыть
               </button>
             </div>
 
             {view.loading ? (
-              <div className={`text-sm ${textSecondary}`}>Loading file...</div>
+              <div className={`text-sm ${textSecondary}`}>Загрузка файла…</div>
             ) : view.error ? (
               <div className={`rounded-md border p-3 text-sm ${errorBox}`}>
                 {view.error}

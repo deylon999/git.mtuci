@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronDown,
   Copy,
@@ -10,10 +11,12 @@ import {
   Search,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { getStudentRepoCloneInfo, type StudentRepoCloneInfo } from "../../api/studentDashboardApi";
 import type { ThemeColors } from "../../theme";
 
 export interface RepoCodeToolbarProps {
   theme: ThemeColors;
+  repoId: string;
   branch: string;
   branches: { name: string; is_default: boolean }[];
   branchLoading?: boolean;
@@ -33,6 +36,7 @@ export interface RepoCodeToolbarProps {
 
 export default function RepoCodeToolbar({
   theme,
+  repoId,
   branch,
   branches,
   branchLoading,
@@ -51,18 +55,63 @@ export default function RepoCodeToolbar({
 }: RepoCodeToolbarProps) {
   const [branchOpen, setBranchOpen] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
+  const [cloneInfo, setCloneInfo] = useState<StudentRepoCloneInfo | null>(null);
+  const [cloneLoading, setCloneLoading] = useState(false);
+  const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const cloneBtnRef = useRef<HTMLButtonElement>(null);
+  const cloneMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setSearchFocused(false);
       }
+      const target = e.target as Node;
+      if (
+        cloneOpen &&
+        !cloneBtnRef.current?.contains(target) &&
+        !cloneMenuRef.current?.contains(target)
+      ) {
+        setCloneOpen(false);
+      }
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
+  }, [cloneOpen]);
+
+  useEffect(() => {
+    if (!cloneOpen) {
+      setCloneInfo(null);
+      return;
+    }
+    if (cloneBtnRef.current) {
+      setMenuRect(cloneBtnRef.current.getBoundingClientRect());
+    }
+    let cancelled = false;
+    setCloneLoading(true);
+    getStudentRepoCloneInfo(repoId)
+      .then((data) => {
+        if (!cancelled) setCloneInfo(data);
+      })
+      .catch(() => {
+        if (!cancelled && cloneUrl) {
+          setCloneInfo({
+            clone_url: cloneUrl,
+            git_clone_command: `git clone ${cloneUrl}`,
+            auth_required: false,
+            note: "Не удалось получить токен — для приватного репо может понадобиться логин Gitea.",
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCloneLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cloneOpen, repoId, cloneUrl]);
 
   const copyText = async (text: string, label: string) => {
     try {
@@ -77,9 +126,88 @@ export default function RepoCodeToolbar({
   const showRepoSearch =
     searchFocused && repoSearchQuery.trim().length >= 1;
 
+  const cloneMenu =
+    cloneOpen && menuRect
+      ? createPortal(
+          <div
+            ref={cloneMenuRef}
+            className="fixed z-[9999] w-[min(100vw-1.5rem,22rem)] rounded-lg border py-1 shadow-2xl"
+            style={{
+              top: menuRect.bottom + 4,
+              right: Math.max(8, window.innerWidth - menuRect.right),
+              backgroundColor: theme.bg3,
+              borderColor: theme.border,
+            }}
+          >
+            {cloneLoading ? (
+              <p className="flex items-center gap-2 px-3 py-3 text-xs" style={{ color: theme.text2 }}>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Подготовка команды…
+              </p>
+            ) : cloneInfo ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void copyText(cloneInfo.git_clone_command, "Команда git clone скопирована")
+                  }
+                  className="w-full px-3 py-2 text-left text-xs hover:opacity-90"
+                  style={{ color: theme.text }}
+                >
+                  <Copy className="inline h-3 w-3 mr-1.5" />
+                  {cloneInfo.auth_required
+                    ? "Скопировать git clone (с токеном)"
+                    : "Скопировать git clone (HTTPS)"}
+                </button>
+                <p
+                  className="px-3 pb-2 text-[10px] font-mono break-all leading-snug max-h-24 overflow-y-auto"
+                  style={{ color: theme.text3 }}
+                >
+                  {cloneInfo.git_clone_command}
+                </p>
+                {cloneInfo.note ? (
+                  <p className="px-3 pb-2 text-[10px] leading-snug" style={{ color: theme.text3 }}>
+                    {cloneInfo.note}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="px-3 py-2 text-xs" style={{ color: theme.text3 }}>
+                URL Gitea недоступен
+              </p>
+            )}
+            {pageUrl ? (
+              <button
+                type="button"
+                onClick={() => void copyText(pageUrl, "Ссылка на страницу MTUCI скопирована")}
+                className="w-full px-3 py-2 text-left text-xs hover:opacity-90 border-t"
+                style={{ color: theme.text2, borderColor: theme.border }}
+              >
+                <Link2 className="inline h-3 w-3 mr-1.5" />
+                Ссылка на страницу (не для git)
+              </button>
+            ) : null}
+            {giteaWebUrl ? (
+              <a
+                href={giteaWebUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 w-full px-3 py-2 text-left text-xs hover:opacity-90"
+                style={{ color: theme.accent2 }}
+                onClick={() => setCloneOpen(false)}
+              >
+                <ExternalLink className="h-3 w-3" />
+                Открыть в Gitea
+              </a>
+            ) : null}
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <div
-      className="flex flex-wrap items-center gap-2 px-3 py-2.5 border-b"
+      className="flex flex-wrap items-center gap-2 px-3 py-2.5 border-b relative z-20"
       style={{ borderColor: theme.border, backgroundColor: theme.bg4 }}
     >
       <div className="relative">
@@ -98,7 +226,7 @@ export default function RepoCodeToolbar({
         </button>
         {branchOpen ? (
           <div
-            className="absolute left-0 top-full z-30 mt-1 min-w-[160px] rounded-lg border py-1 shadow-lg max-h-48 overflow-y-auto"
+            className="absolute left-0 top-full z-50 mt-1 min-w-[160px] rounded-lg border py-1 shadow-lg max-h-48 overflow-y-auto"
             style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
           >
             {branches.map((b) => (
@@ -109,26 +237,21 @@ export default function RepoCodeToolbar({
                   onBranchChange(b.name);
                   setBranchOpen(false);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:opacity-90"
+                className="w-full px-3 py-1.5 text-left text-xs hover:opacity-90 truncate"
                 style={{
                   color: b.name === branch ? theme.accent2 : theme.text,
-                  backgroundColor: b.name === branch ? `${theme.accent}18` : "transparent",
+                  fontWeight: b.name === branch ? 600 : 400,
                 }}
               >
-                <GitBranch className="h-3 w-3 shrink-0" />
                 {b.name}
-                {b.is_default ? (
-                  <span className="ml-auto text-[10px]" style={{ color: theme.text3 }}>
-                    default
-                  </span>
-                ) : null}
+                {b.is_default ? " (default)" : ""}
               </button>
             ))}
           </div>
         ) : null}
       </div>
 
-      <div ref={searchRef} className="relative flex-1 min-w-[180px] max-w-md">
+      <div ref={searchRef} className="relative flex-1 min-w-[140px] max-w-md">
         <Search
           className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 pointer-events-none"
           style={{ color: theme.text3 }}
@@ -136,10 +259,13 @@ export default function RepoCodeToolbar({
         <input
           type="search"
           value={localFilter}
-          onChange={(e) => onLocalFilterChange(e.target.value)}
+          onChange={(e) => {
+            onLocalFilterChange(e.target.value);
+            onRepoSearchQueryChange(e.target.value);
+          }}
           onFocus={() => setSearchFocused(true)}
-          placeholder="Поиск файла…"
-          className="w-full rounded-lg border py-1.5 pl-8 pr-3 text-xs outline-none"
+          placeholder="Поиск по файлам…"
+          className="w-full rounded-lg border pl-8 pr-2 py-1.5 text-xs outline-none"
           style={{
             borderColor: theme.border,
             backgroundColor: theme.bg3,
@@ -148,51 +274,37 @@ export default function RepoCodeToolbar({
         />
         {showRepoSearch ? (
           <div
-            className="absolute left-0 right-0 top-full z-40 mt-1 rounded-lg border shadow-xl overflow-hidden"
+            className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border shadow-xl overflow-hidden max-h-56 overflow-y-auto"
             style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
           >
-            <div
-              className="px-2 py-1.5 border-b flex items-center gap-2"
-              style={{ borderColor: theme.border }}
-            >
-              <input
-                type="text"
-                value={repoSearchQuery}
-                onChange={(e) => onRepoSearchQueryChange(e.target.value)}
-                placeholder="Перейти к файлу во всём репозитории…"
-                className="flex-1 bg-transparent text-xs outline-none py-1"
-                style={{ color: theme.text }}
-                autoFocus
-              />
-              {repoSearchLoading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" style={{ color: theme.text3 }} />
-              ) : null}
-            </div>
-            <ul className="max-h-56 overflow-y-auto py-1">
-              {repoSearchResults.length === 0 && !repoSearchLoading ? (
-                <li className="px-3 py-2 text-xs" style={{ color: theme.text3 }}>
-                  Ничего не найдено
-                </li>
-              ) : (
-                repoSearchResults.map((item) => (
-                  <li key={item.path}>
+            {repoSearchLoading ? (
+              <p className="px-3 py-2 text-xs flex items-center gap-2" style={{ color: theme.text3 }}>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Поиск…
+              </p>
+            ) : repoSearchResults.length === 0 ? (
+              <p className="px-3 py-2 text-xs" style={{ color: theme.text3 }}>
+                Ничего не найдено
+              </p>
+            ) : (
+              <ul>
+                {repoSearchResults.map((r) => (
+                  <li key={r.path}>
                     <button
                       type="button"
                       onClick={() => {
-                        onPickSearchResult(item.path);
+                        onPickSearchResult(r.path);
                         setSearchFocused(false);
-                        onLocalFilterChange("");
-                        onRepoSearchQueryChange("");
                       }}
-                      className="w-full px-3 py-2 text-left text-xs font-mono truncate hover:opacity-90"
-                      style={{ color: theme.accent2 }}
+                      className="w-full px-3 py-1.5 text-left text-xs font-mono truncate hover:opacity-90"
+                      style={{ color: theme.text }}
                     >
-                      {item.path}
+                      {r.path}
                     </button>
                   </li>
-                ))
-              )}
-            </ul>
+                ))}
+              </ul>
+            )}
           </div>
         ) : null}
       </div>
@@ -213,6 +325,7 @@ export default function RepoCodeToolbar({
 
       <div className="relative shrink-0">
         <button
+          ref={cloneBtnRef}
           type="button"
           onClick={() => setCloneOpen((v) => !v)}
           className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium"
@@ -222,47 +335,7 @@ export default function RepoCodeToolbar({
           Клонировать
           <ChevronDown className="h-3 w-3 opacity-70" />
         </button>
-        {cloneOpen ? (
-          <div
-            className="absolute right-0 top-full z-30 mt-1 min-w-[220px] rounded-lg border py-1 shadow-lg"
-            style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
-          >
-            {cloneUrl ? (
-              <button
-                type="button"
-                onClick={() => void copyText(cloneUrl, "URL клонирования скопирован")}
-                className="w-full px-3 py-2 text-left text-xs hover:opacity-90"
-                style={{ color: theme.text }}
-              >
-                HTTPS — клонировать
-              </button>
-            ) : null}
-            {pageUrl ? (
-              <button
-                type="button"
-                onClick={() => void copyText(pageUrl, "Ссылка на страницу скопирована")}
-                className="w-full px-3 py-2 text-left text-xs hover:opacity-90"
-                style={{ color: theme.text }}
-              >
-                <Link2 className="inline h-3 w-3 mr-1.5" />
-                Копировать ссылку
-              </button>
-            ) : null}
-            {giteaWebUrl ? (
-              <a
-                href={giteaWebUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 w-full px-3 py-2 text-left text-xs hover:opacity-90"
-                style={{ color: theme.accent2 }}
-                onClick={() => setCloneOpen(false)}
-              >
-                <ExternalLink className="h-3 w-3" />
-                Открыть в Gitea
-              </a>
-            ) : null}
-          </div>
-        ) : null}
+        {cloneMenu}
       </div>
     </div>
   );

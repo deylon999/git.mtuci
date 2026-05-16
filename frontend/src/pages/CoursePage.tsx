@@ -2,7 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getMe } from "../api/authApi";
-import { createAssignment, getAssignments, getCourses, deleteAssignment } from "../api/coursesApi";
+import {
+  createAssignment,
+  getAssignments,
+  getAssignmentStats,
+  getCourses,
+  deleteAssignment,
+  type AssignmentStats,
+} from "../api/coursesApi";
+import CourseRosterPanel from "../components/CourseRosterPanel";
 import type { Assignment, UserRead } from "../api/types";
 
 interface CoursePageProps {
@@ -117,6 +125,34 @@ export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
   }, [courseId]);
 
   const canCreateAssignment = me?.role === "teacher";
+  const isTeacher = me?.role === "teacher";
+  const [assignmentStats, setAssignmentStats] = useState<Record<string, AssignmentStats>>({});
+
+  useEffect(() => {
+    if (!courseId || !isTeacher || assignments.length === 0) return;
+    let cancelled = false;
+    async function loadStats() {
+      const entries = await Promise.allSettled(
+        assignments.map(async (a) => {
+          const stats = await getAssignmentStats(courseId, a.id);
+          return [a.id, stats] as const;
+        }),
+      );
+      if (cancelled) return;
+      const map: Record<string, AssignmentStats> = {};
+      for (const entry of entries) {
+        if (entry.status === "fulfilled") {
+          const [id, stats] = entry.value;
+          map[id] = stats;
+        }
+      }
+      setAssignmentStats(map);
+    }
+    void loadStats();
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId, isTeacher, assignments]);
   const sortedLatePenaltyPeriods = useMemo(
     () => [...latePenaltyPeriods].sort((a, b) => a.weeks - b.weeks),
     [latePenaltyPeriods],
@@ -240,6 +276,8 @@ export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
           </button>
         ) : null}
       </div>
+
+      {isTeacher && courseId ? <CourseRosterPanel courseId={courseId} isDarkTheme={isDarkTheme} /> : null}
 
       {showCreateForm && canCreateAssignment ? (
         <form

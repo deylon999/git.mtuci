@@ -12,6 +12,11 @@ from app.core.security import get_current_user, hash_password, verify_password
 from app.core.permissions import require_permission
 from app.models.user import UserRole
 from app.schemas.user import ChangePasswordRequest, StudentUserRead, UpdateAvatarDisplayModeRequest, UserRead
+from app.schemas.user_settings import UserSettingsRead, UserSettingsUpdate
+from app.services.user_settings_service import (
+    apply_user_settings_update,
+    read_user_settings,
+)
 from app.services.user_service import get_user_by_id, get_users_by_role
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -78,6 +83,29 @@ async def update_avatar_display_mode(
     await session.commit()
     await session.refresh(current_user)
     return UserRead.model_validate(current_user)
+
+
+@router.get("/me/settings", response_model=UserSettingsRead)
+async def get_my_settings(
+    current_user=Depends(get_current_user),
+) -> UserSettingsRead:
+    return read_user_settings(current_user)
+
+
+@router.patch("/me/settings", response_model=UserSettingsRead)
+async def patch_my_settings(
+    payload: UserSettingsUpdate,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> UserSettingsRead:
+    try:
+        current_user.preferences = apply_user_settings_update(current_user, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    session.add(current_user)
+    await session.commit()
+    await session.refresh(current_user)
+    return read_user_settings(current_user)
 
 
 @router.patch("/me/password", status_code=status.HTTP_204_NO_CONTENT)

@@ -11,14 +11,34 @@ export interface Repository {
   updated_at: string;
 }
 
+export type RepositoryVisibility = "public" | "private";
+
 export interface CreateRepositoryRequest {
   name: string;
   description?: string;
+  visibility?: RepositoryVisibility;
+  add_readme?: boolean;
+  gitignore_template?: string | null;
+  license_template?: string | null;
+}
+
+export interface RepositoryTemplateOption {
+  id: string;
+  label: string;
+}
+
+export interface RepositoryCreateTemplates {
+  gitignores: RepositoryTemplateOption[];
+  licenses: RepositoryTemplateOption[];
 }
 
 export interface UpdateRepositoryRequest {
   name?: string;
   description?: string;
+}
+
+export async function getRepositoryCreateTemplates(): Promise<RepositoryCreateTemplates> {
+  return apiRequest<RepositoryCreateTemplates>("/repositories/create-templates");
 }
 
 export async function getMyRepositories(): Promise<Repository[]> {

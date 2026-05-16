@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { getMe } from "../api/authApi";
 import { getCourses } from "../api/coursesApi";
+import { getTeacherDashboard, type TeacherDashboard } from "../api/teacherDashboardApi";
 import { getTheme } from "../theme";
 import type { UserRead, Course as CourseType } from "../api/types";
 
@@ -112,17 +114,30 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
   const [selectedCourse, setSelectedCourse] = useState<string>("all");
   const [courses, setCourses] = useState<CourseType[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
+  const [teacherDash, setTeacherDash] = useState<TeacherDashboard | null>(null);
 
   const theme = getTheme(isDarkTheme);
+  const isTeacherLike = user?.role === "teacher" || user?.role === "laborant";
 
   useEffect(() => {
     let cancelled = false;
     async function loadData() {
       try {
-        const [me, coursesData] = await Promise.all([getMe(), getCourses()]);
+        const me = await getMe();
+        const tasks: Promise<unknown>[] = [getCourses()];
+        if (me.role === "teacher" || me.role === "laborant") {
+          tasks.push(getTeacherDashboard());
+        }
+        const results = await Promise.allSettled(tasks);
         if (!cancelled) {
           setUser(me);
-          setCourses(coursesData);
+          const coursesResult = results[0];
+          if (coursesResult.status === "fulfilled") {
+            setCourses(coursesResult.value as CourseType[]);
+          }
+          if (results[1]?.status === "fulfilled") {
+            setTeacherDash(results[1].value as TeacherDashboard);
+          }
         }
       } catch {
         // ignore
@@ -149,6 +164,44 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
           👋 Привет, {loading ? "..." : user?.full_name || user?.email || "Иван"}!
         </h1>
       </div>
+
+      {isTeacherLike && teacherDash ? (
+        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+          {[
+            ["Курсы", teacherDash.courses_count],
+            ["Студентов", teacherDash.students_total],
+            ["Заданий", teacherDash.assignments_total],
+            ["На проверке", teacherDash.pending_grading],
+            ["Сдач за неделю", teacherDash.submissions_this_week],
+            ["Просрочено", teacherDash.overdue_assignments],
+          ].map(([label, value]) => (
+            <div
+              key={String(label)}
+              className="rounded-xl border p-3"
+              style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
+            >
+              <p className="text-xs" style={{ color: theme.text2 }}>
+                {label}
+              </p>
+              <p className="mt-1 text-xl font-semibold" style={{ color: theme.text }}>
+                {value}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {isTeacherLike ? (
+        <div className="mb-6">
+          <Link
+            to="/grading-queue"
+            className="inline-flex rounded-lg px-4 py-2 text-sm font-medium text-white"
+            style={{ backgroundColor: theme.accent }}
+          >
+            Очередь проверки ({teacherDash?.pending_grading ?? 0})
+          </Link>
+        </div>
+      ) : null}
 
       {/* Основная сетка: контент + сайдбар */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

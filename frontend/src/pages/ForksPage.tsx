@@ -1,26 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, Search, Eye, Pencil, X } from "lucide-react";
+import { Download, Search } from "lucide-react";
 import AdminPageHeader from "../components/AdminPageHeader";
-import { getAdminRepositories, type AdminRepository } from "../api/adminApi";
+import { getAdminForks, type AdminForkEvent } from "../api/adminApi";
 import { getTheme } from "../theme";
 
 interface ForksPageProps {
   isDarkTheme?: boolean;
 }
 
-const languageColors: Record<string, string> = {
-  Python: "#3b82f6",
-  JavaScript: "#f4db4f",
-  TypeScript: "#3178c6",
-  "C++": "#f14e9e",
-  C: "#8b949e",
+const EVENT_LABEL: Record<AdminForkEvent["event_type"], string> = {
+  fork: "Форк",
+  repo_created: "Создание",
 };
 
 export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
-  const [rows, setRows] = useState<AdminRepository[]>([]);
+  const [events, setEvents] = useState<AdminForkEvent[]>([]);
+  const [stats, setStats] = useState({
+    total: 0,
+    forks_count: 0,
+    created_count: 0,
+    today_count: 0,
+    unique_users: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | "fork" | "repo_created">("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -28,8 +33,14 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
       setLoading(true);
       setError(null);
       try {
-        const data = await getAdminRepositories({ skip: 0, limit: 200 });
-        if (!cancelled) setRows(data);
+        const data = await getAdminForks({
+          limit: 200,
+          event_type: typeFilter === "all" ? undefined : typeFilter,
+        });
+        if (!cancelled) {
+          setEvents(data.events);
+          setStats(data.stats);
+        }
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Ошибка загрузки");
@@ -42,20 +53,22 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [typeFilter]);
 
   const filtered = useMemo(
     () =>
-      rows.filter((r) =>
-        `${r.name} ${r.owner_full_name ?? ""}`.toLowerCase().includes(query.toLowerCase()),
-      ),
-    [rows, query],
+      events.filter((row) => {
+        const q = query.toLowerCase();
+        if (!q) return true;
+        return (
+          (row.user_full_name ?? "").toLowerCase().includes(q) ||
+          (row.source_repo ?? "").toLowerCase().includes(q) ||
+          (row.target_repo ?? "").toLowerCase().includes(q) ||
+          (row.user_login ?? "").toLowerCase().includes(q)
+        );
+      }),
+    [events, query],
   );
-  const active = filtered.filter((r) => r.commits_count > 0).length;
-  const clonesToday = filtered.filter(
-    (r) => new Date(r.created_at).toDateString() === new Date().toDateString(),
-  ).length;
-  const users = new Set(filtered.map((r) => r.owner_full_name || r.id)).size;
 
   const theme = getTheme(isDarkTheme);
 
@@ -78,10 +91,10 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
 
         <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           {[
-            ["Всего репозиториев", filtered.length],
-            ["Активных", active],
-            ["Создано сегодня", clonesToday],
-            ["Уникальных студентов", users],
+            ["Всего событий", stats.total],
+            ["Форков", stats.forks_count],
+            ["Созданий репо", stats.created_count],
+            ["Сегодня", stats.today_count],
           ].map(([title, value]) => (
             <div
               key={String(title)}
@@ -98,11 +111,11 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
 
         <div className="rounded-xl border" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
           <div
-            className="flex items-center gap-2 border-b border-inherit p-3"
+            className="flex flex-wrap items-center gap-2 border-b border-inherit p-3"
             style={{ borderColor: theme.border }}
           >
             <div
-              className="flex h-8 flex-1 items-center gap-2 rounded-md border px-2"
+              className="flex h-8 min-w-[200px] flex-1 items-center gap-2 rounded-md border px-2"
               style={{ backgroundColor: theme.inputBg, borderColor: theme.border }}
             >
               <Search className="h-3.5 w-3.5" style={{ color: theme.text2 }} />
@@ -111,10 +124,22 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
                 onChange={(e) => setQuery(e.target.value)}
                 className="w-full bg-transparent text-sm outline-none"
                 style={{ color: theme.text }}
-                placeholder="Поиск по репозиторию, студенту..."
+                placeholder="Поиск по пользователю или репозиторию..."
               />
             </div>
-            <span style={{ color: theme.text2 }}>По 10 на странице</span>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
+              className="h-8 rounded-md border px-2 text-xs"
+              style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
+            >
+              <option value="all">Все типы</option>
+              <option value="fork">Только форки</option>
+              <option value="repo_created">Только создания</option>
+            </select>
+            <span className="text-xs" style={{ color: theme.text2 }}>
+              Уникальных пользователей: {stats.unique_users}
+            </span>
           </div>
 
           {loading ? (
@@ -125,59 +150,31 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
             <table className="w-full text-sm">
               <thead className="text-xs uppercase" style={{ color: theme.text2 }}>
                 <tr>
-                  {["Оригинальный репо", "Владелец", "Тип", "Язык", "Коммиты", "Дата", "Действия"].map(
-                    (h) => (
-                      <th key={h} className="px-3 py-3 text-left">
-                        {h}
-                      </th>
-                    ),
-                  )}
+                  {["Пользователь", "Тип", "Источник", "Результат", "Дата"].map((h) => (
+                    <th key={h} className="px-3 py-3 text-left">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice(0, 20).map((row) => (
+                {filtered.slice(0, 50).map((row) => (
                   <tr key={row.id} className="border-t border-inherit" style={{ borderColor: theme.border }}>
                     <td className="px-3 py-3">
-                      <p className="font-medium">{row.name}</p>
+                      <p className="font-medium">{row.user_full_name}</p>
                       <p className="text-xs" style={{ color: theme.text2 }}>
-                        {row.clone_url || "—"}
+                        {row.user_login || row.user_id}
                       </p>
                     </td>
-                    <td className="px-3 py-3">{row.owner_full_name || "Неизвестно"}</td>
                     <td className="px-3 py-3">
                       <span className="rounded-full bg-[#1f6feb]/20 px-2 py-1 text-xs text-[#58a6ff]">
-                        {row.repo_type === "course" ? "Форк" : "Клон"}
+                        {EVENT_LABEL[row.event_type]}
                       </span>
                     </td>
-                    <td className="px-3 py-3">
-                      <span className="inline-flex items-center gap-2">
-                        <span
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: languageColors[row.language || ""] || "#8b949e" }}
-                        />
-                        {row.language || "—"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3">{row.commits_count}</td>
+                    <td className="px-3 py-3">{row.source_repo || "—"}</td>
+                    <td className="px-3 py-3">{row.target_repo || "—"}</td>
                     <td className="px-3 py-3" style={{ color: theme.text2 }}>
-                      {new Date(row.created_at).toLocaleDateString("ru-RU")}
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex gap-1">
-                        <button type="button" className="rounded border border-inherit p-1" style={{ borderColor: theme.border }}>
-                          <Eye className="h-3 w-3" />
-                        </button>
-                        <button type="button" className="rounded border border-inherit p-1" style={{ borderColor: theme.border }}>
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded border border-inherit p-1 text-[#f85149]"
-                          style={{ borderColor: theme.border }}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
+                      {new Date(row.created_at).toLocaleString("ru-RU")}
                     </td>
                   </tr>
                 ))}

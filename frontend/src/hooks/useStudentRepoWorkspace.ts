@@ -38,6 +38,7 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
   );
   const [summary, setSummary] = useState<StudentRepoSummary | null>(cached?.summary ?? null);
   const [loading, setLoading] = useState(() => !meta && !cached?.meta);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!repoId) {
@@ -48,6 +49,7 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
     async function load() {
       const hasMeta = !!meta?.name;
       if (!hasMeta) setLoading(true);
+      setError(null);
       try {
         let nextMeta = meta;
         if (!nextMeta?.name) {
@@ -75,8 +77,14 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
             setCachedRepoWorkspace(repoId, { meta: nextMeta, summary: summaryRes });
           }
         }
-      } catch {
-        if (!cancelled) navigate("/repositories", { replace: true });
+      } catch (e) {
+        if (cancelled) return;
+        const msg = e instanceof Error ? e.message : "Не удалось загрузить репозиторий";
+        if (msg.includes("404") && /not found|не найден/i.test(msg)) {
+          navigate("/repositories", { replace: true });
+          return;
+        }
+        setError(msg);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -88,5 +96,5 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoId, navigate]);
 
-  return { meta, summary, loading, setSummary };
+  return { meta, summary, loading, error, setSummary };
 }

@@ -130,7 +130,10 @@ docker compose up --build
 
 ### Gitea Token
 
-По умолчанию API обращается к Gitea через basic auth (`GITEA_ADMIN_USERNAME` / `GITEA_ADMIN_PASSWORD`).
+По умолчанию API обращается к Gitea через **basic auth** (`gitea_admin` / `admin12345` из docker-compose).  
+`GITEA_TOKEN` можно не задавать.
+
+При `docker compose up` сервис **`gitea-bootstrap`** создаёт `gitea_admin`, если в Gitea ещё нет пользователей (бывает, если том Postgres/Gitea остался от старой установки без админа).
 
 Чтобы использовать токен:
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -12,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.activity_log import ActivityLog, ActivityType
 from app.models.assignment import Assignment
 from app.models.course import Course
-from app.models.repository import Repository
+from app.models.repository import Repository, RepositoryType
 from app.models.student_repository import StudentRepository
 from app.models.submission import Submission
 from app.models.user import User, UserRole
@@ -22,8 +23,13 @@ from app.schemas.student_dashboard import (
     StudentDashboardCourseRead,
     StudentDashboardKpiRead,
     StudentDashboardStatsRead,
+    StudentAssignmentListItemRead,
     StudentDeadlineDetailRead,
     StudentDeadlineRead,
+    StudentForkItemRead,
+    StudentGradeCourseRead,
+    StudentGradeItemRead,
+    StudentGradesSummaryRead,
     StudentGroupRankingEntryRead,
     StudentGroupRankingRead,
     StudentRecentRepositoryRead,
@@ -37,15 +43,21 @@ from app.services.course_service import list_student_courses
 from app.utils.gitea_user import resolve_gitea_username
 from app.services.gitea_service import (
     GiteaAuthError,
+    build_authenticated_clone_url,
     build_clone_url,
     build_repo_web_url,
+    create_gitea_user_access_token,
     delete_repository as delete_gitea_repository,
+    ensure_gitea_user,
     enrich_repos_gitea_stats,
     gitea_public_base_url,
     get_repo_metadata,
     resolve_repo_owner,
     stats_from_repo_metadata,
+    verify_gitea_access_token,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _start_of_day(dt: datetime) -> datetime:
@@ -144,10 +156,125 @@ def _normalize_repo_path(path: str) -> str:
     return path.strip().strip("/")
 
 
-async def _require_repo_in_gitea(*, owner: str, repo_name: str, not_found_message: str) -> None:
-    meta = await get_repo_metadata(owner=owner, repo=repo_name)
-    if not meta:
-        raise ValueError(not_found_message)
+async def ensure_student_gitea_clone_token(session: AsyncSession, user: User) -> str:
+    """Personal access token for git clone without interactive login (stored in preferences)."""
+    prefs: dict = dict(user.preferences) if isinstance(user.preferences, dict) else {}
+    existing = str(prefs.get("gitea_clone_token") or "").strip()
+    if existing and await verify_gitea_access_token(existing):
+        return existing
+
+    username = resolve_gitea_username(user)
+    await ensure_gitea_user(username)
+    token = await create_gitea_user_access_token(username)
+    prefs["gitea_clone_token"] = token
+    user.preferences = prefs
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return token
+
+
+async def get_student_repository_clone_info(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+) -> dict:
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    student_user = await session.get(User, student_id)
+    if not student_user:
+        raise ValueError("User not found")
+
+    gitea_username = resolve_gitea_username(student_user)
+    clone_url = build_clone_url(target.owner, target.repo_name)
+    meta = await get_repo_metadata(owner=target.owner, repo=target.repo_name)
+    is_private = bool(meta.get("private")) if meta else True
+
+    if not is_private:
+        cmd = f"git clone {clone_url}"
+        return {
+            "clone_url": clone_url,
+            "git_clone_command": cmd,
+            "auth_required": False,
+            "note": "Публичный репозиторий — логин в Gitea не нужен.",
+        }
+
+    token = await ensure_student_gitea_clone_token(session, student_user)
+    auth_url = build_authenticated_clone_url(
+        owner=target.owner,
+        repo_name=target.repo_name,
+        username=gitea_username,
+        token=token,
+    )
+    cmd = f"git clone {auth_url}"
+    return {
+        "clone_url": clone_url,
+        "git_clone_command": cmd,
+        "auth_required": True,
+        "note": (
+            "Приватный репозиторий: в команду подставлен ваш токен Gitea. "
+            "Не публикуйте её и не коммитьте в репозиторий."
+        ),
+    }
+
+
+async def sync_personal_repository_to_gitea(
+    session: AsyncSession,
+    *,
+    student_user: User,
+    repo: Repository,
+) -> None:
+    """
+    Если запись есть в БД, но репозитория нет в Gitea — создаём (как при первом создании).
+    """
+    from app.services.gitea_service import ensure_gitea_user, repo_exists_in_gitea
+    from app.services.repo_init_service import create_personal_repository_in_gitea
+
+    owner = resolve_gitea_username(student_user)
+    repo_name = (repo.gitea_repo_name or repo.name or "").strip()
+    if not repo_name:
+        raise ValueError("У репозитория нет имени — пересоздайте его в разделе «Мои репозитории».")
+
+    exists = await repo_exists_in_gitea(owner=owner, repo=repo_name)
+    if exists is True:
+        return
+    if exists is None:
+        raise GiteaAuthError(
+            "Gitea недоступен. Проверьте настройки сервера или обратитесь к администратору."
+        )
+
+    await ensure_gitea_user(owner)
+    repo_type = repo.repo_type
+    if isinstance(repo_type, RepositoryType):
+        is_private = repo_type == RepositoryType.private
+    else:
+        is_private = str(repo_type) == "private"
+
+    try:
+        await create_personal_repository_in_gitea(
+            owner_username=owner,
+            name=repo_name,
+            description=repo.description,
+            private=is_private,
+            add_readme=True,
+            gitignore_template=None,
+            license_template=None,
+        )
+    except Exception as exc:
+        logger.warning("sync_personal_repository_to_gitea %s/%s: %s", owner, repo_name, exc)
+        raise ValueError(
+            f"Не удалось создать репозиторий в Gitea ({owner}/{repo_name}). "
+            "Проверьте логин Gitea (mtuci_login) в профиле и попробуйте снова."
+        ) from exc
+
+    repo.gitea_repo_name = repo_name
+    repo.clone_url = build_clone_url(owner, repo_name)
+    session.add(repo)
+    await session.commit()
 
 
 async def resolve_student_repo_gitea_target(
@@ -174,18 +301,11 @@ async def resolve_student_repo_gitea_target(
     )
     repo = personal.scalar_one_or_none()
     if repo:
+        await sync_personal_repository_to_gitea(session, student_user=student_user, repo=repo)
         repo_name = (repo.gitea_repo_name or repo.name or "").strip()
         if not repo_name:
             raise ValueError("У репозитория нет имени — пересоздайте его в разделе «Мои репозитории».")
         owner = await resolve_repo_owner(primary_owner=primary_owner, repo_name=repo_name)
-        await _require_repo_in_gitea(
-            owner=owner,
-            repo_name=repo_name,
-            not_found_message=(
-                f"Репозиторий «{repo.name}» не найден в Gitea ({owner}/{repo_name}). "
-                "Удалите запись и создайте репозиторий снова."
-            ),
-        )
         return StudentRepoGiteaTarget(
             owner=owner,
             repo_name=repo_name,
@@ -208,14 +328,12 @@ async def resolve_student_repo_gitea_target(
             primary_owner=primary_owner,
             repo_name=repo_name,
         )
-        await _require_repo_in_gitea(
-            owner=owner,
-            repo_name=repo_name,
-            not_found_message=(
+        meta = await get_repo_metadata(owner=owner, repo=repo_name)
+        if not meta:
+            raise ValueError(
                 f"Репозиторий задания не найден в Gitea ({owner}/{repo_name}). "
                 "Откройте задание в курсе — репозиторий создастся автоматически."
-            ),
-        )
+            )
         return StudentRepoGiteaTarget(
             owner=owner,
             repo_name=repo_name,
@@ -979,6 +1097,202 @@ async def get_student_deadlines(
                 deadline=a.deadline,
                 urgency=_deadline_urgency(a.deadline, now),
                 submitted=submitted,
+            )
+        )
+    return items
+
+
+def _parse_fork_target(message: str | None) -> str | None:
+    if not message:
+        return None
+    text = message.strip()
+    if text.startswith("→"):
+        return text[1:].strip() or None
+    return text or None
+
+
+async def get_student_forks(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    limit: int = 100,
+) -> list[StudentForkItemRead]:
+    result = await session.execute(
+        select(ActivityLog)
+        .where(
+            ActivityLog.user_id == student_id,
+            ActivityLog.activity_type.in_([ActivityType.fork, ActivityType.repo_created]),
+        )
+        .order_by(ActivityLog.created_at.desc())
+        .limit(limit)
+    )
+    items: list[StudentForkItemRead] = []
+    for log in result.scalars().all():
+        event_type = (
+            log.activity_type.value
+            if hasattr(log.activity_type, "value")
+            else str(log.activity_type)
+        )
+        source = log.repo_name or "—"
+        target = _parse_fork_target(log.message) if event_type == "fork" else source
+        items.append(
+            StudentForkItemRead(
+                id=log.id,
+                event_type=event_type,
+                source_repo=source,
+                target_repo=target,
+                created_at=log.created_at,
+            )
+        )
+    return items
+
+
+async def get_student_grades(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    group_name: str | None,
+    limit: int = 200,
+) -> StudentGradesSummaryRead:
+    now = datetime.now(timezone.utc)
+    ctx = await _load_student_assignment_context(session, student_id=student_id, group_name=group_name)
+    course_grade_max = {c.id: c.grade_max for c in ctx.courses}
+
+    teachers: dict[UUID, str] = {}
+    if ctx.courses:
+        teacher_ids = list({c.teacher_id for c in ctx.courses})
+        t_result = await session.execute(select(User.id, User.full_name).where(User.id.in_(teacher_ids)))
+        teachers = {row[0]: row[1] for row in t_result.all()}
+
+    course_summaries: list[StudentGradeCourseRead] = []
+    items: list[StudentGradeItemRead] = []
+    graded_scores: list[float] = []
+    pending_review = 0
+    graded_count = 0
+
+    for course in ctx.courses:
+        course_assignments = [a for a in ctx.all_assignments if a.course_id == course.id]
+        assignments_graded = 0
+        assignments_submitted = 0
+        course_grades: list[float] = []
+
+        for a in course_assignments:
+            sub = ctx.submissions_map.get(a.id)
+            submitted = bool(sub and sub.submitted_at)
+            if submitted:
+                assignments_submitted += 1
+            if sub and (sub.grade is not None or sub.final_grade is not None):
+                assignments_graded += 1
+                if sub.final_grade is not None:
+                    course_grades.append(float(sub.final_grade))
+                elif sub.grade is not None:
+                    course_grades.append(float(sub.grade))
+
+        avg_score = round(sum(course_grades) / len(course_grades)) if course_grades else None
+        course_summaries.append(
+            StudentGradeCourseRead(
+                course_id=course.id,
+                title=course.title,
+                teacher_name=teachers.get(course.teacher_id, "—"),
+                grade_max=course.grade_max,
+                average_score=avg_score,
+                assignments_total=len(course_assignments),
+                assignments_graded=assignments_graded,
+                assignments_submitted=assignments_submitted,
+            )
+        )
+
+    sorted_assignments = sorted(ctx.all_assignments, key=lambda a: a.deadline, reverse=True)
+    for a in sorted_assignments[:limit]:
+        sub = ctx.submissions_map.get(a.id)
+        submitted = bool(sub and sub.submitted_at)
+        grade = sub.grade if sub else None
+        final_grade = sub.final_grade if sub else None
+        grade_max = course_grade_max.get(a.course_id, 100)
+
+        if grade is not None or final_grade is not None:
+            status = "graded"
+            graded_count += 1
+            graded_scores.append(float(final_grade if final_grade is not None else grade))
+        elif submitted:
+            status = "submitted"
+            pending_review += 1
+        elif a.deadline < now:
+            status = "overdue"
+        else:
+            status = "pending"
+
+        items.append(
+            StudentGradeItemRead(
+                assignment_id=a.id,
+                course_id=a.course_id,
+                course_title=ctx.course_title_by_id.get(a.course_id, "—"),
+                title=a.title,
+                grade=grade,
+                final_grade=final_grade,
+                grade_max=grade_max,
+                status=status,
+                graded_at=sub.graded_at if sub else None,
+                submitted_at=sub.submitted_at if sub else None,
+            )
+        )
+
+    overall_average = round(sum(graded_scores) / len(graded_scores), 1) if graded_scores else None
+
+    return StudentGradesSummaryRead(
+        overall_average=overall_average,
+        graded_count=graded_count,
+        pending_review=pending_review,
+        courses=course_summaries,
+        items=items,
+    )
+
+
+async def get_student_assignments(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    group_name: str | None,
+    limit: int = 200,
+) -> list[StudentAssignmentListItemRead]:
+    now = datetime.now(timezone.utc)
+    ctx = await _load_student_assignment_context(session, student_id=student_id, group_name=group_name)
+    course_grade_max = {c.id: c.grade_max for c in ctx.courses}
+
+    sorted_assignments = sorted(ctx.all_assignments, key=lambda a: a.deadline)
+
+    items: list[StudentAssignmentListItemRead] = []
+    for a in sorted_assignments[:limit]:
+        sub = ctx.submissions_map.get(a.id)
+        submitted = bool(sub and sub.submitted_at)
+        grade = sub.grade if sub else None
+        final_grade = sub.final_grade if sub else None
+        grade_max = course_grade_max.get(a.course_id, 100)
+
+        if grade is not None:
+            status = "graded"
+        elif submitted:
+            status = "submitted"
+        elif a.deadline < now:
+            status = "overdue"
+        else:
+            status = "pending"
+
+        items.append(
+            StudentAssignmentListItemRead(
+                id=a.id,
+                course_id=a.course_id,
+                course_title=ctx.course_title_by_id.get(a.course_id, "—"),
+                title=a.title,
+                description=a.description,
+                deadline=a.deadline,
+                start_date=a.start_date,
+                submitted=submitted,
+                grade=grade,
+                final_grade=final_grade,
+                grade_max=grade_max,
+                status=status,
+                urgency=_deadline_urgency(a.deadline, now),
             )
         )
     return items

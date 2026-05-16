@@ -17,11 +17,20 @@ from app.core.permissions import require_permission
 from app.models.repository import Repository, RepositoryType
 from app.models.system_log import LogLevel, LogSource
 from app.models.user import User
+from app.data.repo_create_templates import (
+    GITIGNORE_OPTIONS,
+    LICENSE_OPTIONS,
+    VALID_GITIGNORE_IDS,
+    VALID_LICENSE_IDS,
+)
 from app.schemas.repository import (
     RepositoryCreateRequest,
+    RepositoryCreateTemplatesRead,
+    RepositoryCreateTemplateOption,
     RepositoryRead,
     RepositoryUpdateRequest,
 )
+from app.services.repo_init_service import create_personal_repository_in_gitea
 from app.services.activity_service import log_repo_created, log_repo_deleted
 from app.services.gitea_service import build_clone_url, ensure_repo_webhook
 from app.services.logging_service import log_info, log_warning, log_event_background
@@ -198,6 +207,17 @@ async def delete_gitea_repository(owner: str, repo_name: str) -> None:
             print(f"Warning: Failed to delete Gitea repo: {response.status_code}")
 
 
+@router.get("/create-templates", response_model=RepositoryCreateTemplatesRead)
+async def get_repository_create_templates(
+    current_user: User = Depends(get_current_user),
+) -> RepositoryCreateTemplatesRead:
+    """Options for README / .gitignore / license when creating a repository."""
+    return RepositoryCreateTemplatesRead(
+        gitignores=[RepositoryCreateTemplateOption(**o) for o in GITIGNORE_OPTIONS],
+        licenses=[RepositoryCreateTemplateOption(**o) for o in LICENSE_OPTIONS],
+    )
+
+
 @router.get("/my", response_model=list[RepositoryRead])
 async def list_my_repositories(
     current_user: User = Depends(get_current_user),
@@ -240,20 +260,38 @@ async def create_repository(
                 detail="Repository with this name already exists",
             )
 
-        # Create repository in Gitea (optional)
+        gitignore = (payload.gitignore_template or "").strip() or None
+        license_tpl = (payload.license_template or "").strip() or None
+        if gitignore and gitignore not in VALID_GITIGNORE_IDS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unknown gitignore template",
+            )
+        if license_tpl and license_tpl not in VALID_LICENSE_IDS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unknown license template",
+            )
+
+        is_private = payload.visibility == "private"
+        repo_type = payload.repo_type or (
+            RepositoryType.private if is_private else RepositoryType.public
+        )
+
         clone_url = None
         gitea_repo_name = None
         gitea_success = False
         try:
-            # Log all user attributes for debugging
-            logger.info(f"User object: id={current_user.id}, email={current_user.email}, full_name={current_user.full_name}")
-            
             owner_username = resolve_gitea_username(current_user)
-            logger.info(f"Owner username extracted: {owner_username}")
-            gitea_repo = await create_gitea_repository(
+            logger.info(f"Creating Gitea repo for {owner_username}: {payload.name}")
+            gitea_repo = await create_personal_repository_in_gitea(
+                owner_username=owner_username,
                 name=payload.name,
                 description=payload.description,
-                owner_username=owner_username,
+                private=is_private,
+                add_readme=payload.add_readme,
+                gitignore_template=gitignore,
+                license_template=license_tpl,
             )
             gitea_repo_name = gitea_repo.get("name") or payload.name
             clone_url = build_clone_url(owner_username, gitea_repo_name)
@@ -262,7 +300,6 @@ async def create_repository(
 
             await ensure_repo_webhook(owner=owner_username, repo_name=gitea_repo_name)
         except Exception as e:
-            # Log but don't fail - create repo in DB only
             logger.warning(f"Gitea repo creation failed (will create in DB only): {e}")
 
         repository = Repository(
@@ -271,6 +308,7 @@ async def create_repository(
             gitea_repo_name=gitea_repo_name,
             clone_url=clone_url,
             owner_id=current_user.id,
+            repo_type=repo_type,
         )
         session.add(repository)
         await session.commit()

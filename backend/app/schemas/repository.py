@@ -4,7 +4,9 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.repository import RepositoryType
 
@@ -12,8 +14,22 @@ from app.models.repository import RepositoryType
 class RepositoryCreateRequest(BaseModel):
     name: str
     description: Optional[str] = None
-    repo_type: RepositoryType = RepositoryType.public
+    visibility: Literal["public", "private"] = "public"
+    add_readme: bool = False
+    gitignore_template: Optional[str] = Field(default=None, max_length=64)
+    license_template: Optional[str] = Field(default=None, max_length=64)
+    repo_type: RepositoryType | None = None
     language: Optional[str] = None
+
+
+class RepositoryCreateTemplateOption(BaseModel):
+    id: str
+    label: str
+
+
+class RepositoryCreateTemplatesRead(BaseModel):
+    gitignores: list[RepositoryCreateTemplateOption]
+    licenses: list[RepositoryCreateTemplateOption]
 
 
 class RepositoryUpdateRequest(BaseModel):

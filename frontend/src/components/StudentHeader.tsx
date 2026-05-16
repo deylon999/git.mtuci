@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, LogOut, User, Moon, Sun, Search } from "lucide-react";
 import { clearToken } from "../api/client";
 import { getMe, invalidateMeCache } from "../api/authApi";
+import { globalSearch } from "../api/searchApi";
 import { getTheme } from "../theme";
 import { pageGutterClass } from "../layout/pageLayout";
 import { getDefaultRouteForRole } from "../utils/defaultRoute";
@@ -90,10 +91,20 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
     navigate("/login", { replace: true });
   }
 
-  function handleSearch(e: React.FormEvent) {
+  async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     const q = searchQuery.trim();
     if (!q) return;
+    try {
+      const result = await globalSearch(q, 8);
+      const first = result.hits[0];
+      if (first?.href) {
+        navigate(first.href);
+        return;
+      }
+    } catch {
+      // fallback
+    }
     navigate(`/courses?q=${encodeURIComponent(q)}`);
   }
 

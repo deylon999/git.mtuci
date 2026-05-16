@@ -46,6 +46,22 @@ class StudentDeadlineDetailRead(StudentDeadlineRead):
     submitted: bool = False
 
 
+class StudentAssignmentListItemRead(BaseModel):
+    id: UUID
+    course_id: UUID
+    course_title: str
+    title: str
+    description: str | None = None
+    deadline: datetime
+    start_date: datetime
+    submitted: bool = False
+    grade: int | None = None
+    final_grade: float | None = None
+    grade_max: int = 100
+    status: str = Field(description="pending | submitted | graded | overdue")
+    urgency: str = Field(description="danger | warning | info | muted")
+
+
 class StudentDashboardStatsRead(BaseModel):
     kpi: StudentDashboardKpiRead
     sidebar: StudentSidebarCountsRead
@@ -133,6 +149,35 @@ class StudentRepositoriesRead(BaseModel):
     gitea_web_base: str
     stats: StudentRepositoriesStatsRead
     repositories: list[StudentRepositoryItemRead] = Field(default_factory=list)
+
+
+class StudentRepoCloneInfoRead(BaseModel):
+    clone_url: str
+    git_clone_command: str
+    auth_required: bool = False
+    note: str | None = None
+
+
+class StudentRepoLintBody(BaseModel):
+    path: str = Field(min_length=1, max_length=500)
+    content: str = Field(max_length=512_000)
+
+
+class StudentRepoLintDiagnosticRead(BaseModel):
+    line: int
+    column: int
+    end_line: int
+    end_column: int
+    message: str
+    severity: str = "error"
+
+
+class StudentRepoLintRead(BaseModel):
+    language: str
+    diagnostics: list[StudentRepoLintDiagnosticRead] = Field(default_factory=list)
+    linter: str = "none"
+    skipped: bool = False
+    message: str | None = None
 
 
 class StudentRepoFileRead(BaseModel):
@@ -276,3 +321,43 @@ class StudentGroupRankingRead(BaseModel):
     your_name: str | None = None
     top_percent_label: str | None = None
     entries: list[StudentGroupRankingEntryRead] = Field(default_factory=list)
+
+
+class StudentGradeCourseRead(BaseModel):
+    course_id: UUID
+    title: str
+    teacher_name: str
+    grade_max: int
+    average_score: int | None = None
+    assignments_total: int
+    assignments_graded: int
+    assignments_submitted: int
+
+
+class StudentGradeItemRead(BaseModel):
+    assignment_id: UUID
+    course_id: UUID
+    course_title: str
+    title: str
+    grade: int | None = None
+    final_grade: float | None = None
+    grade_max: int = 100
+    status: str = Field(description="pending | submitted | graded | overdue")
+    graded_at: datetime | None = None
+    submitted_at: datetime | None = None
+
+
+class StudentGradesSummaryRead(BaseModel):
+    overall_average: float | None = None
+    graded_count: int = 0
+    pending_review: int = 0
+    courses: list[StudentGradeCourseRead] = Field(default_factory=list)
+    items: list[StudentGradeItemRead] = Field(default_factory=list)
+
+
+class StudentForkItemRead(BaseModel):
+    id: UUID
+    event_type: str = Field(description="fork | repo_created")
+    source_repo: str
+    target_repo: str | None = None
+    created_at: datetime

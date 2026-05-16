@@ -22,7 +22,9 @@ import {
   type StudentRepoSummary,
 } from "../api/studentDashboardApi";
 import RepoMarkdown from "./RepoMarkdown";
+import RepoMonacoViewer from "./repo/RepoMonacoViewer";
 import RepoCodeToolbar from "./repo/RepoCodeToolbar";
+import { displayLanguageLabel } from "../utils/codeLanguage";
 import RepoCreateFileModal from "./repo/RepoCreateFileModal";
 import RepoNavTabs from "./repo/RepoNavTabs";
 import RepoProjectSidebar from "./repo/RepoProjectSidebar";
@@ -72,18 +74,11 @@ function formatBytes(size: number | null): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function guessHighlightLanguage(filepath: string): string {
+function isBinaryLikePath(filepath: string): boolean {
   const ext = filepath.split(".").pop()?.toLowerCase() ?? "";
-  const map: Record<string, string> = {
-    py: "Python",
-    js: "JavaScript",
-    ts: "TypeScript",
-    md: "Markdown",
-    json: "JSON",
-    go: "Go",
-    rs: "Rust",
-  };
-  return map[ext] ?? (ext ? ext.toUpperCase() : "Text");
+  return ["png", "jpg", "jpeg", "gif", "svg", "ico", "webp", "pdf", "zip", "exe", "dll"].includes(
+    ext,
+  );
 }
 
 function findReadme(entries: RepoBrowserFile[]): RepoBrowserFile | undefined {
@@ -419,6 +414,7 @@ export default function RepoFileBrowser({
   const toolbar = (
     <RepoCodeToolbar
       theme={theme}
+      repoId={repoId}
       branch={branch}
       branches={branches.length ? branches : [{ name: branch, is_default: true }]}
       branchLoading={branchLoading}
@@ -452,11 +448,12 @@ export default function RepoFileBrowser({
 
   const fileTable = (
     <div
-      className="rounded-xl border overflow-hidden"
+      className="rounded-xl border"
       style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
     >
       {navTabs}
       {toolbar}
+      <div className="overflow-hidden rounded-b-xl">
       {(isDirectoryView || isRepoHome) && pathParts.length > 0 && (
         <Breadcrumb
           theme={theme}
@@ -551,6 +548,7 @@ export default function RepoFileBrowser({
           })
         )}
       </div>
+      </div>
     </div>
   );
 
@@ -623,7 +621,7 @@ export default function RepoFileBrowser({
         <span className="font-mono truncate" style={{ color: theme.text }}>
           {selectedFile}
         </span>
-        <span style={{ color: theme.text3 }}>{guessHighlightLanguage(selectedFile!)}</span>
+        <span style={{ color: theme.text3 }}>{displayLanguageLabel(selectedFile!)}</span>
       </div>
       <div className="overflow-auto max-h-[min(70vh,640px)]">
         {fileLoading ? (
@@ -639,8 +637,18 @@ export default function RepoFileBrowser({
           <div className="px-5 py-5">
             <RepoMarkdown content={fileContent ?? ""} theme={theme} />
           </div>
+        ) : isBinaryLikePath(selectedFile!) ? (
+          <p className="px-4 py-8 text-sm" style={{ color: theme.text2 }}>
+            Бинарный файл — просмотр и линтер недоступны. Скачайте через Gitea или git clone.
+          </p>
         ) : (
-          <CodeBlock content={fileContent ?? ""} theme={theme} />
+          <RepoMonacoViewer
+            repoId={repoId}
+            filepath={selectedFile!}
+            content={fileContent ?? ""}
+            isDarkTheme={isDarkTheme}
+            theme={theme}
+          />
         )}
       </div>
     </div>
@@ -709,25 +717,3 @@ export default function RepoFileBrowser({
   );
 }
 
-function CodeBlock({ content, theme }: { content: string; theme: ThemeColors }) {
-  const lines = content.split("\n");
-  return (
-    <pre className="flex text-xs font-mono leading-relaxed" style={{ color: theme.text }}>
-      <code className="flex min-w-0 flex-1">
-        <span
-          className="select-none shrink-0 py-4 pr-3 pl-4 text-right border-r"
-          style={{ color: theme.text3, borderColor: theme.border, backgroundColor: theme.bg }}
-        >
-          {lines.map((_, i) => (
-            <div key={i}>{i + 1}</div>
-          ))}
-        </span>
-        <span className="py-4 px-4 whitespace-pre-wrap break-words flex-1">
-          {lines.map((line, i) => (
-            <div key={i}>{line || "\u00a0"}</div>
-          ))}
-        </span>
-      </code>
-    </pre>
-  );
-}

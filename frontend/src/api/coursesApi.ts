@@ -157,6 +157,84 @@ function encodeRepoFilePath(filepath: string) {
     .join("/");
 }
 
+export interface CourseStudent {
+  student_id: string;
+  full_name: string;
+  email: string;
+  group_name: string | null;
+  student_number: string | null;
+  enrolled_at: string | null;
+}
+
+export interface EnrollByGroupResult {
+  group_name: string;
+  enrolled: number;
+  skipped: number;
+  student_ids: string[];
+}
+
+export interface AssignmentStats {
+  assignment_id: string;
+  course_id: string;
+  title: string;
+  students_total: number;
+  submitted_count: number;
+  graded_count: number;
+  pending_grade_count: number;
+  overdue_count: number;
+  average_grade: number | null;
+  average_final_grade: number | null;
+}
+
+export async function getCourseStudents(courseId: string): Promise<CourseStudent[]> {
+  return apiRequest<CourseStudent[]>(`/courses/${courseId}/students`);
+}
+
+export async function unenrollStudent(courseId: string, studentId: string): Promise<void> {
+  await apiRequest<void>(`/courses/${courseId}/enroll/${studentId}`, { method: "DELETE" });
+}
+
+export async function enrollGroupToCourse(
+  courseId: string,
+  groupName: string,
+): Promise<EnrollByGroupResult> {
+  return apiRequest<EnrollByGroupResult>(`/courses/${courseId}/enroll-by-group`, {
+    method: "POST",
+    body: { group_name: groupName },
+  });
+}
+
+export async function getAssignmentStats(
+  courseId: string,
+  assignmentId: string,
+): Promise<AssignmentStats> {
+  return apiRequest<AssignmentStats>(
+    `/courses/${courseId}/assignments/${assignmentId}/stats`,
+  );
+}
+
+export async function exportCourseGradesCsv(courseId: string): Promise<void> {
+  const token = localStorage.getItem("token");
+  const res = await fetch(
+    `${import.meta.env.VITE_API_URL ?? "/api"}/courses/${courseId}/grades/export`,
+    {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+      },
+    },
+  );
+  if (!res.ok) throw new Error("Не удалось экспортировать ведомость");
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `grades-${courseId}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
 export async function getFileContent(
   courseId: string,
   assignmentId: string,

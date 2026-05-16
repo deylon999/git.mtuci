@@ -5,7 +5,7 @@ import base64
 import logging
 from datetime import datetime
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse, urlunparse
 
 import httpx
 
@@ -23,6 +23,24 @@ COMMIT_WEEK_MAX_PAGES = 10
 
 class GiteaAuthError(RuntimeError):
     """Gitea API rejected credentials (invalid token or missing admin user)."""
+
+
+_GITEA_AUTH_FAILED_STATUSES = frozenset({401, 403})
+_gitea_auth_failure_logged = False
+
+
+def gitea_auth_error_message() -> str:
+    token_set = bool((settings.GITEA_TOKEN or "").strip())
+    hint = (
+        "Удалите или обновите GITEA_TOKEN в backend/.env"
+        if token_set
+        else "Задайте GITEA_TOKEN или проверьте GITEA_ADMIN_USERNAME / GITEA_ADMIN_PASSWORD"
+    )
+    return (
+        f"Gitea отклонил авторизацию. {hint}. "
+        f"Пользователь {settings.GITEA_ADMIN_USERNAME} должен существовать в Gitea "
+        "(при первом запуске через docker-compose пароль по умолчанию: admin12345)."
+    )
 
 
 def _basic_auth_headers() -> dict[str, str]:
@@ -48,6 +66,26 @@ def _get_auth_headers(*, prefer_basic: bool = False) -> dict[str, str]:
     return _token_auth_headers()  # type: ignore[return-value]
 
 
+def _log_gitea_auth_failure(resp: httpx.Response, *, context: str) -> None:
+    global _gitea_auth_failure_logged
+    if _gitea_auth_failure_logged:
+        return
+    _gitea_auth_failure_logged = True
+    body = (resp.text or "")[:200].replace("\n", " ")
+    logger.error(
+        "Gitea API auth failed (%s %s): HTTP %s — %s. %s",
+        context,
+        resp.request.url if resp.request else "?",
+        resp.status_code,
+        body,
+        gitea_auth_error_message(),
+    )
+
+
+def _gitea_response_unauthorized(resp: httpx.Response) -> bool:
+    return resp.status_code in _GITEA_AUTH_FAILED_STATUSES
+
+
 async def _gitea_request(
     client: httpx.AsyncClient,
     method: str,
@@ -56,14 +94,57 @@ async def _gitea_request(
     headers: dict[str, str] | None = None,
     **kwargs: Any,
 ) -> httpx.Response:
-    """HTTP-запрос к Gitea с повтором через basic auth, если token отклонён (401)."""
+    """HTTP-запрос к Gitea с повтором через basic auth, если token отклонён (401/403)."""
     merged = {**_get_auth_headers(), **(headers or {})}
     resp = await client.request(method, url, headers=merged, **kwargs)
-    if resp.status_code == 401 and _token_auth_headers() is not None:
-        logger.warning("GITEA_TOKEN rejected; retrying with admin basic auth")
+    if _gitea_response_unauthorized(resp) and _token_auth_headers() is not None:
+        logger.warning(
+            "GITEA_TOKEN rejected (HTTP %s); retrying with admin basic auth",
+            resp.status_code,
+        )
         merged = {**_get_auth_headers(prefer_basic=True), **(headers or {})}
         resp = await client.request(method, url, headers=merged, **kwargs)
     return resp
+
+
+async def check_gitea_api_access() -> tuple[bool, str]:
+    """
+    Проверка доступа к Gitea API (для health/startup).
+    Возвращает (ok, сообщение для логов).
+    """
+    base_url = settings.GITEA_URL.rstrip("/")
+    version_url = f"{base_url}/api/v1/version"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await _gitea_request(client, "GET", version_url)
+            if _gitea_response_unauthorized(resp):
+                resp = await client.get(version_url, headers=_basic_auth_headers())
+    except httpx.HTTPError as exc:
+        return False, f"Gitea недоступен по {base_url}: {exc}"
+    if _gitea_response_unauthorized(resp):
+        return (
+            False,
+            f"{gitea_auth_error_message()} "
+            "Запустите: docker compose run --rm gitea-bootstrap",
+        )
+    if resp.status_code != 200:
+        return False, f"Gitea version check: HTTP {resp.status_code}"
+    token_set = bool((settings.GITEA_TOKEN or "").strip())
+    if token_set:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                token_resp = await client.get(
+                    version_url, headers=_token_auth_headers() or {}
+                )
+            if _gitea_response_unauthorized(token_resp):
+                return (
+                    True,
+                    f"Gitea API OK ({base_url}, basic auth). "
+                    "GITEA_TOKEN в .env устарел — очистите строку для автоматического режима.",
+                )
+        except httpx.HTTPError:
+            pass
+    return True, f"Gitea API OK ({base_url})"
 
 
 def gitea_public_base_url() -> str:
@@ -72,6 +153,63 @@ def gitea_public_base_url() -> str:
 
 def build_clone_url(owner: str, repo_name: str) -> str:
     return f"{gitea_public_base_url()}/{owner}/{repo_name}.git"
+
+
+def build_authenticated_clone_url(*, owner: str, repo_name: str, username: str, token: str) -> str:
+    """HTTP(S) clone URL with embedded credentials (for private repos in lab)."""
+    parsed = urlparse(build_clone_url(owner, repo_name))
+    user = quote(username, safe="")
+    tok = quote(token, safe="")
+    host = parsed.hostname or "localhost"
+    netloc = f"{user}:{tok}@{host}"
+    if parsed.port:
+        netloc += f":{parsed.port}"
+    return urlunparse((parsed.scheme, netloc, parsed.path, "", "", ""))
+
+
+MTUCI_GITEA_CLONE_TOKEN_NAME = "mtuci-clone"
+
+
+async def verify_gitea_access_token(token: str) -> bool:
+    base_url = settings.GITEA_URL.rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{base_url}/api/v1/user",
+                headers={"Authorization": f"token {token}"},
+            )
+        return resp.status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
+async def create_gitea_user_access_token(
+    username: str,
+    *,
+    name: str = MTUCI_GITEA_CLONE_TOKEN_NAME,
+) -> str:
+    """Create PAT for a Gitea user (admin API). Token value returned only once."""
+    base_url = settings.GITEA_URL.rstrip("/")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            f"{base_url}/api/v1/users/{gitea_owner_path(username)}/tokens",
+            headers={"Content-Type": "application/json"},
+            json={
+                "name": name,
+                "scopes": ["read:repository", "write:repository", "read:user"],
+            },
+        )
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Gitea create token failed: {resp.status_code} {resp.text[:300]}")
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise RuntimeError("Gitea create token: invalid response")
+    raw = data.get("sha1") or data.get("token")
+    if not raw:
+        raise RuntimeError("Gitea create token: empty token")
+    return str(raw)
 
 
 def build_repo_web_url(owner: str, repo_name: str) -> str:
@@ -139,11 +277,8 @@ async def ensure_gitea_user(username: str) -> None:
         )
         if check.status_code == 200:
             return
-        if check.status_code == 401:
-            raise GiteaAuthError(
-                "Gitea отклонил авторизацию. Проверьте GITEA_TOKEN или учётную запись "
-                f"{settings.GITEA_ADMIN_USERNAME} в Gitea."
-            )
+        if _gitea_response_unauthorized(check):
+            raise GiteaAuthError(gitea_auth_error_message())
         if check.status_code != 404:
             logger.warning("Gitea user check for %s: %s", username, check.status_code)
             return
@@ -171,23 +306,34 @@ async def create_repository_for_owner(
     description: str | None = None,
     private: bool = False,
     auto_init: bool = True,
+    gitignores: str | None = None,
+    license_key: str | None = None,
+    readme: str | None = None,
 ) -> dict[str, Any]:
     """Create repository under a specific Gitea user (admin API)."""
     await ensure_gitea_user(owner_username)
     base_url = settings.GITEA_URL.rstrip("/")
+    payload: dict[str, Any] = {
+        "name": name,
+        "description": description or "",
+        "private": private,
+        "auto_init": auto_init,
+        "default_branch": "main",
+    }
+    if gitignores:
+        payload["gitignores"] = gitignores
+    if license_key:
+        payload["license"] = license_key
+    if readme:
+        payload["readme"] = readme
+
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await _gitea_request(
             client,
             "POST",
             f"{base_url}/api/v1/admin/users/{gitea_owner_path(owner_username)}/repos",
             headers={"Content-Type": "application/json"},
-            json={
-                "name": name,
-                "description": description or "",
-                "private": private,
-                "auto_init": auto_init,
-                "default_branch": "main",
-            },
+            json=payload,
         )
 
     if resp.status_code == 409:
@@ -286,27 +432,50 @@ def stats_from_repo_metadata(meta: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-async def get_repo_metadata(*, owner: str, repo: str) -> dict[str, Any] | None:
+async def _fetch_repo_api_response(*, owner: str, repo: str) -> httpx.Response | None:
     try:
         owner, repo = normalize_gitea_owner_repo(owner, repo)
     except ValueError:
         return None
     base_url = settings.GITEA_URL.rstrip("/")
     async with httpx.AsyncClient(timeout=20) as client:
-        resp = await _gitea_request(
+        return await _gitea_request(
             client,
             "GET",
             f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}",
         )
-    if resp.status_code == 401:
-        raise GiteaAuthError(
-            "Gitea отклонил авторизацию. Обновите GITEA_TOKEN в .env или создайте пользователя "
-            f"{settings.GITEA_ADMIN_USERNAME} в Gitea."
-        )
+
+
+async def repo_exists_in_gitea(*, owner: str, repo: str) -> bool | None:
+    """
+    True/False — репозиторий есть/нет.
+    None — не удалось проверить (ошибка авторизации Gitea).
+    """
+    resp = await _fetch_repo_api_response(owner=owner, repo=repo)
+    if resp is None:
+        return False
+    if _gitea_response_unauthorized(resp):
+        _log_gitea_auth_failure(resp, context="repo probe")
+        return None
+    if resp.status_code == 404:
+        return False
+    if resp.status_code == 200:
+        return True
+    logger.warning("Gitea repo probe %s/%s: HTTP %s", owner, repo, resp.status_code)
+    return False
+
+
+async def get_repo_metadata(*, owner: str, repo: str) -> dict[str, Any] | None:
+    resp = await _fetch_repo_api_response(owner=owner, repo=repo)
+    if resp is None:
+        return None
+    if _gitea_response_unauthorized(resp):
+        _log_gitea_auth_failure(resp, context="get_repo_metadata")
+        raise GiteaAuthError(gitea_auth_error_message())
     if resp.status_code == 404:
         return None
     if resp.status_code != 200:
-        logger.warning("Gitea get repo %s/%s: %s", owner, repo, resp.status_code)
+        logger.warning("Gitea get repo: HTTP %s", resp.status_code)
         return None
     data = resp.json()
     return data if isinstance(data, dict) else None
@@ -317,10 +486,20 @@ async def resolve_repo_owner(*, primary_owner: str, repo_name: str) -> str:
     Return Gitea owner where the repo actually lives.
     Supports legacy assignment repos created under admin before the fix.
     """
-    if await get_repo_metadata(owner=primary_owner, repo=repo_name):
+    exists = await repo_exists_in_gitea(owner=primary_owner, repo=repo_name)
+    if exists is True:
+        return primary_owner
+    if exists is None:
+        # Не валим весь запрос: при сбое Gitea auth используем владельца по умолчанию.
+        logger.warning(
+            "resolve_repo_owner: Gitea auth failed, using primary_owner=%s for %s",
+            primary_owner,
+            repo_name,
+        )
         return primary_owner
     if primary_owner != GITEA_ADMIN_USERNAME:
-        if await get_repo_metadata(owner=GITEA_ADMIN_USERNAME, repo=repo_name):
+        admin_exists = await repo_exists_in_gitea(owner=GITEA_ADMIN_USERNAME, repo=repo_name)
+        if admin_exists is True:
             return GITEA_ADMIN_USERNAME
     return primary_owner
 
@@ -560,8 +739,8 @@ async def create_repo_file(
                 "message": message or f"Add {cleaned}",
             },
         )
-    if resp.status_code in (401, 403):
-        raise GiteaAuthError("Gitea отклонил создание файла. Проверьте права доступа.")
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
     if resp.status_code == 422:
         raise RuntimeError("Файл уже существует. Выберите другое имя или отредактируйте в Gitea.")
     if resp.status_code not in (200, 201):
@@ -703,11 +882,8 @@ async def get_repo_contents(
             f"Репозиторий {owner}/{repo} не найден в Gitea. "
             "Возможно, он создан только в базе — удалите и создайте заново."
         )
-    if resp.status_code == 401:
-        raise GiteaAuthError(
-            f"Gitea отклонил запрос для {owner}/{repo}. Проверьте GITEA_TOKEN и что пользователь "
-            f"«{owner}» существует в Gitea."
-        )
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
     if resp.status_code != 200:
         raise RuntimeError(f"Gitea get contents failed: {resp.status_code} {resp.text[:300]}")
 

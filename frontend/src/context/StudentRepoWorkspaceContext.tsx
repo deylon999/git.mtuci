@@ -8,6 +8,7 @@ export interface StudentRepoWorkspaceContextValue {
   meta: StudentRepoMeta | null;
   summary: StudentRepoSummary | null;
   loading: boolean;
+  error: string | null;
   activeTab: RepoNavTabId;
 }
 

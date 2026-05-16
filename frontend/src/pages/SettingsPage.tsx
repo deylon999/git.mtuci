@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Moon, Sun, Bell, Globe, User, Shield, LogOut, ChevronRight } from "lucide-react";
 import { clearToken } from "../api/client";
 import { getMe, invalidateMeCache } from "../api/authApi";
+import { getUserSettings, patchUserSettings } from "../api/userSettingsApi";
 import { getTheme } from "../theme";
 
 interface SettingsPageProps {
@@ -10,30 +11,40 @@ interface SettingsPageProps {
 }
 
 export default function SettingsPage({ isDarkTheme = false, onToggleTheme }: SettingsPageProps) {
-  const [notifications, setNotifications] = useState(() => {
-    const saved = localStorage.getItem("notifications");
-    return saved ? JSON.parse(saved) : {
-      email: true,
-      push: true,
-      assignments: true,
-      grades: true,
+  const [notifications, setNotifications] = useState({
+    email: true,
+    push: true,
+    assignments: true,
+    grades: true,
+  });
+  const [language, setLanguage] = useState("ru");
+  const [settingsLoading, setSettingsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    getUserSettings()
+      .then((s) => {
+        if (!cancelled) {
+          setNotifications(s.notifications);
+          setLanguage(s.language);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setSettingsLoading(false);
+      });
+    return () => {
+      cancelled = true;
     };
-  });
-
-  const [language, setLanguage] = useState(() => {
-    return localStorage.getItem("language") || "ru";
-  });
-
-  // TODO: Replace localStorage with API calls when backend endpoints are available
-  // GET /api/user/settings
-  // PATCH /api/user/settings
-  useEffect(() => {
-    localStorage.setItem("notifications", JSON.stringify(notifications));
-  }, [notifications]);
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem("language", language);
-  }, [language]);
+    if (settingsLoading) return;
+    const t = window.setTimeout(() => {
+      void patchUserSettings({ notifications, language }).catch(() => {});
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [notifications, language, settingsLoading]);
 
   const theme = getTheme(isDarkTheme);
 

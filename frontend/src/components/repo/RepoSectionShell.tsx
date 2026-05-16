@@ -14,6 +14,7 @@ interface RepoSectionShellProps {
   meta: StudentRepoMeta | null;
   summary: StudentRepoSummary | null;
   loading?: boolean;
+  error?: string | null;
   subtitle?: string;
   children: ReactNode;
   onGoToReadme?: () => void;
@@ -27,6 +28,7 @@ export default function RepoSectionShell({
   meta,
   summary,
   loading,
+  error,
   subtitle,
   children,
   onGoToReadme,
@@ -79,6 +81,19 @@ export default function RepoSectionShell({
           openPrCount={summary?.open_pr_count}
         />
       </div>
+
+      {error ? (
+        <div
+          className="rounded-xl border px-4 py-3 text-sm"
+          style={{
+            borderColor: theme.danger,
+            backgroundColor: `${theme.danger}18`,
+            color: theme.text,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
 
       <div className="flex flex-col xl:flex-row gap-4 items-start w-full">
         <div className="flex-1 min-w-0 flex flex-col gap-4">{children}</div>
