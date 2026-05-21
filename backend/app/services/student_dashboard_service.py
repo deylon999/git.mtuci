@@ -415,16 +415,19 @@ async def resolve_student_repo_gitea_target(
         repo_name = (student_repo.repo_name or "").strip()
         if not repo_name:
             raise ValueError("Репозиторий задания не настроен.")
-        owner = await resolve_repo_owner(
-            primary_owner=primary_owner,
-            repo_name=repo_name,
-        )
-        meta = await get_repo_metadata(owner=owner, repo=repo_name)
-        if not meta:
-            raise ValueError(
-                f"Репозиторий задания не найден в Gitea ({owner}/{repo_name}). "
-                "Откройте задание в курсе — репозиторий создастся автоматически."
+        from app.services.student_repository_service import sync_assignment_repository_to_gitea
+
+        try:
+            owner, repo_name = await sync_assignment_repository_to_gitea(
+                session,
+                student=student_user,
+                student_repo=student_repo,
             )
+        except Exception as exc:
+            raise ValueError(
+                f"Не удалось открыть репозиторий задания ({repo_name}). "
+                "Откройте задание в курсе или удалите запись и создайте заново."
+            ) from exc
         return StudentRepoGiteaTarget(
             owner=owner,
             repo_name=repo_name,
@@ -969,6 +972,10 @@ async def delete_student_personal_repository(
     gitea_login: str | None,
     repository_id: UUID,
 ) -> None:
+    """Delete a personal Repository or an assignment StudentRepository (DB + Gitea if present)."""
+    student_user = await session.get(User, student_id)
+    primary_owner = resolve_gitea_username(student_user) if student_user else (gitea_login or "user")
+
     result = await session.execute(
         select(Repository).where(
             Repository.id == repository_id,
@@ -976,23 +983,41 @@ async def delete_student_personal_repository(
         )
     )
     repo = result.scalar_one_or_none()
-    if not repo:
+    if repo:
+        repo_name = repo.gitea_repo_name or repo.name
+        owner = await resolve_repo_owner(primary_owner=primary_owner, repo_name=repo_name)
+        await delete_gitea_repository(owner=owner, repo_name=repo_name)
+        await log_repo_deleted(
+            session=session,
+            user_id=student_id,
+            repo_name=repo.name,
+            ip_address=None,
+        )
+        await session.delete(repo)
+        await session.commit()
+        return
+
+    ar_result = await session.execute(
+        select(StudentRepository).where(
+            StudentRepository.id == repository_id,
+            StudentRepository.student_id == student_id,
+        )
+    )
+    student_repo = ar_result.scalar_one_or_none()
+    if not student_repo:
         raise ValueError("Repository not found")
 
-    student_user = await session.get(User, student_id)
-    primary_owner = resolve_gitea_username(student_user) if student_user else (gitea_login or "user")
-    repo_name = repo.gitea_repo_name or repo.name
-    owner = await resolve_repo_owner(primary_owner=primary_owner, repo_name=repo_name)
-    await delete_gitea_repository(owner=owner, repo_name=repo_name)
-
-    repo_name_log = repo.name
+    repo_name = (student_repo.repo_name or "").strip()
+    if repo_name:
+        owner = await resolve_repo_owner(primary_owner=primary_owner, repo_name=repo_name)
+        await delete_gitea_repository(owner=owner, repo_name=repo_name)
     await log_repo_deleted(
         session=session,
         user_id=student_id,
-        repo_name=repo_name_log,
+        repo_name=repo_name or "assignment-repo",
         ip_address=None,
     )
-    await session.delete(repo)
+    await session.delete(student_repo)
     await session.commit()
 
 
@@ -1094,33 +1119,38 @@ async def get_student_dashboard_stats(
         )
     ).scalar() or 0
 
-    from app.services.student_lk_courses_service import get_student_merged_courses
-
-    student_user = await session.get(User, student_id)
     course_items: list[StudentDashboardCourseRead] = []
-    merged_count = len(courses)
-    if student_user:
-        merged_list, _ = await get_student_merged_courses(
-            session, user=student_user, use_lk_cache_only=True
+    for course in courses:
+        course_assignments = [a for a in all_assignments if a.course_id == course.id]
+        course_earned = 0.0
+        course_max = 0.0
+        for a in course_assignments:
+            pts = _graded_points(ctx.submissions_map.get(a.id))
+            if pts is not None:
+                course_earned += pts
+                course_max += float(course.grade_max)
+        course_percent = _weighted_percent(course_earned, course_max)
+        score_int = int(round(course_percent)) if course_percent is not None else None
+        score_label = (
+            f"{int(course_earned)} / {int(course_max)}"
+            if course_max > 0
+            else None
         )
-        merged_count = len(merged_list)
-        for m in merged_list[:12]:
-            course_items.append(
-                StudentDashboardCourseRead(
-                    id=m.id,
-                    platform_course_id=m.platform_course_id,
-                    title=m.title,
-                    teacher_name=m.teacher_name,
-                    assignments_count=m.assignments_total,
-                    score=m.score,
-                    score_label=m.score_label,
-                    score_max=m.grade_max,
-                    score_color=m.score_color,
-                    attendance_percent=m.attendance_percent,
-                    source=m.source,
-                    has_platform=m.has_platform,
-                )
+        course_items.append(
+            StudentDashboardCourseRead(
+                id=str(course.id),
+                platform_course_id=course.id,
+                title=course.title,
+                teacher_name=teachers.get(course.teacher_id),
+                assignments_count=len(course_assignments),
+                score=score_int,
+                score_label=score_label,
+                score_max=course.grade_max,
+                score_color=_score_color(score_int, course.grade_max),
+                source="platform",
+                has_platform=True,
             )
+        )
 
     repo_specs = await _student_repo_specs(session, student_id=student_id)
     commits_week = await _commits_week_count(
@@ -1136,7 +1166,7 @@ async def get_student_dashboard_stats(
         repos_week_delta=int(repos_week_delta),
         commits_week=commits_week,
         commits_week_avg=commits_week_avg,
-        courses_active=merged_count,
+        courses_active=len(courses),
         assignments_total=len(all_assignments),
         deadlines_today=len(deadlines_today_titles),
         deadlines_today_sub=_deadlines_today_sub(deadlines_today_titles, next_title),
@@ -1339,56 +1369,6 @@ async def get_student_grades(
             )
         )
 
-    student_user = await session.get(User, student_id)
-    if student_user:
-        from app.services.student_lk_courses_service import get_student_merged_courses
-        import uuid as uuid_mod
-
-        merged_list, _ = await get_student_merged_courses(
-            session, user=student_user, use_lk_cache_only=True
-        )
-        merged_by_platform = {
-            str(m.platform_course_id): m for m in merged_list if m.platform_course_id
-        }
-        for idx, summary in enumerate(course_summaries):
-            extra = merged_by_platform.get(str(summary.course_id))
-            if not extra:
-                continue
-            updates: dict = {}
-            if extra.attendance_percent is not None and summary.percent is None:
-                updates["percent"] = extra.attendance_percent
-                updates["average_score"] = int(round(extra.attendance_percent))
-            if extra.teacher_name and summary.teacher_name == "—":
-                updates["teacher_name"] = extra.teacher_name
-            if updates:
-                course_summaries[idx] = summary.model_copy(update=updates)
-
-        platform_ids = {s.course_id for s in course_summaries}
-        for m in merged_list:
-            if m.source != "lk" or m.platform_course_id:
-                continue
-            lk_uuid = uuid_mod.uuid5(uuid_mod.NAMESPACE_URL, m.id)
-            if lk_uuid in platform_ids:
-                continue
-            att = m.attendance_percent
-            course_summaries.append(
-                StudentGradeCourseRead(
-                    course_id=lk_uuid,
-                    title=m.title,
-                    teacher_name=m.teacher_name or "—",
-                    grade_max=100,
-                    average_score=int(round(att)) if att is not None else None,
-                    earned_points=float(att or 0),
-                    max_points=100.0,
-                    percent=att,
-                    assignments_total=0,
-                    assignments_graded=0,
-                    assignments_submitted=0,
-                )
-            )
-            if att is not None:
-                course_percents.append(att)
-
     overall_percent = _weighted_percent(overall_earned, overall_max)
     semester_average = (
         round(sum(course_percents) / len(course_percents), 1) if course_percents else None
@@ -1560,6 +1540,7 @@ async def get_student_repositories(
             open_pr_count: int | None = None
 
             meta = await get_repo_metadata(owner=resolved_owner, repo=repo_name)
+            gitea_available = meta is not None
             if meta:
                 parsed = stats_from_repo_metadata(meta)
                 if not language:
@@ -1575,18 +1556,25 @@ async def get_student_repositories(
                     except ValueError:
                         pass
 
+            can_delete = item.source == "personal" or (
+                item.source == "assignment" and not gitea_available
+            )
             return item.model_copy(
                 update={
-                    "gitea_path": f"{resolved_owner}/{repo_name}",
-                    "gitea_web_url": build_repo_web_url(resolved_owner, repo_name),
-                    "clone_url": build_clone_url(resolved_owner, repo_name),
-                    "commits_count": count,
+                    "gitea_path": f"{resolved_owner}/{repo_name}" if gitea_available else None,
+                    "gitea_web_url": build_repo_web_url(resolved_owner, repo_name)
+                    if gitea_available
+                    else None,
+                    "clone_url": build_clone_url(resolved_owner, repo_name) if gitea_available else None,
+                    "commits_count": count if gitea_available else None,
                     "commits_count_approx": approx,
                     "language": language,
                     "forks_count": forks_count,
                     "stars_count": stars_count,
                     "open_pr_count": open_pr_count,
                     "updated_at": updated_at,
+                    "gitea_available": gitea_available,
+                    "can_delete": can_delete,
                 }
             )
 
@@ -1872,7 +1860,7 @@ async def get_student_activity_feed(
             items.append(
                 StudentActivityFeedItemRead(
                     id=f"log-{log.id}",
-                    type="notification",
+                    type="pr",
                     text="Pull Request в ",
                     bold=log.repo_name or "репозиторий",
                     text_after=f" — {log.message[:60] if log.message else ''}",
@@ -1905,7 +1893,7 @@ async def get_student_activity_feed(
             items.append(
                 StudentActivityFeedItemRead(
                     id=f"log-{log.id}",
-                    type="notification",
+                    type="repo",
                     text="Создан репозиторий ",
                     bold=log.repo_name or "",
                     time_label=_feed_time_label(log.created_at, now),

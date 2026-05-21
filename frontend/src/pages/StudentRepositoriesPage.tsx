@@ -416,7 +416,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
         <div
           className={
             viewMode === "grid"
-              ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"
+              ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-stretch"
               : "flex flex-col gap-2"
           }
         >
@@ -435,23 +435,34 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
               description: repo.description,
               language: repo.language,
             };
-            const openCodeBrowser = () =>
+            const giteaOk = repo.gitea_available !== false;
+            const assignmentHref =
+              repo.source === "assignment" && repo.course_id && repo.assignment_id
+                ? `/courses/${repo.course_id}/assignments/${repo.assignment_id}`
+                : null;
+            const openRepo = () => {
+              if (!giteaOk && assignmentHref) {
+                navigate(assignmentHref);
+                return;
+              }
+              if (!giteaOk) return;
               navigate(`/repositories/${repo.id}/code`, { state: browseState });
+            };
 
             return (
               <article
                   key={repo.id}
                   role="button"
                   tabIndex={0}
-                  onClick={openCodeBrowser}
+                  onClick={openRepo}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      openCodeBrowser();
+                      openRepo();
                     }
                   }}
-                  className={`flex h-full gap-2.5 rounded-xl border p-4 transition-colors hover:border-opacity-80 cursor-pointer ${
-                    viewMode === "list" ? "flex-row items-center" : "flex-col"
+                  className={`flex gap-2.5 rounded-xl border p-4 transition-colors hover:border-opacity-80 cursor-pointer ${
+                    viewMode === "list" ? "flex-row items-center" : "flex-col flex-1 min-h-0"
                   }`}
                   style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
                   onMouseEnter={(e) => {
@@ -498,6 +509,14 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                       >
                         {badge.label}
                       </span>
+                      {!giteaOk ? (
+                        <span
+                          className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium"
+                          style={{ backgroundColor: `${theme.warning}20`, color: theme.warning }}
+                        >
+                          {t("student.repos.giteaMissing")}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
@@ -592,7 +611,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          openCodeBrowser();
+                          openRepo();
                         }}
                         className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
                         style={{ borderColor: theme.border, color: theme.text2 }}

@@ -157,6 +157,10 @@ export const studentRu = {
   deadlines: {
     title: "Дедлайны",
     subtitle: "Все предстоящие задания по вашим курсам",
+    statToday: "Сегодня",
+    statWeek: "На этой неделе",
+    statMonth: "В этом месяце",
+    statOverdue: "Просрочено",
     filterAll: "Все",
     filterWeek: "На неделе",
     filterPending: "Не сдано",
@@ -180,6 +184,7 @@ export const studentRu = {
     subtitleStats: "{repos} · {commits} всего",
     importGithub: "Импорт из GitHub",
     create: "Создать репозиторий",
+    giteaMissing: "Нет в Gitea",
     statTotal: "Всего репозиториев",
     statPublic: "Публичных",
     statPublicSub: "Видны всем",

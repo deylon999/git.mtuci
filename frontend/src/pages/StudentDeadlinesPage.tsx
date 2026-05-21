@@ -10,6 +10,7 @@ import {
   groupDeadlinesByPeriod,
 } from "../utils/studentDeadlineGroups";
 import { formatDeadlineLabel, type StudentDeadlineItem } from "../utils/studentDeadlines";
+import type { DeadlineGroupKey } from "../utils/studentDeadlineGroups";
 import { StudentPageShell } from "../components/student/studentPageUi";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getTheme } from "../theme";
@@ -28,6 +29,19 @@ function urgencyColor(urgency: string, theme: ReturnType<typeof getTheme>) {
     case "warning":
       return theme.warning;
     case "info":
+      return theme.accent2;
+    default:
+      return theme.text2;
+  }
+}
+
+function groupTitleColor(key: DeadlineGroupKey, theme: ReturnType<typeof getTheme>) {
+  switch (key) {
+    case "today":
+      return theme.danger;
+    case "tomorrow":
+      return theme.warning;
+    case "week":
       return theme.accent2;
     default:
       return theme.text2;
@@ -112,6 +126,35 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
   const groups = useMemo(() => groupDeadlinesByPeriod(filtered, new Date(), language), [filtered, language]);
   const deadlineDays = useMemo(() => deadlineDatesSet(filtered), [filtered]);
 
+  const deadlineStats = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    const weekEnd = new Date(todayStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const monthEnd = new Date(todayStart);
+    monthEnd.setDate(monthEnd.getDate() + 31);
+
+    let today = 0;
+    let week = 0;
+    let month = 0;
+    let overdue = 0;
+    for (const item of items) {
+      const submitted = submittedMap[item.id] ?? false;
+      const d = item.deadline;
+      if (!submitted && d < now) {
+        overdue += 1;
+        continue;
+      }
+      if (d >= todayStart && d < tomorrowStart) today += 1;
+      if (d >= todayStart && d <= weekEnd) week += 1;
+      if (d >= todayStart && d <= monthEnd) month += 1;
+    }
+    return { today, week, month, overdue };
+  }, [items, submittedMap]);
+
   const filters: { key: FilterKey; label: string }[] = [
     { key: "all", label: t("student.deadlines.filterAll") },
     { key: "week", label: t("student.deadlines.filterWeek") },
@@ -194,6 +237,30 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
           ))}
         </select>
       </div>
+
+      {!loading && items.length > 0 ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {[
+            { label: t("student.deadlines.statToday"), value: deadlineStats.today, color: theme.danger },
+            { label: t("student.deadlines.statWeek"), value: deadlineStats.week, color: theme.warning },
+            { label: t("student.deadlines.statMonth"), value: deadlineStats.month, color: theme.text },
+            { label: t("student.deadlines.statOverdue"), value: deadlineStats.overdue, color: theme.text2 },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="rounded-xl border px-4 py-3"
+              style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
+            >
+              <p className="text-xs" style={{ color: theme.text2 }}>
+                {stat.label}
+              </p>
+              <p className="text-2xl font-semibold mt-0.5" style={{ color: stat.color }}>
+                {stat.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {error ? (
         <div
@@ -283,15 +350,22 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
           {t("student.deadlines.emptyFilter")}
         </p>
       ) : (
-        groups.map((group) => (
-          <section key={group.key}>
-            <h2 className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: theme.text3 }}>
-              {group.title}
-            </h2>
-            <div
-              className="rounded-xl border overflow-hidden"
-              style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
-            >
+        <div
+          className="rounded-xl border overflow-hidden"
+          style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
+        >
+          {groups.map((group) => (
+            <div key={group.key}>
+              <h2
+                className="px-4 py-2 text-xs font-semibold border-b"
+                style={{
+                  color: groupTitleColor(group.key, theme),
+                  borderColor: theme.border,
+                  backgroundColor: theme.bg2,
+                }}
+              >
+                {group.title}
+              </h2>
               {group.items.map((dl) => {
                 const submitted = submittedMap[dl.id];
                 const remaining = formatDeadlineRemaining(dl.deadline, new Date(), language);
@@ -313,24 +387,34 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
                         </p>
                         <p className="text-xs truncate" style={{ color: theme.text2 }}>
                           {dl.course}
-                          {submitted ? t("student.deadline.submittedSuffix") : ""}
                         </p>
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-xs font-medium" style={{ color: urgencyColor(dl.urgency, theme) }}>
-                        {dl.timeLabel}
-                      </p>
-                      <p className="text-[10px]" style={{ color: theme.text3 }}>
-                        {remaining}
-                      </p>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="text-right">
+                        <p className="text-xs font-medium" style={{ color: urgencyColor(dl.urgency, theme) }}>
+                          {dl.timeLabel}
+                        </p>
+                        <p className="text-[10px]" style={{ color: theme.text3 }}>
+                          {remaining}
+                        </p>
+                      </div>
+                      <span
+                        className="rounded-md px-2 py-0.5 text-[10px] font-medium"
+                        style={{
+                          backgroundColor: submitted ? `${theme.success}20` : `${theme.warning}20`,
+                          color: submitted ? theme.success : theme.warning,
+                        }}
+                      >
+                        {submitted ? t("student.deadlines.filterSubmitted") : t("student.deadlines.filterPending")}
+                      </span>
                     </div>
                   </Link>
                 );
               })}
             </div>
-          </section>
-        ))
+          ))}
+        </div>
       )}
     </StudentPageShell>
   );

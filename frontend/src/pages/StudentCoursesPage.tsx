@@ -8,6 +8,7 @@ import { useUserPreferences } from "../context/UserPreferencesContext";
 import { pluralWord } from "../i18n/plural";
 import { getTheme } from "../theme";
 import { gradeColorForPercent } from "../utils/gradeScoring";
+import { clearLkCoursesCache, readLkCoursesCache, writeLkCoursesCache } from "../utils/lkCoursesCache";
 
 const BANNER_GRADIENTS = [
   "linear-gradient(135deg,#1a237e,#283593)",
@@ -37,8 +38,12 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
   const [lkRefreshing, setLkRefreshing] = useState(false);
 
   const loadCourses = async (refreshLk: boolean) => {
-    if (refreshLk) setLkRefreshing(true);
-    else setLoading(true);
+    if (refreshLk) {
+      clearLkCoursesCache();
+      setLkRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     try {
       const [me, merged, asn] = await Promise.all([
         getMe(),
@@ -49,9 +54,12 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
       setCourses(merged.courses);
       setLkWarning(merged.lk_warning);
       setAssignments(asn);
+      writeLkCoursesCache(merged);
     } catch {
-      setCourses([]);
-      setLkWarning(null);
+      if (!readLkCoursesCache()) {
+        setCourses([]);
+        setLkWarning(null);
+      }
     } finally {
       setLoading(false);
       setLkRefreshing(false);
@@ -59,7 +67,19 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
   };
 
   useEffect(() => {
-    void loadCourses(true);
+    const cached = readLkCoursesCache();
+    if (cached) {
+      setCourses(cached.courses);
+      setLkWarning(cached.lk_warning);
+      setLoading(false);
+      void loadCourses(false);
+    } else {
+      void loadCourses(false);
+    }
+    void getMe().then((me) => setGroupName(me.group_name)).catch(() => undefined);
+    void getStudentAssignments(200)
+      .then(setAssignments)
+      .catch(() => undefined);
   }, []);
 
   const courseStats = useMemo(() => {
@@ -79,7 +99,7 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
     if (course.assignments_total > 0) {
       return course.assignments_graded >= course.assignments_total;
     }
-    return course.attendance_percent != null && course.attendance_percent >= 85;
+    return false;
   };
 
   const isActive = (course: StudentMergedCourse) => !isDone(course);
@@ -288,11 +308,6 @@ function CourseCard({
         : String(course.score)
       : "—");
 
-  const hasPending =
-    platformStats != null &&
-    platformStats.total > 0 &&
-    platformStats.graded < platformStats.total;
-
   const openHref = course.has_platform && course.platform_course_id
     ? `/courses/${course.platform_course_id}`
     : null;
@@ -308,21 +323,6 @@ function CourseCard({
     >
       <div className="h-20 flex items-center justify-center relative" style={{ background: gradient }}>
         <span className="text-3xl">{emoji}</span>
-        {course.source === "lk" ? (
-          <span
-            className="absolute top-2 right-2 text-[10px] font-medium rounded px-1.5 py-0.5"
-            style={{ backgroundColor: `${theme.accent2}22`, color: theme.accent2 }}
-          >
-            {t("student.courses.badgeLk")}
-          </span>
-        ) : hasPending ? (
-          <span
-            className="absolute top-2 right-2 text-[10px] font-medium rounded px-1.5 py-0.5"
-            style={{ backgroundColor: `${theme.warning}22`, color: theme.warning }}
-          >
-            {t("student.courses.badgeActive")}
-          </span>
-        ) : null}
       </div>
       <div className="p-3.5 flex flex-col gap-3 flex-1">
         <div>

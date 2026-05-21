@@ -1,16 +1,15 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertCircle,
   BookOpen,
   Check,
-  Github,
   GitCommit,
   Bell,
   FolderGit2,
-  Plus,
+  GitPullRequest,
+  MessageSquare,
 } from "lucide-react";
-import CreateRepositoryModal from "../components/CreateRepositoryModal";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { useStudentDashboardCore } from "../hooks/useStudentDashboardCore";
 import { formatRelativeTime } from "../utils/formatRelativeTime";
@@ -180,6 +179,23 @@ function activityIcon(type: string, theme: ThemeColors) {
         </div>
       );
     case "comment":
+      return (
+        <div className={box} style={{ backgroundColor: `${theme.warning}18` }}>
+          <MessageSquare className={icon} style={{ color: theme.warning }} />
+        </div>
+      );
+    case "pr":
+      return (
+        <div className={box} style={{ backgroundColor: `${theme.accent}18` }}>
+          <GitPullRequest className={icon} style={{ color: theme.accent2 }} />
+        </div>
+      );
+    case "repo":
+      return (
+        <div className={box} style={{ backgroundColor: `${theme.success}18` }}>
+          <FolderGit2 className={icon} style={{ color: theme.success }} />
+        </div>
+      );
     case "notification":
       return (
         <div className={box} style={{ backgroundColor: `${theme.warning}18` }}>
@@ -250,8 +266,7 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
     refetch,
   } = useStudentDashboardCore();
 
-  const [createRepoOpen, setCreateRepoOpen] = useState(false);
-  const [githubHint, setGithubHint] = useState(false);
+  const dashboardCourses = useMemo(() => courses.slice(0, 3), [courses]);
 
   const stats = useMemo(() => {
     if (!kpi) {
@@ -347,42 +362,9 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
             {groupLine} · {deadlinesLine}
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <p className="text-xs capitalize" style={{ color: theme.text3 }}>
-            {formatTodayLong(new Date(), language)}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setCreateRepoOpen(true)}
-              className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium"
-              style={{
-                backgroundColor: `${theme.success}18`,
-                borderColor: `${theme.success}40`,
-                color: theme.success,
-              }}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {t("student.dashboard.newRepo")}
-            </button>
-            <button
-              type="button"
-              title={t("student.dashboard.importGithubTitle")}
-              onClick={() => setGithubHint(true)}
-              disabled
-              className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white opacity-60 cursor-not-allowed"
-              style={{ backgroundColor: theme.accent }}
-            >
-              <Github className="h-3.5 w-3.5" />
-              {t("student.dashboard.importGithub")}
-            </button>
-          </div>
-          {githubHint ? (
-            <p className="text-[10px]" style={{ color: theme.text2 }}>
-              {t("student.dashboard.importGithubHint")}
-            </p>
-          ) : null}
-        </div>
+        <p className="text-xs capitalize" style={{ color: theme.text3 }}>
+          {formatTodayLong(new Date(), language)}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
@@ -454,22 +436,9 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
               <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>{t("common.loading")}</div>
             ) : recentRepos.length === 0 ? (
               <div className="px-3.5 py-6 text-center">
-                <p className="text-sm mb-2" style={{ color: theme.text2 }}>
+                <p className="text-sm" style={{ color: theme.text2 }}>
                   {t("student.dashboard.noRepos")}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setCreateRepoOpen(true)}
-                  className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium"
-                  style={{
-                    backgroundColor: `${theme.success}18`,
-                    borderColor: `${theme.success}40`,
-                    color: theme.success,
-                  }}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  {t("student.dashboard.createRepo")}
-                </button>
               </div>
             ) : (
               recentRepos.map((repo) => {
@@ -576,7 +545,7 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
 
         <div className="flex flex-col gap-3.5">
           <Card theme={theme}>
-            <CardHead title={t("student.dashboard.deadlinesTitle")} theme={theme} action={{ label: t("student.dashboard.viewAll"), to: "/assignments" }} />
+            <CardHead title={t("student.dashboard.deadlinesTitle")} theme={theme} action={{ label: t("student.dashboard.viewAll"), to: "/deadlines" }} />
             {loading ? (
               <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>
                 {t("common.loading")}
@@ -619,13 +588,17 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
           </Card>
 
           <Card theme={theme}>
-            <CardHead title={t("student.dashboard.coursesTitle")} theme={theme} />
+            <CardHead
+              title={t("student.dashboard.coursesTitle")}
+              theme={theme}
+              action={courses.length > 3 ? { label: t("student.dashboard.viewAll"), to: "/courses" } : undefined}
+            />
             {loading ? (
               <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>{t("common.loading")}</div>
             ) : courses.length === 0 ? (
               <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>{t("student.dashboard.noCourses")}</div>
             ) : (
-              courses.map((course) => {
+              dashboardCourses.map((course) => {
                 const avatar = courseAvatarStyle(course.id);
                 const courseHref =
                   course.has_platform !== false && course.platform_course_id
@@ -657,9 +630,7 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
                     {course.score_label ?? (course.score != null ? String(course.score) : "—")}
                   </p>
                   <p className="text-[10px]" style={{ color: theme.text2 }}>
-                    {course.source === "lk"
-                      ? t("student.courses.attendance")
-                      : tp("student.dashboard.scoreOf", { max: course.score_max })}
+                    {course.score_label ?? tp("student.dashboard.scoreOf", { max: course.score_max })}
                   </p>
                 </div>
               </div>
@@ -759,12 +730,6 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
         </div>
       </div>
 
-      <CreateRepositoryModal
-        isOpen={createRepoOpen}
-        isDarkTheme={isDarkTheme}
-        onClose={() => setCreateRepoOpen(false)}
-        onCreated={refetch}
-      />
     </div>
   );
 }

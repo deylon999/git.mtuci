@@ -104,7 +104,7 @@ export interface StudentActivitySummary {
 
 export interface StudentActivityFeedItem {
   id: string;
-  type: "success" | "commit" | "comment" | "deadline" | "notification";
+  type: "success" | "commit" | "comment" | "deadline" | "pr" | "repo" | "notification";
   text: string;
   bold: string | null;
   text_after: string | null;
@@ -302,6 +302,7 @@ export interface StudentRepositoryItem {
   assignment_id?: string | null;
   repository_id?: string | null;
   can_delete: boolean;
+  gitea_available?: boolean;
   updated_at: string;
 }
 

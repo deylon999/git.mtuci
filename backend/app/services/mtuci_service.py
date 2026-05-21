@@ -13,15 +13,13 @@ import re
 import time
 from dataclasses import dataclass, field
 
-from datetime import datetime, timezone
-
 from mtuci_private_api import Mtuci
 from mtuci_private_api.errors import AuthError
 
 logger = logging.getLogger(__name__)
 
 # How long to reuse LK data per login (seconds)
-LK_CACHE_TTL_SEC = 30 * 60
+LK_CACHE_TTL_SEC = 60 * 60
 
 # Negative cache for auth failures (avoid hammering LK)
 LK_ERROR_CACHE_TTL_SEC = 5 * 60
@@ -175,34 +173,6 @@ async def fetch_lk_subjects(
                     attendance_percent=float(row.attendance_percentage),
                     skips=int(row.skips) if row.skips is not None else None,
                 )
-
-            # Optional: single schedule sample for teacher names (one month fetch, not 21×)
-            try:
-                today = datetime.now(timezone.utc).replace(
-                    hour=12, minute=0, second=0, microsecond=0
-                )
-                schedule = await client.get_schedule(today)
-                for lesson in schedule.lessons:
-                    name = (lesson.name or "").strip()
-                    if not name:
-                        continue
-                    key = _normalize_subject_name(name)
-                    teachers = [t.strip() for t in (lesson.teachers or []) if t and t.strip()]
-                    existing = by_name.get(key)
-                    if existing:
-                        merged_teachers = list(
-                            dict.fromkeys([*existing.teachers, *teachers])
-                        )
-                        by_name[key] = MtuciLkSubject(
-                            name=existing.name,
-                            attendance_percent=existing.attendance_percent,
-                            skips=existing.skips,
-                            teachers=merged_teachers,
-                        )
-                    else:
-                        by_name[key] = MtuciLkSubject(name=name, teachers=teachers)
-            except Exception as exc:
-                logger.debug("LK schedule sample skipped: %s", exc)
 
             return sorted(by_name.values(), key=lambda s: s.name.lower())
     except AuthError as e:

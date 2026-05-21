@@ -128,7 +128,7 @@ class StudentActivitySummaryRead(BaseModel):
 
 class StudentActivityFeedItemRead(BaseModel):
     id: str
-    type: str = Field(description="success | commit | comment | deadline | notification")
+    type: str = Field(description="success | commit | comment | deadline | pr | repo | notification")
     text: str
     bold: str | None = None
     text_after: str | None = None
@@ -177,6 +177,7 @@ class StudentRepositoryItemRead(BaseModel):
     assignment_id: UUID | None = None
     repository_id: UUID | None = None
     can_delete: bool = False
+    gitea_available: bool = True
     updated_at: datetime
 
 

@@ -10,6 +10,8 @@ from app.models.user import User
 from app.services.gitea_service import (
     create_repository_for_owner,
     ensure_repo_webhook,
+    get_repo_metadata,
+    resolve_repo_owner,
 )
 from app.utils.gitea_user import resolve_gitea_username
 
@@ -58,6 +60,33 @@ async def ensure_student_repository(
     session.add(record)
     await session.flush()
     return record
+
+
+async def sync_assignment_repository_to_gitea(
+    session: AsyncSession,
+    *,
+    student: User,
+    student_repo: StudentRepository,
+) -> tuple[str, str]:
+    """Create assignment repo in Gitea under the student if it exists only in DB."""
+    owner = resolve_gitea_username(student)
+    repo_name = (student_repo.repo_name or "").strip()
+    if not repo_name:
+        raise ValueError("Репозиторий задания не настроен.")
+
+    resolved = await resolve_repo_owner(primary_owner=owner, repo_name=repo_name)
+    if await get_repo_metadata(owner=resolved, repo=repo_name):
+        return resolved, repo_name
+
+    await create_repository_for_owner(
+        owner_username=owner,
+        name=repo_name,
+        description="Assignment repository",
+        private=True,
+        auto_init=True,
+    )
+    await ensure_repo_webhook(owner=owner, repo_name=repo_name)
+    return owner, repo_name
 
 
 async def get_student_repo_name(

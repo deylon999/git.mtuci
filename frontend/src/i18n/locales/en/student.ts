@@ -157,6 +157,10 @@ export const studentEn = {
   deadlines: {
     title: "Deadlines",
     subtitle: "All upcoming assignments across your courses",
+    statToday: "Today",
+    statWeek: "This week",
+    statMonth: "This month",
+    statOverdue: "Overdue",
     filterAll: "All",
     filterWeek: "This week",
     filterPending: "Not submitted",
@@ -180,6 +184,7 @@ export const studentEn = {
     subtitleStats: "{repos} · {commits} total",
     importGithub: "Import from GitHub",
     create: "Create repository",
+    giteaMissing: "Not in Gitea",
     statTotal: "Total repositories",
     statPublic: "Public",
     statPublicSub: "Visible to everyone",
