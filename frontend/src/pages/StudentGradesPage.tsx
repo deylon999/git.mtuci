@@ -2,12 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown, Loader2 } from "lucide-react";
 import {
-  getStudentGrades,
-  getStudentGroupRanking,
   type StudentGradeCourse,
   type StudentGradeItem,
   type StudentGradesSummary,
 } from "../api/studentDashboardApi";
+import { getStudentGradesDeduped, getStudentGroupRankingDeduped } from "../api/studentRequestDedup";
 import { StudentPageShell } from "../components/student/studentPageUi";
 import { useAuthUser } from "../context/AuthUserContext";
 import { useUserPreferences } from "../context/UserPreferencesContext";
@@ -100,8 +99,8 @@ export default function StudentGradesPage({ isDarkTheme = false }: StudentGrades
       setError(null);
       try {
         const [summary, ranking] = await Promise.all([
-          getStudentGrades(200),
-          getStudentGroupRanking().catch(() => null),
+          getStudentGradesDeduped(200),
+          getStudentGroupRankingDeduped().catch(() => null),
         ]);
         if (cancelled) return;
         setData(summary);

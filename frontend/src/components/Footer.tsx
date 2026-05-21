@@ -1,5 +1,11 @@
 import { Github, GitBranch, AlertCircle, BookOpen } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import {
+  isStudentBootstrapPath,
+  isStudentShellBootstrapResolved,
+  onStudentShellBootstrap,
+} from "../api/studentAppBootstrap";
 import { getSystemInfo } from "../api/systemApi";
 import { getTheme } from "../theme";
 import { pageGutterClass } from "../layout/pageLayout";
@@ -11,28 +17,43 @@ interface FooterProps {
 
 export default function Footer({ isDarkTheme = true }: FooterProps) {
   const { t } = useUserPreferences();
+  const { pathname } = useLocation();
   const [commitCount, setCommitCount] = useState(0);
   const [version, setVersion] = useState("v1.0.0");
   const theme = getTheme(isDarkTheme);
 
   useEffect(() => {
     let cancelled = false;
-    void getSystemInfo()
-      .then((info) => {
-        if (cancelled) return;
-        setVersion(info.version || "v1.0.0");
-        setCommitCount(info.commits ?? 0);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setVersion("v1.0.0");
-          setCommitCount(0);
-        }
+    const load = () => {
+      void getSystemInfo()
+        .then((info) => {
+          if (cancelled) return;
+          setVersion(info.version || "v1.0.0");
+          setCommitCount(info.commits ?? 0);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setVersion("v1.0.0");
+            setCommitCount(0);
+          }
+        });
+    };
+
+    if (isStudentBootstrapPath(pathname) && !isStudentShellBootstrapResolved()) {
+      const unsub = onStudentShellBootstrap(() => {
+        if (!cancelled) load();
       });
+      return () => {
+        cancelled = true;
+        unsub();
+      };
+    }
+
+    load();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [pathname]);
 
   return (
     <footer className={`border-t`} style={{ backgroundColor: theme.bg, borderColor: theme.border }}>

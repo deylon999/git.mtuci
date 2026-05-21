@@ -17,6 +17,7 @@ from app.schemas.student_dashboard import (
     StudentGitCloneTokenRegenerateRead,
     StudentGitCloneTokenStatusRead,
     StudentGroupRankingRead,
+    StudentDashboardBundleRead,
     StudentProfileBundleRead,
     StudentMergedCoursesRead,
     StudentRecentRepositoryRead,
@@ -61,6 +62,7 @@ from app.services.student_dashboard_service import (
     get_student_git_clone_token_status,
     get_student_group_ranking,
     get_student_profile_bundle,
+    get_student_dashboard_bundle,
     regenerate_student_git_clone_token,
     get_student_recent_repositories,
     get_student_repositories,
@@ -153,6 +155,22 @@ async def student_assignments(
     )
 
 
+@router.get("/dashboard-bundle", response_model=StudentDashboardBundleRead)
+async def student_dashboard_bundle(
+    recent_limit: int = Query(default=5, ge=1, le=20),
+    feed_limit: int = Query(default=12, ge=1, le=30),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentDashboardBundleRead:
+    _require_student(current_user)
+    return await get_student_dashboard_bundle(
+        session,
+        user=current_user,
+        recent_limit=recent_limit,
+        feed_limit=feed_limit,
+    )
+
+
 @router.get("/dashboard-stats", response_model=StudentDashboardStatsRead)
 async def student_dashboard_stats(
     session: AsyncSession = Depends(get_session),
@@ -190,9 +208,7 @@ async def student_profile_bundle(
     _require_student(current_user)
     return await get_student_profile_bundle(
         session,
-        student_id=current_user.id,
-        group_name=current_user.group_name,
-        student_full_name=current_user.full_name,
+        user=current_user,
         feed_limit=feed_limit,
     )
 

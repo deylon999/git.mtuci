@@ -14,11 +14,13 @@ import { PendingCountProvider } from "./context/PendingCountContext";
 import { StudentNavCountsProvider } from "./context/StudentNavCountsContext";
 import { AuthUserProvider } from "./context/AuthUserContext";
 import { UserPreferencesProvider, useUserPreferences } from "./context/UserPreferencesContext";
+import StudentShellBootstrapRunner from "./components/StudentShellBootstrapRunner";
 import { getTheme } from "./theme";
 import { pageGutterClass } from "./layout/pageLayout";
 import StudentRepositoryLayout from "./layouts/StudentRepositoryLayout";
 import StudentRepoCodePanel from "./pages/student/StudentRepoCodePanel";
 import CoursesRoute from "./components/CoursesRoute";
+import ProjectsRoute from "./components/ProjectsRoute";
 import StudentCreateRepoPage from "./pages/StudentCreateRepoPage";
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
@@ -67,6 +69,7 @@ export default function App() {
 
   return (
     <UserPreferencesProvider isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme}>
+      <StudentShellBootstrapRunner />
       <AppShell isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme} />
     </UserPreferencesProvider>
   );
@@ -127,7 +130,7 @@ function AppShell({
                   />
                   {/* Placeholder routes for new sidebar items */}
                   <Route path="/dashboard" element={<DashboardRoute isDarkTheme={isDarkTheme} />} />
-                  <Route path="/projects" element={<CoursesPage />} />
+                  <Route path="/projects" element={<ProjectsRoute isDarkTheme={isDarkTheme} />} />
                   <Route path="/repositories" element={<RepositoriesRoute isDarkTheme={isDarkTheme} />} />
                   <Route
                     path="/repositories/:repoId"
@@ -151,11 +154,11 @@ function AppShell({
                       path="settings"
                       element={<StudentRepositorySectionPage isDarkTheme={isDarkTheme} section="settings" />}
                     />
+                    <Route
+                      path="commits"
+                      element={<StudentRepositoryCommitsPage isDarkTheme={isDarkTheme} />}
+                    />
                   </Route>
-                  <Route
-                    path="/repositories/:repoId/commits"
-                    element={<StudentRepositoryCommitsPage isDarkTheme={isDarkTheme} />}
-                  />
                   <Route path="/assignments" element={<StudentAssignmentsPage isDarkTheme={isDarkTheme} />} />
                   <Route path="/deadlines" element={<StudentDeadlinesPage isDarkTheme={isDarkTheme} />} />
                   <Route path="/repositories/new" element={<StudentCreateRepoPage isDarkTheme={isDarkTheme} />} />

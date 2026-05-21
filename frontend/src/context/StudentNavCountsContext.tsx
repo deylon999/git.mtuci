@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
-import { getStudentDashboardStats, type StudentSidebarCounts } from "../api/studentDashboardApi";
+import { getCachedDashboardSidebarCounts } from "../api/studentRequestDedup";
+import type { StudentSidebarCounts } from "../api/studentDashboardApi";
 
 interface StudentNavCountsContextType {
   sidebar: StudentSidebarCounts | null;
@@ -17,11 +18,9 @@ export function StudentNavCountsProvider({ children }: { children: ReactNode }) 
   }, []);
 
   const refreshSidebarCounts = useCallback(async () => {
-    try {
-      const data = await getStudentDashboardStats();
-      setSidebar(data.sidebar);
-    } catch {
-      // ignore — sidebar badges are optional
+    const cached = getCachedDashboardSidebarCounts();
+    if (cached) {
+      setSidebar(cached);
     }
   }, []);
 

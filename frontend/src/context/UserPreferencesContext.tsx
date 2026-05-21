@@ -8,7 +8,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useLocation } from "react-router-dom";
 import { getToken } from "../api/client";
+import {
+  isStudentBootstrapPath,
+  isStudentShellBootstrapResolved,
+  onStudentShellBootstrap,
+} from "../api/studentAppBootstrap";
 import { getUserSettings, patchUserSettings, type NotificationSettings, type UserSettings } from "../api/userSettingsApi";
 import {
   LANGUAGE_STORAGE_KEY,
@@ -71,7 +77,29 @@ interface ProviderProps {
   setIsDarkTheme: (dark: boolean) => void;
 }
 
+function applySettingsToState(
+  settings: UserSettings,
+  setLanguageState: (locale: Locale) => void,
+  setIsDarkTheme: (dark: boolean) => void,
+  setNotifications: React.Dispatch<React.SetStateAction<NotificationSettings>>,
+) {
+  const locale = resolveLocale(settings.language);
+  setLanguageState(locale);
+  localStorage.setItem(LANGUAGE_STORAGE_KEY, locale);
+  applyDocumentLanguage(locale);
+  resolveThemeFromSettings(settings.theme, setIsDarkTheme);
+  setNotifications((prev) => ({
+    ...prev,
+    ...settings.notifications,
+    teacher_pr_submitted: settings.notifications.teacher_pr_submitted ?? prev.teacher_pr_submitted,
+    teacher_pr_stale: settings.notifications.teacher_pr_stale ?? prev.teacher_pr_stale,
+    teacher_deadline_missed: settings.notifications.teacher_deadline_missed ?? prev.teacher_deadline_missed,
+    teacher_daily_digest: settings.notifications.teacher_daily_digest ?? prev.teacher_daily_digest,
+  }));
+}
+
 export function UserPreferencesProvider({ children, isDarkTheme, setIsDarkTheme }: ProviderProps) {
+  const { pathname } = useLocation();
   const [language, setLanguageState] = useState<Locale>(() => {
     const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
     return resolveLocale(stored ?? undefined);
@@ -93,37 +121,44 @@ export function UserPreferencesProvider({ children, isDarkTheme, setIsDarkTheme 
     }
 
     let cancelled = false;
-    void getUserSettings()
-      .then((settings) => {
-        if (cancelled) return;
-        const locale = resolveLocale(settings.language);
-        setLanguageState(locale);
-        localStorage.setItem(LANGUAGE_STORAGE_KEY, locale);
-        applyDocumentLanguage(locale);
-        resolveThemeFromSettings(settings.theme, setIsDarkTheme);
-        setNotifications((prev) => ({
-          ...prev,
-          ...settings.notifications,
-          teacher_pr_submitted: settings.notifications.teacher_pr_submitted ?? prev.teacher_pr_submitted,
-          teacher_pr_stale: settings.notifications.teacher_pr_stale ?? prev.teacher_pr_stale,
-          teacher_deadline_missed: settings.notifications.teacher_deadline_missed ?? prev.teacher_deadline_missed,
-          teacher_daily_digest: settings.notifications.teacher_daily_digest ?? prev.teacher_daily_digest,
-        }));
-      })
-      .catch(() => {
-        /* keep local fallbacks */
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setSettingsLoading(false);
-          hydratedRef.current = true;
-        }
-      });
+    const loadSettings = () => {
+      void getUserSettings()
+        .then((settings) => {
+          if (cancelled) return;
+          applySettingsToState(settings, setLanguageState, setIsDarkTheme, setNotifications);
+        })
+        .catch(() => {
+          /* keep local fallbacks */
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setSettingsLoading(false);
+            hydratedRef.current = true;
+          }
+        });
+    };
 
+    if (isStudentBootstrapPath(pathname)) {
+      if (isStudentShellBootstrapResolved()) {
+        loadSettings();
+        return () => {
+          cancelled = true;
+        };
+      }
+      const unsub = onStudentShellBootstrap(() => {
+        if (!cancelled) loadSettings();
+      });
+      return () => {
+        cancelled = true;
+        unsub();
+      };
+    }
+
+    loadSettings();
     return () => {
       cancelled = true;
     };
-  }, [setIsDarkTheme]);
+  }, [pathname, setIsDarkTheme]);
 
   const setLanguage = useCallback((locale: Locale) => {
     if (!isLocale(locale)) return;
@@ -138,15 +173,6 @@ export function UserPreferencesProvider({ children, isDarkTheme, setIsDarkTheme 
     if (!getToken()) return;
     await patchUserSettings({ theme });
   }, []);
-
-  useEffect(() => {
-    if (!hydratedRef.current || settingsLoading) return;
-    if (!getToken()) return;
-    const timer = window.setTimeout(() => {
-      void patchUserSettings({ notifications, language }).catch(() => {});
-    }, 400);
-    return () => window.clearTimeout(timer);
-  }, [notifications, language, settingsLoading]);
 
   const t = useCallback((key: string) => translate(language, key), [language]);
   const tp = useCallback(

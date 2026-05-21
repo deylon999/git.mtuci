@@ -11,6 +11,8 @@ export const studentRu = {
   },
   errors: {
     loadDashboard: "Не удалось загрузить данные",
+    loadProfile: "Не удалось загрузить профиль",
+    loadCourses: "Не удалось загрузить курсы",
     loadAssignments: "Не удалось загрузить задания",
     loadDeadlines: "Не удалось загрузить дедлайны",
     loadGrades: "Не удалось загрузить оценки",
@@ -167,6 +169,7 @@ export const studentRu = {
     filterSubmitted: "Сдано",
     allCourses: "Все курсы",
     emptyFilter: "Нет дедлайнов по выбранному фильтру",
+    emptyAll: "Нет предстоящих дедлайнов",
   },
   grades: {
     title: "Оценки",

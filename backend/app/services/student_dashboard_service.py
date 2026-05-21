@@ -18,6 +18,11 @@ from app.models.repository import Repository, RepositoryType
 from app.models.student_repository import StudentRepository
 from app.models.submission import Submission
 from app.models.user import User, UserRole
+from app.schemas.notification import NotificationRead
+from app.schemas.system import SystemInfoRead, build_system_info_read
+from app.schemas.user import UserRead
+from app.schemas.user_settings import UserSettingsRead
+from app.services.user_settings_service import read_user_settings
 from app.schemas.student_dashboard import (
     StudentActivityFeedItemRead,
     StudentActivitySummaryRead,
@@ -33,6 +38,7 @@ from app.schemas.student_dashboard import (
     StudentGradesSummaryRead,
     StudentGroupRankingEntryRead,
     StudentGroupRankingRead,
+    StudentDashboardBundleRead,
     StudentProfileBundleRead,
     StudentRecentRepositoryRead,
     StudentRepositoriesRead,
@@ -1717,42 +1723,119 @@ async def get_student_recent_repositories(
     return trimmed
 
 
+async def _load_student_app_shell(
+    session: AsyncSession,
+    user: User,
+) -> tuple[UserRead, UserSettingsRead, list[NotificationRead], SystemInfoRead]:
+    from app.services.notification_service import list_notifications
+
+    notifications = await list_notifications(
+        session,
+        user_id=user.id,
+        group_name=user.group_name,
+        role=user.role,
+    )
+    return (
+        UserRead.model_validate(user),
+        read_user_settings(user),
+        [NotificationRead.model_validate(n) for n in notifications],
+        build_system_info_read(),
+    )
+
+
 async def get_student_profile_bundle(
     session: AsyncSession,
     *,
-    student_id: UUID,
-    group_name: str | None,
-    student_full_name: str | None,
+    user: User,
     feed_limit: int = 8,
 ) -> StudentProfileBundleRead:
     now = datetime.now(timezone.utc)
     week_ago = now - timedelta(days=7)
+    student_id = user.id
+    group_name = user.group_name
+    student_full_name = user.full_name
 
-    summary, feed, ranking, repo_stats = await asyncio.gather(
-        get_student_activity_summary(
-            session,
-            student_id=student_id,
-            group_name=group_name,
-        ),
-        get_student_activity_feed(
-            session,
-            student_id=student_id,
-            group_name=group_name,
-            limit=feed_limit,
-        ),
-        get_student_group_ranking(
-            session,
-            student_id=student_id,
-            group_name=group_name,
-            student_full_name=student_full_name,
-        ),
-        _student_repositories_stats_db(session, student_id=student_id, week_ago=week_ago),
+    # One AsyncSession must not run concurrent operations (IllegalStateChangeError on close).
+    shell = await _load_student_app_shell(session, user)
+    summary = await get_student_activity_summary(
+        session,
+        student_id=student_id,
+        group_name=group_name,
     )
+    feed = await get_student_activity_feed(
+        session,
+        student_id=student_id,
+        group_name=group_name,
+        limit=feed_limit,
+    )
+    ranking = await get_student_group_ranking(
+        session,
+        student_id=student_id,
+        group_name=group_name,
+        student_full_name=student_full_name,
+    )
+    repo_stats = await _student_repositories_stats_db(session, student_id=student_id, week_ago=week_ago)
+    user_read, settings, notifications, system_info = shell
     return StudentProfileBundleRead(
+        user=user_read,
+        settings=settings,
+        notifications=notifications,
+        system_info=system_info,
         activity_summary=summary,
         activity_feed=feed,
         group_ranking=ranking,
         repositories_stats=repo_stats,
+    )
+
+
+async def get_student_dashboard_bundle(
+    session: AsyncSession,
+    *,
+    user: User,
+    recent_limit: int = 5,
+    feed_limit: int = 12,
+) -> StudentDashboardBundleRead:
+    student_id = user.id
+    group_name = user.group_name
+    student_full_name = user.full_name
+
+    shell = await _load_student_app_shell(session, user)
+    stats = await get_student_dashboard_stats(
+        session,
+        student_id=student_id,
+        group_name=group_name,
+    )
+    recent_repositories = await get_student_recent_repositories(
+        session, student_id=student_id, limit=recent_limit
+    )
+    activity_summary = await get_student_activity_summary(
+        session,
+        student_id=student_id,
+        group_name=group_name,
+    )
+    activity_feed = await get_student_activity_feed(
+        session,
+        student_id=student_id,
+        group_name=group_name,
+        limit=feed_limit,
+    )
+    group_ranking = await get_student_group_ranking(
+        session,
+        student_id=student_id,
+        group_name=group_name,
+        student_full_name=student_full_name,
+    )
+    user_read, settings, notifications, system_info = shell
+    return StudentDashboardBundleRead(
+        user=user_read,
+        settings=settings,
+        notifications=notifications,
+        system_info=system_info,
+        stats=stats,
+        recent_repositories=recent_repositories,
+        activity_summary=activity_summary,
+        activity_feed=activity_feed,
+        group_ranking=group_ranking,
     )
 
 

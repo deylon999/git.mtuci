@@ -20,6 +20,10 @@ SessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False, class_=As
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Request-scoped session. Do not pass the same instance to asyncio.gather /
+    concurrent tasks — AsyncSession allows only one in-flight operation at a time.
+    """
     async with SessionLocal() as session:
         yield session
 

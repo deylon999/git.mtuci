@@ -1,37 +1,29 @@
-import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { getMe } from "../api/authApi";
+import { useAuthUser } from "../context/AuthUserContext";
 import DashboardPage from "../pages/DashboardPage";
 import TeacherDashboardPage from "../pages/teacher/TeacherDashboardPage";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 type Props = {
   isDarkTheme?: boolean;
 };
 
 export default function DashboardRoute({ isDarkTheme = false }: Props) {
-  const [role, setRole] = useState<string | null>(null);
+  const { t } = useUserPreferences();
+  const { user, loading } = useAuthUser();
 
-  useEffect(() => {
-    let cancelled = false;
-    getMe()
-      .then((me) => {
-        if (!cancelled) setRole(me.role);
-      })
-      .catch(() => {
-        if (!cancelled) setRole("");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (role === null) {
-    return <div className="text-sm text-slate-500">Loading...</div>;
+  if (loading) {
+    return <div className="text-sm text-slate-500">{t("common.loading")}</div>;
   }
-  if (role === "admin") {
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user.role === "admin") {
     return <Navigate to="/admin" replace />;
   }
-  if (role === "teacher" || role === "laborant") {
+  if (user.role === "teacher" || user.role === "laborant") {
     return <TeacherDashboardPage isDarkTheme={isDarkTheme} />;
   }
   return <DashboardPage isDarkTheme={isDarkTheme} />;

@@ -5,6 +5,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.notification import NotificationRead
+from app.schemas.system import SystemInfoRead
+from app.schemas.user import UserRead
+from app.schemas.user_settings import UserSettingsRead
+
 
 class StudentDashboardKpiRead(BaseModel):
     repos_total: int
@@ -359,13 +364,32 @@ class StudentGroupRankingRead(BaseModel):
     entries: list[StudentGroupRankingEntryRead] = Field(default_factory=list)
 
 
-class StudentProfileBundleRead(BaseModel):
-    """Single response for /students/me/profile — avoids parallel Gitea-heavy calls."""
+class StudentAppShellRead(BaseModel):
+    """Auth, preferences, inbox, and footer metadata bundled with student pages."""
+
+    user: UserRead
+    settings: UserSettingsRead
+    notifications: list[NotificationRead] = Field(default_factory=list)
+    system_info: SystemInfoRead
+
+
+class StudentProfileBundleRead(StudentAppShellRead):
+    """Single response for /students/me/profile-bundle."""
 
     activity_summary: StudentActivitySummaryRead
     activity_feed: list[StudentActivityFeedItemRead] = Field(default_factory=list)
     group_ranking: StudentGroupRankingRead
     repositories_stats: StudentRepositoriesStatsRead
+
+
+class StudentDashboardBundleRead(StudentAppShellRead):
+    """Single response for /students/me/dashboard-bundle — one round-trip for dashboard."""
+
+    stats: StudentDashboardStatsRead
+    recent_repositories: list[StudentRecentRepositoryRead] = Field(default_factory=list)
+    activity_summary: StudentActivitySummaryRead
+    activity_feed: list[StudentActivityFeedItemRead] = Field(default_factory=list)
+    group_ranking: StudentGroupRankingRead
 
 
 class StudentGitCloneTokenStatusRead(BaseModel):

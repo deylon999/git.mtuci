@@ -26,6 +26,11 @@ export function invalidateUserSettingsCache(): void {
   settingsInflight = null;
 }
 
+export function seedUserSettingsCache(data: UserSettings): void {
+  settingsCache = { savedAt: Date.now(), data };
+  settingsInflight = null;
+}
+
 export function getUserSettings(): Promise<UserSettings> {
   const now = Date.now();
   if (settingsCache && now - settingsCache.savedAt < SETTINGS_CACHE_TTL_MS) {

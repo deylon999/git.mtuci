@@ -96,6 +96,7 @@ export const repoPagesRu = {
     loading: "Загрузка коммитов…",
     empty: "Коммитов пока нет",
     loadMore: "Загрузить ещё",
+    loadError: "Не удалось загрузить коммиты",
   },
   toolbar: {
     copyPath: "Копировать путь",

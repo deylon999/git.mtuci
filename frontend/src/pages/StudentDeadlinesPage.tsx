@@ -162,6 +162,8 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
     { key: "submitted", label: t("student.deadlines.filterSubmitted") },
   ];
 
+  const weekdayLabels = useMemo(() => deadlineWeekdayLabels(language), [language]);
+
   const monthLabel = new Date(calendarMonth.year, calendarMonth.month).toLocaleDateString(
     language === "en" ? "en-US" : "ru-RU",
     {
@@ -238,7 +240,7 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
         </select>
       </div>
 
-      {!loading && items.length > 0 ? (
+      {!loading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
           {[
             { label: t("student.deadlines.statToday"), value: deadlineStats.today, color: theme.danger },
@@ -277,10 +279,10 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
         </p>
       ) : viewMode === "calendar" ? (
         <div
-          className="rounded-xl border p-4"
+          className="rounded-xl border p-2.5 max-w-[280px]"
           style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         >
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2 gap-2">
             <button
               type="button"
               onClick={() =>
@@ -289,12 +291,12 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
                   return { year: d.getFullYear(), month: d.getMonth() };
                 })
               }
-              className="text-xs px-2"
+              className="text-[11px] px-1.5 py-0.5 rounded hover:opacity-80"
               style={{ color: theme.text2 }}
             >
               ←
             </button>
-            <span className="text-sm font-medium capitalize" style={{ color: theme.text }}>
+            <span className="text-xs font-medium capitalize truncate" style={{ color: theme.text }}>
               {monthLabel}
             </span>
             <button
@@ -305,20 +307,25 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
                   return { year: d.getFullYear(), month: d.getMonth() };
                 })
               }
-              className="text-xs px-2"
+              className="text-[11px] px-1.5 py-0.5 rounded hover:opacity-80"
               style={{ color: theme.text2 }}
             >
               →
             </button>
           </div>
-          <div className="grid grid-cols-7 gap-1 text-center text-[10px] mb-1" style={{ color: theme.text3 }}>
+          <div
+            className="grid grid-cols-7 gap-0.5 text-center text-[9px] mb-1 font-medium"
+            style={{ color: theme.text3 }}
+          >
             {weekdayLabels.map((d) => (
-              <span key={d}>{d}</span>
+              <span key={d} className="leading-none">
+                {d}
+              </span>
             ))}
           </div>
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-0.5">
             {Array.from({ length: offset }).map((_, i) => (
-              <div key={`e-${i}`} />
+              <div key={`e-${i}`} className="h-7" />
             ))}
             {Array.from({ length: totalDays }).map((_, i) => {
               const day = i + 1;
@@ -332,12 +339,13 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
               return (
                 <div
                   key={day}
-                  className="aspect-square flex flex-col items-center justify-center rounded-md text-xs"
+                  className="h-7 w-full flex items-center justify-center rounded text-[11px] leading-none"
                   style={{
                     backgroundColor: has ? `${theme.danger}22` : isToday ? theme.bg4 : "transparent",
                     color: has ? theme.danger : theme.text2,
                     border: isToday ? `1px solid ${theme.accent}` : undefined,
                   }}
+                  title={has ? t("student.deadlines.statToday") : undefined}
                 >
                   {day}
                 </div>
@@ -345,6 +353,10 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
             })}
           </div>
         </div>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-center py-8" style={{ color: theme.text2 }}>
+          {t("student.deadlines.emptyAll")}
+        </p>
       ) : groups.length === 0 ? (
         <p className="text-sm text-center py-8" style={{ color: theme.text2 }}>
           {t("student.deadlines.emptyFilter")}

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Moon, Sun, Bell, Globe, Shield, Key } from "lucide-react";
 import { getMe } from "../api/authApi";
+import { patchUserSettings } from "../api/userSettingsApi";
 import StudentGitTokenSettings from "../components/StudentGitTokenSettings";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { requestBrowserNotificationPermission } from "../utils/browserNotifications";
@@ -41,7 +42,9 @@ export default function SettingsPage({ isDarkTheme = false, onToggleTheme }: Set
       if (key === "push" && next) {
         void requestBrowserNotificationPermission();
       }
-      return { ...prev, [key]: next };
+      const updated = { ...prev, [key]: next };
+      void patchUserSettings({ notifications: updated }).catch(() => {});
+      return updated;
     });
   };
 

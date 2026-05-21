@@ -12,6 +12,13 @@ export function invalidateMeCache() {
   meInFlight = null;
 }
 
+/** Seed from dashboard/profile bundle — avoids a separate GET /auth/me on student shell pages. */
+export function seedMeCache(user: UserRead): void {
+  meCache = user;
+  meCacheTs = Date.now();
+  meInFlight = null;
+}
+
 export async function login(email: string, password: string, rememberMe?: boolean) {
   const data = await apiRequest<TokenResponse>("/auth/login", {
     method: "POST",

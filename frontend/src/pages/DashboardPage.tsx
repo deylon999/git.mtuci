@@ -7,6 +7,7 @@ import {
   GitCommit,
   Bell,
   FolderGit2,
+  Github,
   GitPullRequest,
   MessageSquare,
 } from "lucide-react";
@@ -314,22 +315,26 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
   const groupLine = groupName
     ? tp("student.dashboard.groupLine", { name: groupName })
     : t("student.dashboard.groupMissing");
-  const deadlinesLine = loading
-    ? t("student.deadline.loading")
-    : tp("student.deadline.todayCount", { n: deadlinesToday, word: pluralDeadlines(deadlinesToday, language) });
-
   return (
     <div className="w-full flex flex-col gap-3.5">
       {error ? (
         <div
-          className="rounded-lg border px-4 py-3 text-sm"
+          className="rounded-lg border px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-3"
           style={{
             backgroundColor: `${theme.danger}12`,
             borderColor: `${theme.danger}40`,
             color: theme.danger,
           }}
         >
-          {error}
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="rounded-lg border px-3 py-1 text-xs font-medium"
+            style={{ borderColor: `${theme.danger}55`, color: theme.danger }}
+          >
+            {t("common.refresh")}
+          </button>
         </div>
       ) : null}
 
@@ -359,12 +364,21 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
             {tp("student.dashboard.greeting", { name: welcomeName })}
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: theme.text2 }}>
-            {groupLine} · {deadlinesLine}
+            {groupLine} · {formatTodayLong(new Date(), language)}
           </p>
         </div>
-        <p className="text-xs capitalize" style={{ color: theme.text3 }}>
-          {formatTodayLong(new Date(), language)}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled
+            title={t("student.dashboard.importGithubTitle")}
+            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium opacity-50 cursor-not-allowed"
+            style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text }}
+          >
+            <Github className="h-3.5 w-3.5" />
+            {t("student.dashboard.importGithub")}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">

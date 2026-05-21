@@ -92,7 +92,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
     } catch {
       // fallback
     }
-    navigate(`/courses?q=${encodeURIComponent(q)}`);
+    navigate(`/assignments?q=${encodeURIComponent(q)}`);
   }
 
   const theme = getTheme(isDarkTheme);

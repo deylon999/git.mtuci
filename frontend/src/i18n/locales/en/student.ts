@@ -11,6 +11,8 @@ export const studentEn = {
   },
   errors: {
     loadDashboard: "Failed to load dashboard",
+    loadProfile: "Failed to load profile",
+    loadCourses: "Failed to load courses",
     loadAssignments: "Failed to load assignments",
     loadDeadlines: "Failed to load deadlines",
     loadGrades: "Failed to load grades",
@@ -167,6 +169,7 @@ export const studentEn = {
     filterSubmitted: "Submitted",
     allCourses: "All courses",
     emptyFilter: "No deadlines match the filter",
+    emptyAll: "No upcoming deadlines",
   },
   grades: {
     title: "Grades",

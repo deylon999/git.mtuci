@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { ClipboardList, Search } from "lucide-react";
 
@@ -115,11 +115,15 @@ export default function StudentAssignmentsPage({ isDarkTheme = false }: StudentA
 
   const [filter, setFilter] = useState<FilterKey>("all");
 
-  const [query, setQuery] = useState("");
+  const [searchParams] = useSearchParams();
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
 
   const [courseFilter, setCourseFilter] = useState("all");
 
-
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q != null) setQuery(q);
+  }, [searchParams]);
 
   const statusLabel = (status: StudentAssignmentStatus) => {
 

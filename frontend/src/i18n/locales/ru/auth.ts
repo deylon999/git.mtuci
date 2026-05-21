@@ -1,5 +1,6 @@
 export const authRu = {
   auth: {
+    loginRequired: "Войдите в аккаунт",
     login: {
       title: "Вход в систему",
       subtitle: "Войдите, чтобы просматривать курсы и задания.",

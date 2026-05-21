@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuthUser } from "../context/AuthUserContext";
-import {
-  getStudentActivityFeed,
-  getStudentActivitySummary,
-  getStudentDashboardStats,
-  getStudentGroupRanking,
-  getStudentRecentRepositories,
-  type StudentActivityFeedItem,
-  type StudentActivitySummary,
-  type StudentDashboardCourse,
-  type StudentGroupRanking,
-  type StudentRecentRepository,
+import type {
+  StudentActivityFeedItem,
+  StudentActivitySummary,
+  StudentDashboardCourse,
+  StudentGroupRanking,
+  StudentRecentRepository,
 } from "../api/studentDashboardApi";
+import { getStudentDashboardBundleDeduped } from "../api/studentRequestDedup";
 import { useStudentNavCountsOptional } from "../context/StudentNavCountsContext";
 import { translate, translateWithParams } from "../i18n";
 import { getI18nLocale } from "../i18n/runtime";
@@ -67,7 +63,7 @@ const initial: StudentDashboardCore = {
 };
 
 function mapDeadlines(
-  items: Awaited<ReturnType<typeof getStudentDashboardStats>>["deadlines"],
+  items: Awaited<ReturnType<typeof getStudentDashboardBundleDeduped>>["stats"]["deadlines"],
   now: Date,
 ): StudentDeadlineItem[] {
   return items.map((dl) => {
@@ -85,7 +81,7 @@ function mapDeadlines(
   });
 }
 
-function buildKpiView(stats: Awaited<ReturnType<typeof getStudentDashboardStats>>): StudentDashboardKpiView {
+function buildKpiView(stats: Awaited<ReturnType<typeof getStudentDashboardBundleDeduped>>["stats"]): StudentDashboardKpiView {
   const locale = getI18nLocale();
   const { kpi } = stats;
   const reposSub =
@@ -132,24 +128,22 @@ export function useStudentDashboardCore(): StudentDashboardCore {
       try {
         if (!user) {
           if (!cancelled) {
-            setState((prev) => ({ ...prev, loading: false, error: "Not authenticated" }));
+            setState((prev) => ({
+              ...prev,
+              loading: false,
+              error: translate(getI18nLocale(), "auth.loginRequired"),
+            }));
           }
           return;
         }
-        const [stats, recentRepos, activitySummary, activityFeed, groupRanking] = await Promise.all([
-          getStudentDashboardStats(),
-          getStudentRecentRepositories(5),
-          getStudentActivitySummary(),
-          getStudentActivityFeed(12),
-          getStudentGroupRanking(),
-        ]);
+        const bundle = await getStudentDashboardBundleDeduped(5, 12);
 
         if (cancelled) return;
 
-        navCounts?.setSidebarCounts(stats.sidebar);
+        navCounts?.setSidebarCounts(bundle.stats.sidebar);
 
         const now = new Date();
-        const deadlines = mapDeadlines(stats.deadlines, now);
+        const deadlines = mapDeadlines(bundle.stats.deadlines, now);
 
         setState({
           loading: false,
@@ -157,14 +151,14 @@ export function useStudentDashboardCore(): StudentDashboardCore {
           firstName: firstNameFromFullName(user.full_name, getI18nLocale()),
           groupName: user.group_name ?? null,
           deadlines,
-          deadlinesToday: stats.kpi.deadlines_today,
-          deadlinesTodaySub: stats.kpi.deadlines_today_sub,
-          kpi: buildKpiView(stats),
-          courses: stats.courses,
-          recentRepos,
-          activitySummary,
-          activityFeed,
-          groupRanking,
+          deadlinesToday: bundle.stats.kpi.deadlines_today,
+          deadlinesTodaySub: bundle.stats.kpi.deadlines_today_sub,
+          kpi: buildKpiView(bundle.stats),
+          courses: bundle.stats.courses,
+          recentRepos: bundle.recent_repositories,
+          activitySummary: bundle.activity_summary,
+          activityFeed: bundle.activity_feed,
+          groupRanking: bundle.group_ranking,
           refetch,
         });
       } catch (e) {

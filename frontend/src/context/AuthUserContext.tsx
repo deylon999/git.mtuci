@@ -7,8 +7,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useLocation } from "react-router-dom";
 import { getToken } from "../api/client";
 import { getMe, invalidateMeCache } from "../api/authApi";
+import {
+  isStudentBootstrapPath,
+  isStudentShellBootstrapResolved,
+  onStudentShellBootstrap,
+} from "../api/studentAppBootstrap";
 import type { UserRead } from "../api/types";
 
 interface AuthUserContextValue {
@@ -21,6 +27,7 @@ interface AuthUserContextValue {
 const AuthUserContext = createContext<AuthUserContextValue | null>(null);
 
 export function AuthUserProvider({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
   const [user, setUser] = useState<UserRead | null>(null);
   const [loading, setLoading] = useState(() => Boolean(getToken()));
 
@@ -52,22 +59,44 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
+
     let cancelled = false;
-    setLoading(true);
-    void getMe()
-      .then((me) => {
-        if (!cancelled) setUser(me);
-      })
-      .catch(() => {
-        if (!cancelled) setUser(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+    const applyMe = () => {
+      void getMe()
+        .then((me) => {
+          if (!cancelled) setUser(me);
+        })
+        .catch(() => {
+          if (!cancelled) setUser(null);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    };
+
+    if (isStudentBootstrapPath(pathname)) {
+      setLoading(true);
+      if (isStudentShellBootstrapResolved()) {
+        applyMe();
+        return () => {
+          cancelled = true;
+        };
+      }
+      const unsub = onStudentShellBootstrap(() => {
+        if (!cancelled) applyMe();
       });
+      return () => {
+        cancelled = true;
+        unsub();
+      };
+    }
+
+    setLoading(true);
+    applyMe();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [pathname]);
 
   const value = useMemo(
     () => ({ user, loading, refreshUser, clearUser }),

@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { getToken } from "../api/client";
+import {
+  isStudentBootstrapPath,
+  isStudentShellBootstrapResolved,
+  onStudentShellBootstrap,
+} from "../api/studentAppBootstrap";
 import {
   getNotifications,
   invalidateNotificationsCache,
@@ -19,6 +25,7 @@ function getNotificationsWsUrl(): string {
 }
 
 export function useNotifications() {
+  const { pathname } = useLocation();
   const prefs = useUserPreferencesOptional();
   const pushEnabled = prefs?.notifications.push ?? false;
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -54,7 +61,11 @@ export function useNotifications() {
       await refresh();
       if (!cancelled) setLoading(false);
     };
-    void load();
+
+    const start = () => {
+      void load();
+      connectWs();
+    };
 
     const connectWs = () => {
       if (!getToken()) return;
@@ -87,22 +98,38 @@ export function useNotifications() {
       ws.onerror = () => ws.close();
     };
 
-    connectWs();
+    let fallback: ReturnType<typeof setInterval> | null = null;
 
-    const fallback = setInterval(() => {
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        void refresh();
-      }
-    }, 120_000);
-
-    return () => {
+    const cleanup = () => {
       cancelled = true;
-      clearInterval(fallback);
+      if (fallback) clearInterval(fallback);
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [refresh]);
+
+    const startWithFallback = () => {
+      start();
+      fallback = setInterval(() => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+          void refresh();
+        }
+      }, 120_000);
+    };
+
+    if (isStudentBootstrapPath(pathname) && !isStudentShellBootstrapResolved()) {
+      const unsub = onStudentShellBootstrap(() => {
+        if (!cancelled) startWithFallback();
+      });
+      return () => {
+        unsub();
+        cleanup();
+      };
+    }
+
+    startWithFallback();
+    return cleanup;
+  }, [refresh, pathname]);
 
   const markAsRead = useCallback(async (id: string) => {
     try {

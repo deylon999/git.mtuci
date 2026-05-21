@@ -1,6 +1,12 @@
 import { useEffect, useState, useRef } from "react";
 import type { FormEvent } from "react";
-import { changeMyPassword, getMe, uploadAvatarWithMode } from "../api/authApi";
+import { Link } from "react-router-dom";
+import { changeMyPassword, uploadAvatarWithMode } from "../api/authApi";
+import { useAuthUser } from "../context/AuthUserContext";
+import {
+  getStudentProfileBundleDeduped,
+  invalidateStudentProfileBundleDedup,
+} from "../api/studentRequestDedup";
 import { getMyRepositories } from "../api/repositoriesApi";
 import { getMyCommits, getTotalUsers, getLogs } from "../api/adminApi";
 import type {
@@ -8,7 +14,6 @@ import type {
   StudentActivitySummary,
   StudentGroupRanking,
 } from "../api/studentDashboardApi";
-import { getStudentProfileBundleDeduped } from "../api/studentRequestDedup";
 import { getTeacherDashboardFull, getTeacherStudents } from "../api/teacherDashboardApi";
 import { getTheme } from "../theme";
 import type { UserRead, LogEntry } from "../api/types";
@@ -105,9 +110,11 @@ function countLabel(locale: Locale, prefix: string, n: number): string {
 export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
   const { t, tp, language } = useUserPreferences();
   const dateLocale = language === "en" ? "en-US" : "ru-RU";
-  const [me, setMe] = useState<UserRead | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { user: me, loading: authLoading, refreshUser } = useAuthUser();
+  const [roleDataLoading, setRoleDataLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [studentBundleError, setStudentBundleError] = useState<string | null>(null);
+  const [studentBundleLoading, setStudentBundleLoading] = useState(false);
 
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -135,18 +142,17 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
 
   async function handleUploadConfirm(file: File) {
     setAvatarLoading(true);
-    setError(null);
     try {
       const updated = await uploadAvatarWithMode(file, "cover");
-      setMe(updated);
-      window.dispatchEvent(new CustomEvent('avatarUpdated', { detail: updated }));
+      await refreshUser({ force: true });
+      window.dispatchEvent(new CustomEvent("avatarUpdated", { detail: updated }));
       setIsModalOpen(false);
       setSelectedFile(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("admin.profile.avatarLoadError"));
+      setStudentBundleError(err instanceof Error ? err.message : t("admin.profile.avatarLoadError"));
     } finally {
       setAvatarLoading(false);
     }
@@ -160,16 +166,41 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
     }
   }
 
-  useEffect(() => {
-    let cancelled = false;
-    async function loadMe() {
-      setLoading(true);
-      try {
-        const meData = await getMe();
-        if (cancelled) return;
-        setMe(meData);
+  const loadStudentBundle = async (force = false) => {
+    setStudentBundleLoading(true);
+    setStudentBundleError(null);
+    try {
+      if (force) invalidateStudentProfileBundleDedup();
+      const bundle = await getStudentProfileBundleDeduped(8);
+      const summary = bundle.activity_summary;
+      setStats({
+        repositories: bundle.repositories_stats.total,
+        commits: summary.commits,
+        users: summary.submitted,
+      });
+      setStudentSummary(summary);
+      setStudentFeed(bundle.activity_feed);
+      setGroupRanking(bundle.group_ranking);
+      setRecentActions([]);
+    } catch (err) {
+      setStudentBundleError(err instanceof Error ? err.message : t("student.errors.loadProfile"));
+      setStudentSummary(null);
+      setStudentFeed([]);
+      setGroupRanking(null);
+      setStats({ repositories: 0, commits: 0, users: 0 });
+    } finally {
+      setStudentBundleLoading(false);
+    }
+  };
 
-        if (meData.role === "teacher" || meData.role === "laborant") {
+  useEffect(() => {
+    if (authLoading || !me) return;
+    let cancelled = false;
+
+    async function loadRoleData() {
+      setRoleDataLoading(true);
+      try {
+        if (me.role === "teacher" || me.role === "laborant") {
           const [dash, studentsSummary] = await Promise.all([
             getTeacherDashboardFull().catch(() => null),
             getTeacherStudents(1).catch(() => null),
@@ -184,20 +215,8 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
             });
             setRecentActions([]);
           }
-        } else if (meData.role === "student") {
-          const bundle = await getStudentProfileBundleDeduped(8).catch(() => null);
-          if (!cancelled && bundle) {
-            const summary = bundle.activity_summary;
-            setStats({
-              repositories: bundle.repositories_stats.total,
-              commits: summary.commits,
-              users: summary.submitted,
-            });
-            setStudentSummary(summary);
-            setStudentFeed(bundle.activity_feed);
-            setGroupRanking(bundle.group_ranking);
-            setRecentActions([]);
-          }
+        } else if (me.role === "student") {
+          await loadStudentBundle();
         } else {
           const [repos, myCommits, totalUsers, logsData] = await Promise.all([
             getMyRepositories().catch(() => []),
@@ -214,7 +233,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
               commits: myCommits.commits,
               users: totalUsers.total_users,
             });
-            const userLogs = logsData.logs.filter((log) => log.user_id === meData.id).slice(0, 5);
+            const userLogs = logsData.logs.filter((log) => log.user_id === me.id).slice(0, 5);
             setRecentActions(userLogs);
             setStudentSummary(null);
             setStudentFeed([]);
@@ -222,24 +241,27 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
           }
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setRoleDataLoading(false);
       }
     }
-    loadMe();
-    return () => { cancelled = true; };
-  }, []);
+
+    void loadRoleData();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, me?.id, me?.role]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setError(null);
+    setPasswordError(null);
     setSuccess(null);
 
     if (newPassword !== repeatNewPassword) {
-      setError(t("admin.profile.passwordMismatch"));
+      setPasswordError(t("admin.profile.passwordMismatch"));
       return;
     }
     if (newPassword.length < 8) {
-      setError(t("admin.profile.passwordTooShort"));
+      setPasswordError(t("admin.profile.passwordTooShort"));
       return;
     }
 
@@ -251,11 +273,19 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
       setRepeatNewPassword("");
       setSuccess(t("admin.profile.passwordChanged"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("admin.profile.passwordChangeError"));
+      setPasswordError(err instanceof Error ? err.message : t("admin.profile.passwordChangeError"));
     } finally {
       setSaving(false);
     }
   }
+
+  const isStudent = me?.role === "student";
+  const isTeacher = me?.role === "teacher" || me?.role === "laborant";
+  const loading = authLoading || roleDataLoading;
+  const studentStatsReady =
+    isStudent && !studentBundleError && !studentBundleLoading && studentSummary != null;
+  const statDisplay = (value: number, ready = true) =>
+    isStudent && !ready ? "—" : String(value);
 
   const roleBadge = me?.role === "admin"
     ? { text: t("admin.profile.roleAdmin"), bg: "rgba(239, 68, 68, 0.2)", color: "#ef4444" }
@@ -266,8 +296,6 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
     : { text: t("admin.profile.roleStudent"), bg: "rgba(34, 197, 94, 0.2)", color: "#22c55e" };
 
   const theme = getTheme(isDarkTheme);
-  const isStudent = me?.role === "student";
-  const isTeacher = me?.role === "teacher" || me?.role === "laborant";
 
   return (
     <>
@@ -416,7 +444,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 textAlign: "center"
               }}>
                 <div style={{ color: theme.text, fontSize: "18px", fontWeight: "700", marginBottom: "2px" }}>
-                  {stats.repositories}
+                  {statDisplay(stats.repositories, !isStudent || studentStatsReady)}
                 </div>
                 <div style={{ color: theme.text2, fontSize: "10px" }}>
                   {isTeacher
@@ -433,7 +461,9 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 textAlign: "center"
               }}>
                 <div style={{ color: theme.text, fontSize: "18px", fontWeight: "700", marginBottom: "2px" }}>
-                  {isStudent ? (studentSummary?.submitted ?? stats.users) : stats.users}
+                  {isStudent
+                    ? statDisplay(studentSummary?.submitted ?? stats.users, studentStatsReady)
+                    : stats.users}
                 </div>
                 <div style={{ color: theme.text2, fontSize: "10px" }}>
                   {isStudent
@@ -452,7 +482,9 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 textAlign: "center"
               }}>
                 <div style={{ color: theme.text, fontSize: "18px", fontWeight: "700", marginBottom: "2px" }}>
-                  {stats.commits}
+                  {isStudent
+                    ? statDisplay(studentSummary?.commits ?? stats.commits, studentStatsReady)
+                    : stats.commits}
                 </div>
                 <div style={{ color: theme.text2, fontSize: "10px" }}>
                   {isTeacher
@@ -642,6 +674,43 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
 
           {/* Правая колонка — обёртка */}
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {isStudent && studentBundleError ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "10px",
+                  backgroundColor: "rgba(239, 68, 68, 0.1)",
+                  border: "1px solid rgba(239, 68, 68, 0.35)",
+                  borderRadius: "8px",
+                  padding: "10px 14px",
+                  color: theme.danger,
+                  fontSize: "12px",
+                }}
+              >
+                <span style={{ flex: "1 1 200px" }}>{studentBundleError}</span>
+                <button
+                  type="button"
+                  onClick={() => void loadStudentBundle(true)}
+                  disabled={studentBundleLoading}
+                  style={{
+                    border: `1px solid ${theme.danger}`,
+                    borderRadius: "6px",
+                    padding: "6px 12px",
+                    fontSize: "11px",
+                    fontWeight: 500,
+                    backgroundColor: "transparent",
+                    color: theme.danger,
+                    cursor: studentBundleLoading ? "wait" : "pointer",
+                    opacity: studentBundleLoading ? 0.6 : 1,
+                  }}
+                >
+                  {t("common.refresh")}
+                </button>
+              </div>
+            ) : null}
             {/* Блок Смена пароля */}
             <div style={{
               backgroundColor: theme.bg3,
@@ -723,7 +792,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 />
               </div>
 
-              {error && (
+              {passwordError ? (
                 <div style={{ 
                   backgroundColor: "rgba(239, 68, 68, 0.1)", 
                   border: "1px solid rgba(239, 68, 68, 0.3)", 
@@ -732,9 +801,9 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                   color: "#ef4444",
                   fontSize: "12px"
                 }}>
-                  {error}
+                  {passwordError}
                 </div>
-              )}
+              ) : null}
 
               {success && (
                 <div style={{ 
@@ -773,7 +842,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                     setOldPassword("");
                     setNewPassword("");
                     setRepeatNewPassword("");
-                    setError(null);
+                    setPasswordError(null);
                     setSuccess(null);
                   }}
                   style={{
@@ -818,7 +887,15 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
             {/* Список действий */}
             <div style={{ display: "flex", flexDirection: "column" }}>
               {isStudent ? (
-                studentFeed.length === 0 ? (
+                studentBundleLoading ? (
+                  <div style={{ color: theme.text2, fontSize: "11px", padding: "8px 0" }}>
+                    {t("common.loading")}
+                  </div>
+                ) : studentBundleError ? (
+                  <div style={{ color: theme.text2, fontSize: "11px", padding: "8px 0" }}>
+                    {t("student.errors.loadProfile")}
+                  </div>
+                ) : studentFeed.length === 0 ? (
                   <div style={{ color: theme.text2, fontSize: "11px", padding: "8px 0" }}>
                     {t("admin.profile.noEvents")}
                   </div>
@@ -846,9 +923,9 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                       </div>
                     );
                     return item.href ? (
-                      <a key={item.id} href={item.href} style={{ textDecoration: "none", color: "inherit" }}>
+                      <Link key={item.id} to={item.href} style={{ textDecoration: "none", color: "inherit" }}>
                         {row}
-                      </a>
+                      </Link>
                     ) : (
                       <div key={item.id}>{row}</div>
                     );

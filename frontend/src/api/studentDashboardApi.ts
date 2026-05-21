@@ -1,4 +1,7 @@
 import { apiRequest } from "./client";
+import type { Notification, UserRead } from "./types";
+import type { UserSettings } from "./userSettingsApi";
+import type { SystemInfo } from "./systemApi";
 
 export interface StudentDashboardKpi {
   repos_total: number;
@@ -132,6 +135,30 @@ export interface StudentGroupRanking {
   entries: StudentGroupRankingEntry[];
 }
 
+export interface StudentAppShellFields {
+  user: UserRead;
+  settings: UserSettings;
+  notifications: Notification[];
+  system_info: SystemInfo;
+}
+
+export interface StudentDashboardBundle extends StudentAppShellFields {
+  stats: StudentDashboardStats;
+  recent_repositories: StudentRecentRepository[];
+  activity_summary: StudentActivitySummary;
+  activity_feed: StudentActivityFeedItem[];
+  group_ranking: StudentGroupRanking;
+}
+
+export function getStudentDashboardBundle(
+  recentLimit = 5,
+  feedLimit = 12,
+): Promise<StudentDashboardBundle> {
+  return apiRequest<StudentDashboardBundle>(
+    `/students/me/dashboard-bundle?recent_limit=${recentLimit}&feed_limit=${feedLimit}`,
+  );
+}
+
 export function getStudentDashboardStats(): Promise<StudentDashboardStats> {
   return apiRequest<StudentDashboardStats>("/students/me/dashboard-stats");
 }
@@ -152,7 +179,7 @@ export function getStudentGroupRanking(): Promise<StudentGroupRanking> {
   return apiRequest<StudentGroupRanking>("/students/me/group-ranking");
 }
 
-export interface StudentProfileBundle {
+export interface StudentProfileBundle extends StudentAppShellFields {
   activity_summary: StudentActivitySummary;
   activity_feed: StudentActivityFeedItem[];
   group_ranking: StudentGroupRanking;

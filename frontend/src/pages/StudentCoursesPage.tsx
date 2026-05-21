@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Clock, Loader2, User, AlertCircle, RefreshCw } from "lucide-react";
 import { useAuthUser } from "../context/AuthUserContext";
 import type { StudentMergedCourse } from "../api/studentDashboardApi";
@@ -41,6 +41,9 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
   const [tab, setTab] = useState<TabKey>("active");
   const [assignments, setAssignments] = useState<Awaited<ReturnType<typeof getStudentAssignmentsDeduped>>>([]);
   const [lkRefreshing, setLkRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const searchQuery = (searchParams.get("q") ?? "").trim().toLowerCase();
   const { user } = useAuthUser();
 
   const loadCourses = async (refreshLk: boolean) => {
@@ -51,6 +54,7 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
     } else {
       setLoading(true);
     }
+    setError(null);
     try {
       const [merged, asn] = await Promise.all([
         getStudentMergedCoursesDeduped(refreshLk),
@@ -61,10 +65,20 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
       setLkWarning(merged.lk_warning);
       setAssignments(asn);
       writeLkCoursesCache(merged);
-    } catch {
-      if (!readLkCoursesCache()) {
+    } catch (err) {
+      const cached = readLkCoursesCache();
+      if (cached) {
+        setCourses(cached.courses);
+        setLkWarning(cached.lk_warning);
+        setError(
+          err instanceof Error
+            ? `${t("student.errors.loadCourses")}: ${err.message}`
+            : t("student.errors.loadCourses"),
+        );
+      } else {
         setCourses([]);
         setLkWarning(null);
+        setError(err instanceof Error ? err.message : t("student.errors.loadCourses"));
       }
     } finally {
       setLoading(false);
@@ -109,10 +123,17 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
   const isActive = (course: StudentMergedCourse) => !isDone(course);
 
   const filtered = useMemo(() => {
-    if (tab === "all") return courses;
-    if (tab === "done") return courses.filter(isDone);
-    return courses.filter(isActive);
-  }, [courses, tab]);
+    let list = courses;
+    if (tab === "done") list = list.filter(isDone);
+    else if (tab === "active") list = list.filter(isActive);
+    if (searchQuery) {
+      list = list.filter((c) => {
+        const hay = `${c.title} ${c.teacher_name ?? ""}`.toLowerCase();
+        return hay.includes(searchQuery);
+      });
+    }
+    return list;
+  }, [courses, tab, searchQuery]);
 
   const doneCount = useMemo(() => courses.filter(isDone).length, [courses]);
 
@@ -133,6 +154,31 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
 
   return (
     <StudentPageShell>
+      {error ? (
+        <div
+          className="rounded-lg border px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-2"
+          style={{
+            backgroundColor: `${theme.danger}12`,
+            borderColor: `${theme.danger}40`,
+            color: theme.danger,
+          }}
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => void loadCourses(false)}
+            className="rounded-lg border px-3 py-1 text-xs font-medium"
+            style={{ borderColor: `${theme.danger}55`, color: theme.danger }}
+          >
+            {t("common.refresh")}
+          </button>
+        </div>
+      ) : null}
+      {searchQuery ? (
+        <p className="text-xs" style={{ color: theme.text2 }}>
+          {tp("admin.courses.searchQuery", { q: searchParams.get("q") ?? "" })}
+        </p>
+      ) : null}
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold" style={{ color: theme.text }}>

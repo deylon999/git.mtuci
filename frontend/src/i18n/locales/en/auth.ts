@@ -1,5 +1,6 @@
 export const authEn = {
   auth: {
+    loginRequired: "Please sign in",
     login: {
       title: "Sign in",
       subtitle: "Sign in to view courses and assignments.",

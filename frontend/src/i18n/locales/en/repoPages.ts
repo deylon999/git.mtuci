@@ -96,6 +96,7 @@ export const repoPagesEn = {
     loading: "Loading commits…",
     empty: "No commits yet",
     loadMore: "Load more",
+    loadError: "Failed to load commits",
   },
   toolbar: {
     copyPath: "Copy path",

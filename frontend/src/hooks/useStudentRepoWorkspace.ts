@@ -42,17 +42,25 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!repoId) return;
+    const cachedEntry = getCachedRepoWorkspace(repoId);
+    setMeta(metaFromPartial(initialMeta) ?? cachedEntry?.meta ?? null);
+    setSummary(cachedEntry?.summary ?? null);
+    setError(null);
+    setLoading(!metaFromPartial(initialMeta)?.name && !cachedEntry?.meta);
+  }, [repoId, initialMeta?.name]);
+
+  useEffect(() => {
     if (!repoId) {
       navigate("/repositories", { replace: true });
       return;
     }
     let cancelled = false;
     async function load() {
-      const hasMeta = !!meta?.name;
-      if (!hasMeta) setLoading(true);
+      setLoading(true);
       setError(null);
       try {
-        let nextMeta = meta;
+        let nextMeta = metaFromPartial(initialMeta) ?? getCachedRepoWorkspace(repoId)?.meta ?? null;
         if (!nextMeta?.name) {
           const list = await getStudentRepositories("lite");
           const repo = list.repositories.find((r) => r.id === repoId);
@@ -69,8 +77,8 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
             language: repo.language,
             visibility: repo.visibility,
           };
-          if (!cancelled) setMeta(nextMeta);
         }
+        if (!cancelled) setMeta(nextMeta);
         const summaryRes = await getStudentRepoSummary(repoId);
         if (!cancelled) {
           setSummary(summaryRes);
@@ -94,8 +102,7 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repoId, navigate]);
+  }, [repoId, navigate, initialMeta?.name]);
 
   return { meta, summary, loading, error, setSummary };
 }

@@ -19,3 +19,7 @@ export function useStudentRepoWorkspaceContext() {
   if (!ctx) throw new Error("useStudentRepoWorkspaceContext outside layout");
   return ctx;
 }
+
+export function useStudentRepoWorkspaceContextOptional() {
+  return useContext(StudentRepoWorkspaceContext);
+}

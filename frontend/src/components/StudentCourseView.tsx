@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { BookOpen, Calendar, CheckCircle2, Clock, Loader2 } from "lucide-react";
 import type { Assignment, Course } from "../api/types";
-import { getStudentGrades, type StudentAssignmentListItem } from "../api/studentDashboardApi";
+import type { StudentAssignmentListItem } from "../api/studentDashboardApi";
 import { getStudentAssignmentsDeduped } from "../api/studentRequestDedup";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { formatDeadlineRemaining } from "../utils/studentDeadlineGroups";
@@ -32,28 +32,37 @@ export default function StudentCourseView({
     gradeMax: number;
   } | null>(null);
   const [extraLoading, setExtraLoading] = useState(true);
+  const [extraError, setExtraError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setExtraLoading(true);
+      setExtraError(null);
       try {
-        const [asn, grades] = await Promise.all([
-          getStudentAssignmentsDeduped(200),
-          getStudentGrades(200),
-        ]);
+        const asn = await getStudentAssignmentsDeduped(200);
         if (cancelled) return;
-        setStudentItems(asn.filter((a) => a.course_id === courseId));
-        const gc = grades.courses.find((c) => c.course_id === courseId);
-        setCourseGrade(
-          gc
-            ? { average: gc.average_score, gradeMax: gc.grade_max }
-            : { average: null, gradeMax: course?.grade_max ?? 100 },
-        );
-      } catch {
+        const courseItems = asn.filter((a) => a.course_id === courseId);
+        setStudentItems(courseItems);
+        let earned = 0;
+        let max = 0;
+        for (const a of courseItems) {
+          if (a.status !== "graded") continue;
+          const pts = a.final_grade ?? a.grade;
+          if (pts == null) continue;
+          earned += Number(pts);
+          max += a.grade_max;
+        }
+        const average = max > 0 ? Math.round((earned / max) * (course?.grade_max ?? 100)) : null;
+        setCourseGrade({
+          average,
+          gradeMax: course?.grade_max ?? 100,
+        });
+      } catch (e) {
         if (!cancelled) {
           setStudentItems([]);
           setCourseGrade(null);
+          setExtraError(e instanceof Error ? e.message : t("student.errors.loadAssignments"));
         }
       } finally {
         if (!cancelled) setExtraLoading(false);
@@ -63,7 +72,7 @@ export default function StudentCourseView({
     return () => {
       cancelled = true;
     };
-  }, [courseId, course?.grade_max]);
+  }, [courseId, course?.grade_max, t]);
 
   const stats = useMemo(() => {
     const total = studentItems.length || assignments.length;
@@ -176,6 +185,11 @@ export default function StudentCourseView({
           </span>
         </div>
 
+        {extraError ? (
+          <p className="px-4 py-6 text-sm text-center" style={{ color: theme.danger }}>
+            {extraError}
+          </p>
+        ) : null}
         {busy ? (
           <div className="flex items-center gap-2 px-4 py-10 text-sm" style={{ color: theme.text2 }}>
             <Loader2 className="h-4 w-4 animate-spin" />

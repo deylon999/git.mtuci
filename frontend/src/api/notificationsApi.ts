@@ -10,6 +10,11 @@ export function invalidateNotificationsCache(): void {
   notificationsInflight = null;
 }
 
+export function seedNotificationsCache(data: Notification[]): void {
+  notificationsCache = { savedAt: Date.now(), data };
+  notificationsInflight = null;
+}
+
 export async function getNotifications(): Promise<Notification[]> {
   const now = Date.now();
   if (notificationsCache && now - notificationsCache.savedAt < NOTIFICATIONS_CACHE_TTL_MS) {
