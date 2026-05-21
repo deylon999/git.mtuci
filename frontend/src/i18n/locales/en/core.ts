@@ -184,6 +184,7 @@ export const coreEn = {
   },
   coursesRoute: {
     loading: "Loading…",
+    noAccess: "You do not have access to this course",
   },
   featurePlaceholder: {
     soon: "Coming soon",

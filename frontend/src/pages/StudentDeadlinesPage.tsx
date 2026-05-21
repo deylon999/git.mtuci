@@ -278,6 +278,7 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
           {t("common.loading")}
         </p>
       ) : viewMode === "calendar" ? (
+        <div className="flex flex-col gap-3">
         <div
           className="rounded-xl border p-2.5 max-w-[280px]"
           style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
@@ -352,6 +353,12 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
               );
             })}
           </div>
+        </div>
+        {items.length === 0 ? (
+          <p className="text-sm text-center py-4" style={{ color: theme.text2 }}>
+            {t("student.deadlines.emptyAll")}
+          </p>
+        ) : null}
         </div>
       ) : items.length === 0 ? (
         <p className="text-sm text-center py-8" style={{ color: theme.text2 }}>

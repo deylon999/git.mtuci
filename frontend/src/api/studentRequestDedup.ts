@@ -94,6 +94,10 @@ export function getCachedDashboardSidebarCounts(): StudentSidebarCounts | null {
   return dashboardBundleMem?.data.stats.sidebar ?? null;
 }
 
+export function getCachedStudentGroupRanking(): StudentGroupRanking | null {
+  return dashboardBundleMem?.data.group_ranking ?? profileBundleMem?.data.group_ranking ?? null;
+}
+
 export function getStudentDashboardBundleDeduped(
   recentLimit = 5,
   feedLimit = 12,

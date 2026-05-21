@@ -500,7 +500,9 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
                   </p>
                 </div>
                 <Badge variant={repo.visibility === "public" ? "ok" : "gray"} theme={theme}>
-                  {repo.visibility === "public" ? "Public" : "Private"}
+                  {repo.visibility === "public"
+                    ? t("student.repos.visibilityPublic")
+                    : t("student.repos.visibilityPrivate")}
                 </Badge>
               </Link>
                 );

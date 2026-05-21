@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getMe } from "../api/authApi";
+import { useAuthUser } from "../context/AuthUserContext";
 import { getAssignments, getCourses } from "../api/coursesApi";
 import StudentCourseView from "../components/StudentCourseView";
 import TeacherCourseView from "../components/teacher/TeacherCourseView";
 import { useUserPreferences } from "../context/UserPreferencesContext";
-import type { Assignment, Course, UserRead } from "../api/types";
+import type { Assignment, Course } from "../api/types";
 
 interface CoursePageProps {
   isDarkTheme?: boolean;
@@ -27,10 +27,10 @@ export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
   const [courseTitle, setCourseTitle] = useState<string | null>(null);
   const [courseData, setCourseData] = useState<Course | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [me, setMe] = useState<UserRead | null>(null);
+  const { user: me, loading: authLoading } = useAuthUser();
 
   useEffect(() => {
-    if (!courseId) return;
+    if (!courseId || authLoading) return;
     let cancelled = false;
     const courseIdStr = courseId;
 
@@ -38,15 +38,11 @@ export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
       setLoading(true);
       setError(null);
       try {
-        const [meResult, as, cs] = await Promise.allSettled([
-          getMe(),
+        const [as, cs] = await Promise.allSettled([
           getAssignments(courseIdStr),
           getCourses(),
         ]);
 
-        if (meResult.status === "fulfilled" && !cancelled) {
-          setMe(meResult.value);
-        }
         if (as.status === "fulfilled" && !cancelled) setAssignments(as.value);
         if (cs.status === "fulfilled" && !cancelled) {
           const found = cs.value.find((c) => c.id === courseIdStr);
@@ -55,8 +51,20 @@ export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
             setCourseData(found);
           }
         }
+        if (
+          !cancelled &&
+          (as.status === "rejected" || cs.status === "rejected")
+        ) {
+          const reason =
+            as.status === "rejected" && as.reason instanceof Error
+              ? as.reason.message
+              : cs.status === "rejected" && cs.reason instanceof Error
+                ? cs.reason.message
+                : t("student.errors.loadCourses");
+          setError(reason);
+        }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed");
+        if (!cancelled) setError(err instanceof Error ? err.message : t("student.errors.loadCourses"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -66,7 +74,7 @@ export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
     return () => {
       cancelled = true;
     };
-  }, [courseId]);
+  }, [courseId, authLoading, t]);
 
   const isTeacher = me?.role === "teacher" || me?.role === "laborant";
   const isStudent = me?.role === "student";
@@ -109,7 +117,15 @@ export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
         />
       ) : null}
 
-      {!isStudent && loading ? <div className={`text-sm ${textSecondary}`}>{t("common.loading")}</div> : null}
+      {authLoading || (!isStudent && !isTeacher && loading) ? (
+        <div className={`text-sm ${textSecondary}`}>{t("common.loading")}</div>
+      ) : null}
+      {!authLoading && !me ? (
+        <div className={`text-sm ${textSecondary}`}>{t("auth.loginRequired")}</div>
+      ) : null}
+      {!authLoading && me && !isStudent && !isTeacher && !loading ? (
+        <div className={`text-sm ${textSecondary}`}>{t("coursesRoute.noAccess")}</div>
+      ) : null}
       {error ? (
         <div className={`rounded-md border p-3 text-sm ${errorBox}`}>
           {error}

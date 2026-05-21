@@ -98,7 +98,7 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
       setLoading(false);
     }
     void loadCourses(false);
-  }, []);
+  }, [user?.id]);
 
   const courseStats = useMemo(() => {
     const map = new Map<string, { total: number; graded: number; overdue: number }>();
@@ -294,6 +294,10 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
                   </thead>
                   <tbody>
                     {[...assignments]
+                      .filter((a) => {
+                        const dl = new Date(a.deadline).getTime();
+                        return dl >= Date.now() && a.status !== "graded";
+                      })
                       .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
                       .slice(0, 8)
                       .map((a) => (

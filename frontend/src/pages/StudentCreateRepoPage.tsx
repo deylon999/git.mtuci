@@ -28,26 +28,31 @@ export default function StudentCreateRepoPage({ isDarkTheme = false }: StudentCr
   const [gitignore, setGitignore] = useState("");
   const [license, setLicense] = useState("");
   const [templates, setTemplates] = useState<RepositoryCreateTemplates | null>(null);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [createdClone, setCreatedClone] = useState<string | null>(null);
 
   useEffect(() => {
     void getMe().then((u) => {
-      const login = (u.email?.split("@")[0] ?? u.full_name ?? "user")
+      const fromEmail = (u.email?.split("@")[0] ?? "")
         .toLowerCase()
         .replace(/[^a-z0-9._-]/g, "");
-      setGiteaUser(login);
+      const fromName = (u.full_name ?? "")
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9._-]/g, "");
+      setGiteaUser(fromEmail || fromName || "user");
     });
+    setTemplatesLoading(true);
     void getRepositoryCreateTemplates()
       .then(setTemplates)
-      .catch(() =>
-        setTemplates({
-          gitignores: [{ id: "", label: t("student.repos.createPage.noGitignore") }],
-          licenses: [{ id: "", label: t("student.repos.createPage.noLicense") }],
-        }),
-      );
-  }, []);
+      .catch(() => {
+        setTemplates(null);
+        setError(t("student.errors.loadTemplates"));
+      })
+      .finally(() => setTemplatesLoading(false));
+  }, [t]);
 
   const pathPreview = useMemo(() => {
     const n = name.trim() || "my-repo";
@@ -197,6 +202,12 @@ export default function StudentCreateRepoPage({ isDarkTheme = false }: StudentCr
           {t("student.repos.createPage.addReadme")}
         </label>
 
+        {templatesLoading ? (
+          <p className="text-xs flex items-center gap-2" style={{ color: theme.text2 }}>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            {t("student.repos.createPage.loadingTemplates")}
+          </p>
+        ) : null}
         {templates ? (
           <>
             <label className="flex flex-col gap-1 text-xs" style={{ color: theme.text2 }}>

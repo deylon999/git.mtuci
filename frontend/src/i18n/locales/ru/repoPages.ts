@@ -141,6 +141,7 @@ export const repoPagesRu = {
     exclude: "Исключить",
   },
   section: {
+    stateOpen: "открыт",
     loading: "Загрузка репозитория…",
     notFound: "Репозиторий не найден",
     loadingShort: "Загрузка…",

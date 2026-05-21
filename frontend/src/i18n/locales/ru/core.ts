@@ -184,6 +184,7 @@ export const coreRu = {
   },
   coursesRoute: {
     loading: "Загрузка…",
+    noAccess: "Нет доступа к этому курсу",
   },
   featurePlaceholder: {
     soon: "Скоро",

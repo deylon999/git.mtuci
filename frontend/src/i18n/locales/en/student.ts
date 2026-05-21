@@ -21,6 +21,7 @@ export const studentEn = {
     deleteRepo: "Failed to delete repository",
     syncFork: "Sync failed",
     createRepo: "Failed to create repository",
+    loadTemplates: "Failed to load .gitignore and license templates",
     nameRequired: "Enter a repository name",
     nameInvalid: "Name: letters, digits, dot, hyphen, and underscore only",
   },
@@ -89,6 +90,7 @@ export const studentEn = {
     kpiCommitsAvg: "Average: {avg}/day",
     kpiCommitsWeek: "Last 7 days",
     kpiSoon: "Soon",
+    kpiCommitsNoneWeek: "No commits this week",
     kpiAssignmentsTotal: "{n} assignments total",
   },
   courses: {

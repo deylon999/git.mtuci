@@ -17,12 +17,12 @@ import type { StudentRepoMeta } from "../../hooks/useStudentRepoWorkspace";
 import type { ThemeColors } from "../../theme";
 
 const SETTINGS_SECTIONS = [
-  { id: "general", label: "General", icon: Settings },
-  { id: "access", label: "Access", icon: Users },
-  { id: "branches", label: "Branches", icon: GitBranch },
-  { id: "webhooks", label: "Webhooks", icon: Webhook },
-  { id: "keys", label: "Deploy keys", icon: Key },
-  { id: "security", label: "Security", icon: Shield },
+  { id: "general", labelKey: "repo.settings.sectionGeneral", icon: Settings },
+  { id: "access", labelKey: "repo.settings.sectionAccess", icon: Users },
+  { id: "branches", labelKey: "repo.settings.sectionBranches", icon: GitBranch },
+  { id: "webhooks", labelKey: "repo.settings.sectionWebhooks", icon: Webhook },
+  { id: "keys", labelKey: "repo.settings.sectionDeployKeys", icon: Key },
+  { id: "security", labelKey: "repo.settings.sectionSecurity", icon: Shield },
 ] as const;
 
 type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]["id"];
@@ -93,7 +93,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
         style={{ borderColor: theme.border, backgroundColor: theme.bg }}
       >
         <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide" style={{ color: theme.text3 }}>
-          Settings
+          {t("repo.settings.panelTitle")}
         </p>
         {SETTINGS_SECTIONS.map((s) => {
           const Icon = s.icon;
@@ -110,7 +110,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
               }}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              {s.label}
+              {t(s.labelKey)}
             </button>
           );
         })}
@@ -120,17 +120,20 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
         {section === "general" && (
           <>
             <h2 className="text-base font-semibold" style={{ color: theme.text }}>
-              General
+              {t("repo.settings.generalTitle")}
             </h2>
             <dl className="grid gap-3 text-sm">
               {[
-                { label: "Repository name", value: meta?.name ?? "—" },
-                { label: "Description", value: summary?.description || meta?.description || "—" },
+                { label: t("repo.settings.labelRepoName"), value: meta?.name ?? "—" },
+                { label: t("repo.settings.labelDescription"), value: summary?.description || meta?.description || "—" },
                 {
-                  label: "Visibility",
-                  value: meta?.visibility === "public" ? "Public" : "Private",
+                  label: t("repo.settings.labelVisibility"),
+                  value:
+                    meta?.visibility === "public"
+                      ? t("student.repos.visibilityPublic")
+                      : t("student.repos.visibilityPrivate"),
                 },
-                { label: "Default branch", value: defaultBranch },
+                { label: t("repo.settings.labelDefaultBranch"), value: defaultBranch },
                 { label: "Primary language", value: summary?.language || meta?.language || "—" },
                 {
                   label: "Size",
@@ -149,7 +152,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
               ))}
             </dl>
             {cloneUrl ? (
-              <PlaceholderBlock theme={theme} title="Clone">
+              <PlaceholderBlock theme={theme} title={t("repo.settings.labelClone")}>
                 <div className="flex gap-2 items-center">
                   <code className="flex-1 text-xs font-mono truncate" style={{ color: theme.accent2 }}>
                     {cloneUrl}

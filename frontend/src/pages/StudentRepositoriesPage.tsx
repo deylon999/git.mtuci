@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import {
   Copy,
   Eye,
@@ -76,11 +77,15 @@ function capitalizeLanguage(lang: string): string {
   return lang.charAt(0).toUpperCase() + lang.slice(1);
 }
 
-function visibilityBadge(visibility: string, source: string) {
-  if (source === "assignment") return { label: "Course", variant: "info" as const };
-  if (visibility === "public") return { label: "Public", variant: "ok" as const };
-  if (visibility === "course") return { label: "Course", variant: "info" as const };
-  return { label: "Private", variant: "gray" as const };
+function visibilityBadge(
+  visibility: string,
+  source: string,
+  t: (key: string) => string,
+) {
+  if (source === "assignment") return { label: t("student.repos.visibilityCourse"), variant: "info" as const };
+  if (visibility === "public") return { label: t("student.repos.visibilityPublic"), variant: "ok" as const };
+  if (visibility === "course") return { label: t("student.repos.visibilityCourse"), variant: "info" as const };
+  return { label: t("student.repos.visibilityPrivate"), variant: "gray" as const };
 }
 
 interface StudentRepositoriesPageProps {
@@ -130,6 +135,13 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
     load();
   }, [load]);
 
+  const closeCreateModal = useCallback(() => {
+    setCreateOpen(false);
+    if (location.pathname === "/repositories/new") {
+      navigate("/repositories", { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
   useEffect(() => {
     if (location.pathname === "/repositories/new") {
       setCreateOpen(true);
@@ -163,7 +175,9 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
       if (sort === "name") return a.name.localeCompare(b.name, "ru");
       if (sort === "commits") return (b.commits_count ?? 0) - (a.commits_count ?? 0);
       if (sort === "date") return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
-      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+      const activityA = (a.commits_count ?? 0) * 1_000_000 + new Date(a.updated_at).getTime();
+      const activityB = (b.commits_count ?? 0) * 1_000_000 + new Date(b.updated_at).getTime();
+      return activityB - activityA;
     });
     return list;
   }, [repos, search, typeFilter, langFilter, sort]);
@@ -190,7 +204,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
       setDeleteRepo(null);
       await load();
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : t("student.errors.deleteRepo"));
+      toast.error(e instanceof Error ? e.message : t("student.errors.deleteRepo"));
     } finally {
       setDeletingId(null);
     }
@@ -425,7 +439,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
         >
           {filtered.map((repo) => {
             const av = avatarStyle(repo.id);
-            const badge = visibilityBadge(repo.visibility, repo.source);
+            const badge = visibilityBadge(repo.visibility, repo.source, t);
             const isFork = repo.gitea_path ? forkPaths.has(repo.gitea_path) : false;
             const langKey = (repo.language ?? "").toLowerCase();
             const langColor = LANG_COLORS[langKey] ?? theme.text3;
@@ -726,8 +740,9 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
       <CreateRepositoryModal
         isOpen={createOpen}
         isDarkTheme={isDarkTheme}
-        onClose={() => setCreateOpen(false)}
+        onClose={closeCreateModal}
         onCreated={() => {
+          closeCreateModal();
           void load();
         }}
       />

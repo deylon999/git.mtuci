@@ -94,7 +94,7 @@ function IssueRow({ theme, item }: { theme: ThemeColors; item: StudentRepoIssue 
               color: open ? theme.success : theme.text3,
             }}
           >
-            {open ? "open" : item.state}
+            {open ? t("repo.section.stateOpen") : item.state}
           </span>
         </div>
         <p className="text-sm font-medium mt-0.5" style={{ color: theme.text }}>

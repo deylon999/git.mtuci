@@ -102,7 +102,7 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
     return () => {
       cancelled = true;
     };
-  }, [repoId, navigate, initialMeta?.name]);
+  }, [repoId, navigate, initialMeta]);
 
   return { meta, summary, loading, error, setSummary };
 }

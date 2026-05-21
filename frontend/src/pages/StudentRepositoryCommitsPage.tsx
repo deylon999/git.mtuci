@@ -13,7 +13,7 @@ interface StudentRepositoryCommitsPageProps {
 
 export default function StudentRepositoryCommitsPage({ isDarkTheme = false }: StudentRepositoryCommitsPageProps) {
   const theme = getTheme(isDarkTheme);
-  const { repoId, summary } = useStudentRepoWorkspaceContext();
+  const { repoId, summary, error: workspaceError } = useStudentRepoWorkspaceContext();
   const { t, tp, language } = useUserPreferences();
 
   const [branch, setBranch] = useState(summary?.default_branch ?? "main");
@@ -64,6 +64,14 @@ export default function StudentRepositoryCommitsPage({ isDarkTheme = false }: St
       className="rounded-xl border overflow-hidden"
       style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}
     >
+      {workspaceError ? (
+        <div
+          className="px-4 py-3 text-sm border-b"
+          style={{ borderColor: theme.border, color: theme.danger }}
+        >
+          {workspaceError}
+        </div>
+      ) : null}
       {commitsError ? (
         <div
           className="px-4 py-3 text-sm border-b"

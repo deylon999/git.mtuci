@@ -6,7 +6,7 @@ import {
   type StudentGradeItem,
   type StudentGradesSummary,
 } from "../api/studentDashboardApi";
-import { getStudentGradesDeduped, getStudentGroupRankingDeduped } from "../api/studentRequestDedup";
+import { getCachedStudentGroupRanking, getStudentGradesDeduped } from "../api/studentRequestDedup";
 import { StudentPageShell } from "../components/student/studentPageUi";
 import { useAuthUser } from "../context/AuthUserContext";
 import { useUserPreferences } from "../context/UserPreferencesContext";
@@ -98,13 +98,10 @@ export default function StudentGradesPage({ isDarkTheme = false }: StudentGrades
       setLoading(true);
       setError(null);
       try {
-        const [summary, ranking] = await Promise.all([
-          getStudentGradesDeduped(200),
-          getStudentGroupRankingDeduped().catch(() => null),
-        ]);
+        const summary = await getStudentGradesDeduped(200);
         if (cancelled) return;
         setData(summary);
-        setGroupPlace(ranking?.your_place ?? null);
+        setGroupPlace(getCachedStudentGroupRanking()?.your_place ?? null);
         if (summary.courses.length > 0) {
           setExpandedCourses(new Set([summary.courses[0].course_id]));
         }
@@ -173,7 +170,7 @@ export default function StudentGradesPage({ isDarkTheme = false }: StudentGrades
   };
 
   return (
-    <StudentPageShell className="gap-3.5 min-w-[900px]">
+    <StudentPageShell className="gap-3.5 min-w-0 w-full">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold" style={{ color: theme.text }}>

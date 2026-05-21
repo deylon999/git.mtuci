@@ -191,7 +191,14 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
   }, [courseId, assignmentId]);
 
   useEffect(() => {
+    if (me?.role === "student") {
+      setActiveTab("grading");
+    }
+  }, [me?.role]);
+
+  useEffect(() => {
     if (!courseId || !assignmentId || !me) return;
+    if (me.role === "student") return;
     if (me.role === "teacher" && !selectedRepoStudentId) return;
     let cancelled = false;
 
@@ -443,12 +450,16 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
       ) : null}
 
       <div className="mb-4 flex flex-wrap gap-2">
+        {me?.role !== "student" ? (
+          <>
         <button type="button" className={tabButtonClass("commits")} onClick={() => setActiveTab("commits")}>
           {t("repo.assignment.tabCommits")}
         </button>
         <button type="button" className={tabButtonClass("files")} onClick={() => setActiveTab("files")}>
           {t("repo.assignment.tabFiles")}
         </button>
+          </>
+        ) : null}
         <button type="button" className={tabButtonClass("grading")} onClick={() => setActiveTab("grading")}>
           {me?.role === "student" ? t("repo.assignment.myGrade") : t("repo.assignment.grading")}
         </button>
@@ -463,7 +474,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
         ) : null}
       </div>
 
-      {activeTab === "commits" ? (
+      {me?.role !== "student" && activeTab === "commits" ? (
         <div className={`rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
           <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.commitsHistory")}</div>
           <div className="space-y-4">
@@ -487,7 +498,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
         </div>
       ) : null}
 
-      {activeTab === "files" ? (
+      {me?.role !== "student" && activeTab === "files" ? (
         <div className={`rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
           <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.filesTree")}</div>
           <div className="space-y-2">

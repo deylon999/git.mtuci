@@ -141,6 +141,7 @@ export const repoPagesEn = {
     exclude: "Remove",
   },
   section: {
+    stateOpen: "open",
     loading: "Loading repository…",
     notFound: "Repository not found",
     loadingShort: "Loading…",

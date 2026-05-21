@@ -21,6 +21,7 @@ export const studentRu = {
     deleteRepo: "Не удалось удалить репозиторий",
     syncFork: "Синхронизация не удалась",
     createRepo: "Не удалось создать репозиторий",
+    loadTemplates: "Не удалось загрузить шаблоны .gitignore и лицензий",
     nameRequired: "Укажите имя репозитория",
     nameInvalid: "Имя: только латиница, цифры, точка, дефис и подчёркивание",
   },
@@ -89,6 +90,7 @@ export const studentRu = {
     kpiCommitsAvg: "Среднее: {avg}/день",
     kpiCommitsWeek: "За последние 7 дней",
     kpiSoon: "Скоро",
+    kpiCommitsNoneWeek: "Нет коммитов за неделю",
     kpiAssignmentsTotal: "{n} заданий всего",
   },
   courses: {

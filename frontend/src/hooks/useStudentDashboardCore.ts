@@ -96,7 +96,7 @@ function buildKpiView(stats: Awaited<ReturnType<typeof getStudentDashboardBundle
       ? translateWithParams(locale, "student.dashboard.kpiCommitsAvg", { avg: kpi.commits_week_avg.toFixed(1) })
       : kpi.commits_week > 0
         ? translate(locale, "student.dashboard.kpiCommitsWeek")
-        : translate(locale, "student.dashboard.kpiSoon");
+        : translate(locale, "student.dashboard.kpiCommitsNoneWeek");
 
   return {
     reposTotal: kpi.repos_total,
