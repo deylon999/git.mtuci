@@ -35,6 +35,8 @@ export default function RepoSectionShell({
   onGoToReadme,
   onOpenLicense,
 }: RepoSectionShellProps) {
+  const { t } = useUserPreferences();
+
   return (
     <div className="w-full flex flex-col gap-4 max-w-7xl mx-auto">
       <Link

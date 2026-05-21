@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, User, Moon, Sun, Search } from "lucide-react";
+import { ChevronDown, LogOut, User, Moon, Sun, Search, Plus } from "lucide-react";
 import { clearToken } from "../api/client";
 import { getMe, invalidateMeCache } from "../api/authApi";
 import { globalSearch } from "../api/searchApi";
@@ -148,6 +148,20 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {userRole === "student" ? (
+              <Link
+                to="/repositories/new"
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors hover:opacity-90"
+                style={{
+                  backgroundColor: `${theme.success}18`,
+                  borderColor: `${theme.success}40`,
+                  color: theme.success,
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {t("header.createRepo")}
+              </Link>
+            ) : null}
             <button
               type="button"
               onClick={onToggleTheme}

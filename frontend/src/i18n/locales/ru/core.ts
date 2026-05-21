@@ -70,6 +70,7 @@ export const coreRu = {
     themeToLight: "Переключить на светлую тему",
     themeToDark: "Переключить на тёмную тему",
     profile: "Профиль",
+    createRepo: "Создать репозиторий",
     logout: "Выйти",
     securitySettings: "Настройки безопасности",
     monitoring: "Мониторинг",

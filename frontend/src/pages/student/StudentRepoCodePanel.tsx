@@ -6,9 +6,16 @@ interface StudentRepoCodePanelProps {
 }
 
 export default function StudentRepoCodePanel({ isDarkTheme = false }: StudentRepoCodePanelProps) {
-  const { repoId, meta, summary, loading } = useStudentRepoWorkspaceContext();
+  const { repoId, meta, summary, loading, error } = useStudentRepoWorkspaceContext();
 
-  if (!meta) return null;
+  if (!meta) {
+    if (loading) return null;
+    return (
+      <p className="text-sm text-center py-8" style={{ color: error ? undefined : "inherit" }}>
+        {error ?? "—"}
+      </p>
+    );
+  }
 
   return (
     <RepoFileBrowser

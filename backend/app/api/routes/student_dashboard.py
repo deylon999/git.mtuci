@@ -17,6 +17,7 @@ from app.schemas.student_dashboard import (
     StudentGitCloneTokenRegenerateRead,
     StudentGitCloneTokenStatusRead,
     StudentGroupRankingRead,
+    StudentMergedCoursesRead,
     StudentRecentRepositoryRead,
     StudentRepositoriesRead,
     StudentRepoBranchesRead,
@@ -36,6 +37,7 @@ from app.schemas.student_dashboard import (
 )
 from app.services.code_lint_service import lint_file_content
 from app.services.gitea_service import GiteaAuthError
+from app.services.student_lk_courses_service import get_student_merged_courses
 from app.services.student_dashboard_service import (
     create_student_repository_file,
     delete_student_personal_repository,
@@ -160,6 +162,21 @@ async def student_dashboard_stats(
         student_id=current_user.id,
         group_name=current_user.group_name,
     )
+
+
+@router.get("/courses-merged", response_model=StudentMergedCoursesRead)
+async def student_merged_courses(
+    refresh: bool = Query(default=False, description="Force refresh from MTUCI LK"),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentMergedCoursesRead:
+    _require_student(current_user)
+    courses, lk_warning = await get_student_merged_courses(
+        session,
+        user=current_user,
+        force_lk_refresh=refresh,
+    )
+    return StudentMergedCoursesRead(courses=courses, lk_warning=lk_warning)
 
 
 @router.get("/repositories", response_model=StudentRepositoriesRead)

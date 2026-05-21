@@ -114,7 +114,6 @@ function buildStudentMenu(): MenuSection[] {
       titleKey: "sidebar.myRepositories",
       items: [
         { path: "/repositories", labelKey: "sidebar.allRepositories", icon: FileText },
-        { path: "/repositories/new", labelKey: "sidebar.createRepo", icon: FolderPlus },
         { path: "/repositories/forks", labelKey: "sidebar.forks", icon: GitFork },
       ],
     },

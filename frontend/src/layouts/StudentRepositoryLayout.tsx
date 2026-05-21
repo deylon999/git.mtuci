@@ -28,6 +28,7 @@ export default function StudentRepositoryLayout({ isDarkTheme = false }: Student
   if (!repoId) return null;
 
   const showSkeleton = loading && !meta;
+  const showMissing = !loading && !meta;
 
   return (
     <StudentRepoWorkspaceContext.Provider
@@ -50,6 +51,13 @@ export default function StudentRepositoryLayout({ isDarkTheme = false }: Student
             className="rounded-xl border animate-pulse min-h-[280px]"
             style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}
           />
+        ) : showMissing ? (
+          <div
+            className="rounded-xl border px-4 py-8 text-sm text-center"
+            style={{ borderColor: theme.border, backgroundColor: theme.bg3, color: theme.text2 }}
+          >
+            {error ?? "Repository not found"}
+          </div>
         ) : (
           <Outlet />
         )}

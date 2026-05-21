@@ -1,8 +1,27 @@
 import { apiRequest } from "./client";
-import type { AdminUserRead, UserRole, SystemMetrics, ServiceStatus, BackupInfo, TodayStats, HotRepoStat, TopUserStat, HourlyActivity, LogsResponse, LogsStats, LogsFilters, LogsPagination } from "./types";
+import type {
+  AdminReviewQueueItem,
+  AdminUserRead,
+  UserRole,
+  SystemMetrics,
+  ServiceStatus,
+  BackupInfo,
+  TodayStats,
+  HotRepoStat,
+  TopUserStat,
+  HourlyActivity,
+  LogsResponse,
+  LogsStats,
+  LogsFilters,
+  LogsPagination,
+} from "./types";
 
 export async function getAdminUsers(): Promise<AdminUserRead[]> {
   return apiRequest<AdminUserRead[]>("/admin/users");
+}
+
+export async function getAdminReviewQueue(limit = 5): Promise<AdminReviewQueueItem[]> {
+  return apiRequest<AdminReviewQueueItem[]>(`/admin/review-queue?limit=${limit}`);
 }
 
 export async function exportUsersCSV(): Promise<void> {

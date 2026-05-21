@@ -18,12 +18,49 @@ export interface StudentSidebarCounts {
 
 export interface StudentDashboardCourse {
   id: string;
+  platform_course_id?: string | null;
   title: string;
-  teacher_name: string;
+  teacher_name?: string | null;
   assignments_count: number;
   score: number | null;
+  score_label?: string | null;
   score_max: number;
   score_color: "success" | "warning" | "danger" | "muted";
+  attendance_percent?: number | null;
+  source?: "platform" | "lk" | "merged";
+  has_platform?: boolean;
+}
+
+export interface StudentMergedCourse {
+  id: string;
+  platform_course_id: string | null;
+  title: string;
+  source: "platform" | "lk" | "merged";
+  teacher_name: string | null;
+  attendance_percent: number | null;
+  attendance_skips: number | null;
+  assignments_total: number;
+  assignments_graded: number;
+  assignments_submitted: number;
+  earned_points: number;
+  max_points: number;
+  percent: number | null;
+  score: number | null;
+  score_label: string | null;
+  grade_max: number;
+  score_color: "success" | "warning" | "danger" | "muted";
+  enrolled_count: number;
+  has_platform: boolean;
+}
+
+export interface StudentMergedCoursesResponse {
+  courses: StudentMergedCourse[];
+  lk_warning: string | null;
+}
+
+export function getStudentMergedCourses(refresh = false): Promise<StudentMergedCoursesResponse> {
+  const qs = refresh ? "?refresh=true" : "";
+  return apiRequest<StudentMergedCoursesResponse>(`/students/me/courses-merged${qs}`);
 }
 
 export interface StudentDeadlineDto {
@@ -173,6 +210,9 @@ export interface StudentGradeCourse {
   teacher_name: string;
   grade_max: number;
   average_score: number | null;
+  earned_points: number;
+  max_points: number;
+  percent: number | null;
   assignments_total: number;
   assignments_graded: number;
   assignments_submitted: number;
@@ -186,6 +226,7 @@ export interface StudentGradeItem {
   grade: number | null;
   final_grade: number | null;
   grade_max: number;
+  percent: number | null;
   status: StudentAssignmentStatus;
   graded_at: string | null;
   submitted_at: string | null;
@@ -193,6 +234,9 @@ export interface StudentGradeItem {
 
 export interface StudentGradesSummary {
   overall_average: number | null;
+  overall_earned: number;
+  overall_max: number;
+  overall_percent: number | null;
   graded_count: number;
   pending_review: number;
   courses: StudentGradeCourse[];

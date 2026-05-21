@@ -35,8 +35,11 @@ import {
   getCommitsByFaculty,
   getActiveRepositories,
   getAdminReportsOverview,
+  getAdminReviewQueue,
   type AdminReportsOverview,
 } from "../api/adminApi";
+import { getNotifications } from "../api/notificationsApi";
+import type { AdminReviewQueueItem } from "../api/types";
 import type { SystemMetrics, ServiceStatus, BackupInfo, FacultyCommitsStat, ActiveRepositoryStat } from "../api/types";
 import { usePermissions } from "../hooks/usePermissions";
 import toast from "react-hot-toast";
@@ -233,6 +236,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   const [showRepoDropdown, setShowRepoDropdown] = useState(false);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [reviewQueue, setReviewQueue] = useState<AdminReviewQueueItem[]>([]);
   const [reportsOverview, setReportsOverview] = useState<AdminReportsOverview | null>(null);
 
   const clearAllNotifications = () => {
@@ -244,7 +248,8 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
     setFacultyStatsLoading(true);
     setActiveRepositoriesLoading(true);
     try {
-      const [list, sysMetrics, svcStatus, backups, facultyData, repoData, reports] = await Promise.all([
+      const [list, sysMetrics, svcStatus, backups, facultyData, repoData, reports, reviewData, appNotifs] =
+        await Promise.all([
         getAdminUsers(),
         getSystemMetrics().catch(() => null),
         getServiceStatus().catch(() => null),
@@ -252,6 +257,8 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
         getCommitsByFaculty().catch(() => []),
         getActiveRepositories(5).catch(() => []),
         getAdminReportsOverview().catch(() => null),
+        getAdminReviewQueue(5).catch(() => []),
+        getNotifications().catch(() => []),
       ]);
       setUsers(list);
       setStats({
@@ -266,9 +273,28 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
       setFacultyStats(facultyData);
       setActiveRepositories(repoData);
       setReportsOverview(reports);
+      setReviewQueue(reviewData);
 
       const loc = getI18nLocale();
       const justNow = translate(loc, "time.justNow");
+
+      const inboxNotifications: Notification[] = appNotifs.slice(0, 10).map((n) => ({
+        id: n.id,
+        type:
+          n.type === "error"
+            ? "critical"
+            : n.type === "warning"
+              ? "warning"
+              : n.type === "success"
+                ? "success"
+                : "info",
+        title: n.title,
+        message: n.message,
+        timestamp: new Date(n.created_at).toLocaleString(loc === "en" ? "en-US" : "ru-RU"),
+        category: "edu",
+      }));
+
+      const metricNotifications: Notification[] = [];
 
       if (sysMetrics) {
         const newNotifications: Notification[] = [];
@@ -317,10 +343,9 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
           });
         }
         
-        if (newNotifications.length > 0) {
-          setNotifications((prev) => [...newNotifications, ...prev]);
-        }
+        metricNotifications.push(...newNotifications);
       }
+      setNotifications([...inboxNotifications, ...metricNotifications]);
       setSystemStatus({
         api: svcStatus?.api ? "online" : "offline",
         db: svcStatus?.db ? "online" : "offline",
@@ -502,11 +527,14 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                       style={{ color: theme.text2 }}>{t("admin.dashboard.colStatus")}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y"
-                  style={{ borderColor: theme.border }}>
-                    {users.map((user) => (
-                      <tr key={user.id} className="transition-colors rounded-lg">
-                        <td className="py-3 pr-8 first:rounded-l-lg last:rounded-r-lg">
+                  <tbody>
+                    {users.map((user, rowIdx) => (
+                      <tr
+                        key={user.id}
+                        className="transition-colors"
+                        style={rowIdx > 0 ? { borderTop: `1px solid ${theme.border}` } : undefined}
+                      >
+                        <td className="py-3 pr-8">
                           <div>
                             <p className="text-sm font-medium"
                             style={{ color: theme.text }}>{user.full_name}</p>
@@ -514,15 +542,15 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                             style={{ color: theme.text2 }}>{user.email}</p>
                           </div>
                         </td>
-                        <td className="py-3 pr-8 text-sm first:rounded-l-lg last:rounded-r-lg"
+                        <td className="py-3 pr-8 text-sm"
                         style={{ color: theme.text3 }}>{user.group_name || "—"}</td>
-                        <td className="py-3 pr-8 first:rounded-l-lg last:rounded-r-lg">
+                        <td className="py-3 pr-8">
                           <span className="text-sm capitalize"
                           style={{ color: theme.text3 }}>
                             {user.role === "admin" ? t("admin.users.roleShortAdmin") : user.role === "teacher" ? t("admin.users.roleShortTeacher") : user.role === "laborant" ? t("admin.users.roleShortLaborant") : t("admin.users.roleShortStudent")}
                           </span>
                         </td>
-                        <td className="py-3 pr-8 text-sm first:rounded-l-lg last:rounded-r-lg"
+                        <td className="py-3 pr-8 text-sm"
                         style={{ color: theme.text3 }}>
                           {user.created_at && !isNaN(new Date(user.created_at).getTime())
                             ? new Date(user.created_at).toLocaleDateString(dateLocale)
@@ -744,25 +772,71 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                   {t("admin.dashboard.codeReviewQueue")}
                 </h3>
                 <div className="space-y-2">
-                  {[
-                    { name: "ist21/lab-db-pet...", pr: "3 PR", icon: AlertOctagon, iconColor: "text-red-500", status: t("admin.dashboard.urgent"), statusClass: isDarkTheme ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-700" },
-                    { name: "is22/networks-l...", pr: "1 PR", icon: Clock, iconColor: "text-yellow-500", status: t("admin.dashboard.today"), statusClass: isDarkTheme ? "bg-yellow-500/20 text-yellow-400" : "bg-yellow-100 text-yellow-700" },
-                    { name: "kuz/os-course-2026", pr: "7 PR", icon: CheckCircle2, iconColor: "text-green-500", status: t("admin.dashboard.normal"), statusClass: isDarkTheme ? "bg-green-500/20 text-green-400" : "bg-green-100 text-green-700" },
-                  ].map((item) => (
-                    <div key={item.name} className="flex items-center justify-between rounded-xl p-3 transition-colors"
-                    style={{ backgroundColor: theme.bg4 }}>
-                      <div className="flex items-center gap-3 min-w-0">
-                        <item.icon className={`h-4 w-4 flex-shrink-0 ${item.iconColor}`} />
-                        <div>
-                          <p className="text-sm font-medium truncate"
-                          style={{ color: theme.text }}>{item.name}</p>
-                          <p className="text-xs"
-                          style={{ color: theme.text2 }}>{tp("admin.dashboard.prOnReview", { pr: item.pr })}</p>
+                  {reviewQueue.length === 0 ? (
+                    <p className="text-sm py-2" style={{ color: theme.text2 }}>
+                      {t("admin.dashboard.noReviewQueue")}
+                    </p>
+                  ) : (
+                    reviewQueue.map((item) => {
+                      const icon =
+                        item.urgency === "urgent"
+                          ? AlertOctagon
+                          : item.urgency === "today"
+                            ? Clock
+                            : CheckCircle2;
+                      const iconColor =
+                        item.urgency === "urgent"
+                          ? "text-red-500"
+                          : item.urgency === "today"
+                            ? "text-yellow-500"
+                            : "text-green-500";
+                      const statusLabel =
+                        item.urgency === "urgent"
+                          ? t("admin.dashboard.urgent")
+                          : item.urgency === "today"
+                            ? t("admin.dashboard.today")
+                            : t("admin.dashboard.normal");
+                      const statusClass =
+                        item.urgency === "urgent"
+                          ? isDarkTheme
+                            ? "bg-red-500/20 text-red-400"
+                            : "bg-red-100 text-red-700"
+                          : item.urgency === "today"
+                            ? isDarkTheme
+                              ? "bg-yellow-500/20 text-yellow-400"
+                              : "bg-yellow-100 text-yellow-700"
+                            : isDarkTheme
+                              ? "bg-green-500/20 text-green-400"
+                              : "bg-green-100 text-green-700";
+                      return (
+                        <div
+                          key={item.repo_label}
+                          className="flex items-center justify-between rounded-xl p-3 transition-colors"
+                          style={{ backgroundColor: theme.bg4 }}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {(() => {
+                              const Icon = icon;
+                              return <Icon className={`h-4 w-4 flex-shrink-0 ${iconColor}`} />;
+                            })()}
+                            <div>
+                              <p className="text-sm font-medium truncate" style={{ color: theme.text }}>
+                                {item.repo_label}
+                              </p>
+                              <p className="text-xs" style={{ color: theme.text2 }}>
+                                {tp("admin.dashboard.pendingSubmissions", { n: item.pending_count })}
+                              </p>
+                            </div>
+                          </div>
+                          <span
+                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusClass}`}
+                          >
+                            {statusLabel}
+                          </span>
                         </div>
-                      </div>
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${item.statusClass}`}>{item.status}</span>
-                    </div>
-                  ))}
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>

@@ -48,6 +48,7 @@ class AdminUserRead(BaseModel):
     avatar_url: str | None = None
     created_at: datetime
     last_login: datetime | None = None
+    repositories_count: int = 0
 
 
 class AdminUpdateUserRequest(BaseModel):

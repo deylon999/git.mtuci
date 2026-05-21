@@ -6,10 +6,13 @@ Logs all requests, especially 4xx/5xx errors, with timing information.
 import time
 import asyncio
 from typing import Callable
+from uuid import UUID
 
 from fastapi import Request, Response
+from jose import JWTError
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.core.security import decode_access_token
 from app.models.system_log import LogLevel, LogSource
 from app.services.logging_service import log_event_background
 
@@ -36,8 +39,13 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         user_full_name = None
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
-            # Could decode token to get user info, but for now skip to avoid overhead
-            pass
+            try:
+                payload = decode_access_token(auth_header[7:])
+                sub = payload.get("sub")
+                if sub:
+                    user_id = UUID(str(sub))
+            except (JWTError, ValueError, TypeError):
+                pass
         
         # Process request
         response = await call_next(request)

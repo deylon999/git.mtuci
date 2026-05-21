@@ -110,6 +110,60 @@ def _submission_points(sub: Submission) -> int:
     return 0
 
 
+def _graded_points(sub: Submission | None) -> float | None:
+    if sub is None:
+        return None
+    if sub.final_grade is not None:
+        return float(sub.final_grade)
+    if sub.grade is not None:
+        return float(sub.grade)
+    return None
+
+
+def _weighted_percent(earned: float, maximum: float) -> float | None:
+    if maximum <= 0:
+        return None
+    return round(earned / maximum * 100, 1)
+
+
+def _percent_color(percent: float | None) -> str:
+    if percent is None:
+        return "muted"
+    if percent >= 85:
+        return "success"
+    if percent >= 60:
+        return "warning"
+    return "danger"
+
+
+async def _student_repo_specs(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+) -> list[tuple[str, str]]:
+    student_user = await session.get(User, student_id)
+    primary_owner = resolve_gitea_username(student_user) if student_user else "user"
+    specs: list[tuple[str, str]] = []
+
+    personal_result = await session.execute(
+        select(Repository).where(Repository.owner_id == student_id)
+    )
+    for repo in personal_result.scalars().all():
+        repo_name = (repo.gitea_repo_name or repo.name or "").strip()
+        if repo_name:
+            specs.append((primary_owner, repo_name))
+
+    ar_result = await session.execute(
+        select(StudentRepository).where(StudentRepository.student_id == student_id)
+    )
+    for student_repo in ar_result.scalars().all():
+        repo_name = (student_repo.repo_name or "").strip()
+        if repo_name:
+            specs.append((primary_owner, repo_name))
+
+    return specs
+
+
 async def _count_student_commits_week(session: AsyncSession, *, student_id: UUID, week_ago: datetime) -> int:
     result = await session.execute(
         select(func.count())
@@ -1040,32 +1094,41 @@ async def get_student_dashboard_stats(
         )
     ).scalar() or 0
 
-    course_items: list[StudentDashboardCourseRead] = []
-    for course in courses:
-        course_assignments = [a for a in all_assignments if a.course_id == course.id]
-        grades: list[float] = []
-        for a in course_assignments:
-            sub = submissions_map.get(a.id)
-            if sub is None:
-                continue
-            if sub.final_grade is not None:
-                grades.append(float(sub.final_grade))
-            elif sub.grade is not None:
-                grades.append(float(sub.grade))
-        avg_score = round(sum(grades) / len(grades)) if grades else None
-        course_items.append(
-            StudentDashboardCourseRead(
-                id=course.id,
-                title=course.title,
-                teacher_name=teachers.get(course.teacher_id, "—"),
-                assignments_count=len(course_assignments),
-                score=avg_score,
-                score_max=course.grade_max,
-                score_color=_score_color(avg_score, course.grade_max),
-            )
-        )
+    from app.services.student_lk_courses_service import get_student_merged_courses
 
-    commits_week = await _count_student_commits_week(session, student_id=student_id, week_ago=week_ago)
+    student_user = await session.get(User, student_id)
+    course_items: list[StudentDashboardCourseRead] = []
+    merged_count = len(courses)
+    if student_user:
+        merged_list, _ = await get_student_merged_courses(
+            session, user=student_user, use_lk_cache_only=True
+        )
+        merged_count = len(merged_list)
+        for m in merged_list[:12]:
+            course_items.append(
+                StudentDashboardCourseRead(
+                    id=m.id,
+                    platform_course_id=m.platform_course_id,
+                    title=m.title,
+                    teacher_name=m.teacher_name,
+                    assignments_count=m.assignments_total,
+                    score=m.score,
+                    score_label=m.score_label,
+                    score_max=m.grade_max,
+                    score_color=m.score_color,
+                    attendance_percent=m.attendance_percent,
+                    source=m.source,
+                    has_platform=m.has_platform,
+                )
+            )
+
+    repo_specs = await _student_repo_specs(session, student_id=student_id)
+    commits_week = await _commits_week_count(
+        session,
+        student_id=student_id,
+        week_ago=week_ago,
+        repo_specs=repo_specs,
+    )
     commits_week_avg = round(commits_week / 7, 1) if commits_week > 0 else None
 
     kpi = StudentDashboardKpiRead(
@@ -1073,7 +1136,7 @@ async def get_student_dashboard_stats(
         repos_week_delta=int(repos_week_delta),
         commits_week=commits_week,
         commits_week_avg=commits_week_avg,
-        courses_active=len(courses),
+        courses_active=merged_count,
         assignments_total=len(all_assignments),
         deadlines_today=len(deadlines_today_titles),
         deadlines_today_sub=_deadlines_today_sub(deadlines_today_titles, next_title),
@@ -1193,36 +1256,46 @@ async def get_student_grades(
 
     course_summaries: list[StudentGradeCourseRead] = []
     items: list[StudentGradeItemRead] = []
-    graded_scores: list[float] = []
     pending_review = 0
     graded_count = 0
+    overall_earned = 0.0
+    overall_max = 0.0
+    course_percents: list[float] = []
 
     for course in ctx.courses:
         course_assignments = [a for a in ctx.all_assignments if a.course_id == course.id]
         assignments_graded = 0
         assignments_submitted = 0
-        course_grades: list[float] = []
+        course_earned = 0.0
+        course_max = 0.0
 
         for a in course_assignments:
             sub = ctx.submissions_map.get(a.id)
             submitted = bool(sub and sub.submitted_at)
             if submitted:
                 assignments_submitted += 1
-            if sub and (sub.grade is not None or sub.final_grade is not None):
+            points = _graded_points(sub)
+            if points is not None:
                 assignments_graded += 1
-                if sub.final_grade is not None:
-                    course_grades.append(float(sub.final_grade))
-                elif sub.grade is not None:
-                    course_grades.append(float(sub.grade))
+                course_earned += points
+                course_max += float(course.grade_max)
 
-        avg_score = round(sum(course_grades) / len(course_grades)) if course_grades else None
+        course_percent = _weighted_percent(course_earned, course_max)
+        if course_percent is not None:
+            course_percents.append(course_percent)
+            overall_earned += course_earned
+            overall_max += course_max
+
         course_summaries.append(
             StudentGradeCourseRead(
                 course_id=course.id,
                 title=course.title,
                 teacher_name=teachers.get(course.teacher_id, "—"),
                 grade_max=course.grade_max,
-                average_score=avg_score,
+                average_score=int(round(course_percent)) if course_percent is not None else None,
+                earned_points=course_earned,
+                max_points=course_max,
+                percent=course_percent,
                 assignments_total=len(course_assignments),
                 assignments_graded=assignments_graded,
                 assignments_submitted=assignments_submitted,
@@ -1236,11 +1309,12 @@ async def get_student_grades(
         grade = sub.grade if sub else None
         final_grade = sub.final_grade if sub else None
         grade_max = course_grade_max.get(a.course_id, 100)
+        points = _graded_points(sub)
+        item_percent = _weighted_percent(points, float(grade_max)) if points is not None else None
 
         if grade is not None or final_grade is not None:
             status = "graded"
             graded_count += 1
-            graded_scores.append(float(final_grade if final_grade is not None else grade))
         elif submitted:
             status = "submitted"
             pending_review += 1
@@ -1258,16 +1332,73 @@ async def get_student_grades(
                 grade=grade,
                 final_grade=final_grade,
                 grade_max=grade_max,
+                percent=item_percent,
                 status=status,
                 graded_at=sub.graded_at if sub else None,
                 submitted_at=sub.submitted_at if sub else None,
             )
         )
 
-    overall_average = round(sum(graded_scores) / len(graded_scores), 1) if graded_scores else None
+    student_user = await session.get(User, student_id)
+    if student_user:
+        from app.services.student_lk_courses_service import get_student_merged_courses
+        import uuid as uuid_mod
+
+        merged_list, _ = await get_student_merged_courses(
+            session, user=student_user, use_lk_cache_only=True
+        )
+        merged_by_platform = {
+            str(m.platform_course_id): m for m in merged_list if m.platform_course_id
+        }
+        for idx, summary in enumerate(course_summaries):
+            extra = merged_by_platform.get(str(summary.course_id))
+            if not extra:
+                continue
+            updates: dict = {}
+            if extra.attendance_percent is not None and summary.percent is None:
+                updates["percent"] = extra.attendance_percent
+                updates["average_score"] = int(round(extra.attendance_percent))
+            if extra.teacher_name and summary.teacher_name == "—":
+                updates["teacher_name"] = extra.teacher_name
+            if updates:
+                course_summaries[idx] = summary.model_copy(update=updates)
+
+        platform_ids = {s.course_id for s in course_summaries}
+        for m in merged_list:
+            if m.source != "lk" or m.platform_course_id:
+                continue
+            lk_uuid = uuid_mod.uuid5(uuid_mod.NAMESPACE_URL, m.id)
+            if lk_uuid in platform_ids:
+                continue
+            att = m.attendance_percent
+            course_summaries.append(
+                StudentGradeCourseRead(
+                    course_id=lk_uuid,
+                    title=m.title,
+                    teacher_name=m.teacher_name or "—",
+                    grade_max=100,
+                    average_score=int(round(att)) if att is not None else None,
+                    earned_points=float(att or 0),
+                    max_points=100.0,
+                    percent=att,
+                    assignments_total=0,
+                    assignments_graded=0,
+                    assignments_submitted=0,
+                )
+            )
+            if att is not None:
+                course_percents.append(att)
+
+    overall_percent = _weighted_percent(overall_earned, overall_max)
+    semester_average = (
+        round(sum(course_percents) / len(course_percents), 1) if course_percents else None
+    )
 
     return StudentGradesSummaryRead(
-        overall_average=overall_average,
+        overall_average=semester_average,
+        overall_earned=overall_earned,
+        overall_max=overall_max,
+        overall_percent=overall_percent,
         graded_count=graded_count,
         pending_review=pending_review,
         courses=course_summaries,

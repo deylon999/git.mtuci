@@ -23,13 +23,48 @@ class StudentSidebarCountsRead(BaseModel):
 
 
 class StudentDashboardCourseRead(BaseModel):
-    id: UUID
+    id: str
+    platform_course_id: UUID | None = None
     title: str
-    teacher_name: str
-    assignments_count: int
-    score: int | None
-    score_max: int
+    teacher_name: str | None = None
+    assignments_count: int = 0
+    score: int | None = None
+    score_label: str | None = None
+    score_max: int = 100
     score_color: str = "muted"
+    attendance_percent: float | None = None
+    source: str = "platform"
+    has_platform: bool = True
+
+
+class StudentMergedCourseRead(BaseModel):
+    id: str
+    platform_course_id: UUID | None = None
+    title: str
+    source: str = Field(description="platform | lk | merged")
+    teacher_name: str | None = None
+    attendance_percent: float | None = None
+    attendance_skips: int | None = None
+    assignments_total: int = 0
+    assignments_graded: int = 0
+    assignments_submitted: int = 0
+    earned_points: float = 0
+    max_points: float = 0
+    percent: float | None = None
+    score: int | None = None
+    score_label: str | None = None
+    grade_max: int = 100
+    score_color: str = "muted"
+    enrolled_count: int = 0
+    has_platform: bool = False
+
+
+class StudentMergedCoursesRead(BaseModel):
+    courses: list[StudentMergedCourseRead] = Field(default_factory=list)
+    lk_warning: str | None = Field(
+        default=None,
+        description="lk_credentials_missing | lk_auth_failed | lk_unavailable",
+    )
 
 
 class StudentDeadlineRead(BaseModel):
@@ -343,6 +378,9 @@ class StudentGradeCourseRead(BaseModel):
     teacher_name: str
     grade_max: int
     average_score: int | None = None
+    earned_points: float = 0
+    max_points: float = 0
+    percent: float | None = None
     assignments_total: int
     assignments_graded: int
     assignments_submitted: int
@@ -356,6 +394,7 @@ class StudentGradeItemRead(BaseModel):
     grade: int | None = None
     final_grade: float | None = None
     grade_max: int = 100
+    percent: float | None = None
     status: str = Field(description="pending | submitted | graded | overdue")
     graded_at: datetime | None = None
     submitted_at: datetime | None = None
@@ -363,6 +402,9 @@ class StudentGradeItemRead(BaseModel):
 
 class StudentGradesSummaryRead(BaseModel):
     overall_average: float | None = None
+    overall_earned: float = 0
+    overall_max: float = 0
+    overall_percent: float | None = None
     graded_count: int = 0
     pending_review: int = 0
     courses: list[StudentGradeCourseRead] = Field(default_factory=list)

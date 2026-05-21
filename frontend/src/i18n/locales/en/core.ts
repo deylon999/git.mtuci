@@ -70,6 +70,7 @@ export const coreEn = {
     themeToLight: "Switch to light theme",
     themeToDark: "Switch to dark theme",
     profile: "Profile",
+    createRepo: "New repository",
     logout: "Log out",
     securitySettings: "Security settings",
     monitoring: "Monitoring",

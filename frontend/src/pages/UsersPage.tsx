@@ -338,7 +338,7 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
           : u.is_pending
           ? "pending"
           : "active",
-        repos: 0,
+        repos: u.repositories_count ?? 0,
         lastLogin: u.last_login
           ? new Date(u.last_login).toLocaleDateString()
           : "—",
@@ -374,7 +374,7 @@ useEffect(() => {
             : u.is_pending
             ? "pending"
             : "active",
-          repos: 0,
+          repos: u.repositories_count ?? 0,
           lastLogin: u.last_login
             ? new Date(u.last_login).toLocaleString("ru-RU", {
                 day: "2-digit",

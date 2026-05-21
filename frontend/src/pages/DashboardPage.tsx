@@ -627,10 +627,12 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
             ) : (
               courses.map((course) => {
                 const avatar = courseAvatarStyle(course.id);
-                return (
-              <Link
-                key={course.id}
-                to={`/courses/${course.id}`}
+                const courseHref =
+                  course.has_platform !== false && course.platform_course_id
+                    ? `/courses/${course.platform_course_id}`
+                    : null;
+                const row = (
+              <div
                 className="flex items-center gap-2.5 px-3.5 py-2.5 border-b last:border-b-0 transition-colors hover:opacity-90"
                 style={{ borderColor: theme.border }}
               >
@@ -645,18 +647,29 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
                     {course.title}
                   </p>
                   <p className="text-[10px]" style={{ color: theme.text2 }}>
-                    {course.teacher_name} · {tp("student.dashboard.assignmentsCount", { n: course.assignments_count })}
+                    {(course.teacher_name ?? "—") +
+                      " · " +
+                      tp("student.dashboard.assignmentsCount", { n: course.assignments_count })}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-sm font-semibold" style={{ color: courseScoreColor(course.score_color, theme) }}>
-                    {course.score ?? "—"}
+                    {course.score_label ?? (course.score != null ? String(course.score) : "—")}
                   </p>
                   <p className="text-[10px]" style={{ color: theme.text2 }}>
-                    {tp("student.dashboard.scoreOf", { max: course.score_max })}
+                    {course.source === "lk"
+                      ? t("student.courses.attendance")
+                      : tp("student.dashboard.scoreOf", { max: course.score_max })}
                   </p>
                 </div>
-              </Link>
+              </div>
+                );
+                return courseHref ? (
+                  <Link key={course.id} to={courseHref} style={{ textDecoration: "none", color: "inherit" }}>
+                    {row}
+                  </Link>
+                ) : (
+                  <div key={course.id}>{row}</div>
                 );
               })
             )}

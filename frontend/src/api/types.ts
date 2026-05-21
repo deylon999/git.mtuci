@@ -46,6 +46,13 @@ export interface AdminUserRead {
   avatar_url: string | null;
   created_at: string;
   last_login: string | null;
+  repositories_count?: number;
+}
+
+export interface AdminReviewQueueItem {
+  repo_label: string;
+  pending_count: number;
+  urgency: "urgent" | "today" | "normal";
 }
 
 export interface SystemMetrics {

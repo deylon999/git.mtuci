@@ -23,6 +23,10 @@ from app.core.database import get_session
 from app.core.security import get_current_user
 from app.core.permissions import require_permission
 from app.models.repository import Repository, RepositoryType
+from app.models.student_repository import StudentRepository
+from app.models.assignment import Assignment
+from app.models.submission import Submission
+from app.models.course import Course
 from app.models.activity_log import ActivityLog, ActivityType
 from app.models.system_log import SystemLog, LogLevel, LogSource
 from app.models.user import User, UserRole
@@ -139,7 +143,93 @@ async def admin_get_users(
     session: AsyncSession = Depends(get_session),
 ) -> List[AdminUserRead]:
     users = await get_all_users(session)
-    return [AdminUserRead.model_validate(u) for u in users]
+
+    personal_counts: dict[UUID, int] = {}
+    personal_result = await session.execute(
+        select(Repository.owner_id, func.count())
+        .group_by(Repository.owner_id)
+    )
+    for owner_id, count in personal_result.all():
+        personal_counts[owner_id] = int(count or 0)
+
+    assignment_counts: dict[UUID, int] = {}
+    assignment_result = await session.execute(
+        select(StudentRepository.student_id, func.count())
+        .group_by(StudentRepository.student_id)
+    )
+    for student_id, count in assignment_result.all():
+        assignment_counts[student_id] = int(count or 0)
+
+    items: list[AdminUserRead] = []
+    for user in users:
+        base = AdminUserRead.model_validate(user)
+        repo_count = personal_counts.get(user.id, 0) + assignment_counts.get(user.id, 0)
+        items.append(base.model_copy(update={"repositories_count": repo_count}))
+    return items
+
+
+class AdminReviewQueueItemRead(BaseModel):
+    repo_label: str
+    pending_count: int
+    urgency: str = "normal"
+
+
+@router.get("/review-queue", response_model=list[AdminReviewQueueItemRead])
+@require_permission("settings_view")
+async def admin_review_queue(
+    limit: int = Query(5, ge=1, le=20),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[AdminReviewQueueItemRead]:
+    """Pending assignment submissions grouped by repository (grading queue)."""
+    now = datetime.now(timezone.utc)
+    result = await session.execute(
+        select(
+            StudentRepository.repo_name,
+            Assignment.title,
+            Course.title,
+            func.count(Submission.id).label("pending_count"),
+            func.min(Submission.submitted_at).label("oldest_submitted"),
+        )
+        .join(Assignment, Assignment.id == Submission.assignment_id)
+        .join(Course, Course.id == Assignment.course_id)
+        .outerjoin(
+            StudentRepository,
+            and_(
+                StudentRepository.assignment_id == Assignment.id,
+                StudentRepository.student_id == Submission.student_id,
+            ),
+        )
+        .where(
+            Submission.submitted_at.is_not(None),
+            Submission.grade.is_(None),
+            Submission.final_grade.is_(None),
+        )
+        .group_by(StudentRepository.repo_name, Assignment.title, Course.title)
+        .order_by(func.min(Submission.submitted_at).asc())
+        .limit(limit)
+    )
+
+    items: list[AdminReviewQueueItemRead] = []
+    for repo_name, assignment_title, course_title, pending_count, oldest in result.all():
+        label = repo_name or f"{course_title}/{assignment_title}"
+        hours = 0.0
+        if oldest is not None:
+            hours = (now - oldest.astimezone(timezone.utc)).total_seconds() / 3600
+        if hours >= 48:
+            urgency = "urgent"
+        elif hours >= 24:
+            urgency = "today"
+        else:
+            urgency = "normal"
+        items.append(
+            AdminReviewQueueItemRead(
+                repo_label=label,
+                pending_count=int(pending_count or 0),
+                urgency=urgency,
+            )
+        )
+    return items
 
 
 @router.get("/users/export")
