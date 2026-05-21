@@ -1,6 +1,6 @@
 import { Github, GitBranch, AlertCircle, BookOpen } from "lucide-react";
 import { useEffect, useState } from "react";
-import { apiRequest } from "../api/client";
+import { getSystemInfo } from "../api/systemApi";
 import { getTheme } from "../theme";
 import { pageGutterClass } from "../layout/pageLayout";
 import { useUserPreferences } from "../context/UserPreferencesContext";
@@ -16,24 +16,22 @@ export default function Footer({ isDarkTheme = true }: FooterProps) {
   const theme = getTheme(isDarkTheme);
 
   useEffect(() => {
-    // TODO: Replace with actual API call when backend endpoint is available
-    // For now, fetch from a simple stats endpoint or use package.json version
-    async function fetchSystemInfo() {
-      try {
-        // Try to get version from API if available
-        const info = await apiRequest<any>("/system/info").catch(() => null);
-        if (info) {
-          setVersion(info.version || "v1.0.0");
-          setCommitCount(info.commits || 0);
+    let cancelled = false;
+    void getSystemInfo()
+      .then((info) => {
+        if (cancelled) return;
+        setVersion(info.version || "v1.0.0");
+        setCommitCount(info.commits ?? 0);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setVersion("v1.0.0");
+          setCommitCount(0);
         }
-      } catch (e) {
-        console.error("Failed to fetch system info:", e);
-        // Fallback to default values
-        setVersion("v1.0.0");
-        setCommitCount(0);
-      }
-    }
-    fetchSystemInfo();
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (

@@ -21,7 +21,7 @@ import {
   Plus,
 } from "lucide-react";
 import { getTeacherDashboard } from "../api/teacherDashboardApi";
-import { getMe } from "../api/authApi";
+import { useAuthUser } from "../context/AuthUserContext";
 import { getUserStats, getSystemMetrics, getServiceStatus } from "../api/adminApi";
 import { usePendingCount } from "../context/PendingCountContext";
 import { useStudentNavCountsOptional } from "../context/StudentNavCountsContext";
@@ -141,9 +141,9 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
-  console.log("[Sidebar] Component rendering");
   const location = useLocation();
-  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const { user } = useAuthUser();
+  const userRole = (user?.role ?? null) as UserRole | null;
   const { pendingCount, setPendingCount } = usePendingCount();
   const studentNav = useStudentNavCountsOptional();
   const [hasSystemIssues, setHasSystemIssues] = useState(false);
@@ -155,28 +155,6 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
     if (userRole !== "student") return;
     void studentNav?.refreshSidebarCounts();
   }, [userRole, studentNav?.refreshSidebarCounts]);
-
-  useEffect(() => {
-    console.log("[Sidebar] useEffect triggered");
-    let cancelled = false;
-    async function loadMe() {
-      try {
-        console.log("[Sidebar] Fetching /auth/me...");
-        const me = await getMe({ force: true });
-        console.log("[Sidebar] User role from API:", me.role, "| full response:", me);
-        if (!cancelled) {
-          setUserRole(me.role);
-        }
-      } catch (e) {
-        console.error("[Sidebar] Failed to load user:", e);
-        if (!cancelled) setUserRole(null);
-      }
-    }
-    loadMe();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (userRole !== "teacher" && userRole !== "laborant") return;

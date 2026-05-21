@@ -4,7 +4,8 @@ import { Link } from "react-router-dom";
 
 import { ClipboardList, Search } from "lucide-react";
 
-import { getStudentAssignments, type StudentAssignmentListItem, type StudentAssignmentStatus } from "../api/studentDashboardApi";
+import type { StudentAssignmentListItem, StudentAssignmentStatus } from "../api/studentDashboardApi";
+import { getStudentAssignmentsDeduped } from "../api/studentRequestDedup";
 
 import {
 
@@ -142,7 +143,7 @@ export default function StudentAssignmentsPage({ isDarkTheme = false }: StudentA
 
       try {
 
-        const rows = await getStudentAssignments(200);
+        const rows = await getStudentAssignmentsDeduped(200);
 
         if (!cancelled) setItems(rows);
 

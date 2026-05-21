@@ -149,30 +149,68 @@ async def fetch_student_info(mtuci_login: str, mtuci_password: str) -> dict:
         raise MTUCIServiceError(f"Failed to fetch student info: {e}") from e
 
 
+async def _fetch_attendance_disciplines_fast(client: Mtuci) -> list[MtuciLkSubject]:
+    """
+    One POST /getProcessor for the discipline list.
+
+    mtuci_private_api AttendanceService.get_attendance() also calls getProcessor
+    once per subject for skip counts (N+1, ~0.5s each) — we skip that for speed.
+    """
+    from json.decoder import JSONDecodeError
+
+    from mtuci_private_api.attendance.parsers import AttendanceListParser
+    from mtuci_private_api.attendance.request_factory import ProcessorRequestFactory
+    from mtuci_private_api.config import app_config
+    from mtuci_private_api.errors import GetAttendanceError, ParseError
+    from mtuci_private_api.http import Method
+
+    body = ProcessorRequestFactory().create(
+        processor="getArray_ArrayDicsiplinesStudentAttendance"
+    )
+    response = await client.client.request(
+        method=Method.POST,
+        url=f"{app_config.mtuci_url}/ilk/x/getProcessor",
+        body=body,
+    )
+    if not response.is_success:
+        raise GetAttendanceError(f"Bad status: {response.text}")
+
+    try:
+        subjects = AttendanceListParser().parse(response.json())
+    except (ParseError, JSONDecodeError) as exc:
+        raise GetAttendanceError("Error parsing attendance response") from exc
+
+    result: list[MtuciLkSubject] = []
+    for subject in subjects:
+        name = (subject.subject_name or "").strip()
+        if not name:
+            continue
+        result.append(
+            MtuciLkSubject(
+                name=name,
+                attendance_percent=float(subject.attendance_percentage),
+                skips=None,
+            )
+        )
+    return result
+
+
 async def fetch_lk_subjects(
     mtuci_login: str,
     mtuci_password: str,
 ) -> list[MtuciLkSubject]:
     """
-    One LK session: attendance (all disciplines) + at most one schedule call for teachers.
-
-    We do NOT loop over 21 days — each get_schedule() in mtuci-private-api reloads
-    the full month timetable (dozens of HTTP calls).
+    One LK session: single attendance request (discipline list only, no per-subject skips).
     """
     try:
         async with Mtuci(login=mtuci_login, password=mtuci_password) as client:
+            rows = await _fetch_attendance_disciplines_fast(client)
             by_name: dict[str, MtuciLkSubject] = {}
-
-            attendance_rows = await client.get_attendace()
-            for row in attendance_rows:
-                key = _normalize_subject_name(row.subject_name)
+            for row in rows:
+                key = _normalize_subject_name(row.name)
                 if not key:
                     continue
-                by_name[key] = MtuciLkSubject(
-                    name=row.subject_name.strip(),
-                    attendance_percent=float(row.attendance_percentage),
-                    skips=int(row.skips) if row.skips is not None else None,
-                )
+                by_name[key] = row
 
             return sorted(by_name.values(), key=lambda s: s.name.lower())
     except AuthError as e:

@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Clock, Loader2, User, AlertCircle, RefreshCw } from "lucide-react";
-import { getMe } from "../api/authApi";
-import { getStudentAssignments, getStudentMergedCourses, type StudentMergedCourse } from "../api/studentDashboardApi";
+import { useAuthUser } from "../context/AuthUserContext";
+import type { StudentMergedCourse } from "../api/studentDashboardApi";
+import {
+  getStudentAssignmentsDeduped,
+  getStudentMergedCoursesDeduped,
+  invalidateStudentMergedCoursesMemCache,
+} from "../api/studentRequestDedup";
 import { StudentPageShell } from "../components/student/studentPageUi";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { pluralWord } from "../i18n/plural";
@@ -34,23 +39,24 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
   const [lkWarning, setLkWarning] = useState<string | null>(null);
   const [groupName, setGroupName] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>("active");
-  const [assignments, setAssignments] = useState<Awaited<ReturnType<typeof getStudentAssignments>>>([]);
+  const [assignments, setAssignments] = useState<Awaited<ReturnType<typeof getStudentAssignmentsDeduped>>>([]);
   const [lkRefreshing, setLkRefreshing] = useState(false);
+  const { user } = useAuthUser();
 
   const loadCourses = async (refreshLk: boolean) => {
     if (refreshLk) {
       clearLkCoursesCache();
+      invalidateStudentMergedCoursesMemCache();
       setLkRefreshing(true);
     } else {
       setLoading(true);
     }
     try {
-      const [me, merged, asn] = await Promise.all([
-        getMe(),
-        getStudentMergedCourses(refreshLk),
-        getStudentAssignments(200),
+      const [merged, asn] = await Promise.all([
+        getStudentMergedCoursesDeduped(refreshLk),
+        getStudentAssignmentsDeduped(200),
       ]);
-      setGroupName(me.group_name);
+      if (user?.group_name) setGroupName(user.group_name);
       setCourses(merged.courses);
       setLkWarning(merged.lk_warning);
       setAssignments(asn);
@@ -67,19 +73,17 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
   };
 
   useEffect(() => {
+    if (user?.group_name) setGroupName(user.group_name);
+  }, [user?.group_name]);
+
+  useEffect(() => {
     const cached = readLkCoursesCache();
     if (cached) {
       setCourses(cached.courses);
       setLkWarning(cached.lk_warning);
       setLoading(false);
-      void loadCourses(false);
-    } else {
-      void loadCourses(false);
     }
-    void getMe().then((me) => setGroupName(me.group_name)).catch(() => undefined);
-    void getStudentAssignments(200)
-      .then(setAssignments)
-      .catch(() => undefined);
+    void loadCourses(false);
   }, []);
 
   const courseStats = useMemo(() => {

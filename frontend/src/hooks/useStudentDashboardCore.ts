@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getMe } from "../api/authApi";
+import { useAuthUser } from "../context/AuthUserContext";
 import {
   getStudentActivityFeed,
   getStudentActivitySummary,
@@ -118,6 +118,7 @@ export function useStudentDashboardCore(): StudentDashboardCore {
   const [state, setState] = useState<StudentDashboardCore>(initial);
   const [reloadToken, setReloadToken] = useState(0);
   const navCounts = useStudentNavCountsOptional();
+  const { user } = useAuthUser();
 
   const refetch = useCallback(() => {
     setReloadToken((n) => n + 1);
@@ -129,8 +130,13 @@ export function useStudentDashboardCore(): StudentDashboardCore {
     async function load() {
       setState((prev) => ({ ...prev, loading: true, error: null }));
       try {
-        const [me, stats, recentRepos, activitySummary, activityFeed, groupRanking] = await Promise.all([
-          getMe({ force: true }),
+        if (!user) {
+          if (!cancelled) {
+            setState((prev) => ({ ...prev, loading: false, error: "Not authenticated" }));
+          }
+          return;
+        }
+        const [stats, recentRepos, activitySummary, activityFeed, groupRanking] = await Promise.all([
           getStudentDashboardStats(),
           getStudentRecentRepositories(5),
           getStudentActivitySummary(),
@@ -148,8 +154,8 @@ export function useStudentDashboardCore(): StudentDashboardCore {
         setState({
           loading: false,
           error: null,
-          firstName: firstNameFromFullName(me.full_name, getI18nLocale()),
-          groupName: me.group_name ?? null,
+          firstName: firstNameFromFullName(user.full_name, getI18nLocale()),
+          groupName: user.group_name ?? null,
           deadlines,
           deadlinesToday: stats.kpi.deadlines_today,
           deadlinesTodaySub: stats.kpi.deadlines_today_sub,
@@ -176,7 +182,7 @@ export function useStudentDashboardCore(): StudentDashboardCore {
     return () => {
       cancelled = true;
     };
-  }, [navCounts?.setSidebarCounts, reloadToken, refetch]);
+  }, [navCounts?.setSidebarCounts, reloadToken, refetch, user]);
 
   return { ...state, refetch };
 }

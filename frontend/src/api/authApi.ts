@@ -83,7 +83,7 @@ export async function changeMyPassword(oldPassword: string, newPassword: string)
 }
 
 export async function getCurrentUser(): Promise<UserRead> {
-  return apiRequest<UserRead>("/auth/me");
+  return getMe();
 }
 
 export async function updateAssistantGrading(allow: boolean): Promise<{ allow_assistant_grading: boolean }> {

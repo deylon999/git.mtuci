@@ -2,11 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { BookOpen, Calendar, CheckCircle2, Clock, Loader2 } from "lucide-react";
 import type { Assignment, Course } from "../api/types";
-import {
-  getStudentAssignments,
-  getStudentGrades,
-  type StudentAssignmentListItem,
-} from "../api/studentDashboardApi";
+import { getStudentGrades, type StudentAssignmentListItem } from "../api/studentDashboardApi";
+import { getStudentAssignmentsDeduped } from "../api/studentRequestDedup";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { formatDeadlineRemaining } from "../utils/studentDeadlineGroups";
 import { formatDeadlineLabel } from "../utils/studentDeadlines";
@@ -42,7 +39,7 @@ export default function StudentCourseView({
       setExtraLoading(true);
       try {
         const [asn, grades] = await Promise.all([
-          getStudentAssignments(200),
+          getStudentAssignmentsDeduped(200),
           getStudentGrades(200),
         ]);
         if (cancelled) return;

@@ -12,6 +12,7 @@ import Sidebar from "./components/Sidebar";
 import Footer from "./components/Footer";
 import { PendingCountProvider } from "./context/PendingCountContext";
 import { StudentNavCountsProvider } from "./context/StudentNavCountsContext";
+import { AuthUserProvider } from "./context/AuthUserContext";
 import { UserPreferencesProvider, useUserPreferences } from "./context/UserPreferencesContext";
 import { getTheme } from "./theme";
 import { pageGutterClass } from "./layout/pageLayout";
@@ -98,6 +99,7 @@ function AppShell({
   const theme = getTheme(isDarkTheme);
 
   return (
+    <AuthUserProvider>
     <PendingCountProvider>
     <StudentNavCountsProvider>
     <div className={`h-screen flex flex-col`} style={{ color: theme.text, backgroundColor: theme.bg }}>
@@ -215,5 +217,6 @@ function AppShell({
     </div>
     </StudentNavCountsProvider>
     </PendingCountProvider>
+    </AuthUserProvider>
   );
 }

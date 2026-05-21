@@ -24,6 +24,7 @@ from app.api.routes.teacher_dashboard import router as teacher_dashboard_router
 from app.api.routes.assistants_dashboard import router as assistants_dashboard_router
 from app.api.routes.search import router as search_router
 from app.api.routes.notifications import router as notifications_router
+from app.api.routes.system import router as system_router
 from app.core.config import settings
 from app.services.gitea_service import check_gitea_api_access
 from app.core.database import SessionLocal
@@ -85,6 +86,7 @@ app.include_router(teacher_dashboard_router)
 app.include_router(assistants_dashboard_router)
 app.include_router(search_router)
 app.include_router(notifications_router)
+app.include_router(system_router)
 
 # Development CORS:
 # Frontend runs on http://localhost:3001 and API on http://localhost:8000.

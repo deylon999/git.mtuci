@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { getToken } from "../api/client";
 import { login, getMe } from "../api/authApi";
+import { useAuthUser } from "../context/AuthUserContext";
 import { getDefaultRouteForRole } from "../utils/defaultRoute";
 import { getTheme } from "../theme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
@@ -11,6 +12,7 @@ import { useUserPreferences } from "../context/UserPreferencesContext";
 export default function LoginPage() {
   const navigate = useNavigate();
   const { t } = useUserPreferences();
+  const { refreshUser } = useAuthUser();
 
   // Read theme from localStorage (persisted across sessions)
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
@@ -58,8 +60,8 @@ export default function LoginPage() {
       } else {
         localStorage.removeItem('remember_me');
       }
-      const me = await getMe({ force: true });
-      navigate(getDefaultRouteForRole(me.role), { replace: true });
+      const me = await refreshUser({ force: true });
+      if (me) navigate(getDefaultRouteForRole(me.role), { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("auth.login.error"));
     } finally {

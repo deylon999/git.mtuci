@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, ChevronDown, LogOut, User, Shield, Activity, Moon, Sun } from "lucide-react";
 import { clearToken } from "../api/client";
-import { getMe, invalidateMeCache } from "../api/authApi";
+import { useAuthUser } from "../context/AuthUserContext";
 import { globalSearch } from "../api/searchApi";
 import { getServiceStatus } from "../api/adminApi";
 import { getTheme } from "../theme";
@@ -43,6 +43,7 @@ interface AdminHeaderProps {
 export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: AdminHeaderProps) {
   const navigate = useNavigate();
   const { t } = useUserPreferences();
+  const { user, clearUser, refreshUser } = useAuthUser();
 
   const [userName, setUserName] = useState("Admin");
   const [userRole, setUserRole] = useState<UserRole | null>(null);
@@ -57,30 +58,20 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
   }>({ api: "offline", database: "offline" });
 
   useEffect(() => {
-    let cancelled = false;
-    async function loadMe() {
-      try {
-        const me = await getMe();
-        if (!cancelled) {
-          setUserName(me.full_name || me.email || "Admin");
-          setUserRole(me.role);
-          setAvatarUrl(me.avatar_url ? `${me.avatar_url}?t=${Date.now()}` : null);
-          setAvatarDisplayMode(me.avatar_display_mode || "cover");
-        }
-      } catch {
-        if (!cancelled) {
-          setUserName("Admin");
-          setUserRole(null);
-          setAvatarUrl(null);
-        }
-      }
-    }
-    loadMe();
+    if (!user) return;
+    setUserName(user.full_name || user.email || "Admin");
+    setUserRole(user.role);
+    setAvatarUrl(user.avatar_url ? `${user.avatar_url}?t=${Date.now()}` : null);
+    setAvatarDisplayMode(user.avatar_display_mode || "cover");
+  }, [user]);
 
-    return () => {
-      cancelled = true;
+  useEffect(() => {
+    const handleAvatarUpdate = () => {
+      void refreshUser({ force: true });
     };
-  }, []);
+    window.addEventListener("avatarUpdated", handleAvatarUpdate);
+    return () => window.removeEventListener("avatarUpdated", handleAvatarUpdate);
+  }, [refreshUser]);
 
   // Fetch system status
   useEffect(() => {
@@ -123,7 +114,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
 
   function onLogout() {
     clearToken();
-    invalidateMeCache();
+    clearUser();
     navigate("/login", { replace: true });
   }
 

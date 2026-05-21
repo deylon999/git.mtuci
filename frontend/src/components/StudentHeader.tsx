@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, LogOut, User, Moon, Sun, Search, Plus } from "lucide-react";
 import { clearToken } from "../api/client";
-import { getMe, invalidateMeCache } from "../api/authApi";
+import { useAuthUser } from "../context/AuthUserContext";
 import { globalSearch } from "../api/searchApi";
 import { getTheme } from "../theme";
 import { pageGutterClass } from "../layout/pageLayout";
@@ -34,6 +34,7 @@ interface StudentHeaderProps {
 export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: StudentHeaderProps) {
   const navigate = useNavigate();
   const { t } = useUserPreferences();
+  const { user, clearUser, refreshUser } = useAuthUser();
 
   const [userName, setUserName] = useState(() => t("roles.user"));
   const [userRole, setUserRole] = useState<UserRole | null>(null);
@@ -43,42 +44,24 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    let cancelled = false;
-    async function loadMe() {
-      try {
-        const me = await getMe();
-        if (!cancelled) {
-          setUserName(me.full_name || me.email || t("roles.user"));
-          setUserRole(me.role);
-          setHomeHref(getDefaultRouteForRole(me.role));
-          setAvatarUrl(me.avatar_url ? `${me.avatar_url}?t=${Date.now()}` : null);
-        }
-      } catch {
-        if (!cancelled) {
-          setUserName(t("roles.user"));
-          setUserRole(null);
-          setAvatarUrl(null);
-        }
-      }
+    if (user) {
+      setUserName(user.full_name || user.email || t("roles.user"));
+      setUserRole(user.role);
+      setHomeHref(getDefaultRouteForRole(user.role));
+      setAvatarUrl(user.avatar_url ? `${user.avatar_url}?t=${Date.now()}` : null);
     }
-    loadMe();
+  }, [user, t]);
 
+  useEffect(() => {
     const handleAvatarUpdate = (e: CustomEvent) => {
       const userData = e.detail;
       if (userData) {
-        setUserName(userData.full_name || userData.email || t("roles.user"));
-        setUserRole(userData.role);
-        setHomeHref(getDefaultRouteForRole(userData.role));
-        setAvatarUrl(userData.avatar_url ? `${userData.avatar_url}?t=${Date.now()}` : null);
+        void refreshUser({ force: true });
       }
     };
     window.addEventListener("avatarUpdated", handleAvatarUpdate as EventListener);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener("avatarUpdated", handleAvatarUpdate as EventListener);
-    };
-  }, [t]);
+    return () => window.removeEventListener("avatarUpdated", handleAvatarUpdate as EventListener);
+  }, [refreshUser]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -91,7 +74,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
 
   function onLogout() {
     clearToken();
-    invalidateMeCache();
+    clearUser();
     navigate("/login", { replace: true });
   }
 

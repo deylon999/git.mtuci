@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getToken } from "../api/client";
 import {
   getNotifications,
+  invalidateNotificationsCache,
   markAllNotificationsAsRead,
   markNotificationAsRead,
 } from "../api/notificationsApi";
@@ -26,8 +27,9 @@ export function useNotifications() {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevUnreadRef = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (opts?: { force?: boolean }) => {
     try {
+      if (opts?.force) invalidateNotificationsCache();
       const data = await getNotifications();
       const unread = data.filter((n) => !n.read);
       if (pushEnabled && unread.length > prevUnreadRef.current) {
@@ -65,7 +67,7 @@ export function useNotifications() {
         try {
           const data = JSON.parse(event.data as string) as { type?: string };
           if (data.type === "notifications_updated" || data.type === "connected") {
-            void refresh();
+            void refresh({ force: true });
           }
           if (data.type === "ping") {
             ws.send("ping");
