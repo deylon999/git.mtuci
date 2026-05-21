@@ -54,7 +54,7 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
       try {
         let nextMeta = meta;
         if (!nextMeta?.name) {
-          const list = await getStudentRepositories();
+          const list = await getStudentRepositories("lite");
           const repo = list.repositories.find((r) => r.id === repoId);
           if (!repo) {
             navigate("/repositories", { replace: true });

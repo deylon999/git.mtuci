@@ -359,6 +359,15 @@ class StudentGroupRankingRead(BaseModel):
     entries: list[StudentGroupRankingEntryRead] = Field(default_factory=list)
 
 
+class StudentProfileBundleRead(BaseModel):
+    """Single response for /students/me/profile — avoids parallel Gitea-heavy calls."""
+
+    activity_summary: StudentActivitySummaryRead
+    activity_feed: list[StudentActivityFeedItemRead] = Field(default_factory=list)
+    group_ranking: StudentGroupRankingRead
+    repositories_stats: StudentRepositoriesStatsRead
+
+
 class StudentGitCloneTokenStatusRead(BaseModel):
     configured: bool
     masked_token: str | None = None
@@ -399,6 +408,7 @@ class StudentGradeItemRead(BaseModel):
     status: str = Field(description="pending | submitted | graded | overdue")
     graded_at: datetime | None = None
     submitted_at: datetime | None = None
+    comment: str | None = None
 
 
 class StudentGradesSummaryRead(BaseModel):

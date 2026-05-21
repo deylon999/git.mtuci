@@ -1,8 +1,10 @@
 import {
   getStudentAssignments,
   getStudentMergedCourses,
+  getStudentProfileBundle,
   type StudentAssignmentListItem,
   type StudentMergedCoursesResponse,
+  type StudentProfileBundle,
 } from "./studentDashboardApi";
 
 /** In-flight dedup: parallel callers share one HTTP request (React StrictMode, multiple hooks). */
@@ -41,4 +43,15 @@ export function getStudentMergedCoursesDeduped(refresh = false): Promise<Student
 
 export function invalidateStudentMergedCoursesMemCache(): void {
   mergedMemCache = null;
+}
+
+let profileBundleInflight: Promise<StudentProfileBundle> | null = null;
+
+export function getStudentProfileBundleDeduped(feedLimit = 8): Promise<StudentProfileBundle> {
+  if (!profileBundleInflight) {
+    profileBundleInflight = getStudentProfileBundle(feedLimit).finally(() => {
+      profileBundleInflight = null;
+    });
+  }
+  return profileBundleInflight;
 }

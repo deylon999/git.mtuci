@@ -152,6 +152,19 @@ export function getStudentGroupRanking(): Promise<StudentGroupRanking> {
   return apiRequest<StudentGroupRanking>("/students/me/group-ranking");
 }
 
+export interface StudentProfileBundle {
+  activity_summary: StudentActivitySummary;
+  activity_feed: StudentActivityFeedItem[];
+  group_ranking: StudentGroupRanking;
+  repositories_stats: StudentRepositoriesStats;
+}
+
+export function getStudentProfileBundle(feedLimit = 8): Promise<StudentProfileBundle> {
+  return apiRequest<StudentProfileBundle>(
+    `/students/me/profile-bundle?feed_limit=${feedLimit}`,
+  );
+}
+
 export interface StudentGitCloneTokenStatus {
   configured: boolean;
   masked_token: string | null;
@@ -230,6 +243,7 @@ export interface StudentGradeItem {
   status: StudentAssignmentStatus;
   graded_at: string | null;
   submitted_at: string | null;
+  comment: string | null;
 }
 
 export interface StudentGradesSummary {
@@ -312,8 +326,25 @@ export interface StudentRepositoriesResponse {
   repositories: StudentRepositoryItem[];
 }
 
-export function getStudentRepositories(): Promise<StudentRepositoriesResponse> {
-  return apiRequest<StudentRepositoriesResponse>("/students/me/repositories");
+export type StudentRepositoriesGiteaMode = "none" | "lite" | "full";
+
+const repositoriesInflight = new Map<
+  StudentRepositoriesGiteaMode,
+  Promise<StudentRepositoriesResponse>
+>();
+
+export function getStudentRepositories(
+  giteaMode: StudentRepositoriesGiteaMode = "lite",
+): Promise<StudentRepositoriesResponse> {
+  const cached = repositoriesInflight.get(giteaMode);
+  if (cached) return cached;
+  const req = apiRequest<StudentRepositoriesResponse>(
+    `/students/me/repositories?gitea=${giteaMode}`,
+  ).finally(() => {
+    repositoriesInflight.delete(giteaMode);
+  });
+  repositoriesInflight.set(giteaMode, req);
+  return req;
 }
 
 export function deleteStudentRepository(repositoryId: string): Promise<void> {

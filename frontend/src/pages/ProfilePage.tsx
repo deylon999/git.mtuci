@@ -3,15 +3,12 @@ import type { FormEvent } from "react";
 import { changeMyPassword, getMe, uploadAvatarWithMode } from "../api/authApi";
 import { getMyRepositories } from "../api/repositoriesApi";
 import { getMyCommits, getTotalUsers, getLogs } from "../api/adminApi";
-import {
-  getStudentActivityFeed,
-  getStudentActivitySummary,
-  getStudentGroupRanking,
-  getStudentRepositories,
-  type StudentActivityFeedItem,
-  type StudentActivitySummary,
-  type StudentGroupRanking,
+import type {
+  StudentActivityFeedItem,
+  StudentActivitySummary,
+  StudentGroupRanking,
 } from "../api/studentDashboardApi";
+import { getStudentProfileBundleDeduped } from "../api/studentRequestDedup";
 import { getTeacherDashboardFull, getTeacherStudents } from "../api/teacherDashboardApi";
 import { getTheme } from "../theme";
 import type { UserRead, LogEntry } from "../api/types";
@@ -188,21 +185,17 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
             setRecentActions([]);
           }
         } else if (meData.role === "student") {
-          const [reposData, summary, feed, ranking] = await Promise.all([
-            getStudentRepositories().catch(() => null),
-            getStudentActivitySummary().catch(() => null),
-            getStudentActivityFeed(8).catch(() => []),
-            getStudentGroupRanking().catch(() => null),
-          ]);
-          if (!cancelled) {
+          const bundle = await getStudentProfileBundleDeduped(8).catch(() => null);
+          if (!cancelled && bundle) {
+            const summary = bundle.activity_summary;
             setStats({
-              repositories: reposData?.stats.total ?? 0,
-              commits: summary?.commits ?? 0,
-              users: summary?.submitted ?? 0,
+              repositories: bundle.repositories_stats.total,
+              commits: summary.commits,
+              users: summary.submitted,
             });
             setStudentSummary(summary);
-            setStudentFeed(feed);
-            setGroupRanking(ranking);
+            setStudentFeed(bundle.activity_feed);
+            setGroupRanking(bundle.group_ranking);
             setRecentActions([]);
           }
         } else {

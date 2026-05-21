@@ -112,7 +112,10 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
     setLoading(true);
     setError(null);
     try {
-      const [data, forks] = await Promise.all([getStudentRepositories(), getStudentForks(200)]);
+      const [data, forks] = await Promise.all([
+        getStudentRepositories("full"),
+        getStudentForks(200),
+      ]);
       setStats(data.stats);
       setRepos(data.repositories);
       setForkPaths(new Set(forks.map((f) => f.fork_repo_path)));

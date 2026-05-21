@@ -5,6 +5,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -32,6 +33,7 @@ from app.schemas.student_dashboard import (
     StudentGradesSummaryRead,
     StudentGroupRankingEntryRead,
     StudentGroupRankingRead,
+    StudentProfileBundleRead,
     StudentRecentRepositoryRead,
     StudentRepositoriesRead,
     StudentRepositoriesStatsRead,
@@ -41,6 +43,11 @@ from app.schemas.student_dashboard import (
 from app.services.activity_service import log_repo_deleted
 from app.services.course_service import list_student_courses
 from app.utils.gitea_user import resolve_gitea_username
+from app.services.gitea_repo_cache import (
+    RepoGiteaSnapshot,
+    batch_repo_snapshots,
+    invalidate_gitea_repo_cache,
+)
 from app.services.gitea_service import (
     GiteaAuthError,
     build_authenticated_clone_url,
@@ -49,11 +56,8 @@ from app.services.gitea_service import (
     create_gitea_user_access_token,
     delete_repository as delete_gitea_repository,
     ensure_gitea_user,
-    enrich_repos_gitea_stats,
     gitea_public_base_url,
-    get_repo_metadata,
     resolve_repo_owner,
-    stats_from_repo_metadata,
     verify_gitea_access_token,
 )
 
@@ -182,20 +186,99 @@ async def _commits_week_count(
     *,
     student_id: UUID,
     week_ago: datetime,
-    repo_specs: list[tuple[str, str]],
 ) -> int:
-    """Commits in the last 7 days: Gitea (primary) with activity_log fallback."""
-    gitea_total = 0
-    gitea_ok = False
-    if repo_specs:
-        week_stats = await enrich_repos_gitea_stats(repo_specs, since=week_ago)
-        for count, _approx, _owner in week_stats:
-            if count is not None:
-                gitea_ok = True
-                gitea_total += count
-    if gitea_ok:
-        return gitea_total
+    """Commits in the last 7 days from platform activity_log (webhooks), no Gitea pagination."""
     return await _count_student_commits_week(session, student_id=student_id, week_ago=week_ago)
+
+
+def _apply_repo_snapshot(
+    item: StudentRepositoryItemRead,
+    snap: RepoGiteaSnapshot,
+    *,
+    include_commit_totals: bool,
+) -> StudentRepositoryItemRead:
+    gitea_available = snap.exists
+    parsed = snap.parsed_stats if snap.metadata else {}
+    language = item.language or parsed.get("language")
+    forks_count = parsed.get("forks_count")
+    stars_count = parsed.get("stars_count")
+    open_pr_count = parsed.get("open_pr_count")
+    updated_at = item.updated_at
+    if snap.metadata and snap.metadata.get("updated_at"):
+        try:
+            updated_at = datetime.fromisoformat(str(snap.metadata["updated_at"]).replace("Z", "+00:00"))
+        except ValueError:
+            pass
+
+    repo_name = item.name
+    resolved_owner = snap.resolved_owner
+    commits_count = snap.commits_total if include_commit_totals and gitea_available else None
+    commits_approx = snap.commits_total_approx if include_commit_totals else False
+    can_delete = item.source == "personal" or (item.source == "assignment" and not gitea_available)
+
+    return item.model_copy(
+        update={
+            "gitea_path": f"{resolved_owner}/{repo_name}" if gitea_available else None,
+            "gitea_web_url": build_repo_web_url(resolved_owner, repo_name) if gitea_available else None,
+            "clone_url": build_clone_url(resolved_owner, repo_name) if gitea_available else None,
+            "commits_count": commits_count,
+            "commits_count_approx": commits_approx,
+            "language": language,
+            "forks_count": forks_count,
+            "stars_count": stars_count,
+            "open_pr_count": open_pr_count,
+            "updated_at": updated_at,
+            "gitea_available": gitea_available,
+            "can_delete": can_delete,
+        }
+    )
+
+
+async def _student_repositories_stats_db(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    week_ago: datetime,
+) -> StudentRepositoriesStatsRead:
+    """Repository counters for profile bundle — DB only, no Gitea HTTP."""
+    personal_result = await session.execute(
+        select(Repository).where(Repository.owner_id == student_id)
+    )
+    personal_repos = list(personal_result.scalars().all())
+
+    ar_result = await session.execute(
+        select(StudentRepository).where(StudentRepository.student_id == student_id)
+    )
+    assignment_repos = list(ar_result.scalars().all())
+
+    public_count = 0
+    private_count = 0
+    course_count = 0
+    repos_week_delta = 0
+    for repo in personal_repos:
+        visibility = repo.repo_type.value if hasattr(repo.repo_type, "value") else str(repo.repo_type)
+        if visibility == "public":
+            public_count += 1
+        elif visibility == "course":
+            course_count += 1
+        else:
+            private_count += 1
+        if repo.created_at >= week_ago:
+            repos_week_delta += 1
+    course_count += len(assignment_repos)
+
+    total = len(personal_repos) + len(assignment_repos)
+    commits_week = await _commits_week_count(session, student_id=student_id, week_ago=week_ago)
+
+    return StudentRepositoriesStatsRead(
+        total=total,
+        public_count=public_count,
+        private_count=private_count,
+        course_count=course_count,
+        commits_week=commits_week,
+        total_commits=0,
+        repos_week_delta=repos_week_delta,
+    )
 
 
 @dataclass
@@ -987,6 +1070,7 @@ async def delete_student_personal_repository(
         repo_name = repo.gitea_repo_name or repo.name
         owner = await resolve_repo_owner(primary_owner=primary_owner, repo_name=repo_name)
         await delete_gitea_repository(owner=owner, repo_name=repo_name)
+        invalidate_gitea_repo_cache(primary_owner=primary_owner, repo_name=repo_name)
         await log_repo_deleted(
             session=session,
             user_id=student_id,
@@ -1011,6 +1095,7 @@ async def delete_student_personal_repository(
     if repo_name:
         owner = await resolve_repo_owner(primary_owner=primary_owner, repo_name=repo_name)
         await delete_gitea_repository(owner=owner, repo_name=repo_name)
+        invalidate_gitea_repo_cache(primary_owner=primary_owner, repo_name=repo_name)
     await log_repo_deleted(
         session=session,
         user_id=student_id,
@@ -1152,12 +1237,10 @@ async def get_student_dashboard_stats(
             )
         )
 
-    repo_specs = await _student_repo_specs(session, student_id=student_id)
     commits_week = await _commits_week_count(
         session,
         student_id=student_id,
         week_ago=week_ago,
-        repo_specs=repo_specs,
     )
     commits_week_avg = round(commits_week / 7, 1) if commits_week > 0 else None
 
@@ -1353,6 +1436,10 @@ async def get_student_grades(
         else:
             status = "pending"
 
+        comment = None
+        if sub and sub.comment and sub.comment.strip():
+            comment = sub.comment.strip()
+
         items.append(
             StudentGradeItemRead(
                 assignment_id=a.id,
@@ -1366,6 +1453,7 @@ async def get_student_grades(
                 status=status,
                 graded_at=sub.graded_at if sub else None,
                 submitted_at=sub.submitted_at if sub else None,
+                comment=comment,
             )
         )
 
@@ -1441,6 +1529,7 @@ async def get_student_repositories(
     *,
     student_id: UUID,
     gitea_login: str | None,
+    gitea_mode: Literal["none", "lite", "full"] = "lite",
 ) -> StudentRepositoriesRead:
     now = datetime.now(timezone.utc)
     week_ago = now - timedelta(days=7)
@@ -1524,73 +1613,18 @@ async def get_student_repositories(
             )
         )
 
-    if repo_specs:
-        gitea_stats = await enrich_repos_gitea_stats(repo_specs)
-
-        async def _apply_gitea_row(
-            item: StudentRepositoryItemRead,
-            row: tuple[int | None, bool, str],
-        ) -> StudentRepositoryItemRead:
-            count, approx, resolved_owner = row
-            repo_name = item.name
-            language = item.language
-            updated_at = item.updated_at
-            forks_count: int | None = None
-            stars_count: int | None = None
-            open_pr_count: int | None = None
-
-            meta = await get_repo_metadata(owner=resolved_owner, repo=repo_name)
-            gitea_available = meta is not None
-            if meta:
-                parsed = stats_from_repo_metadata(meta)
-                if not language:
-                    language = parsed.get("language")
-                forks_count = parsed.get("forks_count")
-                stars_count = parsed.get("stars_count")
-                open_pr_count = parsed.get("open_pr_count")
-                if meta.get("updated_at"):
-                    try:
-                        updated_at = datetime.fromisoformat(
-                            str(meta["updated_at"]).replace("Z", "+00:00")
-                        )
-                    except ValueError:
-                        pass
-
-            can_delete = item.source == "personal" or (
-                item.source == "assignment" and not gitea_available
-            )
-            return item.model_copy(
-                update={
-                    "gitea_path": f"{resolved_owner}/{repo_name}" if gitea_available else None,
-                    "gitea_web_url": build_repo_web_url(resolved_owner, repo_name)
-                    if gitea_available
-                    else None,
-                    "clone_url": build_clone_url(resolved_owner, repo_name) if gitea_available else None,
-                    "commits_count": count if gitea_available else None,
-                    "commits_count_approx": approx,
-                    "language": language,
-                    "forks_count": forks_count,
-                    "stars_count": stars_count,
-                    "open_pr_count": open_pr_count,
-                    "updated_at": updated_at,
-                    "gitea_available": gitea_available,
-                    "can_delete": can_delete,
-                }
-            )
-
-        items = await asyncio.gather(
-            *[_apply_gitea_row(item, row) for item, row in zip(items, gitea_stats, strict=True)]
-        )
+    if repo_specs and gitea_mode != "none":
+        snapshots = await batch_repo_snapshots(repo_specs, since_week=week_ago, mode=gitea_mode)
+        include_totals = gitea_mode == "full"
+        items = [
+            _apply_repo_snapshot(item, snap, include_commit_totals=include_totals)
+            for item, snap in zip(items, snapshots, strict=True)
+        ]
 
     items.sort(key=lambda x: x.updated_at, reverse=True)
 
-    total_commits = sum(i.commits_count or 0 for i in items)
-    commits_week = await _commits_week_count(
-        session,
-        student_id=student_id,
-        week_ago=week_ago,
-        repo_specs=repo_specs,
-    )
+    total_commits = sum(i.commits_count or 0 for i in items) if gitea_mode == "full" else 0
+    commits_week = await _commits_week_count(session, student_id=student_id, week_ago=week_ago)
 
     stats = StudentRepositoriesStatsRead(
         total=len(items),
@@ -1669,13 +1703,57 @@ async def get_student_recent_repositories(
         user_row = await session.get(User, student_id)
         primary_owner = resolve_gitea_username(user_row) if user_row else "user"
         specs = [(primary_owner, item.name) for item in trimmed]
-        stats = await enrich_repos_gitea_stats(specs)
+        snapshots = await batch_repo_snapshots(specs, mode="lite")
         trimmed = [
-            item.model_copy(update={"commits_count": row[0]})
-            for item, row in zip(trimmed, stats, strict=True)
+            item.model_copy(
+                update={
+                    "language": item.language or snap.parsed_stats.get("language"),
+                    "commits_count": None,
+                }
+            )
+            for item, snap in zip(trimmed, snapshots, strict=True)
         ]
 
     return trimmed
+
+
+async def get_student_profile_bundle(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    group_name: str | None,
+    student_full_name: str | None,
+    feed_limit: int = 8,
+) -> StudentProfileBundleRead:
+    now = datetime.now(timezone.utc)
+    week_ago = now - timedelta(days=7)
+
+    summary, feed, ranking, repo_stats = await asyncio.gather(
+        get_student_activity_summary(
+            session,
+            student_id=student_id,
+            group_name=group_name,
+        ),
+        get_student_activity_feed(
+            session,
+            student_id=student_id,
+            group_name=group_name,
+            limit=feed_limit,
+        ),
+        get_student_group_ranking(
+            session,
+            student_id=student_id,
+            group_name=group_name,
+            student_full_name=student_full_name,
+        ),
+        _student_repositories_stats_db(session, student_id=student_id, week_ago=week_ago),
+    )
+    return StudentProfileBundleRead(
+        activity_summary=summary,
+        activity_feed=feed,
+        group_ranking=ranking,
+        repositories_stats=repo_stats,
+    )
 
 
 async def get_student_activity_summary(

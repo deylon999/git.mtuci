@@ -17,6 +17,7 @@ from app.schemas.student_dashboard import (
     StudentGitCloneTokenRegenerateRead,
     StudentGitCloneTokenStatusRead,
     StudentGroupRankingRead,
+    StudentProfileBundleRead,
     StudentMergedCoursesRead,
     StudentRecentRepositoryRead,
     StudentRepositoriesRead,
@@ -59,6 +60,7 @@ from app.services.student_dashboard_service import (
     get_student_grades,
     get_student_git_clone_token_status,
     get_student_group_ranking,
+    get_student_profile_bundle,
     regenerate_student_git_clone_token,
     get_student_recent_repositories,
     get_student_repositories,
@@ -179,16 +181,39 @@ async def student_merged_courses(
     return StudentMergedCoursesRead(courses=courses, lk_warning=lk_warning)
 
 
+@router.get("/profile-bundle", response_model=StudentProfileBundleRead)
+async def student_profile_bundle(
+    feed_limit: int = Query(default=8, ge=1, le=30),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentProfileBundleRead:
+    _require_student(current_user)
+    return await get_student_profile_bundle(
+        session,
+        student_id=current_user.id,
+        group_name=current_user.group_name,
+        student_full_name=current_user.full_name,
+        feed_limit=feed_limit,
+    )
+
+
 @router.get("/repositories", response_model=StudentRepositoriesRead)
 async def student_repositories(
+    gitea: str = Query(
+        default="lite",
+        pattern="^(none|lite|full)$",
+        description="Gitea enrichment: none (DB only), lite (metadata), full (+ commit counts)",
+    ),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepositoriesRead:
     _require_student(current_user)
+    mode = gitea if gitea in ("none", "lite", "full") else "lite"
     return await get_student_repositories(
         session,
         student_id=current_user.id,
         gitea_login=current_user.mtuci_login,
+        gitea_mode=mode,  # type: ignore[arg-type]
     )
 
 
