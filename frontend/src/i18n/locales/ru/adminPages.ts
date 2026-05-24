@@ -21,6 +21,7 @@ export const adminPagesRu = {
     commitsCount: "{n} коммитов",
     notifications: "Уведомления",
     clearAll: "Очистить все",
+    notificationsClearError: "Не удалось отметить уведомления как прочитанные",
     noNotifications: "Уведомлений пока нет",
     commitsByFaculty: "Коммиты по кафедрам",
     noCommitData: "Нет данных о коммитах",

@@ -38,7 +38,11 @@ import {
   getAdminReviewQueue,
   type AdminReportsOverview,
 } from "../api/adminApi";
-import { getNotifications } from "../api/notificationsApi";
+import {
+  getNotifications,
+  invalidateNotificationsCache,
+  markAllNotificationsAsRead,
+} from "../api/notificationsApi";
 import type { AdminReviewQueueItem } from "../api/types";
 import type { SystemMetrics, ServiceStatus, BackupInfo, FacultyCommitsStat, ActiveRepositoryStat } from "../api/types";
 import { usePermissions } from "../hooks/usePermissions";
@@ -243,8 +247,14 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   const [reviewQueue, setReviewQueue] = useState<AdminReviewQueueItem[]>([]);
   const [reportsOverview, setReportsOverview] = useState<AdminReportsOverview | null>(null);
 
-  const clearAllNotifications = () => {
-    setNotifications([]);
+  const clearAllNotifications = async () => {
+    try {
+      await markAllNotificationsAsRead();
+      invalidateNotificationsCache();
+      setNotifications([]);
+    } catch {
+      toast.error(t("admin.dashboard.notificationsClearError"));
+    }
   };
 
   const load = useCallback(async () => {
@@ -282,7 +292,10 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
       const loc = getI18nLocale();
       const justNow = translate(loc, "time.justNow");
 
-      const inboxNotifications: Notification[] = appNotifs.slice(0, 10).map((n) => ({
+      const inboxNotifications: Notification[] = appNotifs
+        .filter((n) => !n.read)
+        .slice(0, 10)
+        .map((n) => ({
         id: n.id,
         type:
           n.type === "error"

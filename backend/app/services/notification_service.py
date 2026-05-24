@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -21,6 +22,63 @@ from app.services.notification_prefs import STALE_REVIEW_HOURS, notification_pre
 from app.services.notification_realtime import push_notifications_updated
 from app.services.student_dashboard_service import _load_student_assignment_context, _start_of_day, _submission_points
 from app.services.user_settings_service import set_last_digest_at
+
+_ADMIN_PENDING_DEDUPE = "admin:pending-users"
+
+
+def _pending_count_from_message(message: str) -> int | None:
+    match = re.search(r"(\d+)", message)
+    return int(match.group(1)) if match else None
+
+
+async def _sync_admin_pending_users_notification(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    pending: int,
+    now: datetime,
+) -> bool:
+    """Keep pending-users alert in sync; do not resurrect after the user marked it read."""
+    result = await session.execute(
+        select(Notification).where(
+            Notification.user_id == user_id,
+            Notification.dedupe_key == _ADMIN_PENDING_DEDUPE,
+        )
+    )
+    existing = result.scalar_one_or_none()
+    message = f"{pending} пользователь(ей) ждут подтверждения"
+    title = "Ожидают одобрения"
+
+    if pending <= 0:
+        if existing:
+            await session.delete(existing)
+            return True
+        return False
+
+    if existing:
+        previous = _pending_count_from_message(existing.message)
+        if previous == pending:
+            return False
+        existing.title = title
+        existing.message = message
+        existing.href = "/users"
+        if previous is not None and pending > previous:
+            existing.read = False
+        return True
+
+    session.add(
+        Notification(
+            user_id=user_id,
+            dedupe_key=_ADMIN_PENDING_DEDUPE,
+            title=title,
+            message=message,
+            type="warning",
+            href="/users",
+            read=False,
+            created_at=now,
+        )
+    )
+    return True
 
 
 async def _repo_pulls_href(session: AsyncSession, repo_name: str | None) -> str:
@@ -441,19 +499,14 @@ async def sync_user_notifications(
 
     if role == UserRole.admin:
         pending = await session.scalar(select(func.count()).select_from(User).where(User.is_pending.is_(True))) or 0
-        if pending > 0:
-            if await upsert_notification(
-                session,
-                user_id=user_id,
-                dedupe_key="admin:pending-users",
-                title="Ожидают одобрения",
-                message=f"{pending} пользователь(ей) ждут подтверждения",
-                ntype="warning",
-                href="/users",
-                created_at=now,
-            ):
-                created += 1
-                await push_notifications_updated(user_id)
+        if await _sync_admin_pending_users_notification(
+            session,
+            user_id=user_id,
+            pending=int(pending),
+            now=now,
+        ):
+            created += 1
+            await push_notifications_updated(user_id)
 
     log_result = await session.execute(
         select(ActivityLog)

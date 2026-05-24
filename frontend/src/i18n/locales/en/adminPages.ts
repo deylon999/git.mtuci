@@ -21,6 +21,7 @@ export const adminPagesEn = {
     commitsCount: "{n} commits",
     notifications: "Notifications",
     clearAll: "Clear all",
+    notificationsClearError: "Could not mark notifications as read",
     noNotifications: "No notifications yet",
     commitsByFaculty: "Commits by department",
     noCommitData: "No commit data",
