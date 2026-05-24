@@ -273,6 +273,8 @@ export const adminPagesEn = {
     actionFork: " forked ",
     actionMerge: " merged ",
     actionDelete: " deleted repository ",
+    actionLogin: " signed in",
+    actionLogout: " signed out",
     shownOf: "Showing {shown} of {total}",
     perPage: "Per",
     onPage: "per page",
@@ -296,6 +298,8 @@ export const adminPagesEn = {
     typeFork: "Fork",
     typeMerge: "Merge",
     typeDelete: "Deleted",
+    typeLogin: "Sign in",
+    typeLogout: "Sign out",
   },
   settings: {
     subtitle: "Global platform settings",

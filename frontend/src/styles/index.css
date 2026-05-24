@@ -53,3 +53,16 @@
 main {
   scrollbar-gutter: stable;
 }
+
+/* Admin native selects — muted text, dark system UI on Windows */
+.dark .admin-native-select {
+  color: #8b949e;
+  background-color: #0d0d0d;
+  border-color: #30363d;
+  color-scheme: dark;
+}
+
+.dark .admin-native-select option {
+  background-color: #111111;
+  color: #ccd0d4;
+}

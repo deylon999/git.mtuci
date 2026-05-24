@@ -5,7 +5,7 @@ import { exportLogs, deleteOldLogs } from "../api/adminApi";
 import ConfirmModal from "../components/ConfirmModal";
 import type { LogEntry } from "../api/types";
 import { useUserPreferences } from "../context/UserPreferencesContext";
-import { getAdminPageTheme } from "../layout/adminPageTheme";
+import { getAdminPageTheme, getAdminNativeSelectProps } from "../layout/adminPageTheme";
 import AdminPageHeader from "../components/AdminPageHeader";
 
 interface LogsPageProps {
@@ -37,12 +37,11 @@ const LogRow = memo(function LogRow({
   formatTime,
   formatFullDate,
 }: LogRowProps) {
-  const textMain = isDarkTheme ? "text-white" : "text-gray-900";
-  const textMuted = isDarkTheme ? "text-gray-500" : "text-gray-500";
-  const hoverBg = isDarkTheme ? "hover:bg-[#1f2937]" : "hover:bg-gray-50";
-  const borderColor = isDarkTheme ? "border-[#2d2d2d]" : "border-gray-200";
+  const ui = getAdminPageTheme(isDarkTheme);
+  const hoverBg = ui.tableRowHover;
+  const borderColor = ui.tableBorder;
   const sourceBadgeBg = isDarkTheme ? "bg-gray-500/20 border-gray-500/30 text-gray-300" : "bg-gray-200 border-gray-300 text-gray-600";
-  const detailBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-gray-50";
+  const detailBg = isDarkTheme ? "bg-[#0d0d0d]" : "bg-slate-100";
 
   const isClickable = log.level === "ERROR" || log.level === "WARNING" || log.detail;
 
@@ -53,7 +52,7 @@ const LogRow = memo(function LogRow({
         onClick={() => isClickable && onToggle(log.id)}
         title={formatFullDate(log.created_at)}
       >
-        <td className={`px-3 py-2.5 text-xs font-mono ${textMain}`}>{formatTime(log.created_at)}</td>
+        <td className={`px-4 py-3 text-xs font-mono ${ui.tableNameText}`}>{formatTime(log.created_at)}</td>
         <td className="px-3 py-2.5">{getLevelBadge(log.level)}</td>
         <td className="px-3 py-2.5">
           <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${sourceBadgeBg}`}>
@@ -65,17 +64,17 @@ const LogRow = memo(function LogRow({
             <div className="w-5.5 h-5.5 rounded-full flex items-center justify-center text-[8px] font-bold flex-shrink-0 bg-blue-500/20 text-blue-400">
               {getUserInitials(log)}
             </div>
-            <span className={`text-xs ${textMain}`}>{getUserName(log)}</span>
+            <span className={`text-xs ${ui.tableNameText}`}>{getUserName(log)}</span>
           </div>
         </td>
-        <td className={`px-3 py-2.5 text-xs font-mono ${textMuted} truncate`}>{log.message}</td>
-        <td className={`px-3 py-2.5 text-xs font-mono ${textMuted}`}>{log.ip_address}</td>
+        <td className={`px-4 py-3 text-xs font-mono ${ui.tableCellText} truncate`}>{log.message}</td>
+        <td className={`px-4 py-3 text-xs font-mono ${ui.tableCellText}`}>{log.ip_address}</td>
         <td className="px-3 py-2.5">{getStatusBadge(log.http_status)}</td>
       </tr>
       {isClickable && isExpanded && (
         <tr className={`border-b ${borderColor}`}>
           <td colSpan={7} className="p-0">
-            <div className={`p-2 font-mono text-xs ${textMuted} whitespace-pre-wrap ${detailBg}`}>
+            <div className={`p-2 font-mono text-xs ${ui.tableCellText} whitespace-pre-wrap ${detailBg}`}>
               {log.detail || `source: ${log.source}\nevent: ${log.message}\nuser: ${log.user_email || "anonymous"}\nip: ${log.ip_address}\nstatus: ${log.http_status || "N/A"}`}
             </div>
           </td>
@@ -246,10 +245,9 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
   const c = ui.colors;
   const cardBg = `${ui.tableBg} border ${ui.tableBorder}`;
   const inputBg = ui.inputBg;
-  const textMain = ui.textPrimary;
-  const textMuted = ui.textSecondary;
-  const textDim = ui.tableHeaderText;
   const hoverBg = ui.tableRowHover;
+  const adminSelect = getAdminNativeSelectProps(isDarkTheme);
+  const adminSelectCompact = getAdminNativeSelectProps(isDarkTheme, "compact");
 
   return (
     <div className={`min-h-screen ${ui.pageWrapper}`}>
@@ -284,84 +282,88 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4">
           <div style={{ background: c.card, border: `1px solid ${c.border}`, borderRadius: "12px", padding: "20px" }}>
-            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>{t("admin.logs.statTotal")}</div>
-            <div style={{ fontSize: "22px", fontWeight: 600, color: textMain }}>{stats?.total ?? "-"}</div>
-            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>{t("admin.logs.periodAllTime")}</div>
+            <div style={{ fontSize: "11px", color: c.textMuted, marginBottom: "4px" }}>{t("admin.logs.statTotal")}</div>
+            <div style={{ fontSize: "22px", fontWeight: 600, color: c.text }}>{stats?.total ?? "-"}</div>
+            <div style={{ fontSize: "10px", color: c.textMuted, marginTop: "3px" }}>{t("admin.logs.periodAllTime")}</div>
           </div>
           <div style={{ background: c.card, border: `1px solid ${c.border}`, borderRadius: "12px", padding: "20px" }}>
             <div style={{ fontSize: "11px", color: c.textMuted, marginBottom: "4px" }}>{t("admin.logs.statErrorsToday")}</div>
             <div style={{ fontSize: "22px", fontWeight: 600, color: "#e24b4a" }}>{stats?.errors_today ?? "-"}</div>
-            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>{t("admin.logs.periodToday")}</div>
+            <div style={{ fontSize: "10px", color: c.textMuted, marginTop: "3px" }}>{t("admin.logs.periodToday")}</div>
           </div>
           <div style={{ background: c.card, border: `1px solid ${c.border}`, borderRadius: "12px", padding: "20px" }}>
             <div style={{ fontSize: "11px", color: c.textMuted, marginBottom: "4px" }}>{t("admin.logs.statWarnings")}</div>
             <div style={{ fontSize: "22px", fontWeight: 600, color: "#f59e0b" }}>{stats?.warnings_today ?? "-"}</div>
-            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>{t("admin.logs.periodToday")}</div>
+            <div style={{ fontSize: "10px", color: c.textMuted, marginTop: "3px" }}>{t("admin.logs.periodToday")}</div>
           </div>
           <div style={{ background: c.card, border: `1px solid ${c.border}`, borderRadius: "12px", padding: "20px" }}>
             <div style={{ fontSize: "11px", color: c.textMuted, marginBottom: "4px" }}>{t("admin.logs.statSuccess")}</div>
             <div style={{ fontSize: "22px", fontWeight: 600, color: "#4caf50" }}>{stats?.success_today ?? "-"}</div>
-            <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>{t("admin.logs.periodToday")}</div>
+            <div style={{ fontSize: "10px", color: c.textMuted, marginTop: "3px" }}>{t("admin.logs.periodToday")}</div>
           </div>
         </div>
 
         {/* Toolbar */}
         <div className={`flex items-center gap-3 p-4 rounded-xl border ${cardBg}`}>
-          <div className={`flex items-center gap-1.5 flex-1 px-2.5 py-1.5 rounded-lg border ${inputBg}`}>
-            <Search className="w-3.5 h-3.5 text-gray-500" />
+          <div className={`flex items-center gap-2 flex-1 px-3 py-2 rounded-lg border ${inputBg}`}>
+            <Search className={`h-4 w-4 shrink-0 ${ui.tableHeaderText}`} />
             <input
               ref={searchInputRef}
               type="text"
               placeholder={t("admin.logs.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className={`bg-transparent border-none outline-none text-xs flex-1 ${textMain} placeholder-gray-500`}
+              className={`bg-transparent border-none outline-none text-sm flex-1 ${ui.tableNameText} ${isDarkTheme ? "placeholder-[#6e7681]" : "placeholder-slate-400"}`}
             />
           </div>
-          <div className={`w-px h-5 ${isDarkTheme ? "bg-[#2d2d2d]" : "bg-gray-300"}`}></div>
+          <div className={`w-px h-5 shrink-0 ${isDarkTheme ? "bg-[#2d2d2d]" : "bg-slate-300"}`} />
           <select
             value={level}
             onChange={(e) => handleFilterChange(() => setLevel(e.target.value as any))}
-            className={`px-2 py-1.5 rounded-lg border text-xs cursor-pointer ${inputBg} ${textMain}`}
+            className={adminSelect.className}
+            style={adminSelect.style}
           >
-            <option value="">{t("admin.logs.allLevels")}</option>
-            <option value="ERROR">ERROR</option>
-            <option value="WARNING">WARN</option>
-            <option value="INFO">INFO</option>
-            <option value="DEBUG">DEBUG</option>
+            <option value="" style={adminSelect.optionStyle}>{t("admin.logs.allLevels")}</option>
+            <option value="ERROR" style={adminSelect.optionStyle}>ERROR</option>
+            <option value="WARNING" style={adminSelect.optionStyle}>WARN</option>
+            <option value="INFO" style={adminSelect.optionStyle}>INFO</option>
+            <option value="DEBUG" style={adminSelect.optionStyle}>DEBUG</option>
           </select>
           <select
             value={source}
             onChange={(e) => handleFilterChange(() => setSource(e.target.value as any))}
-            className={`px-2 py-1.5 rounded-lg border text-xs cursor-pointer ${inputBg} ${textMain}`}
+            className={adminSelect.className}
+            style={adminSelect.style}
           >
-            <option value="">{t("admin.logs.allSources")}</option>
-            <option value="auth">auth</option>
-            <option value="repositories">repositories</option>
-            <option value="webhooks">webhooks</option>
-            <option value="admin">admin</option>
-            <option value="gitea">gitea</option>
-            <option value="permissions">permissions</option>
-            <option value="courses">courses</option>
+            <option value="" style={adminSelect.optionStyle}>{t("admin.logs.allSources")}</option>
+            <option value="auth" style={adminSelect.optionStyle}>auth</option>
+            <option value="repositories" style={adminSelect.optionStyle}>repositories</option>
+            <option value="webhooks" style={adminSelect.optionStyle}>webhooks</option>
+            <option value="admin" style={adminSelect.optionStyle}>admin</option>
+            <option value="gitea" style={adminSelect.optionStyle}>gitea</option>
+            <option value="permissions" style={adminSelect.optionStyle}>permissions</option>
+            <option value="courses" style={adminSelect.optionStyle}>courses</option>
           </select>
           <select
             value={timeFilter}
             onChange={(e) => handleFilterChange(() => setTimeFilter(e.target.value as any))}
-            className={`px-2 py-1.5 rounded-lg border text-xs cursor-pointer ${inputBg} ${textMain}`}
+            className={adminSelect.className}
+            style={adminSelect.style}
           >
-            <option value="today">{t("admin.logs.periodToday")}</option>
-            <option value="hour">{t("admin.logs.periodHour")}</option>
-            <option value="week">{t("admin.logs.periodWeek")}</option>
-            <option value="month">{t("admin.logs.periodMonth")}</option>
+            <option value="today" style={adminSelect.optionStyle}>{t("admin.logs.periodToday")}</option>
+            <option value="hour" style={adminSelect.optionStyle}>{t("admin.logs.periodHour")}</option>
+            <option value="week" style={adminSelect.optionStyle}>{t("admin.logs.periodWeek")}</option>
+            <option value="month" style={adminSelect.optionStyle}>{t("admin.logs.periodMonth")}</option>
           </select>
-          <div className={`w-px h-5 ${isDarkTheme ? "bg-[#2d2d2d]" : "bg-gray-300"}`}></div>
+          <div className={`w-px h-5 shrink-0 ${isDarkTheme ? "bg-[#2d2d2d]" : "bg-slate-300"}`} />
           <select
             value={sort}
             onChange={(e) => handleFilterChange(() => setSort(e.target.value as any))}
-            className={`px-2 py-1.5 rounded-lg border text-xs cursor-pointer ${inputBg} ${textMain}`}
+            className={adminSelect.className}
+            style={adminSelect.style}
           >
-            <option value="desc">{t("admin.logs.sortNewFirst")}</option>
-            <option value="asc">{t("admin.logs.sortOldFirst")}</option>
+            <option value="desc" style={adminSelect.optionStyle}>{t("admin.logs.sortNewFirst")}</option>
+            <option value="asc" style={adminSelect.optionStyle}>{t("admin.logs.sortOldFirst")}</option>
           </select>
         </div>
 
@@ -369,30 +371,30 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
         <div className={`rounded-xl border overflow-hidden ${cardBg}`}>
           {logsLoading ? (
             <div className="flex items-center justify-center py-12">
-              <span className={`text-sm ${textMuted}`}>{t("common.loading")}</span>
+              <span className={`text-sm ${ui.tableCellText}`}>{t("common.loading")}</span>
             </div>
           ) : logsError ? (
             <div className="flex flex-col items-center justify-center py-12">
-              <FileX className={`w-12 h-12 ${textMuted} mb-3`} />
-              <span className={`text-sm ${textMuted}`}>{logsError}</span>
+              <FileX className={`w-12 h-12 ${ui.tableHeaderText} mb-3`} />
+              <span className={`text-sm ${ui.tableCellText}`}>{logsError}</span>
             </div>
           ) : logs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
-              <FileX className={`w-12 h-12 ${textMuted} mb-3`} />
-              <span className={`text-sm ${textMuted}`}>{t("admin.logs.empty")}</span>
+              <FileX className={`w-12 h-12 ${ui.tableHeaderText} mb-3`} />
+              <span className={`text-sm ${ui.tableCellText}`}>{t("admin.logs.empty")}</span>
             </div>
           ) : (
             <>
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className={`border-b ${isDarkTheme ? "border-[#30363d]" : "border-gray-200"}`}>
-                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[120px]`}>{t("admin.logs.colTime")}</th>
-                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[90px]`}>{t("admin.logs.colLevel")}</th>
-                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[110px]`}>{t("admin.logs.colModule")}</th>
-                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[160px]`}>{t("admin.logs.colUser")}</th>
-                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted}`}>{t("admin.logs.colMessage")}</th>
-                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[110px]`}>IP</th>
-                    <th className={`text-xs font-semibold uppercase tracking-wider text-left px-3 py-2.5 ${textMuted} w-[70px]`}>{t("admin.logs.colStatus")}</th>
+                  <tr className={`border-b ${ui.tableBorder}`}>
+                    <th className={`text-xs font-medium uppercase tracking-wider text-left px-4 py-3 ${ui.tableHeaderText} w-[120px]`}>{t("admin.logs.colTime")}</th>
+                    <th className={`text-xs font-medium uppercase tracking-wider text-left px-4 py-3 ${ui.tableHeaderText} w-[90px]`}>{t("admin.logs.colLevel")}</th>
+                    <th className={`text-xs font-medium uppercase tracking-wider text-left px-4 py-3 ${ui.tableHeaderText} w-[110px]`}>{t("admin.logs.colModule")}</th>
+                    <th className={`text-xs font-medium uppercase tracking-wider text-left px-4 py-3 ${ui.tableHeaderText} w-[160px]`}>{t("admin.logs.colUser")}</th>
+                    <th className={`text-xs font-medium uppercase tracking-wider text-left px-4 py-3 ${ui.tableHeaderText}`}>{t("admin.logs.colMessage")}</th>
+                    <th className={`text-xs font-medium uppercase tracking-wider text-left px-4 py-3 ${ui.tableHeaderText} w-[110px]`}>IP</th>
+                    <th className={`text-xs font-medium uppercase tracking-wider text-left px-4 py-3 ${ui.tableHeaderText} w-[70px]`}>{t("admin.logs.colStatus")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -415,13 +417,14 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
               </table>
 
               {/* Pagination */}
-              <div className={`flex items-center justify-between px-4 py-3 border-t ${isDarkTheme ? "border-[#2d2d2d]" : "border-gray-200"} text-sm ${textMuted}`}>
+              <div className={`flex items-center justify-between px-4 py-3 border-t ${ui.tableBorder} text-sm ${ui.tableCellText}`}>
                 <span>{tp("admin.logs.shownOf", { shown: logs.length, total })}</span>
                 <div className="flex items-center gap-2">
                   {page > 1 && (
                     <button
+                      type="button"
                       onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${isDarkTheme ? "bg-[#0f0f10] border-[#30363d] text-[#8b949e] hover:bg-[#1f2937] hover:text-[#ccd0d4]" : "bg-gray-100 border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-900"}`}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${ui.paginationBtn}`}
                     >
                       ←
                     </button>
@@ -431,14 +434,15 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
                   </span>
                   {page < totalPages && (
                     <button
+                      type="button"
                       onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${isDarkTheme ? "bg-[#0f0f10] border-[#30363d] text-[#8b949e] hover:bg-[#1f2937] hover:text-[#ccd0d4]" : "bg-gray-100 border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-900"}`}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${ui.paginationBtn}`}
                     >
                       →
                     </button>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className={`flex items-center gap-2 ${ui.tableCellText}`}>
                   <span>{t("admin.logs.perPage")}</span>
                   <select
                     value={limit}
@@ -446,11 +450,12 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
                       setLimit(Number(e.target.value));
                       setPage(1);
                     }}
-                    className={`px-1.5 py-1 rounded border text-xs cursor-pointer ${inputBg} ${textMain}`}
+                    className={adminSelectCompact.className}
+                    style={adminSelectCompact.style}
                   >
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
+                    <option value={10} style={adminSelectCompact.optionStyle}>10</option>
+                    <option value={25} style={adminSelectCompact.optionStyle}>25</option>
+                    <option value={50} style={adminSelectCompact.optionStyle}>50</option>
                   </select>
                   <span>{t("admin.logs.onPage")}</span>
                 </div>

@@ -273,6 +273,8 @@ export const adminPagesRu = {
     actionFork: " форкнул ",
     actionMerge: " смёрджил ",
     actionDelete: " удалил репозиторий ",
+    actionLogin: " вошёл в систему",
+    actionLogout: " вышел из системы",
     shownOf: "Показано {shown} из {total}",
     perPage: "По",
     onPage: "на странице",
@@ -296,6 +298,8 @@ export const adminPagesRu = {
     typeFork: "Форк",
     typeMerge: "Merge",
     typeDelete: "Удаление",
+    typeLogin: "Вход",
+    typeLogout: "Выход",
   },
   settings: {
     subtitle: "Глобальные параметры платформы",

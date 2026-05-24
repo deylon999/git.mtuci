@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 /**
  * Единая палитра админ-страниц (эталон — UsersPage).
  * Tailwind-классы для разметки + colors для inline-стилей.
@@ -117,6 +119,29 @@ export function getAdminPageTheme(isDark: boolean): AdminPageTheme {
       textName: "#0f172a",
       hover: "#e2e8f0",
       iconBg: "#e5e7eb",
+    },
+  };
+}
+
+/** Нативные `<select>` в админке — приглушённый текст как у фильтров Users. */
+export function getAdminNativeSelectProps(
+  isDark: boolean,
+  size: "default" | "compact" = "default",
+): { className: string; style: CSSProperties; optionStyle: CSSProperties } {
+  const ui = getAdminPageTheme(isDark);
+  const c = ui.colors;
+  const pad = size === "compact" ? "px-2 py-1" : "px-3 py-2";
+  return {
+    className: `admin-native-select ${pad} rounded-lg border text-sm cursor-pointer ${ui.inputBg} ${ui.tableCellText}`,
+    style: {
+      backgroundColor: c.input,
+      color: c.textCell,
+      borderColor: c.borderInput,
+      ...(isDark ? { colorScheme: "dark" } : {}),
+    },
+    optionStyle: {
+      backgroundColor: c.card,
+      color: c.textName,
     },
   };
 }

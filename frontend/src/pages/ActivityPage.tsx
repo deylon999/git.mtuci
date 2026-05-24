@@ -1,10 +1,10 @@
 import { Search, Download, GitCommit, GitPullRequest, GitBranch, Plus, Trash2, GitMerge, ArrowUpCircle, Wifi } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from "react";
 import AdminPageHeader from "../components/AdminPageHeader";
 import { getTodayStats, getHotRepos, getTopUsers, getHourlyActivity, getRecentActivity } from "../api/adminApi";
 import type { TodayStats, HotRepoStat, TopUserStat, HourlyActivity, ActivityItem } from "../api/types";
 import { useUserPreferences } from "../context/UserPreferencesContext";
-import { getAdminPageTheme } from "../layout/adminPageTheme";
+import { getAdminPageTheme, getAdminNativeSelectProps } from "../layout/adminPageTheme";
 
 interface ActivityPageProps {
   isDarkTheme?: boolean;
@@ -27,6 +27,7 @@ const getColors = (isDark: boolean) => {
     teal: "#14b8a6",
     violet: "#7c3aed",
     textPrimary: c.text,
+    textName: c.textName,
     textSecondary: c.textCell,
     textMuted: c.textMuted,
   };
@@ -45,12 +46,37 @@ const EventIcons = {
   pr_merge: <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.3"><circle cx="4" cy="4" r="2"/><circle cx="4" cy="13" r="2"/><circle cx="12" cy="8" r="2"/><path d="M4 6v5M4 6c0 3 8 2 8 2" strokeLinecap="round"/></svg>,
   delete: <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   repo_deleted: <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  login: <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M11 8H6M9 5l3 3-3 3" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  logout: <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M10 2h3a1 1 0 011 1v10a1 1 0 01-1 1h-3M5 8h5M8 5L5 8l3 3" strokeLinecap="round" strokeLinejoin="round"/></svg>,
 };
 
 export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) {
   const { t, tp, language } = useUserPreferences();
   const dateLocale = language === "en" ? "en-US" : "ru-RU";
   const colors = getColors(isDarkTheme);
+  const adminSelect = getAdminNativeSelectProps(isDarkTheme, "compact");
+  const toolbarSelectStyle: CSSProperties = {
+    fontSize: "11px",
+    padding: "5px 8px",
+    borderRadius: "7px",
+    border: `0.5px solid ${colors.border}`,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    backgroundColor: adminSelect.style.backgroundColor,
+    color: adminSelect.style.color,
+    ...(isDarkTheme ? { colorScheme: "dark" } : {}),
+  };
+  const pageSizeSelectStyle: CSSProperties = {
+    padding: "3px 6px",
+    borderRadius: "6px",
+    border: `0.5px solid ${colors.border}`,
+    fontSize: "11px",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    backgroundColor: adminSelect.style.backgroundColor,
+    color: adminSelect.style.color,
+    ...(isDarkTheme ? { colorScheme: "dark" } : {}),
+  };
   const [stats, setStats] = useState<TodayStats | null>(null);
   const [hotRepos, setHotRepos] = useState<HotRepoStat[]>([]);
   const [topUsers, setTopUsers] = useState<TopUserStat[]>([]);
@@ -66,24 +92,65 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
   const eventIdRef = useRef(0);
   const hasLoadedRef = useRef(false);
 
-  // Helper to render trend indicator
+  const statCardStyle: CSSProperties = {
+    background: colors.cardBg,
+    border: `1px solid ${colors.border}`,
+    borderRadius: "12px",
+    padding: "20px",
+    display: "flex",
+    flexDirection: "column",
+    minHeight: "104px",
+  };
+
+  // Подпись снизу карточки — как на странице «Логи» (одинаковый 10px, выровнено по центру)
   const renderTrend = (delta: number | undefined) => {
+    const footerStyle: CSSProperties = {
+      fontSize: "10px",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "4px",
+    };
     if (delta === undefined || delta === 0) {
-      return <span style={{ fontSize: "10px", color: colors.textSecondary }}>— <span style={{ fontSize: "9px", color: colors.textMuted }}>{t("admin.activity.vsYesterday")}</span></span>;
+      return (
+        <span style={{ ...footerStyle, color: colors.textMuted }}>
+          <span>—</span>
+          <span>{t("admin.activity.vsYesterday")}</span>
+        </span>
+      );
     }
     const isPositive = delta > 0;
     const absValue = Math.abs(delta);
     const color = isPositive ? colors.success : colors.danger;
     const arrow = isPositive ? "↑" : "↓";
     const sign = isPositive ? "+" : "−";
-    
+
     return (
-      <span style={{ fontSize: "10px", color, fontWeight: 500 }}>
-        {arrow} {sign}{absValue}{" "}
-        <span style={{ fontSize: "9px", color: colors.textMuted, fontWeight: 400 }}>{t("admin.activity.vsYesterday")}</span>
+      <span style={footerStyle}>
+        <span style={{ color, fontWeight: 500 }}>{arrow} {sign}{absValue}</span>
+        <span style={{ color: colors.textMuted, fontWeight: 400 }}>{t("admin.activity.vsYesterday")}</span>
       </span>
     );
   };
+
+  const renderStatCard = (label: string, value: number, delta: number | undefined) => (
+    <div style={statCardStyle}>
+      <div style={{ fontSize: "11px", color: colors.textMuted, marginBottom: "4px" }}>{label}</div>
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          fontSize: "22px",
+          fontWeight: 600,
+          color: colors.textPrimary,
+          lineHeight: 1,
+        }}
+      >
+        {value}
+      </div>
+      <div style={{ marginTop: "3px" }}>{renderTrend(delta)}</div>
+    </div>
+  );
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState("");
@@ -283,6 +350,8 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
       case "pr_merge": return { bg: `${colors.violet}20`, color: colors.violet };
       case "delete":
       case "repo_deleted": return { bg: `${colors.danger}20`, color: colors.danger };
+      case "login": return { bg: `${colors.accent2}20`, color: colors.accent2 };
+      case "logout": return { bg: `${colors.textMuted}20`, color: colors.textMuted };
       default: return { bg: `${colors.accent}20`, color: colors.accent2 };
     }
   };
@@ -301,6 +370,12 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
       Merge: "admin.activity.typeMerge",
       Удаление: "admin.activity.typeDelete",
       Deleted: "admin.activity.typeDelete",
+      Вход: "admin.activity.typeLogin",
+      Login: "admin.activity.typeLogin",
+      "Sign in": "admin.activity.typeLogin",
+      Выход: "admin.activity.typeLogout",
+      Logout: "admin.activity.typeLogout",
+      "Sign out": "admin.activity.typeLogout",
     };
     const key = keys[tag];
     return key ? t(key) : tag;
@@ -319,6 +394,12 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
       case "Merge": return { background: `${colors.violet}10`, color: colors.violet };
       case "Удаление":
       case "Deleted": return { background: `${colors.danger}10`, color: colors.danger };
+      case "Вход":
+      case "Login":
+      case "Sign in": return { background: `${colors.accent2}10`, color: colors.accent2 };
+      case "Выход":
+      case "Logout":
+      case "Sign out": return { background: `${colors.textMuted}20`, color: colors.textMuted };
       default: return { background: `${colors.accent2}10`, color: colors.accent2 };
     }
   };
@@ -341,31 +422,15 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
       </div>
 
       {/* Stats Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
         {loading ? (
           <div style={{ gridColumn: "span 4", textAlign: "center", color: colors.textSecondary }}>{t("admin.activity.loading")}</div>
         ) : stats ? (
           <>
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: "10px", padding: "14px 16px" }}>
-              <div style={{ fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>{t("admin.activity.statEventsToday")}</div>
-              <div style={{ fontSize: "22px", fontWeight: 600, color: colors.textPrimary }}>{stats.total_events}</div>
-              <div style={{ marginTop: "3px" }}>{renderTrend(stats.total_events_delta)}</div>
-            </div>
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: "10px", padding: "14px 16px" }}>
-              <div style={{ fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>{t("admin.activity.statCommits")}</div>
-              <div style={{ fontSize: "22px", fontWeight: 600, color: colors.textPrimary }}>{stats.commits}</div>
-              <div style={{ marginTop: "3px" }}>{renderTrend(stats.commits_delta)}</div>
-            </div>
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: "10px", padding: "14px 16px" }}>
-              <div style={{ fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>{t("admin.activity.statActiveUsers")}</div>
-              <div style={{ fontSize: "22px", fontWeight: 600, color: colors.textPrimary }}>{stats.active_users}</div>
-              <div style={{ marginTop: "3px" }}>{renderTrend(stats.active_users_delta)}</div>
-            </div>
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: "10px", padding: "14px 16px" }}>
-              <div style={{ fontSize: "11px", color: colors.textSecondary, marginBottom: "4px" }}>{t("admin.activity.statNewRepos")}</div>
-              <div style={{ fontSize: "22px", fontWeight: 600, color: colors.textPrimary }}>{stats.new_repositories}</div>
-              <div style={{ marginTop: "3px" }}>{renderTrend(stats.new_repositories_delta)}</div>
-            </div>
+            {renderStatCard(t("admin.activity.statEventsToday"), stats.total_events, stats.total_events_delta)}
+            {renderStatCard(t("admin.activity.statCommits"), stats.commits, stats.commits_delta)}
+            {renderStatCard(t("admin.activity.statActiveUsers"), stats.active_users, stats.active_users_delta)}
+            {renderStatCard(t("admin.activity.statNewRepos"), stats.new_repositories, stats.new_repositories_delta)}
           </>
         ) : (
           <div style={{ gridColumn: "span 4", textAlign: "center", color: colors.textSecondary }}>{t("admin.activity.loadError")}</div>
@@ -393,8 +458,9 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                 onChange={(e) => handleFilterChange(setSearchQuery, e.target.value)}
                 style={{
                   background: "transparent", border: "none", outline: "none", fontSize: "12px",
-                  color: colors.textPrimary, width: "100%", fontFamily: "inherit"
+                  color: colors.textName, width: "100%", fontFamily: "inherit"
                 }}
+                className={isDarkTheme ? "placeholder-[#6e7681]" : "placeholder-slate-400"}
               />
             </div>
             <div style={{ width: "0.5px", height: "20px", background: colors.border }} />
@@ -411,40 +477,34 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
             <select
               value={eventTypeFilter}
               onChange={(e) => handleFilterChange(setEventTypeFilter, e.target.value)}
-              style={{
-                fontSize: "11px", padding: "5px 8px", borderRadius: "7px", border: `0.5px solid ${colors.border}`,
-                background: colors.pageBg, color: colors.textPrimary, cursor: "pointer", fontFamily: "inherit"
-              }}
+              className="admin-native-select"
+              style={toolbarSelectStyle}
             >
               {eventTypes.map(type => (
-                <option key={type.value} value={type.value}>{type.label}</option>
+                <option key={type.value} value={type.value} style={adminSelect.optionStyle}>{type.label}</option>
               ))}
             </select>
             <select
               value={userFilter || ""}
               onChange={(e) => handleFilterChange(setUserFilter, e.target.value || null)}
-              style={{
-                fontSize: "11px", padding: "5px 8px", borderRadius: "7px", border: `0.5px solid ${colors.border}`,
-                background: colors.pageBg, color: colors.textPrimary, cursor: "pointer", fontFamily: "inherit"
-              }}
+              className="admin-native-select"
+              style={toolbarSelectStyle}
             >
-              <option value="">{t("admin.activity.filterAllUsers")}</option>
+              <option value="" style={adminSelect.optionStyle}>{t("admin.activity.filterAllUsers")}</option>
               {topUsers.map(user => (
-                <option key={user.user_id} value={user.user_id}>{user.user_name}</option>
+                <option key={user.user_id} value={user.user_id} style={adminSelect.optionStyle}>{user.user_name}</option>
               ))}
             </select>
             <select
               value={dateRange}
               onChange={(e) => handleFilterChange(setDateRange, e.target.value)}
-              style={{
-                fontSize: "11px", padding: "5px 8px", borderRadius: "7px", border: `0.5px solid ${colors.border}`,
-                background: colors.pageBg, color: colors.textPrimary, cursor: "pointer", fontFamily: "inherit"
-              }}
+              className="admin-native-select"
+              style={toolbarSelectStyle}
             >
-              <option value="today">{t("admin.activity.periodToday")}</option>
-              <option value="week">{t("admin.activity.periodWeek")}</option>
-              <option value="month">{t("admin.activity.periodMonth")}</option>
-              <option value="all">{t("admin.activity.periodAll")}</option>
+              <option value="today" style={adminSelect.optionStyle}>{t("admin.activity.periodToday")}</option>
+              <option value="week" style={adminSelect.optionStyle}>{t("admin.activity.periodWeek")}</option>
+              <option value="month" style={adminSelect.optionStyle}>{t("admin.activity.periodMonth")}</option>
+              <option value="all" style={adminSelect.optionStyle}>{t("admin.activity.periodAll")}</option>
             </select>
           </div>
 
@@ -481,17 +541,26 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                     <div style={{ fontSize: "12px", color: colors.textPrimary, lineHeight: 1.5 }}>
                       <strong style={{ fontWeight: 600 }}>{activity.user}</strong>
                       {activity.type === "commit" && t("admin.activity.actionCommit")}
-                      {activity.type === "pr" && t("admin.activity.actionPr")}
+                      {(activity.type === "pr" || activity.type === "pull_request") && t("admin.activity.actionPr")}
                       {activity.type === "push" && t("admin.activity.actionPush")}
-                      {activity.type === "create" && t("admin.activity.actionCreate")}
+                      {(activity.type === "create" || activity.type === "repo_created") && t("admin.activity.actionCreate")}
                       {activity.type === "fork" && t("admin.activity.actionFork")}
-                      {activity.type === "merge" && t("admin.activity.actionMerge")}
-                      {activity.type === "delete" && t("admin.activity.actionDelete")}
-                      <span style={{ color: colors.accent2, fontFamily: "monospace", fontSize: "11px" }}>{activity.repo}</span>
-                      {activity.message && activity.type !== "push" && activity.type !== "delete" && (
+                      {(activity.type === "merge" || activity.type === "pr_merge") && t("admin.activity.actionMerge")}
+                      {(activity.type === "delete" || activity.type === "repo_deleted") && t("admin.activity.actionDelete")}
+                      {activity.type === "login" && t("admin.activity.actionLogin")}
+                      {activity.type === "logout" && t("admin.activity.actionLogout")}
+                      {activity.repo ? (
+                        <span style={{ color: colors.accent2, fontFamily: "monospace", fontSize: "11px" }}>{activity.repo}</span>
+                      ) : null}
+                      {activity.message &&
+                        activity.type !== "push" &&
+                        activity.type !== "delete" &&
+                        activity.type !== "repo_deleted" &&
+                        activity.type !== "login" &&
+                        activity.type !== "logout" && (
                         <span style={{ color: colors.textSecondary, fontStyle: "italic", fontSize: "11px" }}> — «{activity.message}»</span>
                       )}
-                      {activity.message && (activity.type === "push" || activity.type === "delete") && (
+                      {activity.message && activity.type === "push" && (
                         <span style={{ color: colors.textSecondary, fontSize: "11px" }}> {activity.message}</span>
                       )}
                     </div>
@@ -546,14 +615,12 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                 <select
                   value={pageSize}
                   onChange={(e) => { setPageSize(Number(e.target.value)); setPageOffset(0); }}
-                  style={{
-                    padding: "3px 6px", borderRadius: "6px", border: `0.5px solid ${colors.border}`,
-                    fontSize: "11px", color: colors.textSecondary, background: "transparent", cursor: "pointer"
-                  }}
+                  className="admin-native-select"
+                  style={pageSizeSelectStyle}
                 >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
+                  <option value={10} style={adminSelect.optionStyle}>10</option>
+                  <option value={25} style={adminSelect.optionStyle}>25</option>
+                  <option value={50} style={adminSelect.optionStyle}>50</option>
                 </select>
               </div>
             </div>
