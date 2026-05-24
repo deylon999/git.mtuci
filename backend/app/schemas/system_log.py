@@ -32,6 +32,16 @@ class LogEntry(BaseModel):
     """System log entry for API response."""
     model_config = ConfigDict(from_attributes=True)
 
+    @classmethod
+    def from_log(cls, log, *, joined_email: str | None = None, joined_full_name: str | None = None) -> "LogEntry":
+        entry = cls.model_validate(log)
+        return entry.model_copy(
+            update={
+                "user_email": getattr(log, "user_email", None) or joined_email,
+                "user_full_name": getattr(log, "user_full_name", None) or joined_full_name,
+            }
+        )
+
     id: UUID
     created_at: datetime
     level: LogLevelEnum

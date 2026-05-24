@@ -7,6 +7,7 @@ import type { LogEntry } from "../api/types";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getAdminPageTheme, getAdminNativeSelectProps } from "../layout/adminPageTheme";
 import AdminPageHeader from "../components/AdminPageHeader";
+import { getLogUserDisplayName, getLogUserInitials } from "../utils/logDisplay";
 
 interface LogsPageProps {
   isDarkTheme?: boolean;
@@ -75,7 +76,7 @@ const LogRow = memo(function LogRow({
         <tr className={`border-b ${borderColor}`}>
           <td colSpan={7} className="p-0">
             <div className={`p-2 font-mono text-xs ${ui.tableCellText} whitespace-pre-wrap ${detailBg}`}>
-              {log.detail || `source: ${log.source}\nevent: ${log.message}\nuser: ${log.user_email || "anonymous"}\nip: ${log.ip_address}\nstatus: ${log.http_status || "N/A"}`}
+              {log.detail || `source: ${log.source}\nevent: ${log.message}\nuser: ${getUserName(log)}\nip: ${log.ip_address}\nstatus: ${log.http_status || "N/A"}`}
             </div>
           </td>
         </tr>
@@ -158,24 +159,11 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
     return <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30">{status}</span>;
   };
 
-  const getUserInitials = (log: LogEntry) => {
-    if (log.user_full_name) {
-      return log.user_full_name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2);
-    }
-    if (log.user_email) {
-      return log.user_email.slice(0, 2).toUpperCase();
-    }
-    return "?";
-  };
+  const unknownUserLabel = t("admin.logs.unknownUser");
 
-  const getUserName = (log: LogEntry) => {
-    return log.user_full_name || log.user_email || "anonymous";
-  };
+  const getUserInitials = (log: LogEntry) => getLogUserInitials(log, unknownUserLabel);
+
+  const getUserName = (log: LogEntry) => getLogUserDisplayName(log, unknownUserLabel);
 
   const formatTime = (isoString: string) => {
     const date = new Date(isoString);

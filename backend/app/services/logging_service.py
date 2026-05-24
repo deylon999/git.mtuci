@@ -11,6 +11,7 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.system_log import SystemLog, LogLevel, LogSource
+from app.services.system_log_display import resolve_log_display_user
 
 
 async def log_event(
@@ -45,6 +46,13 @@ async def log_event(
     Returns:
         The created SystemLog entry
     """
+    user_email, user_full_name = await resolve_log_display_user(
+        session,
+        user_id=user_id,
+        user_email=user_email,
+        user_full_name=user_full_name,
+        message=message,
+    )
     log_entry = SystemLog(
         level=level,
         source=source,
@@ -88,6 +96,13 @@ async def log_event_background(
     
     async with SessionLocal() as session:
         try:
+            user_email, user_full_name = await resolve_log_display_user(
+                session,
+                user_id=user_id,
+                user_email=user_email,
+                user_full_name=user_full_name,
+                message=message,
+            )
             log_entry = SystemLog(
                 level=level,
                 source=source,

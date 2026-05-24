@@ -1,5 +1,7 @@
 import os
+import socket
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -8,15 +10,50 @@ from pydantic import BaseModel, Field
 BASE_DIR = Path(__file__).resolve().parents[2]  # backend/
 load_dotenv(BASE_DIR / ".env")
 
+# Docker Compose service names — on the host machine use localhost (port 5432 is published).
+_DOCKER_DB_HOSTS = frozenset({"postgres", "db"})
+
+
+def _resolve_postgres_host(host: str) -> str:
+    if host not in _DOCKER_DB_HOSTS:
+        return host
+    try:
+        socket.getaddrinfo(host, None)
+        return host
+    except socket.gaierror:
+        return "localhost"
+
+
+def _replace_database_url_host(url: str, new_host: str) -> str:
+    parsed = urlparse(url)
+    if not parsed.hostname or parsed.hostname == new_host:
+        return url
+    auth = ""
+    if parsed.username:
+        auth = parsed.username
+        if parsed.password:
+            auth += f":{parsed.password}"
+        auth += "@"
+    port = f":{parsed.port}" if parsed.port else ""
+    return urlunparse(parsed._replace(netloc=f"{auth}{new_host}{port}"))
+
 
 def _build_database_url() -> str:
     """
     Собирает DATABASE_URL из POSTGRES_* переменных.
     Используем asyncpg для SQLAlchemy async.
     """
+    explicit = os.getenv("DATABASE_URL", "").strip()
+    if explicit:
+        parsed = urlparse(explicit)
+        if parsed.hostname:
+            resolved = _resolve_postgres_host(parsed.hostname)
+            explicit = _replace_database_url_host(explicit, resolved)
+        return explicit
+
     user = os.getenv("POSTGRES_USER", "postgres")
     password = os.getenv("POSTGRES_PASSWORD", "postgres")
-    host = os.getenv("POSTGRES_HOST", "localhost")
+    host = _resolve_postgres_host(os.getenv("POSTGRES_HOST", "localhost"))
     port = os.getenv("POSTGRES_PORT", "5432")
     db = os.getenv("POSTGRES_DB", "mtuci")
     return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}"

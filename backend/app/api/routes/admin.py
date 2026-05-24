@@ -37,6 +37,7 @@ from app.schemas.repository import RepositoryRead
 from app.services.admin_forks_service import get_admin_fork_events
 from app.services.repository_presenter import build_repository_read
 from app.schemas.system_log import LogEntry, LogsResponse, LogsStats
+from app.services.system_log_display import build_log_entry, logs_select_with_user
 from app.schemas.user import (
     AdminResetPasswordRequest,
     AdminResetPasswordResponse,
@@ -1304,8 +1305,12 @@ async def get_logs(
     """Get system logs with filtering and pagination."""
     _require_admin(current_user)
 
-    # Build query
-    query = select(SystemLog)
+    query = logs_select_with_user()
+    count_query = (
+        select(func.count())
+        .select_from(SystemLog)
+        .join(User, SystemLog.user_id == User.id, isouter=True)
+    )
 
     # Apply filters
     conditions = []
@@ -1323,15 +1328,17 @@ async def get_logs(
             or_(
                 SystemLog.message.ilike(search_pattern),
                 SystemLog.user_email.ilike(search_pattern),
+                SystemLog.user_full_name.ilike(search_pattern),
                 SystemLog.ip_address.ilike(search_pattern),
+                User.email.ilike(search_pattern),
+                User.full_name.ilike(search_pattern),
             )
         )
 
     if conditions:
         query = query.where(and_(*conditions))
+        count_query = count_query.where(and_(*conditions))
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
     total_result = await session.execute(count_query)
     total = total_result.scalar()
 
@@ -1344,11 +1351,16 @@ async def get_logs(
     # Apply pagination
     query = query.limit(limit).offset(offset)
 
-    # Execute query
     result = await session.execute(query)
-    logs = result.scalars().all()
+    rows = result.all()
 
-    return LogsResponse(logs=[LogEntry.model_validate(log) for log in logs], total=total)
+    return LogsResponse(
+        logs=[
+            build_log_entry(log, joined_email=joined_email, joined_full_name=joined_full_name)
+            for log, joined_email, joined_full_name in rows
+        ],
+        total=total,
+    )
 
 
 @router.get("/logs/stats", response_model=LogsStats)
@@ -1432,8 +1444,7 @@ async def export_logs(
     """Export logs to CSV."""
     _require_admin(current_user)
 
-    # Build query (same as get_logs but without pagination)
-    query = select(SystemLog)
+    query = logs_select_with_user()
 
     conditions = []
     if level:
@@ -1450,46 +1461,42 @@ async def export_logs(
             or_(
                 SystemLog.message.ilike(search_pattern),
                 SystemLog.user_email.ilike(search_pattern),
+                SystemLog.user_full_name.ilike(search_pattern),
                 SystemLog.ip_address.ilike(search_pattern),
+                User.email.ilike(search_pattern),
+                User.full_name.ilike(search_pattern),
             )
         )
 
     if conditions:
         query = query.where(and_(*conditions))
 
-    # Apply sorting
     if sort == "desc":
         query = query.order_by(SystemLog.created_at.desc())
     else:
         query = query.order_by(SystemLog.created_at.asc())
 
-    # Execute query
     result = await session.execute(query)
-    logs = result.scalars().all()
-
-    # Generate CSV
-    import csv
-    import io
+    rows = result.all()
 
     output = io.StringIO()
     writer = csv.writer(output)
 
-    # Header
     writer.writerow([
         "id", "created_at", "level", "source", "user_id", "user_email",
         "user_full_name", "message", "detail", "ip_address", "http_status"
     ])
 
-    # Rows
-    for log in logs:
+    for log, joined_email, joined_full_name in rows:
+        entry = build_log_entry(log, joined_email=joined_email, joined_full_name=joined_full_name)
         writer.writerow([
             str(log.id),
             log.created_at.isoformat(),
             log.level.value,
             log.source.value,
             str(log.user_id) if log.user_id else "",
-            log.user_email or "",
-            log.user_full_name or "",
+            entry.user_email or "",
+            entry.user_full_name or "",
             log.message,
             log.detail or "",
             log.ip_address,

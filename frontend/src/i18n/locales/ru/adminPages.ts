@@ -207,6 +207,7 @@ export const adminPagesRu = {
     colModule: "Модуль",
     colMessage: "Сообщение",
     colUser: "Пользователь",
+    unknownUser: "Неизвестный",
     colIp: "IP",
     colStatus: "Статус",
     empty: "Логов не найдено",

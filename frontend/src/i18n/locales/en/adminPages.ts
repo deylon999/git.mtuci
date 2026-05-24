@@ -207,6 +207,7 @@ export const adminPagesEn = {
     colModule: "Module",
     colMessage: "Message",
     colUser: "User",
+    unknownUser: "Unknown",
     colIp: "IP",
     colStatus: "Status",
     empty: "No logs found",
