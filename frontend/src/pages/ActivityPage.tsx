@@ -1,7 +1,15 @@
 import { Search, Download, GitCommit, GitPullRequest, GitBranch, Plus, Trash2, GitMerge, ArrowUpCircle, Wifi } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from "react";
 import AdminPageHeader from "../components/AdminPageHeader";
-import { getTodayStats, getHotRepos, getTopUsers, getHourlyActivity, getRecentActivity } from "../api/adminApi";
+import toast from "react-hot-toast";
+import {
+  exportActivityCSV,
+  getTodayStats,
+  getHotRepos,
+  getTopUsers,
+  getHourlyActivity,
+  getRecentActivity,
+} from "../api/adminApi";
 import type { TodayStats, HotRepoStat, TopUserStat, HourlyActivity, ActivityItem } from "../api/types";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getAdminPageTheme, getAdminNativeSelectProps } from "../layout/adminPageTheme";
@@ -54,6 +62,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
   const { t, tp, language } = useUserPreferences();
   const dateLocale = language === "en" ? "en-US" : "ru-RU";
   const colors = getColors(isDarkTheme);
+  const ui = getAdminPageTheme(isDarkTheme);
   const adminSelect = getAdminNativeSelectProps(isDarkTheme, "compact");
   const toolbarSelectStyle: CSSProperties = {
     fontSize: "11px",
@@ -82,6 +91,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
   const [topUsers, setTopUsers] = useState<TopUserStat[]>([]);
   const [hourlyActivity, setHourlyActivity] = useState<HourlyActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [totalActivities, setTotalActivities] = useState(0);
@@ -232,7 +242,27 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
     } finally {
       setLoading(false);
     }
-  }, [pageSize, pageOffset, searchQuery, eventTypeFilter, userFilter, dateRange, getDateRange])
+  }, [pageSize, pageOffset, searchQuery, eventTypeFilter, userFilter, dateRange, getDateRange]);
+
+  const handleExportCsv = async () => {
+    setExporting(true);
+    try {
+      const { dateFrom, dateTo } = getDateRange();
+      await exportActivityCSV({
+        search: searchQuery || undefined,
+        activityType: eventTypeFilter || undefined,
+        userId: userFilter || undefined,
+        dateFrom,
+        dateTo,
+      });
+      toast.success(t("admin.activity.exportSuccess"));
+    } catch (error) {
+      console.error("Activity export failed:", error);
+      toast.error(t("admin.activity.exportFailed"));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // WebSocket connection
   useEffect(() => {
@@ -412,12 +442,14 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
           <div style={{ fontSize: "20px", fontWeight: 600, color: colors.textPrimary }}>{t("admin.activity.title")}</div>
           <div style={{ fontSize: "12px", color: colors.textSecondary, marginTop: "3px" }}>{t("admin.activity.subtitleFull")}</div>
         </div>
-        <button style={{
-          display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "12px", fontWeight: 500,
-          padding: "7px 14px", borderRadius: "7px", border: `0.5px solid ${colors.border}`,
-          background: colors.cardBg, color: colors.textPrimary, cursor: "pointer"
-        }}>
-          <Download size={14} /> {t("admin.activity.export")}
+        <button
+          type="button"
+          onClick={() => void handleExportCsv()}
+          disabled={exporting}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm ${ui.cardBg} ${ui.cardHover} disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          <Download className="h-4 w-4" />
+          {exporting ? t("admin.activity.exporting") : t("admin.activity.exportCsv")}
         </button>
       </div>
 

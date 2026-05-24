@@ -1,17 +1,87 @@
 """
 Activity log endpoints for recent activity feed
 """
-from typing import List, Optional
-from fastapi import APIRouter, Depends, Query
+import csv
+import io
+from typing import Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
 from datetime import datetime, timedelta, timezone
 
 from app.core.database import get_session
 from app.models import ActivityLog, User, ActivityType
+from app.models.user import UserRole
 from app.core.security import get_current_user
 
 router = APIRouter(prefix="/activity", tags=["activity"])
+
+
+def _require_admin(current_user: User) -> None:
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+
+
+def _apply_activity_filters(
+    count_query,
+    query,
+    *,
+    activity_type: Optional[str] = None,
+    search: Optional[str] = None,
+    user_id: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    if activity_type:
+        try:
+            act_type = ActivityType(activity_type)
+            count_query = count_query.where(ActivityLog.activity_type == act_type)
+            query = query.where(ActivityLog.activity_type == act_type)
+        except ValueError:
+            pass
+
+    if user_id:
+        try:
+            uid = UUID(user_id)
+            count_query = count_query.where(ActivityLog.user_id == uid)
+            query = query.where(ActivityLog.user_id == uid)
+        except ValueError:
+            count_query = count_query.where(ActivityLog.user_login == user_id)
+            query = query.where(ActivityLog.user_login == user_id)
+
+    if search:
+        search_pattern = f"%{search}%"
+        count_query = count_query.where(
+            (ActivityLog.repo_name.ilike(search_pattern))
+            | (ActivityLog.message.ilike(search_pattern))
+            | (ActivityLog.user_login.ilike(search_pattern))
+        )
+        query = query.where(
+            (ActivityLog.repo_name.ilike(search_pattern))
+            | (ActivityLog.message.ilike(search_pattern))
+            | (ActivityLog.user_login.ilike(search_pattern))
+        )
+
+    if date_from:
+        try:
+            from_dt = datetime.fromisoformat(date_from.replace("Z", "+00:00"))
+            count_query = count_query.where(ActivityLog.created_at >= from_dt)
+            query = query.where(ActivityLog.created_at >= from_dt)
+        except ValueError:
+            pass
+
+    if date_to:
+        try:
+            to_dt = datetime.fromisoformat(date_to.replace("Z", "+00:00"))
+            count_query = count_query.where(ActivityLog.created_at <= to_dt)
+            query = query.where(ActivityLog.created_at <= to_dt)
+        except ValueError:
+            pass
+
+    return count_query, query
 
 
 @router.get("/recent")
@@ -20,7 +90,7 @@ async def get_recent_activity(
     offset: int = Query(0, ge=0),
     activity_type: Optional[str] = None,
     search: Optional[str] = None,
-    user_id: Optional[int] = None,
+    user_id: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     session: AsyncSession = Depends(get_session),
@@ -38,48 +108,16 @@ async def get_recent_activity(
         .join(User, ActivityLog.user_id == User.id, isouter=True)
     )
     
-    # Apply filters
-    if activity_type:
-        try:
-            act_type = ActivityType(activity_type)
-            count_query = count_query.where(ActivityLog.activity_type == act_type)
-            query = query.where(ActivityLog.activity_type == act_type)
-        except ValueError:
-            pass
-    
-    if user_id:
-        count_query = count_query.where(ActivityLog.user_id == user_id)
-        query = query.where(ActivityLog.user_id == user_id)
-    
-    if search:
-        search_pattern = f"%{search}%"
-        count_query = count_query.where(
-            (ActivityLog.repo_name.ilike(search_pattern)) |
-            (ActivityLog.message.ilike(search_pattern)) |
-            (ActivityLog.user_login.ilike(search_pattern))
-        )
-        query = query.where(
-            (ActivityLog.repo_name.ilike(search_pattern)) |
-            (ActivityLog.message.ilike(search_pattern)) |
-            (ActivityLog.user_login.ilike(search_pattern))
-        )
-    
-    if date_from:
-        try:
-            from_dt = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
-            count_query = count_query.where(ActivityLog.created_at >= from_dt)
-            query = query.where(ActivityLog.created_at >= from_dt)
-        except ValueError:
-            pass
-    
-    if date_to:
-        try:
-            to_dt = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
-            count_query = count_query.where(ActivityLog.created_at <= to_dt)
-            query = query.where(ActivityLog.created_at <= to_dt)
-        except ValueError:
-            pass
-    
+    count_query, query = _apply_activity_filters(
+        count_query,
+        query,
+        activity_type=activity_type,
+        search=search,
+        user_id=user_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
     # Get total count
     total_result = await session.execute(count_query)
     total_count = total_result.scalar() or 0
@@ -144,3 +182,74 @@ async def get_recent_activity(
         })
     
     return {"activities": activities, "count": len(activities), "total": total_count}
+
+
+@router.get("/export")
+async def export_activity_csv(
+    activity_type: Optional[str] = None,
+    search: Optional[str] = None,
+    user_id: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Export activity log to CSV (respects current filters)."""
+    _require_admin(current_user)
+
+    query = (
+        select(ActivityLog, User.full_name, User.email)
+        .join(User, ActivityLog.user_id == User.id, isouter=True)
+    )
+    _, query = _apply_activity_filters(
+        select(func.count(ActivityLog.id)),
+        query,
+        activity_type=activity_type,
+        search=search,
+        user_id=user_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    query = query.order_by(desc(ActivityLog.created_at))
+
+    result = await session.execute(query)
+    rows = result.all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "id",
+        "created_at",
+        "activity_type",
+        "user_id",
+        "user_name",
+        "user_login",
+        "repo_name",
+        "message",
+        "ip_address",
+    ])
+
+    for activity, full_name, email in rows:
+        user_name = full_name or email or activity.user_login or ""
+        writer.writerow([
+            str(activity.id),
+            activity.created_at.isoformat() if activity.created_at else "",
+            activity.activity_type.value,
+            str(activity.user_id) if activity.user_id else "",
+            user_name,
+            activity.user_login or "",
+            activity.repo_name or "",
+            activity.message or "",
+            activity.ip_address or "",
+        ])
+
+    csv_content = output.getvalue()
+    output.close()
+
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="activity_{datetime.now(timezone.utc).isoformat()}.csv"'
+        },
+    )

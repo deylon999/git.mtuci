@@ -363,6 +363,40 @@ export async function getRecentActivity(
   return apiRequest<RecentActivityResponse>(`/activity/recent?${params.toString()}`);
 }
 
+export async function exportActivityCSV(filters?: ActivityFilters): Promise<void> {
+  const params = new URLSearchParams();
+
+  if (filters?.search) params.append("search", filters.search);
+  if (filters?.activityType) params.append("activity_type", filters.activityType);
+  if (filters?.userId) params.append("user_id", filters.userId);
+  if (filters?.dateFrom && filters.dateFrom !== "undefined") params.append("date_from", filters.dateFrom);
+  if (filters?.dateTo && filters.dateTo !== "undefined") params.append("date_to", filters.dateTo);
+
+  const token = localStorage.getItem("token");
+  const res = await fetch(
+    `${import.meta.env.VITE_API_URL ?? "/api"}/activity/export?${params.toString()}`,
+    {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+      },
+    },
+  );
+
+  if (!res.ok) {
+    throw new Error(`${res.status} ${res.statusText}`);
+  }
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `activity_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
 // Logs API functions
 export async function getLogs(
   filters?: LogsFilters,
