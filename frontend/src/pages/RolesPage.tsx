@@ -69,6 +69,17 @@ const iconMap: Record<string, React.ElementType> = {
   Settings,
 };
 
+function getRoleIconStyle(roleId: string, isDarkTheme: boolean) {
+  const styles: Record<string, { dark: string; light: string }> = {
+    admin: { dark: "bg-red-500/20 text-red-400", light: "bg-red-100 text-red-700" },
+    teacher: { dark: "bg-purple-500/20 text-purple-400", light: "bg-purple-100 text-purple-700" },
+    student: { dark: "bg-blue-500/20 text-blue-400", light: "bg-blue-100 text-blue-700" },
+    laborant: { dark: "bg-pink-500/20 text-pink-400", light: "bg-pink-100 text-pink-700" },
+  };
+  const s = styles[roleId] ?? styles.student;
+  return isDarkTheme ? s.dark : s.light;
+}
+
 function getLevelBadge(level: PermissionLevel, isDarkTheme: boolean, t: (key: string) => string) {
   const styles = {
     read: isDarkTheme ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700",
@@ -94,7 +105,7 @@ function Toggle({ checked, onChange, disabled, isDarkTheme }: { checked: boolean
     <button
       onClick={onChange}
       disabled={disabled}
-      className={`relative w-11 h-6 rounded-full transition-colors ${checked ? "bg-blue-600" : isDarkTheme ? "bg-[#2d2d2d]" : "bg-gray-300"} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+      className={`relative w-11 h-6 rounded-full transition-colors ${checked ? "bg-blue-600" : isDarkTheme ? "bg-[#2d2d2d] border border-[#30363d]" : "bg-gray-300"} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
     >
       <span
         className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${checked ? "translate-x-5" : "translate-x-0"}`}
@@ -314,43 +325,43 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-      </div>
-    );
-  }
-
   const ui = getAdminPageTheme(isDarkTheme);
-  const cardBg = `border ${ui.tableBorder} ${ui.tableBg}`;
+  const tableBg = ui.tableBg;
+  const tableBorder = ui.tableBorder;
+  const panelCard = `${tableBg} border ${tableBorder}`;
+  const headerActionBg = ui.cardBg;
+  const headerActionHover = ui.cardHover;
   const cardBgLight = ui.iconBg;
-  const cardBgLighter = ui.tableBg;
   const textPrimary = ui.tableNameText;
   const textSecondary = ui.tableHeaderText;
   const textTertiary = ui.tableCellText;
-  const roleCardText = ui.tableNameText;
-  const roleCardDesc = ui.tableHeaderText;
-  const roleCardCount = ui.tableCellText;
   const headerText = ui.tableHeaderText;
   const activeBadge = isDarkTheme ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700";
   const systemBadge = isDarkTheme ? "bg-[#2d2d2d] text-[#6e7681]" : "bg-gray-200 text-gray-500";
   const dividerColor = ui.tableBorder;
   const hoverBg = ui.tableRowHover;
-  const resetBtn = `${ui.iconBg} border ${ui.tableBorder} ${ui.tableCellText} ${isDarkTheme ? "hover:text-white" : "hover:text-gray-900"}`;
-  const saveBtnActive = "bg-blue-600 text-white hover:bg-blue-700";
-  const saveBtnInactive = isDarkTheme ? "bg-[#2d2d2d] text-[#6e7681] cursor-not-allowed" : "bg-gray-300 text-gray-500 cursor-not-allowed";
+  const listItemHover = ui.tableRowHover;
+  const saveBtnActive = "bg-blue-600 text-white hover:bg-blue-700 shadow-sm";
+  const saveBtnInactive = `${ui.iconBg} ${ui.tableCellText} cursor-not-allowed opacity-60`;
   const sectionHeader = ui.tableHeaderText;
-  const assistantCard = `${ui.tableBg} border ${isDarkTheme ? "border-[#30363d]" : "border-gray-200"}`;
+  const assistantCard = `${tableBg} border ${tableBorder}`;
   const assistantHeader = ui.iconBg;
   const trustedText = isDarkTheme ? "text-emerald-400" : "text-emerald-600";
   const untrustedText = ui.tableHeaderText;
-  const auditCard = `${ui.tableBg} border ${ui.tableBorder}`;
+  const auditCard = `${tableBg} border ${tableBorder}`;
   const auditTag = `${ui.iconBg} ${ui.tableCellText}`;
 
+  if (loading) {
+    return (
+      <div className={`h-full flex items-center justify-center ${ui.pageWrapper} transition-colors`}>
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
   return (
-    <div className={`h-full overflow-y-auto ${ui.pageWrapper}`}>
-      <div className="max-w-7xl mx-auto py-6 px-6 pr-2 space-y-6 pb-20">
+    <div className={`h-full overflow-y-auto ${ui.pageWrapper} transition-colors`}>
+      <div className="max-w-7xl mx-auto py-6 px-6 space-y-6 pb-20">
         {/* Header */}
         <AdminPageHeader
           isDarkTheme={isDarkTheme}
@@ -367,18 +378,18 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
               <button
                 key={role.id}
                 onClick={() => handleRoleChange(role.id as RoleType)}
-                className={`text-left p-5 rounded-xl border transition-all ${cardBg} ${
+                className={`text-left p-5 rounded-xl border transition-colors ${panelCard} ${
                   isActive
-                    ? "border-blue-500/50 shadow-lg shadow-blue-500/10"
-                    : isDarkTheme ? "hover:border-[#3d3d3d]" : "hover:border-gray-300"
+                    ? "border-blue-500/40 ring-1 ring-blue-500/20"
+                    : isDarkTheme ? "hover:border-[#3d3d3d]" : "hover:border-slate-300"
                 }`}
               >
-                <div className={`w-10 h-10 rounded-lg ${role.icon_bg} flex items-center justify-center mb-3`}>
+                <div className={`w-10 h-10 rounded-lg ${getRoleIconStyle(role.id, isDarkTheme)} flex items-center justify-center mb-3`}>
                   <Icon className="h-5 w-5" />
                 </div>
-                <h3 className={`text-base font-semibold mb-1 ${roleCardText}`}>{role.name}</h3>
-                <p className={`text-xs mb-3 line-clamp-2 ${roleCardDesc}`}>{role.description}</p>
-                <p className={`text-sm ${roleCardCount}`}>{role.user_count} {pluralWord(language, "admin.roles.users", role.user_count)}</p>
+                <h3 className={`text-base font-semibold mb-1 ${textPrimary}`}>{role.name}</h3>
+                <p className={`text-xs mb-3 line-clamp-2 ${textSecondary}`}>{role.description}</p>
+                <p className={`text-sm ${textTertiary}`}>{role.user_count} {pluralWord(language, "admin.roles.users", role.user_count)}</p>
               </button>
             );
           })}
@@ -387,7 +398,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
         {/* Split Screen */}
         <div className="grid grid-cols-[35%_1fr] gap-6">
           {/* Left Column - Role Selection */}
-          <div className={`rounded-xl border p-5 ${cardBg}`}>
+          <div className={`rounded-xl p-5 ${panelCard}`}>
             <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${headerText}`}>
               {t("admin.roles.selectRole")}
             </h2>
@@ -400,10 +411,10 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                     key={role.id}
                     onClick={() => handleRoleChange(role.id as RoleType)}
                     className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                      isSelected ? cardBgLight : isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-gray-100"
+                      isSelected ? cardBgLight : listItemHover
                     }`}
                   >
-                    <div className={`w-8 h-8 rounded-lg ${role.icon_bg} flex items-center justify-center flex-shrink-0`}>
+                    <div className={`w-8 h-8 rounded-lg ${getRoleIconStyle(role.id, isDarkTheme)} flex items-center justify-center flex-shrink-0`}>
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="flex-1 text-left">
@@ -426,7 +437,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
           </div>
 
           {/* Right Column - Permission Settings */}
-          <div className={`rounded-xl border p-5 shadow-sm ${cardBg}`}>
+          <div className={`rounded-xl p-5 ${panelCard}`}>
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <h2 className={`text-lg font-semibold ${textPrimary}`}>{currentRole?.name || t("admin.roles.roleFallback")}</h2>
@@ -437,7 +448,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                 <button
                   onClick={handleReset}
                   disabled={permissionsLoading || (!hasChanges && categories.length > 0)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition-colors disabled:opacity-50 ${resetBtn}`}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${headerActionBg} ${headerActionHover} ${ui.tableCellText}`}
                 >
                   <RotateCcw className="h-4 w-4" />
                   {t("admin.roles.reset")}
@@ -445,7 +456,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                 <button
                   onClick={handleSave}
                   disabled={permissionsLoading || !hasChanges}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
                     hasChanges ? saveBtnActive : saveBtnInactive
                   }`}
                 >
