@@ -80,7 +80,7 @@ function buildTeacherMenu(): MenuSection[] {
       titleKey: "sidebar.myCourses",
       items: [
         { path: "/teacher/courses", labelKey: "sidebar.allCourses", icon: BookOpen },
-        { path: "/courses", labelKey: "sidebar.createCourse", icon: Plus },
+        { path: "/courses?create=1", labelKey: "sidebar.createCourse", icon: Plus },
       ],
     },
     {
@@ -148,6 +148,7 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   const studentNav = useStudentNavCountsOptional();
   const [hasSystemIssues, setHasSystemIssues] = useState(false);
   const [teacherPending, setTeacherPending] = useState(0);
+  const [teacherCoursesCount, setTeacherCoursesCount] = useState(0);
   const { t } = useUserPreferences();
   const theme = getTheme(isDarkTheme);
 
@@ -161,10 +162,16 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
     let cancelled = false;
     void getTeacherDashboard()
       .then((d) => {
-        if (!cancelled) setTeacherPending(d.pending_grading);
+        if (!cancelled) {
+          setTeacherPending(d.pending_grading);
+          setTeacherCoursesCount(d.courses_count);
+        }
       })
       .catch(() => {
-        if (!cancelled) setTeacherPending(0);
+        if (!cancelled) {
+          setTeacherPending(0);
+          setTeacherCoursesCount(0);
+        }
       });
     return () => {
       cancelled = true;
@@ -230,6 +237,9 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
 
   const isActive = (path: string) => {
     const pathname = location.pathname;
+    if (path === "/courses?create=1") {
+      return pathname === "/courses" && location.search === "?create=1";
+    }
     if (pathname === path) return true;
 
     if (path === "/repositories") {
@@ -243,6 +253,11 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
       return pathname === path;
     }
 
+    // /admin/settings, /admin/monitoring и т.д. не должны подсвечивать дашборд
+    if (path === "/admin") {
+      return pathname === "/admin";
+    }
+
     return pathname.startsWith(`${path}/`);
   };
 
@@ -254,6 +269,9 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
         items: section.items.map((item) => {
           if (item.path === "/teacher/code-review" && teacherPending > 0) {
             return { ...item, badge: { text: String(teacherPending), variant: "red" as const } };
+          }
+          if (item.path === "/teacher/courses" && teacherCoursesCount > 0) {
+            return { ...item, badge: { text: String(teacherCoursesCount), variant: "orange" as const } };
           }
           return item;
         }),
@@ -274,7 +292,9 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
         return { ...item, badge };
       }),
     }));
-  }, [userRole, studentNav?.sidebar, teacherPending, t]);
+  }, [userRole, studentNav?.sidebar, teacherPending, teacherCoursesCount, t]);
+
+  const isTeacherLike = userRole === "teacher" || userRole === "laborant";
 
   // While loading, show nothing or student menu to avoid flashing admin menu
   if (userRole === null) {
@@ -289,44 +309,77 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   console.log("[Sidebar] Rendering menu for role:", userRole, "sections count:", menuSections.length);
 
   return (
-    <aside className={`w-[260px] flex-shrink-0 h-full border-r`} style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
-      <nav className="p-4">
+    <aside
+      className={`${isTeacherLike ? "w-[210px]" : "w-[260px]"} flex-shrink-0 h-full border-r`}
+      style={{ backgroundColor: isTeacherLike ? theme.bg2 : theme.bg, borderColor: theme.border }}
+    >
+      <nav className={isTeacherLike ? "py-4 px-0" : "p-4"}>
         {menuSections.map((section) => (
-          <div key={section.titleKey} className="mb-6">
-            <h3 className={`text-xs font-semibold uppercase tracking-wider mb-2 px-3`} style={{ color: theme.text2 }}>
+          <div key={section.titleKey} className={isTeacherLike ? "mb-2 px-2.5" : "mb-6"}>
+            <h3
+              className={
+                isTeacherLike
+                  ? "text-[9px] font-semibold uppercase tracking-[0.07em] px-2 pt-1 pb-1"
+                  : "text-xs font-semibold uppercase tracking-wider mb-2 px-3"
+              }
+              style={{ color: isTeacherLike ? theme.text3 : theme.text2 }}
+            >
               {t(section.titleKey)}
             </h3>
-            <ul className="space-y-1">
+            <ul className={isTeacherLike ? "space-y-0" : "space-y-1"}>
               {section.items.map((item) => {
                 const active = isActive(item.path);
                 const Icon = item.icon;
+                const linkTo = item.path === "/courses?create=1" ? "/courses?create=1" : item.path;
                 return (
                   <li key={item.path}>
                     <Link
-                      to={item.path}
-                      className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                        active
-                          ? `border-l-2 border-blue-500`
-                          : ``
-                      }`}
-                      style={{
-                        backgroundColor: active ? theme.hoverBg : 'transparent',
-                        color: active ? theme.accent : theme.text2
-                      }}
+                      to={linkTo}
+                      className={
+                        isTeacherLike
+                          ? "flex items-center justify-between gap-2 rounded-md px-2 py-[7px] text-[11px] transition-colors"
+                          : `flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                              active ? "border-l-2 border-blue-500" : ""
+                            }`
+                      }
+                      style={
+                        isTeacherLike
+                          ? {
+                              backgroundColor: active ? "rgba(124,58,237,0.12)" : "transparent",
+                              color: active ? "#a78bfa" : theme.text2,
+                              fontWeight: active ? 500 : 400,
+                            }
+                          : {
+                              backgroundColor: active ? theme.hoverBg : "transparent",
+                              color: active ? theme.accent : theme.text2,
+                            }
+                      }
                     >
-                      <div className="flex items-center gap-3">
-                        <Icon className={`h-5 w-5`} style={{ color: active ? theme.accent : theme.text3 }} />
+                      <div className={`flex items-center ${isTeacherLike ? "gap-2" : "gap-3"}`}>
+                        <Icon
+                          className={isTeacherLike ? "h-[13px] w-[13px] shrink-0" : "h-5 w-5"}
+                          style={isTeacherLike ? undefined : { color: active ? theme.accent : theme.text3 }}
+                        />
                         <span>{t(item.labelKey)}</span>
                       </div>
-                      {/* Pending users badge for "Все пользователи" */}
                       {item.path === "/users" && pendingCount > 0 && (
-                        <span
-                          className="flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full text-xs font-semibold bg-red-500 text-white"
-                        >
+                        <span className="flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full text-xs font-semibold bg-red-500 text-white">
                           {pendingCount}
                         </span>
                       )}
-                      {item.path !== "/users" && item.badge && (
+                      {item.path !== "/users" && item.badge && isTeacherLike ? (
+                        <span
+                          className="rounded-lg px-1.5 py-px text-[9px] font-semibold"
+                          style={
+                            item.badge.variant === "red"
+                              ? { backgroundColor: "rgba(226,75,74,0.15)", color: theme.danger }
+                              : { backgroundColor: "rgba(245,158,11,0.15)", color: theme.warning }
+                          }
+                        >
+                          {item.badge.text}
+                        </span>
+                      ) : null}
+                      {item.path !== "/users" && item.badge && !isTeacherLike ? (
                         <span
                           className={`flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full text-xs font-semibold ${
                             item.badge.variant === "red"
@@ -336,7 +389,7 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
                         >
                           {item.badge.text}
                         </span>
-                      )}
+                      ) : null}
                       {item.path === "/admin/monitoring" && hasSystemIssues && (
                         <AlertCircle className="h-4 w-4 text-orange-500" />
                       )}

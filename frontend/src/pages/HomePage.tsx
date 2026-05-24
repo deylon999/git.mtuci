@@ -1,84 +1,45 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getMe } from "../api/authApi";
 import { getCourses } from "../api/coursesApi";
-import { getTeacherDashboard, type TeacherDashboard } from "../api/teacherDashboardApi";
+import {
+  getTeacherActivity,
+  getTeacherDashboardFull,
+  type TeacherActivityItem,
+  type TeacherDashboardFull,
+} from "../api/teacherDashboardApi";
 import { getTheme } from "../theme";
 import type { UserRead, Course as CourseType } from "../api/types";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 
-interface Activity {
-  id: string;
-  text: string;
-  type: "submission" | "comment" | "deadline";
+interface HomePageProps {
+  isDarkTheme?: boolean;
 }
 
-interface Course {
-  id: string;
-  name: string;
-  rating: number;
+function formatDeadlineTime(iso: string, locale: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString(locale === "en" ? "en-US" : "ru-RU", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
-interface Deadline {
-  id: string;
-  time: string;
-  title: string;
-  urgency: "today" | "tomorrow" | "later";
-}
-
-interface StudentRating {
-  id: string;
-  name: string;
-  points: number;
-}
-
-interface CourseDisplay {
-  id: string;
-  name: string;
-  rating: number;
-}
-
-const mockCourses: CourseDisplay[] = [
-  { id: "1", name: "Databases", rating: 4 },
-  { id: "2", name: "Web Development", rating: 3 },
-  { id: "3", name: "Advanced Python", rating: 5 },
-];
-
-const mockDeadlines: Deadline[] = [
-  { id: "1", time: "17:00", title: "Lab #3", urgency: "today" },
-  { id: "2", time: "23:59", title: "DB Test", urgency: "tomorrow" },
-  { id: "3", time: "", title: "Term paper", urgency: "later" },
-];
-
-const mockRatings: StudentRating[] = [
-  { id: "1", name: "Petrov I.", points: 450 },
-  { id: "2", name: "Ivanov A.", points: 420 },
-  { id: "3", name: "Sidorov K.", points: 380 },
-];
-
-function getActivityIcon(type: Activity["type"]) {
-  switch (type) {
-    case "submission":
-      return "✅";
-    case "comment":
-      return "💬";
-    case "deadline":
-      return "🔥";
-  }
-}
-
-function StarRating({ rating, theme }: { rating: number; theme: any }) {
-  return (
-    <span style={{ color: theme.warning }}>
-      {Array.from({ length: 5 }).map((_, i) =>
-        i < rating ? "⭐" : "☆"
-      )}
-    </span>
-  );
+function deadlineUrgency(deadlineIso: string): "today" | "tomorrow" | "later" {
+  const now = new Date();
+  const d = new Date(deadlineIso);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  if (day.getTime() <= today.getTime()) return "today";
+  if (day.getTime() === tomorrow.getTime()) return "tomorrow";
+  return "later";
 }
 
 function getUrgencyLabel(
-  urgency: Deadline["urgency"],
+  urgency: "today" | "tomorrow" | "later",
   t: (key: string) => string,
 ) {
   switch (urgency) {
@@ -91,7 +52,7 @@ function getUrgencyLabel(
   }
 }
 
-function getUrgencyColor(urgency: Deadline["urgency"], theme: any) {
+function getUrgencyColor(urgency: "today" | "tomorrow" | "later", theme: ReturnType<typeof getTheme>) {
   switch (urgency) {
     case "today":
       return theme.danger;
@@ -102,67 +63,93 @@ function getUrgencyColor(urgency: Deadline["urgency"], theme: any) {
   }
 }
 
-interface HomePageProps {
-  isDarkTheme?: boolean;
+function activityLine(item: TeacherActivityItem, t: (key: string) => string): string {
+  const who = item.student_name ?? t("roles.student");
+  const repo = item.repo_name ? ` · ${item.repo_name}` : "";
+  const msg = item.message?.trim();
+  if (msg) return `${who}${repo}: ${msg}`;
+  return `${who}${repo} (${item.activity_type})`;
 }
 
 export default function HomePage({ isDarkTheme = false }: HomePageProps) {
-  const { t, tp } = useUserPreferences();
-  const mockActivities: Activity[] = [
-    { id: "1", text: t("admin.home.activitySubmission"), type: "submission" },
-    { id: "2", text: t("admin.home.activityComment"), type: "comment" },
-    { id: "3", text: t("admin.home.activityDeadline"), type: "deadline" },
-  ];
+  const { t, tp, language } = useUserPreferences();
   const [user, setUser] = useState<UserRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedCourse, setSelectedCourse] = useState<string>("all");
   const [courses, setCourses] = useState<CourseType[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
-  const [teacherDash, setTeacherDash] = useState<TeacherDashboard | null>(null);
+  const [teacherFull, setTeacherFull] = useState<TeacherDashboardFull | null>(null);
+  const [activity, setActivity] = useState<TeacherActivityItem[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
 
   const theme = getTheme(isDarkTheme);
   const isTeacherLike = user?.role === "teacher" || user?.role === "laborant";
+  const dateLocale = language === "en" ? "en-US" : "ru-RU";
 
   useEffect(() => {
     let cancelled = false;
     async function loadData() {
       try {
         const me = await getMe();
-        const tasks: Promise<unknown>[] = [getCourses()];
-        if (me.role === "teacher" || me.role === "laborant") {
-          tasks.push(getTeacherDashboard());
-        }
-        const results = await Promise.allSettled(tasks);
+        if (cancelled) return;
+        setUser(me);
+
+        const coursesResult = await getCourses().catch(() => [] as CourseType[]);
         if (!cancelled) {
-          setUser(me);
-          const coursesResult = results[0];
-          if (coursesResult.status === "fulfilled") {
-            setCourses(coursesResult.value as CourseType[]);
-          }
-          if (results[1]?.status === "fulfilled") {
-            setTeacherDash(results[1].value as TeacherDashboard);
+          setCourses(coursesResult);
+          setCoursesLoading(false);
+        }
+
+        if (me.role === "teacher" || me.role === "laborant") {
+          setActivityLoading(true);
+          const [full, act] = await Promise.all([
+            getTeacherDashboardFull().catch(() => null),
+            getTeacherActivity(12).catch(() => [] as TeacherActivityItem[]),
+          ]);
+          if (!cancelled) {
+            setTeacherFull(full);
+            setActivity(act);
+            setActivityLoading(false);
           }
         }
       } catch {
-        // ignore
+        /* ignore */
       } finally {
         if (!cancelled) {
           setLoading(false);
           setCoursesLoading(false);
+          setActivityLoading(false);
         }
       }
     }
-    loadData();
+    void loadData();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const weeklyProgress = 75;
+  const weeklyProgress = useMemo(() => {
+    const days = teacherFull?.activity_by_day ?? [];
+    if (days.length === 0) return 0;
+    const max = Math.max(...days.map((d) => d.commits), 1);
+    const total = days.reduce((s, d) => s + d.commits, 0);
+    return Math.min(100, Math.round((total / (max * days.length)) * 100));
+  }, [teacherFull?.activity_by_day]);
+
+  const filteredActivity = useMemo(() => {
+    if (selectedCourse === "all") return activity;
+    return activity.filter((a) => a.repo_name?.includes(selectedCourse));
+  }, [activity, selectedCourse]);
+
+  const deadlines = useMemo(() => {
+    const rows = teacherFull?.deadlines ?? [];
+    return [...rows]
+      .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+      .slice(0, 8);
+  }, [teacherFull?.deadlines]);
 
   return (
     <div className="min-h-screen pb-20" style={{ backgroundColor: theme.bg }}>
-      {/* Приветствие */}
       <div className="mb-6">
         <h1 className="text-2xl font-semibold" style={{ color: theme.text }}>
           {tp("admin.home.greeting", {
@@ -171,15 +158,15 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
         </h1>
       </div>
 
-      {isTeacherLike && teacherDash ? (
+      {isTeacherLike && teacherFull ? (
         <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
           {[
-            [t("admin.home.statCourses"), teacherDash.courses_count],
-            [t("admin.home.statStudents"), teacherDash.students_total],
-            [t("admin.home.statAssignments"), teacherDash.assignments_total],
-            [t("admin.home.statPending"), teacherDash.pending_grading],
-            [t("admin.home.statSubmissionsWeek"), teacherDash.submissions_this_week],
-            [t("admin.home.statOverdue"), teacherDash.overdue_assignments],
+            [t("admin.home.statCourses"), teacherFull.active_courses_count],
+            [t("admin.home.statStudents"), teacherFull.students_total],
+            [t("admin.home.statAssignments"), teacherFull.courses.reduce((s, c) => s + c.assignments_count, 0)],
+            [t("admin.home.statPending"), teacherFull.pending_grading],
+            [t("admin.home.statSubmissionsWeek"), teacherFull.commits_today],
+            [t("admin.home.statOverdue"), teacherFull.deadlines.filter((d) => new Date(d.deadline) < new Date()).length],
           ].map(([label, value]) => (
             <div
               key={String(label)}
@@ -200,29 +187,29 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
       {isTeacherLike ? (
         <div className="mb-6">
           <Link
-            to="/grading-queue"
+            to="/teacher/code-review"
             className="inline-flex rounded-lg px-4 py-2 text-sm font-medium text-white"
             style={{ backgroundColor: theme.accent }}
           >
-            {tp("admin.home.gradingQueue", { n: teacherDash?.pending_grading ?? 0 })}
+            {tp("admin.home.gradingQueue", { n: teacherFull?.pending_grading ?? 0 })}
           </Link>
         </div>
       ) : null}
 
-      {/* Основная сетка: контент + сайдбар */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Левая колонка (основной контент) */}
         <div className="space-y-6 lg:col-span-2">
-          {/* Активность за неделю */}
-          <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold transition-colors" style={{ color: theme.text }}>{t("admin.home.activityWeek")}</h2>
-              </div>
+          <div
+            className="rounded-xl border p-5 shadow-sm transition-colors"
+            style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold transition-colors" style={{ color: theme.text }}>
+                {t("admin.home.activityWeek")}
+              </h2>
               <select
                 value={selectedCourse}
                 onChange={(e) => setSelectedCourse(e.target.value)}
-                className="rounded-md border px-3 py-1.5 text-sm outline-none focus:border-[#372579] focus:ring-1 focus:ring-[#372579] transition-colors"
+                className="rounded-md border px-3 py-1.5 text-sm outline-none focus:border-[#372579] focus:ring-1 focus:ring-[#372579] transition-colors max-w-[200px]"
                 style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
               >
                 <option value="all">{t("admin.home.allCoursesOption")}</option>
@@ -239,8 +226,6 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
                 )}
               </select>
             </div>
-
-            {/* Прогресс бар */}
             <div className="mb-2">
               <div className="h-3 w-full rounded-full transition-colors" style={{ backgroundColor: theme.bg4 }}>
                 <div
@@ -249,83 +234,132 @@ export default function HomePage({ isDarkTheme = false }: HomePageProps) {
                 />
               </div>
             </div>
-            <div className="text-sm font-medium transition-colors" style={{ color: theme.text }}>{weeklyProgress}%</div>
+            <div className="text-sm font-medium transition-colors" style={{ color: theme.text }}>
+              {weeklyProgress}%
+            </div>
           </div>
 
-          {/* Последние действия */}
-          <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
-            <h2 className="mb-3 text-lg font-semibold transition-colors" style={{ color: theme.text }}>{t("admin.home.recentActions")}</h2>
-            <ul className="space-y-2">
-              {mockActivities.map((activity) => (
-                <li key={activity.id} className="flex items-start gap-2 text-sm transition-colors" style={{ color: theme.text2 }}>
-                  <span>{getActivityIcon(activity.type)}</span>
-                  <span>{activity.text}</span>
-                </li>
-              ))}
-            </ul>
+          <div
+            className="rounded-xl border p-5 shadow-sm transition-colors"
+            style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
+          >
+            <h2 className="mb-3 text-lg font-semibold transition-colors" style={{ color: theme.text }}>
+              {t("admin.home.recentActions")}
+            </h2>
+            {activityLoading ? (
+              <p className="text-sm" style={{ color: theme.text2 }}>
+                {t("common.loading")}
+              </p>
+            ) : filteredActivity.length === 0 ? (
+              <p className="text-sm" style={{ color: theme.text2 }}>
+                {t("admin.home.noRecentActivity")}
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {filteredActivity.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex items-start gap-2 text-sm transition-colors"
+                    style={{ color: theme.text2 }}
+                  >
+                    <span className="shrink-0 text-xs tabular-nums" style={{ color: theme.text3 }}>
+                      {formatDeadlineTime(item.created_at, dateLocale)}
+                    </span>
+                    <span>{activityLine(item, t)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
-          {/* Активные курсы */}
-          <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
-            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>{t("admin.home.activeCourses")}</h2>
+          <div
+            className="rounded-xl border p-5 shadow-sm transition-colors"
+            style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
+          >
+            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>
+              {t("admin.home.activeCourses")}
+            </h2>
             {coursesLoading ? (
-              <div className="text-sm transition-colors" style={{ color: theme.text2 }}>{t("admin.home.loadingCoursesList")}</div>
+              <div className="text-sm transition-colors" style={{ color: theme.text2 }}>
+                {t("admin.home.loadingCoursesList")}
+              </div>
             ) : courses.length === 0 ? (
-              <div className="text-sm transition-colors" style={{ color: theme.text2 }}>{t("admin.home.noCoursesAvailable")}</div>
+              <div className="text-sm transition-colors" style={{ color: theme.text2 }}>
+                {t("admin.home.noCoursesAvailable")}
+              </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {courses.map((course) => (
-                  <div
+                  <Link
                     key={course.id}
-                    className="rounded-lg border p-4 transition hover:shadow-md transition-colors"
+                    to={`/courses/${course.id}`}
+                    className="rounded-lg border p-4 transition hover:shadow-md"
                     style={{ backgroundColor: theme.bg2, borderColor: theme.border }}
                   >
-                    <div className="mb-2 text-sm font-medium transition-colors" style={{ color: theme.text }}>{course.title}</div>
-                    <div className="text-xs transition-colors" style={{ color: theme.text2 }}>{course.description || t("admin.courses.noDescription")}</div>
-                  </div>
+                    <div className="mb-2 text-sm font-medium transition-colors" style={{ color: theme.text }}>
+                      {course.title}
+                    </div>
+                    <div className="text-xs transition-colors" style={{ color: theme.text2 }}>
+                      {course.description || t("admin.courses.noDescription")}
+                    </div>
+                  </Link>
                 ))}
               </div>
             )}
           </div>
         </div>
 
-        {/* Правая колонка (сайдбар) */}
         <div className="space-y-6">
-          {/* Дедлайны */}
-          <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
-            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>{t("admin.home.deadlines")}</h2>
-            <ul className="space-y-3">
-              {mockDeadlines.map((deadline) => (
-                <li key={deadline.id} className="border-l-2 pl-3 transition-colors" style={{ borderColor: theme.border }}>
-                  <div className="text-xs transition-colors" style={{ color: getUrgencyColor(deadline.urgency, theme) }}>
-                    {getUrgencyLabel(deadline.urgency, t)} {deadline.time}
-                  </div>
-                  <div className="text-sm transition-colors" style={{ color: theme.text2 }}>{deadline.title}</div>
-                </li>
-              ))}
-            </ul>
+          <div
+            className="rounded-xl border p-5 shadow-sm transition-colors"
+            style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
+          >
+            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>
+              {t("admin.home.deadlines")}
+            </h2>
+            {deadlines.length === 0 ? (
+              <p className="text-sm" style={{ color: theme.text2 }}>
+                {t("admin.home.noDeadlines")}
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {deadlines.map((deadline) => {
+                  const urgency = deadlineUrgency(deadline.deadline);
+                  return (
+                    <li
+                      key={deadline.assignment_id}
+                      className="border-l-2 pl-3 transition-colors"
+                      style={{ borderColor: theme.border }}
+                    >
+                      <div
+                        className="text-xs transition-colors"
+                        style={{ color: getUrgencyColor(urgency, theme) }}
+                      >
+                        {getUrgencyLabel(urgency, t)} · {formatDeadlineTime(deadline.deadline, dateLocale)}
+                      </div>
+                      <div className="text-sm transition-colors" style={{ color: theme.text2 }}>
+                        {deadline.assignment_title}
+                      </div>
+                      <div className="text-[11px]" style={{ color: theme.text3 }}>
+                        {deadline.course_title} · {deadline.submitted_count}/{deadline.total_students}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
 
-          {/* Рейтинг */}
-          <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
-            <h2 className="mb-4 text-lg font-semibold transition-colors" style={{ color: theme.text }}>{t("admin.home.rating")}</h2>
-            <ul className="space-y-2">
-              {mockRatings.map((student, index) => (
-                <li key={student.id} className="flex items-center justify-between text-sm">
-                  <span style={{ color: theme.text2 }}>
-                    <span className="mr-2 font-medium" style={{ color: theme.text3 }}>{index + 1}.</span>
-                    {student.name}
-                  </span>
-                  <span className="font-medium" style={{ color: theme.accent }}>{student.points}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Советы */}
-          <div className="rounded-xl border p-5 shadow-sm transition-colors" style={{ backgroundColor: theme.bg2, borderColor: theme.border }}>
-            <h2 className="mb-3 text-lg font-semibold transition-colors" style={{ color: theme.text }}>{t("admin.home.tips")}</h2>
-            <p className="text-sm italic transition-colors" style={{ color: theme.text2 }}>&quot;{t("admin.home.pushReminder")}&quot;</p>
+          <div
+            className="rounded-xl border p-5 shadow-sm transition-colors"
+            style={{ backgroundColor: theme.bg2, borderColor: theme.border }}
+          >
+            <h2 className="mb-3 text-lg font-semibold transition-colors" style={{ color: theme.text }}>
+              {t("admin.home.tips")}
+            </h2>
+            <p className="text-sm italic transition-colors" style={{ color: theme.text2 }}>
+              &quot;{t("admin.home.pushReminder")}&quot;
+            </p>
           </div>
         </div>
       </div>

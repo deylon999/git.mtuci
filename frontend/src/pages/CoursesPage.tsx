@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { BookOpen, Plus, Users, X } from "lucide-react";
 import { getMe } from "../api/authApi";
 import { createCourse, deleteCourse, getCourses, getGroups } from "../api/coursesApi";
 import { getTheme } from "../theme";
@@ -10,6 +11,14 @@ import { pluralWord } from "../i18n/plural";
 
 interface CoursesPageProps {
   isDarkTheme?: boolean;
+}
+
+function fieldLabel(theme: ReturnType<typeof getTheme>, text: string) {
+  return (
+    <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide" style={{ color: theme.text2 }}>
+      {text}
+    </label>
+  );
 }
 
 export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
@@ -31,10 +40,16 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
-  
-  // Groups selection
+
   const [availableGroups, setAvailableGroups] = useState<string[]>([]);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+
+  const inputClass = "w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none transition";
+  const inputStyle = {
+    backgroundColor: theme.inputBg,
+    borderColor: theme.border,
+    color: theme.text,
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -44,9 +59,9 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
       setError(null);
       try {
         const [meResult, coursesResult, groupsResult] = await Promise.allSettled([
-          getMe(), 
+          getMe(),
           getCourses(),
-          getGroups()
+          getGroups(),
         ]);
         if (cancelled) return;
 
@@ -65,7 +80,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
             coursesResult.reason instanceof Error ? coursesResult.reason.message : "Failed",
           );
         }
-        
+
         if (groupsResult.status === "fulfilled") {
           setAvailableGroups(groupsResult.value);
         }
@@ -93,6 +108,15 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
     });
   }, [courses, searchQuery]);
 
+  function resetCreateForm() {
+    setShowCreateForm(false);
+    setCreateTitle("");
+    setCreateDescription("");
+    setCreateGradeMax(10);
+    setSelectedGroups([]);
+    setCreateError(null);
+  }
+
   async function onCreateCourse(e: FormEvent) {
     e.preventDefault();
     setCreateLoading(true);
@@ -109,11 +133,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
         target_groups: selectedGroups.length > 0 ? selectedGroups : undefined,
       });
       setCourses((prev) => [created, ...prev]);
-      setCreateTitle("");
-      setCreateDescription("");
-      setCreateGradeMax(10);
-      setSelectedGroups([]);
-      setShowCreateForm(false);
+      resetCreateForm();
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : "Failed to create course");
     } finally {
@@ -139,21 +159,33 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
 
   return (
     <div className="w-full min-h-screen py-4" style={{ backgroundColor: theme.bg }}>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold" style={{ color: theme.text }}>{t("admin.courses.myCourses")}</h1>
-          {searchQuery ? (
-            <p className="mt-1 text-sm" style={{ color: theme.text2 }}>
-              {tp("admin.courses.searchQuery", { q: searchParams.get("q") ?? "" })}
-            </p>
-          ) : null}
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"
+            style={{ backgroundColor: `${theme.accent}22`, color: theme.accent }}
+          >
+            <BookOpen className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight" style={{ color: theme.text }}>
+              {t("admin.courses.myCourses")}
+            </h1>
+            {searchQuery ? (
+              <p className="mt-1 text-sm" style={{ color: theme.text2 }}>
+                {tp("admin.courses.searchQuery", { q: searchParams.get("q") ?? "" })}
+              </p>
+            ) : null}
+          </div>
         </div>
         {canCreateCourse ? (
           <button
+            type="button"
             onClick={() => setShowCreateForm((v) => !v)}
-            className="rounded-lg px-4 py-2 text-sm font-medium transition"
-            style={{ backgroundColor: theme.accent, color: '#fff' }}
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition hover:opacity-90"
+            style={{ backgroundColor: theme.accent, color: "#fff" }}
           >
+            <Plus className="h-4 w-4" />
             {showCreateForm ? t("admin.courses.hideForm") : t("admin.courses.createCourse")}
           </button>
         ) : null}
@@ -162,154 +194,191 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
       {showCreateForm && canCreateCourse ? (
         <form
           onSubmit={onCreateCourse}
-          className="mb-6 rounded-xl border p-5 shadow-md"
+          className="mb-8 overflow-hidden rounded-2xl border shadow-lg"
           style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         >
-          <div className="mb-3 text-sm font-semibold" style={{ color: theme.text }}>{t("admin.courses.newCourse")}</div>
-          <div className="grid gap-3">
-            <input
-              type="text"
-              placeholder="title"
-              value={createTitle}
-              onChange={(e) => setCreateTitle(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30"
-              style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
-              required
-            />
-            <textarea
-              placeholder="description"
-              value={createDescription}
-              onChange={(e) => setCreateDescription(e.target.value)}
-              className="min-h-24 w-full rounded-lg border px-3 py-2 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30"
-              style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
-            />
-            <div className="rounded-lg border px-3 py-2 text-sm font-medium"
-            style={{ borderColor: theme.accent + '80', backgroundColor: theme.accent + '20', color: theme.accent }}>
-              {tp("admin.courses.gradeMaxLabel", { n: createGradeMax })}
+          <div
+            className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4"
+            style={{ borderColor: theme.border, backgroundColor: theme.bg4 }}
+          >
+            <div>
+              <h2 className="text-base font-semibold" style={{ color: theme.text }}>
+                {t("admin.courses.newCourse")}
+              </h2>
+              <p className="mt-0.5 text-xs" style={{ color: theme.text2 }}>
+                {t("admin.courses.newCourseHint")}
+              </p>
             </div>
-            <input
-              type="range"
-              min={0}
-              max={50}
-              step={1}
-              list="grade-marks"
-              value={createGradeMax}
-              onChange={(e) => setCreateGradeMax(Number(e.target.value))}
-              className="w-full"
-              style={{ accentColor: theme.accent }}
-              required
-            />
-            <datalist id="grade-marks">
-              <option value="0">0</option>
-              <option value="5">5</option>
-              <option value="10">10</option>
-              <option value="15">15</option>
-              <option value="20">20</option>
-              <option value="25">25</option>
-              <option value="30">30</option>
-              <option value="35">35</option>
-              <option value="40">40</option>
-              <option value="45">45</option>
-              <option value="50">50</option>
-            </datalist>
-            <div className="mt-1 flex justify-between text-xs"
-            style={{ color: theme.text3 }}>
-              <span>0</span>
-              <span>5</span>
-              <span>10</span>
-              <span>15</span>
-              <span>20</span>
-              <span>25</span>
-              <span>30</span>
-              <span>35</span>
-              <span>40</span>
-              <span>45</span>
-              <span>50</span>
+            <button
+              type="button"
+              onClick={resetCreateForm}
+              className="rounded-lg p-1.5 transition hover:opacity-80"
+              style={{ color: theme.text2 }}
+              aria-label={t("common.cancel")}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="grid gap-6 p-6 lg:grid-cols-2">
+            <div className="flex flex-col gap-4">
+              {fieldLabel(theme, t("admin.courses.fieldTitle"))}
+              <input
+                type="text"
+                placeholder={t("admin.courses.fieldTitlePlaceholder")}
+                value={createTitle}
+                onChange={(e) => setCreateTitle(e.target.value)}
+                className={inputClass}
+                style={inputStyle}
+                required
+              />
+
+              {fieldLabel(theme, t("admin.courses.fieldDescription"))}
+              <textarea
+                placeholder={t("admin.courses.fieldDescriptionPlaceholder")}
+                value={createDescription}
+                onChange={(e) => setCreateDescription(e.target.value)}
+                className={`${inputClass} min-h-[120px] resize-y`}
+                style={inputStyle}
+              />
             </div>
 
-            {/* Groups selection */}
-            {availableGroups.length > 0 && (
-              <div className="mt-4">
-                <div className="mb-2 text-sm font-medium" style={{ color: theme.text2 }}>{t("admin.courses.availableGroups")}</div>
-                <div className="flex flex-wrap gap-2">
-                  {availableGroups.map((group) => (
-                    <label
-                      key={group}
-                      className="cursor-pointer rounded-lg border px-3 py-1.5 text-sm transition"
-                      style={{
-                        borderColor: selectedGroups.includes(group) ? theme.accent : theme.border,
-                        backgroundColor: selectedGroups.includes(group) ? theme.accent + '20' : theme.bg2,
-                        color: selectedGroups.includes(group) ? theme.accent : theme.text2
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={selectedGroups.includes(group)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedGroups((prev) => [...prev, group]);
-                          } else {
-                            setSelectedGroups((prev) => prev.filter((g) => g !== group));
-                          }
-                        }}
-                      />
-                      {group}
-                    </label>
-                  ))}
+            <div className="flex flex-col gap-5">
+              <div
+                className="rounded-xl border p-4"
+                style={{ borderColor: theme.border, backgroundColor: theme.bg }}
+              >
+                {fieldLabel(theme, t("admin.courses.fieldGradeMax"))}
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-3xl font-semibold tabular-nums" style={{ color: theme.accent }}>
+                    {createGradeMax}
+                  </span>
+                  <span className="text-xs" style={{ color: theme.text3 }}>
+                    {tp("admin.courses.gradeMaxLabel", { n: createGradeMax })}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={50}
+                  step={1}
+                  value={createGradeMax}
+                  onChange={(e) => setCreateGradeMax(Number(e.target.value))}
+                  className="mt-3 w-full"
+                  style={{ accentColor: theme.accent }}
+                  required
+                />
+                <div className="mt-2 flex justify-between text-[10px] tabular-nums" style={{ color: theme.text3 }}>
+                  <span>0</span>
+                  <span>10</span>
+                  <span>20</span>
+                  <span>30</span>
+                  <span>40</span>
+                  <span>50</span>
                 </div>
               </div>
-            )}
 
-            <div className="mt-4 text-xs" style={{ color: theme.text3 }}>
-              {tp("admin.courses.selectedGroups", {
-                n: selectedGroups.length,
-                word: pluralWord(language, "admin.courses.group", selectedGroups.length),
-              })}
+              {availableGroups.length > 0 ? (
+                <div
+                  className="rounded-xl border p-4"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg }}
+                >
+                  <div className="mb-1 flex items-center gap-2">
+                    <Users className="h-4 w-4" style={{ color: theme.accent }} />
+                    <span className="text-sm font-medium" style={{ color: theme.text }}>
+                      {t("admin.courses.availableGroups")}
+                    </span>
+                  </div>
+                  <p className="mb-3 text-xs leading-relaxed" style={{ color: theme.text3 }}>
+                    {t("admin.courses.groupsHint")}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {availableGroups.map((group) => {
+                      const selected = selectedGroups.includes(group);
+                      return (
+                        <label
+                          key={group}
+                          className="cursor-pointer rounded-lg border px-3 py-2 text-sm font-medium transition"
+                          style={{
+                            borderColor: selected ? theme.accent : theme.border,
+                            backgroundColor: selected ? `${theme.accent}18` : theme.bg3,
+                            color: selected ? theme.accent : theme.text2,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            className="sr-only"
+                            checked={selected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedGroups((prev) => [...prev, group]);
+                              } else {
+                                setSelectedGroups((prev) => prev.filter((g) => g !== group));
+                              }
+                            }}
+                          />
+                          {group}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-xs" style={{ color: theme.text2 }}>
+                    {tp("admin.courses.selectedGroups", {
+                      n: selectedGroups.length,
+                      word: pluralWord(language, "admin.courses.group", selectedGroups.length),
+                    })}
+                  </p>
+                </div>
+              ) : null}
             </div>
+          </div>
 
-            <div className="mt-6 flex gap-2">
-              <button
-                type="submit"
-                disabled={createLoading}
-                className="w-full rounded-lg px-4 py-2 text-sm font-medium transition"
-                style={{ backgroundColor: theme.accent, color: '#fff' }}
-              >
-                {createLoading ? t("admin.courses.creating") : t("admin.courses.createCourse")}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCreateForm(false);
-                  setCreateTitle("");
-                  setCreateDescription("");
-                  setCreateGradeMax(10);
-                  setSelectedGroups([]);
-                  setCreateError(null);
-                }}
-                className="rounded-lg px-4 py-2 text-sm font-medium transition"
-                style={{ border: `1px solid ${theme.border}`, color: theme.text2 }}
-              >
-                {t("common.cancel")}
-              </button>
+          {createError ? (
+            <div
+              className="mx-6 mb-4 rounded-xl border px-4 py-3 text-sm"
+              style={{ borderColor: `${theme.danger}60`, backgroundColor: `${theme.danger}15`, color: theme.danger }}
+            >
+              {createError}
             </div>
+          ) : null}
 
-            {createError && <div className="mb-4 rounded-lg border px-3 py-2 text-sm"
-            style={{ borderColor: theme.danger + '80', backgroundColor: theme.danger + '20', color: theme.danger }}>{createError}</div>}
+          <div
+            className="flex flex-wrap gap-3 border-t px-6 py-4"
+            style={{ borderColor: theme.border, backgroundColor: theme.bg4 }}
+          >
+            <button
+              type="submit"
+              disabled={createLoading}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition disabled:opacity-60 sm:flex-none sm:min-w-[200px]"
+              style={{ backgroundColor: theme.accent, color: "#fff" }}
+            >
+              <Plus className="h-4 w-4" />
+              {createLoading ? t("admin.courses.creating") : t("admin.courses.createCourse")}
+            </button>
+            <button
+              type="button"
+              onClick={resetCreateForm}
+              className="rounded-xl border px-4 py-2.5 text-sm font-medium transition"
+              style={{ borderColor: theme.border, color: theme.text2 }}
+            >
+              {t("common.cancel")}
+            </button>
           </div>
         </form>
       ) : null}
 
       {loading ? <div className="text-sm" style={{ color: theme.text2 }}>{t("common.loading")}</div> : null}
       {error ? (
-        <div className="rounded-md border p-3 text-sm"
-        style={{ borderColor: theme.danger + '80', backgroundColor: theme.danger + '20', color: theme.danger }}>
+        <div
+          className="rounded-xl border p-4 text-sm"
+          style={{ borderColor: `${theme.danger}60`, backgroundColor: `${theme.danger}15`, color: theme.danger }}
+        >
           {error}
         </div>
       ) : null}
 
       {!loading && !error && searchQuery && filteredCourses.length === 0 ? (
-        <p className="text-sm mb-4" style={{ color: theme.text2 }}>
+        <p className="mb-4 text-sm" style={{ color: theme.text2 }}>
           {tp("admin.courses.nothingFound", { q: searchParams.get("q") ?? "" })}
         </p>
       ) : null}
@@ -318,22 +387,30 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
         {filteredCourses.map((c) => (
           <div
             key={c.id}
-            className="rounded-xl border p-5 shadow-md transition duration-200"
+            className="rounded-2xl border p-5 shadow-sm transition hover:shadow-md"
             style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
           >
             <div className="flex items-start justify-between gap-3">
               <Link to={`/courses/${c.id}`} className="min-w-0 flex-1">
-                <div className="text-base font-semibold" style={{ color: theme.text }}>{c.title}</div>
+                <div className="text-base font-semibold leading-snug" style={{ color: theme.text }}>
+                  {c.title}
+                </div>
                 {c.description ? (
-                  <div className="mt-1 text-sm line-clamp-3" style={{ color: theme.text2 }}>
+                  <div className="mt-2 line-clamp-3 text-sm leading-relaxed" style={{ color: theme.text2 }}>
                     {c.description}
                   </div>
                 ) : null}
-                <div className="mt-4 grid grid-cols-2 gap-2 text-xs" style={{ color: theme.text2 }}>
-                  <div className="rounded-md px-2 py-1" style={{ backgroundColor: theme.bg4 }}>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div
+                    className="rounded-lg px-3 py-2 text-xs font-medium"
+                    style={{ backgroundColor: theme.bg4, color: theme.text2 }}
+                  >
                     {tp("admin.courses.studentsCount", { n: c.enrolled_count ?? 0 })}
                   </div>
-                  <div className="rounded-md px-2 py-1" style={{ backgroundColor: theme.accent + '20', color: theme.accent }}>
+                  <div
+                    className="rounded-lg px-3 py-2 text-xs font-medium"
+                    style={{ backgroundColor: `${theme.accent}18`, color: theme.accent }}
+                  >
                     {tp("admin.courses.maxGrade", { n: c.grade_max })}
                   </div>
                 </div>
@@ -345,10 +422,10 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
                   title={t("admin.courses.deleteCourseTitle")}
                   onClick={() => onDeleteCourse(c.id)}
                   disabled={deletingCourseId === c.id}
-                  className="rounded-lg border px-2 py-1 transition disabled:opacity-60"
-                  style={{ borderColor: theme.danger + '80', color: theme.danger }}
+                  className="rounded-lg border px-2 py-1 text-sm transition disabled:opacity-60"
+                  style={{ borderColor: `${theme.danger}50`, color: theme.danger }}
                 >
-                  🗑️
+                  ×
                 </button>
               ) : null}
             </div>
@@ -357,9 +434,10 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
       </div>
 
       {!loading && !error && courses.length === 0 ? (
-        <div className="mt-6 text-sm" style={{ color: theme.text2 }}>No courses found.</div>
+        <div className="mt-8 text-center text-sm" style={{ color: theme.text2 }}>
+          {t("admin.courses.emptyList")}
+        </div>
       ) : null}
     </div>
   );
 }
-

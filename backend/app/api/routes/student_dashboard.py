@@ -38,6 +38,7 @@ from app.schemas.student_dashboard import (
     StudentRepoFileSearchItemRead,
 )
 from app.services.code_lint_service import lint_file_content
+from app.services.repository_access_service import RepositoryBlockedError
 from app.services.gitea_service import GiteaAuthError
 from app.services.student_lk_courses_service import get_student_merged_courses
 from app.services.student_dashboard_service import (
@@ -264,6 +265,8 @@ async def student_repository_commits(
         )
     except GiteaAuthError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return StudentRepoCommitsRead.model_validate(data)
@@ -284,6 +287,8 @@ async def student_repository_clone_info(
         )
     except GiteaAuthError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return StudentRepoCloneInfoRead.model_validate(data)
@@ -303,6 +308,8 @@ async def student_repository_lint_file(
             student_id=current_user.id,
             repo_item_id=repo_item_id,
         )
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     result = lint_file_content(body.path, body.content)
@@ -326,6 +333,8 @@ async def student_repository_summary(
         )
     except GiteaAuthError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return StudentRepoSummaryRead.model_validate(data)
@@ -352,6 +361,8 @@ async def student_repository_issues(
         )
     except GiteaAuthError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return StudentRepoIssuesRead.model_validate(data)
@@ -378,6 +389,8 @@ async def student_repository_pulls(
         )
     except GiteaAuthError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return StudentRepoPullsRead.model_validate(data)
@@ -398,6 +411,8 @@ async def student_repository_wiki_pages(
         )
     except GiteaAuthError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return StudentRepoWikiPagesRead.model_validate(data)
@@ -420,6 +435,8 @@ async def student_repository_wiki_page(
         )
     except GiteaAuthError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return StudentRepoWikiContentRead.model_validate(data)
@@ -440,6 +457,8 @@ async def student_repository_branches(
         )
     except GiteaAuthError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return StudentRepoBranchesRead.model_validate(data)
@@ -467,6 +486,8 @@ async def student_repository_files_search(
         )
     except GiteaAuthError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return [StudentRepoFileSearchItemRead(path=p) for p in paths]
@@ -494,6 +515,8 @@ async def student_repository_create_file(
         )
     except GiteaAuthError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     name = body.path.strip().split("/")[-1]
@@ -525,6 +548,8 @@ async def student_repository_files(
         )
     except GiteaAuthError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return [StudentRepoFileRead.model_validate(row) for row in rows]
@@ -551,6 +576,8 @@ async def student_repository_file_content(
         )
     except GiteaAuthError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return StudentRepoFileContentRead(filepath=filepath, content=content)
@@ -570,6 +597,8 @@ async def student_delete_repository(
             gitea_login=current_user.mtuci_login,
             repository_id=repository_id,
         )
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found")
 

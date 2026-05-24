@@ -11,6 +11,45 @@ from app.models.user import User, UserRole
 from app.services.student_repository_service import ensure_student_repository
 
 
+async def _enroll_students_by_target_groups(
+    session: AsyncSession,
+    *,
+    course_id: UUID,
+    target_groups: list[str] | None,
+) -> int:
+    """Зачислить всех активных студентов из выбранных групп."""
+    if not target_groups:
+        return 0
+    normalized = sorted({g.strip() for g in target_groups if g and g.strip()})
+    if not normalized:
+        return 0
+
+    students_q = await session.execute(
+        select(User).where(
+            User.role == UserRole.student,
+            User.group_name.in_(normalized),
+            User.is_blocked.is_(False),
+            User.is_pending.is_(False),
+        )
+    )
+    students = list(students_q.scalars().all())
+    added = 0
+    for student in students:
+        existing_q = await session.execute(
+            select(CourseEnrollment).where(
+                CourseEnrollment.course_id == course_id,
+                CourseEnrollment.student_id == student.id,
+            )
+        )
+        if existing_q.scalar_one_or_none():
+            continue
+        session.add(CourseEnrollment(course_id=course_id, student_id=student.id))
+        added += 1
+    if added:
+        await session.flush()
+    return added
+
+
 async def create_course(
     session: AsyncSession,
     *,
@@ -28,8 +67,16 @@ async def create_course(
         target_groups=target_groups,
     )
     session.add(course)
+    await session.flush()
+    await _enroll_students_by_target_groups(
+        session,
+        course_id=course.id,
+        target_groups=target_groups,
+    )
     await session.commit()
     await session.refresh(course)
+    counts = await _get_enrolled_counts(session, [course.id])
+    course.enrolled_count = counts.get(course.id, 0)
     return course
 
 
@@ -125,6 +172,65 @@ async def list_student_courses(session: AsyncSession, *, student_id: UUID, group
         course.enrolled_count = counts.get(course.id, 0)
     
     return result_courses
+
+
+async def _student_can_access_course(
+    session: AsyncSession,
+    *,
+    course: Course,
+    student_id: UUID,
+    group_name: str | None,
+) -> bool:
+    enrollment_q = await session.execute(
+        select(CourseEnrollment).where(
+            CourseEnrollment.course_id == course.id,
+            CourseEnrollment.student_id == student_id,
+        )
+    )
+    if enrollment_q.scalar_one_or_none():
+        return True
+
+    target_groups = course.target_groups
+    if target_groups is None or len(target_groups) == 0:
+        return True
+    return group_name is not None and group_name in list(target_groups)
+
+
+async def get_course_for_user(
+    session: AsyncSession,
+    *,
+    user: User,
+    course_id: UUID,
+) -> Course:
+    """Return course if the user may access it (teacher owner, laborant assistant, or student)."""
+    from app.services.teacher_dashboard_service import _teacher_course_ids
+
+    course_q = await session.execute(select(Course).where(Course.id == course_id))
+    course = course_q.scalar_one_or_none()
+    if not course:
+        raise ValueError("Course not found")
+
+    if user.role == UserRole.teacher:
+        if course.teacher_id != user.id:
+            raise PermissionError("Access denied")
+    elif user.role == UserRole.laborant:
+        allowed_ids = await _teacher_course_ids(session, user=user)
+        if course.id not in allowed_ids:
+            raise PermissionError("Access denied")
+    elif user.role == UserRole.student:
+        if not await _student_can_access_course(
+            session,
+            course=course,
+            student_id=user.id,
+            group_name=user.group_name,
+        ):
+            raise PermissionError("Access denied")
+    else:
+        raise PermissionError("Access denied")
+
+    counts = await _get_enrolled_counts(session, [course.id])
+    course.enrolled_count = counts.get(course.id, 0)
+    return course
 
 
 async def delete_teacher_course(

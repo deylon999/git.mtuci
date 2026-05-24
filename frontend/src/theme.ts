@@ -51,7 +51,7 @@ export interface ThemeColors {
 export const darkTheme: ThemeColors = {
   // Background colors
   bg: "#0f0f10",
-  bg2: "#0f0f10",
+  bg2: "#111111",
   bg3: "#1e1e1e",
   bg4: "#2a2a2a",
   bgCard: "#0f0f10",

@@ -89,6 +89,43 @@ async def sync_assignment_repository_to_gitea(
     return owner, repo_name
 
 
+async def resolve_assignment_repo_owner_and_name(
+    session: AsyncSession,
+    *,
+    assignment_id: UUID,
+    student_id: UUID,
+) -> tuple[str, str]:
+    """Gitea owner + repo name for a student's assignment repo (creates in Gitea if only in DB)."""
+    student = await session.get(User, student_id)
+    if not student:
+        raise ValueError("Student not found")
+
+    repo_q = await session.execute(
+        select(StudentRepository).where(
+            StudentRepository.assignment_id == assignment_id,
+            StudentRepository.student_id == student_id,
+        )
+    )
+    student_repo = repo_q.scalar_one_or_none()
+    if not student_repo:
+        raise ValueError("Student repository not found")
+
+    primary = resolve_gitea_username(student)
+    repo_name = (student_repo.repo_name or "").strip()
+    if not repo_name:
+        raise ValueError("Student repository not found")
+
+    if not await get_repo_metadata(owner=primary, repo=repo_name):
+        await sync_assignment_repository_to_gitea(
+            session,
+            student=student,
+            student_repo=student_repo,
+        )
+
+    owner = await resolve_repo_owner(primary_owner=primary, repo_name=repo_name)
+    return owner, repo_name
+
+
 async def get_student_repo_name(
     session: AsyncSession,
     *,

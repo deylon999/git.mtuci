@@ -206,7 +206,14 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
             getTeacherStudents(1).catch(() => null),
           ]);
           if (!cancelled && dash) {
-            setTeacherDepartment(dash.department);
+            const prefs = me?.preferences as Record<string, unknown> | undefined;
+            const deptFromPrefs =
+              typeof prefs?.department === "string"
+                ? prefs.department
+                : typeof prefs?.department_name === "string"
+                  ? prefs.department_name
+                  : null;
+            setTeacherDepartment(dash.department ?? deptFromPrefs);
             setTeacherAverageGrade(studentsSummary?.average_grade ?? null);
             setStats({
               repositories: dash.active_courses_count,
@@ -558,7 +565,7 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                 </span>
               </div>
 
-              {isTeacher && teacherDepartment ? (
+              {isTeacher ? (
                 <div style={{
                   display: "flex",
                   justifyContent: "space-between",
@@ -567,7 +574,9 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
                   borderBottom: `1px solid ${theme.border}`,
                 }}>
                   <span style={{ color: theme.text2, fontSize: "11px" }}>{t("admin.profile.fieldDepartment")}</span>
-                  <span style={{ color: theme.text, fontSize: "11px" }}>{teacherDepartment}</span>
+                  <span style={{ color: theme.text, fontSize: "11px" }}>
+                    {teacherDepartment?.trim() || "—"}
+                  </span>
                 </div>
               ) : null}
 

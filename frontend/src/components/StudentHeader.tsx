@@ -42,6 +42,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -97,10 +98,34 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
 
   const theme = getTheme(isDarkTheme);
 
+  const searchForm = (
+    <form onSubmit={handleSearch} className="relative">
+      <Search
+        className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
+        style={{ color: theme.text3 }}
+      />
+      <input
+        type="search"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder={t("header.searchStudent")}
+        className="w-full h-9 pl-10 pr-4 rounded-lg text-sm outline-none border focus:ring-2 focus:ring-blue-500/50"
+        style={{
+          backgroundColor: theme.inputBg,
+          borderColor: theme.border,
+          color: theme.text,
+        }}
+      />
+    </form>
+  );
+
   return (
-    <header className="border-b transition-colors shrink-0" style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
+    <header
+      className="border-b transition-colors shrink-0 relative"
+      style={{ backgroundColor: theme.bg, borderColor: theme.border }}
+    >
       <div className={pageGutterClass}>
-        <div className="flex items-center justify-between h-14">
+        <div className="flex items-center justify-between h-14 gap-2">
           <Link to={homeHref} className="flex items-center gap-2 group">
             <img
               src="/logo_mtuci.png"
@@ -109,28 +134,18 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
             />
           </Link>
 
-          <div className="flex-1 max-w-2xl mx-4 md:mx-8 hidden md:block min-w-0">
-            <form onSubmit={handleSearch} className="relative">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
-                style={{ color: theme.text3 }}
-              />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t("header.searchStudent")}
-                className="w-full h-9 pl-10 pr-4 rounded-lg text-sm outline-none border focus:ring-2 focus:ring-blue-500/50"
-                style={{
-                  backgroundColor: theme.inputBg,
-                  borderColor: theme.border,
-                  color: theme.text,
-                }}
-              />
-            </form>
-          </div>
+          <div className="flex-1 max-w-2xl mx-2 sm:mx-4 hidden sm:block min-w-0">{searchForm}</div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              className="sm:hidden flex items-center justify-center w-9 h-9 rounded-lg"
+              style={{ color: theme.text2, backgroundColor: theme.hoverBg }}
+              onClick={() => setMobileSearchOpen((v) => !v)}
+              aria-label={t("header.searchStudent")}
+            >
+              <Search className="h-5 w-5" />
+            </button>
             {userRole === "student" ? (
               <Link
                 to="/repositories/new"
@@ -237,6 +252,9 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
             </div>
           </div>
         </div>
+        {mobileSearchOpen ? (
+          <div className="sm:hidden pb-3">{searchForm}</div>
+        ) : null}
       </div>
     </header>
   );

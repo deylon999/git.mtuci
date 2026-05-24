@@ -196,6 +196,9 @@ mtuci_private_api-*.zip
 todo.txt
 TODO.md
 
+# Local backlog (not for repo) — see DEFERRED.local.md
+DEFERRED.local.md
+
 # Misc
 *.pid
 *.seed
@@ -203,3 +206,5 @@ TODO.md
 
 /backups/
 test-repo
+
+teacher-app.html

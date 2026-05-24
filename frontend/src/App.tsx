@@ -12,9 +12,11 @@ import Sidebar from "./components/Sidebar";
 import Footer from "./components/Footer";
 import { PendingCountProvider } from "./context/PendingCountContext";
 import { StudentNavCountsProvider } from "./context/StudentNavCountsContext";
-import { AuthUserProvider } from "./context/AuthUserContext";
+import { AuthUserProvider, useAuthUser } from "./context/AuthUserContext";
 import { UserPreferencesProvider, useUserPreferences } from "./context/UserPreferencesContext";
 import StudentShellBootstrapRunner from "./components/StudentShellBootstrapRunner";
+import AppErrorBoundary from "./components/AppErrorBoundary";
+import PageLoadingFallback from "./components/PageLoadingFallback";
 import { getTheme } from "./theme";
 import { pageGutterClass } from "./layout/pageLayout";
 import StudentRepositoryLayout from "./layouts/StudentRepositoryLayout";
@@ -44,7 +46,6 @@ const StudentDeadlinesPage = lazy(() => import("./pages/StudentDeadlinesPage"));
 const StudentAssignmentsPage = lazy(() => import("./pages/StudentAssignmentsPage"));
 const StudentGradesPage = lazy(() => import("./pages/StudentGradesPage"));
 const StudentForksPage = lazy(() => import("./pages/StudentForksPage"));
-const TeacherGradingQueuePage = lazy(() => import("./pages/TeacherGradingQueuePage"));
 const TeacherCoursesPage = lazy(() => import("./pages/teacher/TeacherCoursesPage"));
 const TeacherStudentsPage = lazy(() => import("./pages/teacher/TeacherStudentsPage"));
 const TeacherCodeReviewPage = lazy(() => import("./pages/teacher/TeacherCodeReviewPage"));
@@ -65,12 +66,15 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem("theme", isDarkTheme ? "dark" : "light");
+    document.documentElement.classList.toggle("dark", isDarkTheme);
   }, [isDarkTheme]);
 
   return (
     <UserPreferencesProvider isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme}>
-      <StudentShellBootstrapRunner />
-      <AppShell isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme} />
+      <AuthUserProvider>
+        <StudentShellBootstrapRunner />
+        <AppShell isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme} />
+      </AuthUserProvider>
     </UserPreferencesProvider>
   );
 }
@@ -85,6 +89,9 @@ function AppShell({
   const location = useLocation();
   const isAuthPage = AUTH_PATHS.includes(location.pathname);
   const { persistTheme, t } = useUserPreferences();
+  const { user } = useAuthUser();
+  const isTeacherLike = user?.role === "teacher" || user?.role === "laborant";
+  const mainPaddingY = !isAuthPage && isTeacherLike ? "py-4" : "py-6";
 
   if (!isAuthPage && !getToken()) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
@@ -102,16 +109,24 @@ function AppShell({
   const theme = getTheme(isDarkTheme);
 
   return (
-    <AuthUserProvider>
     <PendingCountProvider>
     <StudentNavCountsProvider>
+    <AppErrorBoundary isDarkTheme={isDarkTheme}>
     <div className={`h-screen flex flex-col`} style={{ color: theme.text, backgroundColor: theme.bg }}>
       {!isAuthPage && <Header isDarkTheme={isDarkTheme} onToggleTheme={toggleTheme} />}
-      <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 56px)' }}>
+      <div
+        className="flex flex-1 min-h-0 overflow-hidden"
+        style={isAuthPage || isTeacherLike ? undefined : { height: "calc(100vh - 56px)" }}
+      >
         {!isAuthPage ? <Sidebar isDarkTheme={isDarkTheme} /> : null}
         <div className="flex flex-1 flex-col min-h-0">
-          <main className={`flex-1 overflow-y-auto py-6 ${pageGutterClass}`} style={{ backgroundColor: theme.bg2 }}>
-            <Suspense fallback={<div className="text-sm" style={{ color: theme.text3 }}>{t("common.loading")}</div>}>
+          <main
+            className={`flex-1 overflow-y-auto min-w-0 ${
+              isAuthPage ? "" : isTeacherLike ? "px-6 py-5" : `${mainPaddingY} ${pageGutterClass}`
+            }`}
+            style={{ backgroundColor: theme.bg }}
+          >
+            <Suspense fallback={<PageLoadingFallback isDarkTheme={isDarkTheme} />}>
               <Routes>
                 <Route path="/" element={<RoleBasedHomeRedirect />} />
                 <Route path="/home" element={<HomeRoute isDarkTheme={isDarkTheme} />} />
@@ -218,8 +233,8 @@ function AppShell({
         }}
       />
     </div>
+    </AppErrorBoundary>
     </StudentNavCountsProvider>
     </PendingCountProvider>
-    </AuthUserProvider>
   );
 }

@@ -386,7 +386,9 @@ async def ensure_gitea_user(username: str) -> None:
             },
         )
         if create.status_code not in (200, 201):
-            logger.error("Failed to create Gitea user %s: %s", username, create.text[:300])
+            msg = create.text[:300]
+            logger.error("Failed to create Gitea user %s: %s", username, msg)
+            raise RuntimeError(f"Gitea create user failed: {create.status_code} {msg}")
 
 
 async def create_repository_for_owner(

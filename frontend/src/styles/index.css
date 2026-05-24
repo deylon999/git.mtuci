@@ -48,3 +48,8 @@
 .dark * {
   scrollbar-color: #2d2d2d #121212;
 }
+
+/* Reserve gutter so scrollbars do not overlap page content (admin main area). */
+main {
+  scrollbar-gutter: stable;
+}

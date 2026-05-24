@@ -35,6 +35,7 @@ from app.schemas.admin_reports import AdminCourseSummaryRead, AdminReportsOvervi
 from app.services.admin_reports_service import get_admin_reports_overview
 from app.schemas.repository import RepositoryRead
 from app.services.admin_forks_service import get_admin_fork_events
+from app.services.repository_presenter import build_repository_read
 from app.schemas.system_log import LogEntry, LogsResponse, LogsStats
 from app.schemas.user import (
     AdminResetPasswordRequest,
@@ -927,9 +928,7 @@ async def admin_list_repositories(
     session: AsyncSession = Depends(get_session),
 ) -> List[RepositoryRead]:
     """Get all repositories with optional filters and pagination (admin only)."""
-    query = select(Repository, User.full_name.label("owner_name")).outerjoin(
-        User, Repository.owner_id == User.id
-    )
+    query = select(Repository, User).outerjoin(User, Repository.owner_id == User.id)
 
     if repo_type:
         query = query.where(Repository.repo_type == repo_type)
@@ -944,7 +943,7 @@ async def admin_list_repositories(
     repos_with_owners = result.all()
 
     repositories = []
-    for repo, owner_name in repos_with_owners:
+    for repo, owner_user in repos_with_owners:
         # Count commits from activity_log
         commits_result = await session.execute(
             select(func.count(ActivityLog.id)).where(
@@ -954,23 +953,15 @@ async def admin_list_repositories(
         )
         commits_count = commits_result.scalar() or 0
 
-        repo_dict = {
-            "id": repo.id,
-            "name": repo.name,
-            "description": repo.description,
-            "gitea_repo_name": repo.gitea_repo_name,
-            "clone_url": repo.clone_url,
-            "owner_id": repo.owner_id,
-            "owner_full_name": owner_name or repo.gitea_repo_name or "Unknown",
-            "commits_count": commits_count,
-            "is_public": repo.repo_type == RepositoryType.public,
-            "repo_type": repo.repo_type,
-            "language": repo.language,
-            "is_blocked": repo.is_blocked,
-            "created_at": repo.created_at,
-            "updated_at": repo.updated_at,
-        }
-        repositories.append(RepositoryRead.model_validate(repo_dict))
+        owner_name = owner_user.full_name if owner_user else None
+        repositories.append(
+            await build_repository_read(
+                repo,
+                owner_user,
+                owner_full_name=owner_name,
+                commits_count=commits_count,
+            )
+        )
 
     return repositories
 
@@ -1034,7 +1025,21 @@ async def admin_toggle_repository_block(
     repository.is_blocked = not repository.is_blocked
     await session.commit()
     await session.refresh(repository)
-    return RepositoryRead.model_validate(repository)
+    owner_user = await session.get(User, repository.owner_id) if repository.owner_id else None
+    return await build_repository_read(repository, owner_user)
+
+
+@router.delete("/repositories/{repository_id}", status_code=status.HTTP_204_NO_CONTENT)
+@require_permission("repo_delete")
+async def admin_delete_repository(
+    repository_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """Permanently delete any repository (platform DB + Gitea)."""
+    from app.services.repository_admin_service import admin_delete_repository as delete_repo
+
+    await delete_repo(session, repository_id=repository_id, actor=current_user)
 
 
 # System-wide Gitea webhook setup

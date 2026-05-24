@@ -9,6 +9,7 @@ from app.models.assignment import Assignment
 from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
 from app.models.repository import Repository
+from app.services.repository_access_service import repository_not_blocked_clause
 from app.models.user import User, UserRole
 from app.schemas.search import SearchHitRead, SearchResponseRead
 from app.services.teacher_dashboard_service import _teacher_course_ids
@@ -218,7 +219,8 @@ async def _search_admin(session: AsyncSession, *, pattern: str, limit: int) -> l
 
     repos_q = await session.execute(
         select(Repository).where(
-            or_(Repository.name.ilike(pattern), Repository.gitea_repo_name.ilike(pattern))
+            repository_not_blocked_clause(),
+            or_(Repository.name.ilike(pattern), Repository.gitea_repo_name.ilike(pattern)),
         ).limit(per_type)
     )
     for r in repos_q.scalars().all():

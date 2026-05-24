@@ -23,6 +23,7 @@ export interface UserRead {
   id: string;
   email: string;
   full_name: string;
+  mtuci_login?: string | null;
   role: UserRole;
   group_name: string | null;
   student_id: string | null;

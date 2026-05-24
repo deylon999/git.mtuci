@@ -175,7 +175,7 @@ export default function StudentAssignmentsPage({ isDarkTheme = false }: StudentA
 
     };
 
-  }, [t]);
+  }, []);
 
 
 

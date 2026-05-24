@@ -14,6 +14,7 @@ from app.schemas.teacher_dashboard import (
     TeacherDashboardFullRead,
     TeacherDashboardRead,
     TeacherGradingQueueItemRead,
+    TeacherGradingQueueStatsRead,
     TeacherStudentsSummaryRead,
     TeacherTemplateRepoRead,
 )
@@ -23,6 +24,7 @@ from app.services.teacher_dashboard_service import (
     get_teacher_dashboard,
     get_teacher_dashboard_full,
     get_teacher_grading_queue,
+    get_teacher_grading_queue_stats,
     list_teacher_activity,
     list_teacher_courses_enriched,
     list_teacher_students,
@@ -55,14 +57,29 @@ async def teacher_dashboard_full(
     return await get_teacher_dashboard_full(session, user=current_user)
 
 
+@router.get("/grading-queue/stats", response_model=TeacherGradingQueueStatsRead)
+async def teacher_grading_queue_stats(
+    course_id: UUID | None = None,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> TeacherGradingQueueStatsRead:
+    _require_teacher_or_laborant(current_user)
+    return await get_teacher_grading_queue_stats(
+        session, user=current_user, course_id=course_id
+    )
+
+
 @router.get("/grading-queue", response_model=list[TeacherGradingQueueItemRead])
 async def teacher_grading_queue(
     limit: int = Query(default=100, ge=1, le=200),
+    course_id: UUID | None = None,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[TeacherGradingQueueItemRead]:
     _require_teacher_or_laborant(current_user)
-    return await get_teacher_grading_queue(session, user=current_user, limit=limit)
+    return await get_teacher_grading_queue(
+        session, user=current_user, limit=limit, course_id=course_id
+    )
 
 
 @router.get("/courses", response_model=list[TeacherCourseListItemRead])

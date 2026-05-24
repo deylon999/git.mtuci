@@ -5,7 +5,7 @@ import {
   getSubmissions,
   getMyGrade,
   gradeSubmission,
-  getCourses,
+  getCourse,
   getAssignments,
   getCommits,
   getFiles,
@@ -172,10 +172,10 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
         const meResult = await getMe();
         if (cancelled) return;
         setMe(meResult);
-        if (meResult.role === "teacher") {
-          const courses = await getCourses();
+        if (meResult.role === "teacher" || meResult.role === "laborant") {
+          const courseRow = await getCourse(courseId);
           if (cancelled) return;
-          setCourse(courses.find((c) => c.id === courseId) ?? null);
+          setCourse(courseRow);
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : t("repo.errors.loadFailed"));

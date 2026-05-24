@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { ExternalLink, GitFork, Loader2, RefreshCw, Search } from "lucide-react";
 import { getStudentForks, syncStudentFork, type StudentForkItem } from "../api/studentDashboardApi";
 import {
@@ -63,7 +64,7 @@ export default function StudentForksPage({ isDarkTheme = false }: StudentForksPa
       await syncStudentFork(item.fork_repo_path);
       await load();
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : t("student.errors.syncFork"));
+      toast.error(e instanceof Error ? e.message : t("student.errors.syncFork"));
     } finally {
       setSyncing(null);
     }

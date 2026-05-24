@@ -14,6 +14,7 @@ class UserRead(BaseModel):
     id: UUID
     email: EmailStr
     full_name: str
+    mtuci_login: str | None = None
     role: UserRole
     is_blocked: bool = False
     group_name: str | None = None

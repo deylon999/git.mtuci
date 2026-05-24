@@ -28,6 +28,7 @@ from app.schemas.teacher_dashboard import (
     TeacherDashboardPendingWorkRead,
     TeacherDashboardRead,
     TeacherGradingQueueItemRead,
+    TeacherGradingQueueStatsRead,
     TeacherStudentListItemRead,
     TeacherStudentsSummaryRead,
     TeacherTemplateRepoRead,
@@ -373,10 +374,15 @@ async def get_teacher_grading_queue(
     *,
     user: User,
     limit: int = 100,
+    course_id: UUID | None = None,
 ) -> list[TeacherGradingQueueItemRead]:
     course_ids = await _teacher_course_ids(session, user=user)
     if not course_ids:
         return []
+    if course_id is not None:
+        if course_id not in course_ids:
+            return []
+        course_ids = [course_id]
 
     now = datetime.now(timezone.utc)
     result = await session.execute(
@@ -422,6 +428,66 @@ async def get_teacher_grading_queue(
             )
         )
     return items
+
+
+async def get_teacher_grading_queue_stats(
+    session: AsyncSession,
+    *,
+    user: User,
+    course_id: UUID | None = None,
+) -> TeacherGradingQueueStatsRead:
+    course_ids = await _teacher_course_ids(session, user=user)
+    if not course_ids:
+        return TeacherGradingQueueStatsRead(pending=0, stale=0, graded_today=0, avg_waiting_hours=None)
+    if course_id is not None:
+        if course_id not in course_ids:
+            return TeacherGradingQueueStatsRead(pending=0, stale=0, graded_today=0, avg_waiting_hours=None)
+        course_ids = [course_id]
+
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    pending_rows = await session.execute(
+        select(Submission.submitted_at)
+        .join(Assignment, Assignment.id == Submission.assignment_id)
+        .join(Course, Course.id == Assignment.course_id)
+        .where(
+            Course.id.in_(course_ids),
+            Submission.submitted_at.is_not(None),
+            Submission.grade.is_(None),
+            Submission.final_grade.is_(None),
+        )
+    )
+    submitted_ats = [row[0] for row in pending_rows.all() if row[0] is not None]
+    stale = 0
+    hours_sum = 0.0
+    for submitted_at in submitted_ats:
+        hours, is_stale = _waiting_meta(submitted_at, now=now)
+        if is_stale:
+            stale += 1
+        hours_sum += hours
+    pending = len(submitted_ats)
+    avg_hours = round(hours_sum / pending, 1) if pending else None
+
+    graded_today_result = await session.execute(
+        select(func.count())
+        .select_from(Submission)
+        .join(Assignment, Assignment.id == Submission.assignment_id)
+        .join(Course, Course.id == Assignment.course_id)
+        .where(
+            Course.id.in_(course_ids),
+            Submission.graded_at.is_not(None),
+            Submission.graded_at >= today_start,
+        )
+    )
+    graded_today = int(graded_today_result.scalar() or 0)
+
+    return TeacherGradingQueueStatsRead(
+        pending=pending,
+        stale=stale,
+        graded_today=graded_today,
+        avg_waiting_hours=avg_hours,
+    )
 
 
 async def list_teacher_courses_enriched(
@@ -472,6 +538,24 @@ async def list_teacher_courses_enriched(
             .limit(1)
         )
         nearest_assignment = nearest.scalar_one_or_none()
+        submitted_count = 0
+        if assignments_count > 0 and students_count > 0:
+            submitted_count = int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(Submission)
+                    .join(Assignment, Assignment.id == Submission.assignment_id)
+                    .where(
+                        Assignment.course_id == course.id,
+                        Submission.submitted_at.is_not(None),
+                    )
+                )
+                or 0
+            )
+        total_slots = assignments_count * students_count
+        submitted_percent = (
+            round(submitted_count / total_slots * 100, 1) if total_slots > 0 else None
+        )
         items.append(
             TeacherCourseListItemRead(
                 course_id=course.id,
@@ -484,6 +568,7 @@ async def list_teacher_courses_enriched(
                 target_groups=list(course.target_groups or []),
                 nearest_deadline=nearest_assignment.deadline if nearest_assignment else None,
                 nearest_deadline_title=nearest_assignment.title if nearest_assignment else None,
+                submitted_percent=submitted_percent,
             )
         )
     return items

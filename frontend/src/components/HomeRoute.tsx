@@ -4,12 +4,14 @@ import { clearToken, getToken } from "../api/client";
 import { getMe } from "../api/authApi";
 import { getDefaultRouteForRole } from "../utils/defaultRoute";
 import HomePage from "../pages/HomePage";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 type Props = {
   isDarkTheme?: boolean;
 };
 
 export default function HomeRoute({ isDarkTheme = false }: Props) {
+  const { t } = useUserPreferences();
   const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,9 +38,9 @@ export default function HomeRoute({ isDarkTheme = false }: Props) {
   }
 
   if (role === null) {
-    return <div className="text-sm text-slate-500">Loading...</div>;
+    return <div className="text-sm text-slate-500">{t("common.loading")}</div>;
   }
-  if (role === "admin" || role === "student") {
+  if (role === "admin" || role === "student" || role === "teacher" || role === "laborant") {
     return <Navigate to={getDefaultRouteForRole(role)} replace />;
   }
   return <HomePage isDarkTheme={isDarkTheme} />;

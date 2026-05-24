@@ -4,11 +4,14 @@ import os
 
 from pydantic import BaseModel
 
+from app.services.gitea_service import gitea_public_base_url
+
 
 class SystemInfoRead(BaseModel):
     version: str
     api_version: str
     commits: int = 0
+    gitea_public_url: str = "http://localhost:3000"
 
 
 def build_system_info_read() -> SystemInfoRead:
@@ -23,4 +26,5 @@ def build_system_info_read() -> SystemInfoRead:
         version=app_version,
         api_version=api_version,
         commits=commits,
+        gitea_public_url=gitea_public_base_url(),
     )

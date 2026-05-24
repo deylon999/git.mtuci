@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Plus } from "lucide-react";
+import { buildDefaultPenaltyPeriods, type PenaltyPeriod } from "../../utils/penaltyDefaults";
+import { AlertCircle, Plus, Trash2 } from "lucide-react";
 import {
   createAssignment,
   deleteAssignment,
@@ -18,15 +19,25 @@ import {
 import CourseRosterPanel from "../CourseRosterPanel";
 import GradeSubmissionModal, { type GradeSubmissionTarget } from "./GradeSubmissionModal";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
-import { TeacherPageShell, TeacherStatGrid, TeacherSurface, useTeacherTheme } from "./teacherPageUi";
+import {
+  TeacherBtn,
+  TeacherEmptyState,
+  TeacherLoadingBlock,
+  TeacherPageShell,
+  TeacherPendingRow,
+  TeacherStatGrid,
+  TeacherSurface,
+  TeacherTabs,
+  useTeacherTheme,
+} from "./teacherPageUi";
+import { waitingBadgeTone } from "./teacherUiConstants";
 import { formatRelativeTime } from "../../utils/formatRelativeTime";
-import type { Assignment, Course } from "../../api/types";
+import type { Assignment } from "../../api/types";
 
 type TabKey = "overview" | "assignments" | "students" | "review";
 
 interface Props {
   courseId: string;
-  course: Course | null;
   isDarkTheme?: boolean;
 }
 
@@ -36,7 +47,19 @@ const STATUS_COLOR: Record<string, string> = {
   inactive: "#6b7280",
 };
 
-export default function TeacherCourseView({ courseId, course, isDarkTheme = false }: Props) {
+function localDatetimeMin(): string {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
+function startOfLocalDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+export default function TeacherCourseView({ courseId, isDarkTheme = false }: Props) {
   const theme = useTeacherTheme(isDarkTheme);
   const { t, tp } = useUserPreferences();
   const [tab, setTab] = useState<TabKey>("overview");
@@ -52,7 +75,14 @@ export default function TeacherCourseView({ courseId, course, isDarkTheme = fals
   const [createDescription, setCreateDescription] = useState("");
   const [createStartDate, setCreateStartDate] = useState("");
   const [createDeadline, setCreateDeadline] = useState("");
+  const [penaltyPeriods, setPenaltyPeriods] = useState<PenaltyPeriod[]>(() =>
+    buildDefaultPenaltyPeriods(10),
+  );
+  const [createDateError, setCreateDateError] = useState<string | null>(null);
   const [createLoading, setCreateLoading] = useState(false);
+
+  const dateMin = useMemo(() => localDatetimeMin(), [showCreateForm]);
+  const gradeCap = detail?.grade_max ?? 10;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,11 +91,11 @@ export default function TeacherCourseView({ courseId, course, isDarkTheme = fals
       const [d, asn, queue] = await Promise.all([
         getTeacherCourseDetail(courseId),
         getAssignments(courseId),
-        getTeacherGradingQueue(200),
+        getTeacherGradingQueue(200, courseId),
       ]);
       setDetail(d);
       setAssignments(asn);
-      setReviewItems(queue.filter((q) => q.course_id === courseId));
+      setReviewItems(queue);
       const statsEntries = await Promise.allSettled(
         asn.map(async (a) => [a.id, await getAssignmentStats(courseId, a.id)] as const),
       );
@@ -94,8 +124,40 @@ export default function TeacherCourseView({ courseId, course, isDarkTheme = fals
     { key: "review", label: t("teacher.courseView.tabReview"), badge: reviewItems.length },
   ];
 
+  function validateAssignmentDates(): boolean {
+    const today = startOfLocalDay(new Date());
+    const start = new Date(createStartDate);
+    const end = new Date(createDeadline);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      setCreateDateError(t("teacher.errors.createFailed"));
+      return false;
+    }
+    if (startOfLocalDay(start) < today || startOfLocalDay(end) < today) {
+      setCreateDateError(t("teacher.courseView.dateMinHint"));
+      return false;
+    }
+    if (start > end) {
+      setCreateDateError(t("teacher.courseView.dateOrderError"));
+      return false;
+    }
+    setCreateDateError(null);
+    return true;
+  }
+
   async function onCreateAssignment(e: FormEvent) {
     e.preventDefault();
+    if (!validateAssignmentDates()) return;
+    const periods = penaltyPeriods
+      .filter((p) => p.weeks > 0)
+      .sort((a, b) => a.weeks - b.weeks)
+      .map((p) => ({
+        weeks: p.weeks,
+        max_grade: Math.min(gradeCap, Math.max(0, p.max_grade)),
+      }));
+    if (periods.length === 0) {
+      periods.push({ weeks: 1, max_grade: Math.min(4, gradeCap) });
+    }
+
     setCreateLoading(true);
     try {
       const created = await createAssignment(courseId, {
@@ -103,12 +165,16 @@ export default function TeacherCourseView({ courseId, course, isDarkTheme = fals
         description: createDescription.trim(),
         start_date: new Date(createStartDate).toISOString(),
         deadline: new Date(createDeadline).toISOString(),
-        late_penalty_periods: [{ weeks: 1, max_grade: 4 }],
+        late_penalty_periods: periods,
       });
       setAssignments((prev) => [...prev, created].sort((a, b) => a.deadline.localeCompare(b.deadline)));
       setShowCreateForm(false);
       setCreateTitle("");
       setCreateDescription("");
+      setCreateStartDate("");
+      setCreateDeadline("");
+      setPenaltyPeriods(buildDefaultPenaltyPeriods(gradeCap));
+      setCreateDateError(null);
       await load();
     } catch (err) {
       alert(err instanceof Error ? err.message : t("teacher.errors.createFailed"));
@@ -131,40 +197,36 @@ export default function TeacherCourseView({ courseId, course, isDarkTheme = fals
       studentName: item.student_name,
       assignmentTitle: item.assignment_title,
       courseTitle: item.course_title,
-      gradeMax: detail?.grade_max ?? course?.grade_max ?? 100,
+      gradeMax: gradeCap,
     });
   }
 
   if (loading && !detail) {
-    return (
-      <div className="flex justify-center py-16 gap-2 text-sm" style={{ color: theme.text2 }}>
-        <Loader2 className="h-5 w-5 animate-spin" />
-        {t("teacher.courseView.loading")}
-      </div>
-    );
+    return <TeacherLoadingBlock theme={theme} label={t("teacher.courseView.loading")} />;
   }
 
   return (
     <TeacherPageShell>
-      <div className="flex flex-wrap gap-2 border-b pb-1" style={{ borderColor: theme.border }}>
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className="rounded-t-lg px-3 py-2 text-sm font-medium transition-colors"
-            style={{
-              color: tab === t.key ? theme.accent2 : theme.text2,
-              borderBottom: tab === t.key ? `2px solid ${theme.accent}` : "2px solid transparent",
-            }}
-          >
-            {t.label}
-            {t.badge != null && t.badge > 0 ? (
-              <span className="ml-1.5 text-[10px] opacity-80">({t.badge})</span>
-            ) : null}
-          </button>
-        ))}
+      <div className="mb-1 text-sm" style={{ color: theme.text2 }}>
+        <Link to="/teacher/courses" className="hover:underline" style={{ color: theme.accent }}>
+          {t("teacher.coursePage.breadcrumbCourses")}
+        </Link>
+        <span className="mx-2 opacity-50">&gt;</span>
+        <span style={{ color: theme.text }}>{detail?.title ?? t("teacher.coursePage.courseFallback")}</span>
       </div>
+      <h1 className="text-2xl font-semibold mb-4" style={{ color: theme.text }}>
+        {detail?.title ?? t("teacher.coursePage.courseFallback")}
+      </h1>
+      <TeacherTabs
+        theme={theme}
+        tabs={tabs.map((tabItem) => ({
+          key: tabItem.key,
+          label: tabItem.label,
+          badge: tabItem.badge,
+        }))}
+        active={tab}
+        onChange={setTab}
+      />
 
       {error ? (
         <p className="text-sm rounded-xl border px-4 py-3" style={{ color: theme.danger, borderColor: theme.border }}>
@@ -232,63 +294,202 @@ export default function TeacherCourseView({ courseId, course, isDarkTheme = fals
       {tab === "assignments" ? (
         <>
           <div className="flex justify-end">
-            <button
+            <TeacherBtn
               type="button"
-              onClick={() => setShowCreateForm((v) => !v)}
-              className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white"
-              style={{ backgroundColor: theme.success }}
+              theme={theme}
+              variant="success"
+              onClick={() => {
+                setPenaltyPeriods(buildDefaultPenaltyPeriods(gradeCap));
+                setShowCreateForm((v) => !v);
+              }}
             >
               <Plus className="h-3.5 w-3.5" />
               {t("teacher.courseView.addAssignment")}
-            </button>
+            </TeacherBtn>
           </div>
           {showCreateForm ? (
             <form
               onSubmit={onCreateAssignment}
-              className="rounded-xl border p-4 flex flex-col gap-3"
+              className="rounded-2xl border overflow-hidden"
               style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
             >
-              <input
-                required
-                value={createTitle}
-                onChange={(e) => setCreateTitle(e.target.value)}
-                placeholder={t("teacher.courseView.titlePlaceholder")}
-                className="rounded-lg border px-3 py-2 text-sm"
-                style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
-              />
-              <textarea
-                value={createDescription}
-                onChange={(e) => setCreateDescription(e.target.value)}
-                placeholder={t("teacher.courseView.descriptionPlaceholder")}
-                className="rounded-lg border px-3 py-2 text-sm min-h-20"
-                style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <input
-                  type="datetime-local"
-                  required
-                  value={createStartDate}
-                  onChange={(e) => setCreateStartDate(e.target.value)}
-                  className="rounded-lg border px-3 py-2 text-sm"
-                  style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
-                />
-                <input
-                  type="datetime-local"
-                  required
-                  value={createDeadline}
-                  onChange={(e) => setCreateDeadline(e.target.value)}
-                  className="rounded-lg border px-3 py-2 text-sm"
-                  style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={createLoading}
-                className="self-end rounded-lg px-4 py-1.5 text-xs text-white disabled:opacity-50"
-                style={{ backgroundColor: theme.accent }}
+              <div
+                className="border-b px-5 py-3.5"
+                style={{ borderColor: theme.border, backgroundColor: theme.bg4 }}
               >
-                {createLoading ? t("teacher.courseView.creating") : t("common.create")}
-              </button>
+                <h3 className="text-sm font-semibold" style={{ color: theme.text }}>
+                  {t("teacher.courseView.newAssignmentTitle")}
+                </h3>
+              </div>
+              <div className="flex flex-col gap-4 p-5">
+                <input
+                  required
+                  value={createTitle}
+                  onChange={(e) => setCreateTitle(e.target.value)}
+                  placeholder={t("teacher.courseView.titlePlaceholder")}
+                  className="rounded-xl border px-3.5 py-2.5 text-sm"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                />
+                <textarea
+                  value={createDescription}
+                  onChange={(e) => setCreateDescription(e.target.value)}
+                  placeholder={t("teacher.courseView.descriptionPlaceholder")}
+                  className="min-h-[88px] rounded-xl border px-3.5 py-2.5 text-sm resize-y"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium" style={{ color: theme.text2 }}>
+                      {t("teacher.courseView.fieldStartDate")}
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      min={dateMin}
+                      value={createStartDate}
+                      onChange={(e) => {
+                        setCreateStartDate(e.target.value);
+                        setCreateDateError(null);
+                      }}
+                      className="w-full rounded-xl border px-3.5 py-2.5 text-sm"
+                      style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium" style={{ color: theme.text2 }}>
+                      {t("teacher.courseView.fieldDeadline")}
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      min={createStartDate || dateMin}
+                      value={createDeadline}
+                      onChange={(e) => {
+                        setCreateDeadline(e.target.value);
+                        setCreateDateError(null);
+                      }}
+                      className="w-full rounded-xl border px-3.5 py-2.5 text-sm"
+                      style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] -mt-2" style={{ color: theme.text3 }}>
+                  {t("teacher.courseView.dateMinHint")}
+                </p>
+
+                <div
+                  className="rounded-xl border p-4"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg }}
+                >
+                  <p className="text-sm font-semibold" style={{ color: theme.text }}>
+                    {t("teacher.courseView.penaltyTitle")}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed" style={{ color: theme.text3 }}>
+                    {t("teacher.courseView.penaltyHint")}
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2">
+                    {penaltyPeriods.map((p, idx) => (
+                      <div key={idx} className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs w-28 shrink-0" style={{ color: theme.text2 }}>
+                          {t("teacher.courseView.penaltyWeeks")}
+                        </span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={52}
+                          value={p.weeks}
+                          onChange={(e) => {
+                            const weeks = Number(e.target.value);
+                            setPenaltyPeriods((prev) =>
+                              prev.map((row, i) => (i === idx ? { ...row, weeks } : row)),
+                            );
+                          }}
+                          className="w-20 rounded-lg border px-2 py-1.5 text-sm tabular-nums"
+                          style={{ borderColor: theme.border, backgroundColor: theme.bg3, color: theme.text }}
+                        />
+                        <span className="text-xs shrink-0" style={{ color: theme.text2 }}>
+                          {t("teacher.courseView.penaltyMaxGrade")}
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={gradeCap}
+                          value={p.max_grade}
+                          onChange={(e) => {
+                            const max_grade = Number(e.target.value);
+                            setPenaltyPeriods((prev) =>
+                              prev.map((row, i) => (i === idx ? { ...row, max_grade } : row)),
+                            );
+                          }}
+                          className="w-20 rounded-lg border px-2 py-1.5 text-sm tabular-nums"
+                          style={{ borderColor: theme.border, backgroundColor: theme.bg3, color: theme.text }}
+                        />
+                        <span className="text-[10px] flex-1 min-w-[120px]" style={{ color: theme.text3 }}>
+                          {tp("teacher.courseView.penaltyPreview", { weeks: p.weeks, grade: p.max_grade })}
+                        </span>
+                        {penaltyPeriods.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => setPenaltyPeriods((prev) => prev.filter((_, i) => i !== idx))}
+                            className="rounded-lg p-1.5"
+                            style={{ color: theme.danger }}
+                            title={t("teacher.courseView.penaltyRemovePeriod")}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPenaltyPeriods((prev) => [
+                        ...prev,
+                        { weeks: (prev[prev.length - 1]?.weeks ?? 0) + 1, max_grade: 0 },
+                      ])
+                    }
+                    className="mt-3 text-xs font-medium"
+                    style={{ color: theme.accent2 }}
+                  >
+                    + {t("teacher.courseView.penaltyAddPeriod")}
+                  </button>
+                </div>
+
+                {createDateError ? (
+                  <div
+                    className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs"
+                    style={{ borderColor: `${theme.danger}50`, color: theme.danger }}
+                  >
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {createDateError}
+                  </div>
+                ) : null}
+              </div>
+              <div
+                className="flex justify-end gap-2 border-t px-5 py-3"
+                style={{ borderColor: theme.border, backgroundColor: theme.bg4 }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateForm(false);
+                    setCreateDateError(null);
+                  }}
+                  className="rounded-lg border px-3 py-1.5 text-xs"
+                  style={{ borderColor: theme.border, color: theme.text2 }}
+                >
+                  {t("common.cancel")}
+                </button>
+                <button
+                  type="submit"
+                  disabled={createLoading}
+                  className="rounded-lg px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                  style={{ backgroundColor: theme.accent }}
+                >
+                  {createLoading ? t("teacher.courseView.creating") : t("common.create")}
+                </button>
+              </div>
             </form>
           ) : null}
           <div className="flex flex-col gap-3">
@@ -320,6 +521,20 @@ export default function TeacherCourseView({ courseId, course, isDarkTheme = fals
                           date: new Date(a.deadline).toLocaleString("ru-RU"),
                         })}
                       </p>
+                      {a.late_penalty_periods.length > 0 ? (
+                        <p className="text-[10px] mt-1" style={{ color: theme.text3 }}>
+                          {t("teacher.courseView.penaltyTitle")}:{" "}
+                          {[...a.late_penalty_periods]
+                            .sort((x, y) => x.weeks - y.weeks)
+                            .map((p) =>
+                              tp("teacher.courseView.penaltyPreview", {
+                                weeks: p.weeks,
+                                grade: p.max_grade,
+                              }),
+                            )
+                            .join(" · ")}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="flex gap-2">
                       <Link
@@ -425,53 +640,32 @@ export default function TeacherCourseView({ courseId, course, isDarkTheme = fals
       ) : null}
 
       {tab === "review" ? (
-        reviewItems.length === 0 ? (
-          <p className="text-sm text-center py-10" style={{ color: theme.text2 }}>
-            {t("teacher.courseView.noReviewForCourse")}
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {reviewItems.map((item) => (
-              <article
+        <TeacherSurface theme={theme} title={t("teacher.courseView.tabReview")} noPadding>
+          {reviewItems.length === 0 ? (
+            <TeacherEmptyState theme={theme} compact>
+              {t("teacher.courseView.noReviewForCourse")}
+            </TeacherEmptyState>
+          ) : (
+            reviewItems.map((item) => (
+              <TeacherPendingRow
                 key={item.submission_id}
-                className="rounded-xl border px-4 py-3 flex flex-wrap justify-between gap-3"
-                style={{
-                  backgroundColor: theme.bg3,
-                  borderColor: item.is_stale ? `${theme.danger}60` : theme.border,
-                }}
-              >
-                <div>
-                  <p className="text-sm font-medium" style={{ color: theme.text }}>
-                    {item.student_name} · {item.assignment_title}
-                  </p>
-                  <p className="text-xs mt-0.5" style={{ color: item.is_stale ? theme.danger : theme.text3 }}>
-                    {formatRelativeTime(new Date(item.submitted_at))}
-                    {item.is_stale
-                      ? tp("teacher.courseView.waitingHours", { hours: Math.round(item.waiting_hours) })
-                      : ""}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Link
-                    to={`/courses/${courseId}/assignments/${item.assignment_id}`}
-                    className="text-xs px-2.5 py-1 rounded-lg border"
-                    style={{ borderColor: theme.border, color: theme.accent2 }}
-                  >
-                    {t("teacher.codeReview.openInGitea")}
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => openGradeModal(item)}
-                    className="text-xs px-2.5 py-1 rounded-lg text-white"
-                    style={{ backgroundColor: theme.accent }}
-                  >
-                    {t("teacher.codeReview.grade")}
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        )
+                theme={theme}
+                studentName={item.student_name}
+                titleLine={`${item.student_name} · ${item.assignment_title}`}
+                subLine={formatRelativeTime(new Date(item.submitted_at))}
+                waitingLabel={
+                  item.is_stale
+                    ? tp("teacher.courseView.waitingHours", { hours: Math.round(item.waiting_hours) })
+                    : undefined
+                }
+                badgeTone={waitingBadgeTone(item.waiting_hours, item.is_stale)}
+                urgent={item.is_stale}
+                onGrade={() => openGradeModal(item)}
+                gradeLabel={t("teacher.codeReview.grade")}
+              />
+            ))
+          )}
+        </TeacherSurface>
       ) : null}
 
       <GradeSubmissionModal

@@ -51,6 +51,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
   const [avatarDisplayMode, setAvatarDisplayMode] = useState<string>("cover");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   // System status from API
   const [systemStatus, setSystemStatus] = useState<{
     api: "online" | "offline";
@@ -137,11 +138,25 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
 
   const theme = getTheme(isDarkTheme);
 
+  const searchForm = (
+    <form onSubmit={handleSearch} className="relative group">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors" style={{ color: theme.text3 }} />
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder={t("header.searchAdmin")}
+        className="w-full h-9 pl-10 pr-4 rounded-lg text-sm outline-none transition-all duration-200 border focus:ring-2 focus:ring-blue-500/50"
+        style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
+      />
+    </form>
+  );
+
   return (
     <header className="border-b transition-colors" style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
       <div className="mx-auto max-w-[1400px] px-4">
         {/* Main header row */}
-        <div className="flex items-center justify-between h-14">
+        <div className="flex items-center justify-between h-14 gap-2">
           {/* Left: Logo */}
           <Link to="/admin" className="flex items-center gap-3 group">
             <div className="flex items-center justify-center w-8 h-8 font-bold text-lg transition-colors" style={{ color: theme.text }}>
@@ -154,23 +169,19 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
             </div>
           </Link>
 
-          {/* Center: Search - wider */}
-          <div className="flex-1 max-w-2xl mx-8 hidden md:block">
-            <form onSubmit={handleSearch} className="relative group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors" style={{ color: theme.text3 }} />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t("header.searchAdmin")}
-                className="w-full h-9 pl-10 pr-4 rounded-lg text-sm outline-none transition-all duration-200 border focus:ring-2 focus:ring-blue-500/50"
-                style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
-              />
-            </form>
-          </div>
+          <div className="flex-1 max-w-2xl mx-2 sm:mx-6 hidden sm:block min-w-0">{searchForm}</div>
 
           {/* Right: Actions + Profile */}
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="sm:hidden flex items-center justify-center w-9 h-9 rounded-lg"
+              style={{ color: theme.text2, backgroundColor: theme.hoverBg }}
+              onClick={() => setMobileSearchOpen((v) => !v)}
+              aria-label={t("header.searchAdmin")}
+            >
+              <Search className="h-5 w-5" />
+            </button>
             {/* System Status */}
             <div className="hidden xl:flex items-center gap-3 mr-2">
               <StatusIndicator status={systemStatus.api} label={t("header.apiStatus")} isDarkTheme={isDarkTheme} />
@@ -272,6 +283,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
             </div>
           </div>
         </div>
+        {mobileSearchOpen ? <div className="sm:hidden pb-3">{searchForm}</div> : null}
       </div>
     </header>
   );

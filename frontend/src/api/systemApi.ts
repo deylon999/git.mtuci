@@ -4,6 +4,7 @@ export interface SystemInfo {
   version: string;
   api_version: string;
   commits: number;
+  gitea_public_url?: string;
 }
 
 let systemInfoInflight: Promise<SystemInfo> | null = null;

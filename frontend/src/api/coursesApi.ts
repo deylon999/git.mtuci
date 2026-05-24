@@ -15,6 +15,10 @@ export async function getCourses(): Promise<Course[]> {
   return apiRequest<Course[]>("/courses");
 }
 
+export async function getCourse(courseId: string): Promise<Course> {
+  return apiRequest<Course>(`/courses/${courseId}`);
+}
+
 export async function createCourse(payload: {
   title: string;
   description: string;

@@ -1,38 +1,35 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Search,
   Plus,
   Download,
   Trash2,
   ChevronDown,
-  Star,
   MoreHorizontal,
   Lock,
   Unlock,
   Loader2,
+  ExternalLink,
+  Copy,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import { CustomCheckbox } from "../components/CustomCheckbox";
+import AdminPageHeader from "../components/AdminPageHeader";
+import CreateRepositoryModal from "../components/CreateRepositoryModal";
 import { API_URL } from "../api/client";
-import { getAdminRepositories } from "../api/adminApi";
+import {
+  deleteAdminRepository,
+  getAdminRepositories,
+  toggleAdminRepositoryBlock,
+  type AdminRepository,
+} from "../api/adminApi";
+import { getSystemInfo } from "../api/systemApi";
+import { useAuthUser } from "../context/AuthUserContext";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+import { getGiteaPublicBase, resolveRepoLinks } from "../utils/giteaLinks";
 
-interface Repository {
-  id: string;
-  name: string;
-  description: string | null;
-  gitea_repo_name: string | null;
-  clone_url: string | null;
-  owner_id: string;
-  owner_full_name: string | null;
-  commits_count: number;
-  is_public: boolean;
-  repo_type: "public" | "private" | "course";
-  language: string | null;
-  is_blocked: boolean;
-  faculty_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
+type Repository = AdminRepository;
 
 interface OverviewStats {
   total_users: number;
@@ -65,11 +62,11 @@ const languageColors: Record<string, string> = {
   SQL: "#6b7280",
 };
 
-function getTypeBadge(type: Repository["repo_type"], t: (key: string) => string) {
+function getTypeBadge(type: Repository["repo_type"], t: (key: string) => string, isDarkTheme: boolean) {
   const styles = {
-    public: "bg-emerald-500/15 text-emerald-400",
-    private: "bg-gray-500/15 text-gray-400",
-    course: "bg-blue-500/15 text-blue-400",
+    public: isDarkTheme ? "bg-green-500/20 text-green-400" : "bg-green-100 text-green-700",
+    private: isDarkTheme ? "bg-gray-500/20 text-gray-400" : "bg-gray-100 text-gray-700",
+    course: isDarkTheme ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700",
   };
   const labels = {
     public: t("repo.visibility.public"),
@@ -77,12 +74,102 @@ function getTypeBadge(type: Repository["repo_type"], t: (key: string) => string)
     course: t("repo.visibility.course"),
   };
   return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[type]}`}
-    >
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${styles[type]}`}>
       {labels[type]}
     </span>
   );
+}
+
+function getRepoStatusBadge(isBlocked: boolean, isDarkTheme: boolean, t: (key: string) => string) {
+  if (isBlocked) {
+    return (
+      <span
+        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+          isDarkTheme ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-700"
+        }`}
+      >
+        {t("admin.dashboard.statusBlocked")}
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+        isDarkTheme ? "bg-green-500/20 text-green-400" : "bg-green-100 text-green-700"
+      }`}
+    >
+      {t("admin.dashboard.statusActive")}
+    </span>
+  );
+}
+
+function csvEscape(value: string | number | boolean | null | undefined): string {
+  const raw = String(value ?? "");
+  if (/[",\n\r]/.test(raw)) {
+    return `"${raw.replace(/"/g, '""')}"`;
+  }
+  return raw;
+}
+
+function downloadRepositoriesCsv(
+  repos: Repository[],
+  labels: {
+    name: string;
+    giteaName: string;
+    type: string;
+    language: string;
+    owner: string;
+    commits: string;
+    status: string;
+    cloneUrl: string;
+    createdAt: string;
+    statusActive: string;
+    statusBlocked: string;
+    typePublic: string;
+    typePrivate: string;
+    typeCourse: string;
+  },
+) {
+  const typeLabel = (type: Repository["repo_type"]) => {
+    if (type === "public") return labels.typePublic;
+    if (type === "private") return labels.typePrivate;
+    return labels.typeCourse;
+  };
+
+  const header = [
+    labels.name,
+    labels.giteaName,
+    labels.type,
+    labels.language,
+    labels.owner,
+    labels.commits,
+    labels.status,
+    labels.cloneUrl,
+    labels.createdAt,
+  ];
+
+  const rows = repos.map((repo) => [
+    repo.name,
+    repo.gitea_repo_name ?? "",
+    typeLabel(repo.repo_type),
+    repo.language ?? "",
+    repo.owner_full_name ?? "",
+    repo.commits_count,
+    repo.is_blocked ? labels.statusBlocked : labels.statusActive,
+    repo.clone_url ?? "",
+    repo.created_at,
+  ]);
+
+  const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `repositories_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
 }
 
 function getInitials(fullName: string | null): string {
@@ -115,6 +202,28 @@ function formatDate(
   return date.toLocaleDateString(dateLocale);
 }
 
+const FLOATING_MENU_Z_BACKDROP = 200;
+const FLOATING_MENU_Z_PANEL = 201;
+
+function computeFloatingMenuPosition(
+  anchor: HTMLElement,
+  menuWidth: number,
+  menuHeightEstimate: number,
+): { top: number; left: number } {
+  const rect = anchor.getBoundingClientRect();
+  const margin = 6;
+  let top = rect.bottom + margin;
+  let left = rect.right - menuWidth;
+
+  if (top + menuHeightEstimate > window.innerHeight - 8) {
+    top = rect.top - menuHeightEstimate - margin;
+  }
+  left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
+  top = Math.max(8, top);
+
+  return { top, left };
+}
+
 function Dropdown({ label, value, options, onChange, isDarkTheme = true }: {
   label: string;
   value: string;
@@ -123,47 +232,63 @@ function Dropdown({ label, value, options, onChange, isDarkTheme = true }: {
   isDarkTheme?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
-  const dropdownBtnBg = isDarkTheme ? "bg-[#1e1e1e] hover:bg-[#2d2d2d]" : "bg-gray-100 hover:bg-gray-200";
-  const dropdownBtnText = isDarkTheme ? "text-gray-300" : "text-gray-700";
-  const dropdownIconColor = isDarkTheme ? "text-gray-500" : "text-gray-400";
-  const dropdownBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-gray-100 border-gray-200";
-  const dropdownItemHover = isDarkTheme ? "hover:bg-[#2d2d2d]" : "hover:bg-gray-200";
-  const dropdownItemText = isDarkTheme ? "text-gray-300" : "text-gray-700";
+  const dropdownBtnBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d]" : "bg-gray-100 border-gray-300";
+  const dropdownBtnText = isDarkTheme ? "text-[#ccd0d4]" : "text-slate-900";
+  const dropdownIconColor = isDarkTheme ? "text-[#8b949e]" : "text-slate-500";
+  const dropdownBg = isDarkTheme ? "bg-[#111111] border-[#2d2d2d]" : "bg-slate-100 border-slate-200";
+  const dropdownItemHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-200";
+  const dropdownItemText = isDarkTheme ? "text-[#8b949e]" : "text-slate-500";
+
+  const selectedLabel = options.find((o) => o.value === value)?.label || label;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const close = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [isOpen]);
 
   return (
-    <div className="relative">
+    <div ref={rootRef} className="relative shrink-0">
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${dropdownBtnBg} ${dropdownBtnText}`}
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className={`inline-flex max-w-[10.5rem] items-center gap-2 border px-3 py-2 rounded-lg text-sm transition-colors ${dropdownBtnBg} ${dropdownBtnText}`}
       >
-        {options.find((o: {value: string, label: string}) => o.value === value)?.label || label}
-        <ChevronDown className={`h-4 w-4 ${dropdownIconColor} transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronDown className={`h-3 w-3 shrink-0 ${dropdownIconColor} transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
-      {isOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setIsOpen(false)}
-          />
-          <div className={`absolute top-full left-0 mt-1 rounded-lg shadow-lg z-50 min-w-[140px] border ${dropdownBg}`}>
-            {options.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-                className={`w-full px-3 py-2 text-left text-sm ${dropdownItemHover} transition-colors ${
-                  value === option.value ? "text-blue-400" : dropdownItemText
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      {isOpen ? (
+        <div
+          className={`absolute top-full left-0 z-50 mt-1.5 w-40 overflow-hidden rounded-xl border shadow-xl ${dropdownBg}`}
+        >
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                setIsOpen(false);
+              }}
+              className={`w-full whitespace-nowrap px-3 py-2 text-left text-sm transition-colors ${
+                value === option.value
+                  ? isDarkTheme
+                    ? "bg-blue-500/20 text-blue-400"
+                    : "bg-blue-100 text-blue-700"
+                  : `${dropdownItemText} ${dropdownItemHover}`
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -182,7 +307,9 @@ interface RepositoriesPageProps {
 
 export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPageProps) {
   const { t, tp, language } = useUserPreferences();
+  const { user } = useAuthUser();
   const dateLocale = language === "en" ? "en-US" : "ru-RU";
+  const [giteaBase, setGiteaBase] = useState(getGiteaPublicBase);
   // Data states
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [stats, setStats] = useState<OverviewStats | null>(null);
@@ -201,6 +328,38 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
   const [selectedRepos, setSelectedRepos] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [openRowMenu, setOpenRowMenu] = useState<{
+    repoId: string;
+    top: number;
+    left: number;
+  } | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  useEffect(() => {
+    if (!openRowMenu) return;
+    const close = () => setOpenRowMenu(null);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [openRowMenu]);
+
+  useEffect(() => {
+    void getSystemInfo()
+      .then((info) => {
+        if (info.gitea_public_url?.trim()) {
+          setGiteaBase(info.gitea_public_url.trim().replace(/\/$/, ""));
+        }
+      })
+      .catch(() => {
+        /* остаётся VITE_GITEA_PUBLIC_URL или localhost:3000 */
+      });
+  }, []);
 
   // Fetch stats
   useEffect(() => {
@@ -233,7 +392,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
       const data = await getAdminRepositories({
         skip: offset,
         limit,
-        repo_type: typeFilter || undefined,
+        repo_type: (typeFilter || undefined) as AdminRepository["repo_type"] | undefined,
         language: languageFilter || undefined,
         is_blocked: blockedFilter === "true" ? true : blockedFilter === "false" ? false : undefined,
       });
@@ -250,27 +409,109 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
   const toggleBlock = async (repoId: string) => {
     setTogglingId(repoId);
     try {
-      const response = await fetch(`${API_URL}/admin/repositories/${repoId}/toggle-block`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to toggle block status");
-      }
-
-      const updatedRepo = await response.json();
-
-      // Update locally without refetching
+      const updatedRepo = await toggleAdminRepositoryBlock(repoId);
       setRepositories((prev) =>
         prev.map((repo) =>
           repo.id === repoId ? { ...repo, is_blocked: updatedRepo.is_blocked } : repo
         )
       );
+      toast.success(
+        updatedRepo.is_blocked
+          ? t("repo.repositories.blockSuccess")
+          : t("repo.repositories.unblockSuccess"),
+      );
     } catch (err) {
-      console.error("Toggle block error:", err);
+      toast.error(err instanceof Error ? err.message : t("repo.repositories.blockError"));
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const deleteRepo = async (repoId: string, repoName: string) => {
+    if (!window.confirm(tp("repo.repositories.deleteConfirm", { name: repoName }))) {
+      return;
+    }
+    setDeletingId(repoId);
+    try {
+      await deleteAdminRepository(repoId);
+      setRepositories((prev) => prev.filter((repo) => repo.id !== repoId));
+      setSelectedRepos((prev) => {
+        const next = new Set(prev);
+        next.delete(repoId);
+        return next;
+      });
+      setTotalCount((prev) => Math.max(0, prev - 1));
+      toast.success(t("repo.repositories.deleteSuccess"));
+      void fetchStats();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("repo.repositories.deleteError"));
+    } finally {
+      setDeletingId(null);
+      setOpenRowMenu(null);
+    }
+  };
+
+  const deleteSelected = async () => {
+    if (selectedRepos.size === 0) return;
+    if (!window.confirm(tp("repo.repositories.deleteSelectedConfirm", { n: selectedRepos.size }))) {
+      return;
+    }
+    setBulkDeleting(true);
+    const ids = [...selectedRepos];
+    try {
+      for (const id of ids) {
+        await deleteAdminRepository(id);
+      }
+      setRepositories((prev) => prev.filter((repo) => !selectedRepos.has(repo.id)));
+      setSelectedRepos(new Set());
+      setSelectAll(false);
+      setTotalCount((prev) => Math.max(0, prev - ids.length));
+      toast.success(t("repo.repositories.deleteSelectedSuccess"));
+      reloadRepositories();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("repo.repositories.deleteError"));
+      reloadRepositories();
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const reloadRepositories = () => {
+    void fetchRepositories();
+    void fetchStats();
+  };
+
+  const handleExportCsv = async () => {
+    setExporting(true);
+    try {
+      const repos = await getAdminRepositories({
+        skip: 0,
+        limit: 10_000,
+        repo_type: (typeFilter || undefined) as AdminRepository["repo_type"] | undefined,
+        language: languageFilter || undefined,
+        is_blocked: blockedFilter === "true" ? true : blockedFilter === "false" ? false : undefined,
+      });
+      downloadRepositoriesCsv(repos, {
+        name: t("repo.repositories.colRepository"),
+        giteaName: "Gitea",
+        type: t("admin.repositories.colType"),
+        language: t("repo.repositories.colLanguage"),
+        owner: t("admin.repositories.colOwner"),
+        commits: t("repo.repositories.colCommits"),
+        status: t("admin.repositories.colStatus"),
+        cloneUrl: "Clone URL",
+        createdAt: t("admin.forks.colDate"),
+        statusActive: t("admin.dashboard.statusActive"),
+        statusBlocked: t("admin.dashboard.statusBlocked"),
+        typePublic: t("repo.visibility.public"),
+        typePrivate: t("repo.visibility.private"),
+        typeCourse: t("repo.visibility.course"),
+      });
+      toast.success(t("repo.repositories.exportSuccess"));
+    } catch {
+      toast.error(t("repo.repositories.exportError"));
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -331,7 +572,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
 
   if (error) {
     return (
-      <div className={`h-full flex items-center justify-center ${isDarkTheme ? "bg-[#0f0f10] text-white" : "bg-gray-50 text-gray-900"}`}>
+      <div className={`min-h-[40vh] flex items-center justify-center ${isDarkTheme ? "bg-[#0f0f10] text-white" : "bg-gray-50 text-gray-900"}`}>
         <div className="text-center">
           <p className="text-red-400 mb-2">{t("repo.repositories.loadError")}</p>
           <p className={isDarkTheme ? "text-[#8b949e]" : "text-gray-500"}>{error}</p>
@@ -347,61 +588,77 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
   }
 
   const pageBg = isDarkTheme ? "bg-[#0f0f10] text-white" : "bg-slate-50 text-slate-900";
-  const cardBg = isDarkTheme ? "bg-[#0f0f10] border-[#2d2d2d]" : "bg-slate-100 border-slate-200 shadow-sm";
+  const cardBg = isDarkTheme ? "bg-[#111111]" : "bg-slate-100 shadow-sm";
+  const headerActionBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-slate-100 border-slate-200 shadow-sm";
+  const headerActionHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-200";
+  const filterInputBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d]" : "bg-gray-100 border-gray-300";
   const cardBgLight = isDarkTheme ? "bg-[#0d0d0d]" : "bg-slate-200";
   const textPrimary = isDarkTheme ? "text-white" : "text-slate-900";
   const textSecondary = isDarkTheme ? "text-gray-500" : "text-slate-500";
   const textTertiary = isDarkTheme ? "text-[#8b949e]" : "text-slate-400";
-  const inputBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d]" : "bg-slate-200 border-slate-300";
+  const inputBg = filterInputBg;
   const inputText = isDarkTheme ? "text-[#ccd0d4]" : "text-slate-900";
   const inputPlaceholder = isDarkTheme ? "placeholder-[#6e7681]" : "placeholder-slate-400";
   const tableHeaderText = isDarkTheme ? "text-[#6e7681]" : "text-slate-400";
-  const tableRowHover = isDarkTheme ? "hover:bg-[#1f2937]" : "hover:bg-slate-100";
+  const tableRowBg = isDarkTheme ? "bg-[#111111]" : "";
+  const tableRowHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-100";
   const tableBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-slate-200";
-  const btnBg = isDarkTheme ? "bg-[#0f0f10] border-[#30363d] hover:bg-[#1f2937]" : "bg-slate-100 border-slate-200 hover:bg-slate-200";
+  const btnBg = isDarkTheme ? "bg-[#111111] border-[#30363d] hover:bg-[#252525]" : "bg-slate-100 border-slate-200 hover:bg-slate-200";
   const btnText = isDarkTheme ? "text-[#8b949e]" : "text-slate-500";
   const btnTextHover = isDarkTheme ? "hover:text-[#ccd0d4]" : "hover:text-slate-900";
+  const actionBtnHover = isDarkTheme ? "hover:bg-[#30363d] hover:text-[#ccd0d4]" : "hover:bg-gray-300 hover:text-gray-900";
+  const actionBtnColor = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
+  const menuItemText = isDarkTheme ? "text-[#ccd0d4]" : "text-slate-900";
+  const menuItemHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-200";
 
   return (
-    <div className={`h-full overflow-y-auto ${pageBg}`}>
-      <div className="w-full py-6 pb-20">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <h1 className={`text-2xl font-bold ${textPrimary}`}>{t("repo.repositories.title")}</h1>
-            <span className={`text-sm ${textSecondary}`}>{tp("repo.repositories.reposCount", { n: totalCount })}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${btnBg} ${btnText} ${btnTextHover}`}>
-              <Download className="h-4 w-4" />
-              {t("repo.repositories.exportCsv")}
-            </button>
-            <button className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium text-white transition-all">
-              <Plus className="h-4 w-4" />
-              {t("repo.repositories.createRepo")}
-            </button>
-          </div>
-        </div>
+    <div className={pageBg}>
+      <div className="mx-auto w-full max-w-7xl space-y-6 pb-20">
+        <AdminPageHeader
+          isDarkTheme={isDarkTheme}
+          title={t("repo.repositories.title")}
+          subtitle={tp("repo.repositories.reposCount", { n: totalCount })}
+          actions={
+            <>
+              <button
+                type="button"
+                disabled={exporting}
+                onClick={() => void handleExportCsv()}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition-colors shadow-sm ${headerActionBg} ${headerActionHover} ${exporting ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                <Download className="h-4 w-4" />
+                {exporting ? t("repo.repositories.exporting") : t("repo.repositories.exportCsv")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(true)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm ${isDarkTheme ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+              >
+                <Plus className="h-4 w-4" />
+                {t("repo.repositories.createRepo")}
+              </button>
+            </>
+          }
+        />
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {getStatsData().map((stat) => (
-            <div key={stat.label} className={`${cardBg} border rounded-xl p-4`}>
+            <div key={stat.label} className={`${cardBg} rounded-xl p-4 border ${tableBorder}`}>
               <p className={`text-xs ${tableHeaderText} mb-1`}>{stat.label}</p>
               <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
             </div>
           ))}
         </div>
 
-        {/* Toolbar */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
+        <div className={`${cardBg} rounded-xl p-4 border ${tableBorder} flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between`}>
+          <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
               <Search className={`absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 ${tableHeaderText}`} />
               <input
                 type="text"
                 placeholder={t("repo.repositories.searchPlaceholder")}
-                className={`w-64 pl-10 pr-4 py-1.5 ${inputBg} rounded-lg text-sm ${inputText} ${inputPlaceholder} focus:outline-none focus:border-[#484f58] transition-colors`}
+                className={`w-64 pl-10 pr-4 py-2 ${filterInputBg} rounded-lg text-sm ${inputText} ${inputPlaceholder} focus:outline-none focus:border-[#484f58] transition-colors`}
               />
             </div>
             <div className="flex items-center gap-2">
@@ -422,16 +679,26 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
             </div>
           </div>
           {selectedRepos.size > 0 && (
-            <button className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm transition-colors">
-              <Trash2 className="h-4 w-4" />
-              {t("repo.repositories.deleteSelected")}
+            <button
+              type="button"
+              disabled={bulkDeleting}
+              onClick={() => void deleteSelected()}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm transition-colors disabled:opacity-50"
+            >
+              {bulkDeleting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              {tp("repo.repositories.deleteSelected", { n: selectedRepos.size })}
             </button>
           )}
         </div>
 
         {/* Table */}
-        <div className={`${cardBg} rounded-xl overflow-hidden`}>
-          <table className="w-full">
+        <div className={`${cardBg} rounded-xl border ${tableBorder} overflow-hidden`}>
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[960px]">
             <thead>
               <tr className={`border-b ${tableBorder}`}>
                 <th className="w-10 py-3 px-4">
@@ -458,7 +725,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
                 <th className="w-10 py-3 px-4"></th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${tableBorder}`}>
+            <tbody>
               {loading ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center">
@@ -475,7 +742,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
                 repositories.map((repo) => (
                   <tr
                     key={repo.id}
-                    className={`${tableRowHover} transition-colors ${repo.is_blocked ? "opacity-60" : ""}`}
+                    className={`border-b ${tableBorder} last:border-b-0 ${tableRowBg} ${tableRowHover} transition-colors ${repo.is_blocked ? "opacity-60" : ""}`}
                   >
                     <td className="py-3 px-4">
                       <CustomCheckbox
@@ -490,17 +757,12 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
                           {getInitials(repo.owner_full_name)}
                         </div>
                         <div>
-                          <p className={`font-medium text-sm ${inputText}`}>
-                            {repo.name}
-                            {repo.is_blocked && (
-                              <span className="ml-2 text-red-400 text-xs">{t("repo.repositories.blockedSuffix")}</span>
-                            )}
-                          </p>
+                          <p className={`font-medium text-sm ${inputText}`}>{repo.name}</p>
                           <p className={`text-xs ${tableHeaderText}`}>{repo.gitea_repo_name || repo.name}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-4">{getTypeBadge(repo.repo_type, t)}</td>
+                    <td className="py-3 px-4">{getTypeBadge(repo.repo_type, t, isDarkTheme)}</td>
                     <td className="py-3 px-4">
                       {repo.language ? (
                         <div className="flex items-center gap-2">
@@ -520,34 +782,22 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
                     <td className={`py-3 px-4 text-sm font-semibold ${inputText}`}>
                       {repo.commits_count}
                     </td>
+                    <td className="py-3 px-4">{getRepoStatusBadge(repo.is_blocked, isDarkTheme, t)}</td>
                     <td className="py-3 px-4">
                       <button
-                        onClick={() => toggleBlock(repo.id)}
-                        disabled={togglingId === repo.id}
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
-                          repo.is_blocked
-                            ? "bg-red-500/15 text-red-400 hover:bg-red-500/25"
-                            : "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
-                        }`}
+                        type="button"
+                        onClick={(e) => {
+                          if (openRowMenu?.repoId === repo.id) {
+                            setOpenRowMenu(null);
+                            return;
+                          }
+                          const pos = computeFloatingMenuPosition(e.currentTarget, 208, 132);
+                          setOpenRowMenu({ repoId: repo.id, ...pos });
+                        }}
+                        className={`p-1.5 rounded-lg ${actionBtnHover} ${actionBtnColor} transition-colors`}
+                        aria-label={t("repo.repositories.actionsMenu")}
                       >
-                        {togglingId === repo.id ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : repo.is_blocked ? (
-                          <>
-                            <Lock className="h-3 w-3" />
-                            {t("repo.repositories.statusBlocked")}
-                          </>
-                        ) : (
-                          <>
-                            <Unlock className="h-3 w-3" />
-                            {t("repo.repositories.statusActive")}
-                          </>
-                        )}
-                      </button>
-                    </td>
-                    <td className="py-3 px-4">
-                      <button className={`p-1 ${btnBg} rounded transition-colors`}>
-                        <MoreHorizontal className={`h-4 w-4 ${tableHeaderText}`} />
+                        <MoreHorizontal className="h-4 w-4" />
                       </button>
                     </td>
                   </tr>
@@ -555,10 +805,11 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between mt-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p className={`text-sm ${tableHeaderText}`}>
             {tp("repo.repositories.shownOf", { shown: repositories.length, total: totalCount })}
           </p>
@@ -603,6 +854,108 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
           </div>
         </div>
       </div>
+
+      {openRowMenu &&
+        (() => {
+          const menuRepo = repositories.find((r) => r.id === openRowMenu.repoId);
+          if (!menuRepo) return null;
+          return createPortal(
+            <>
+              <div
+                className="fixed inset-0"
+                style={{ zIndex: FLOATING_MENU_Z_BACKDROP }}
+                onClick={() => setOpenRowMenu(null)}
+              />
+              <div
+                className={`fixed w-52 ${cardBg} border ${tableBorder} rounded-xl shadow-xl overflow-hidden py-1`}
+                style={{
+                  zIndex: FLOATING_MENU_Z_PANEL,
+                  top: openRowMenu.top,
+                  left: openRowMenu.left,
+                }}
+              >
+                <button
+                  type="button"
+                  disabled={togglingId === menuRepo.id}
+                  onClick={() => {
+                    void toggleBlock(menuRepo.id);
+                    setOpenRowMenu(null);
+                  }}
+                  className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors disabled:opacity-50 ${menuItemText} ${menuItemHover}`}
+                >
+                  {togglingId === menuRepo.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  ) : menuRepo.is_blocked ? (
+                    <Unlock className="h-4 w-4 shrink-0" />
+                  ) : (
+                    <Lock className="h-4 w-4 shrink-0" />
+                  )}
+                  {menuRepo.is_blocked
+                    ? t("repo.repositories.actionUnblock")
+                    : t("repo.repositories.actionBlock")}
+                </button>
+                {(() => {
+                  const { webUrl, cloneUrl } = resolveRepoLinks(menuRepo, { giteaBase });
+                  return (
+                    <>
+                      {webUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.open(webUrl, "_blank", "noopener,noreferrer");
+                            setOpenRowMenu(null);
+                          }}
+                          className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors ${menuItemText} ${menuItemHover}`}
+                        >
+                          <ExternalLink className="h-4 w-4 shrink-0" />
+                          {t("repo.repositories.actionOpen")}
+                        </button>
+                      ) : null}
+                      {cloneUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(cloneUrl).then(() => {
+                              toast.success(t("repo.repositories.copyCloneSuccess"));
+                              setOpenRowMenu(null);
+                            });
+                          }}
+                          className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors ${menuItemText} ${menuItemHover}`}
+                        >
+                          <Copy className="h-4 w-4 shrink-0" />
+                          {t("repo.repositories.actionCopyClone")}
+                        </button>
+                      ) : null}
+                    </>
+                  );
+                })()}
+                <button
+                  type="button"
+                  disabled={deletingId === menuRepo.id}
+                  onClick={() => {
+                    void deleteRepo(menuRepo.id, menuRepo.name);
+                  }}
+                  className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors disabled:opacity-50 text-red-400 ${isDarkTheme ? "hover:bg-red-500/10" : "hover:bg-red-50"}`}
+                >
+                  {deletingId === menuRepo.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 shrink-0" />
+                  )}
+                  {t("repo.repositories.actionDelete")}
+                </button>
+              </div>
+            </>,
+            document.body,
+          );
+        })()}
+
+      <CreateRepositoryModal
+        isOpen={createModalOpen}
+        isDarkTheme={isDarkTheme}
+        onClose={() => setCreateModalOpen(false)}
+        onCreated={reloadRepositories}
+      />
     </div>
   );
 }

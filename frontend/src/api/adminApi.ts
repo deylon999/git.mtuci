@@ -155,6 +155,9 @@ export interface AdminRepository {
   description: string | null;
   gitea_repo_name: string | null;
   clone_url: string | null;
+  gitea_web_url: string | null;
+  gitea_owner: string | null;
+  gitea_available?: boolean;
   owner_id: string | null;
   owner_full_name: string | null;
   commits_count: number;
@@ -252,6 +255,16 @@ export async function getAdminRepositories(
   if (query.is_blocked != null) params.set("is_blocked", String(query.is_blocked));
   const qs = params.toString();
   return apiRequest<AdminRepository[]>(`/admin/repositories${qs ? `?${qs}` : ""}`);
+}
+
+export async function deleteAdminRepository(repositoryId: string): Promise<void> {
+  await apiRequest<void>(`/admin/repositories/${repositoryId}`, { method: "DELETE" });
+}
+
+export async function toggleAdminRepositoryBlock(repositoryId: string): Promise<AdminRepository> {
+  return apiRequest<AdminRepository>(`/admin/repositories/${repositoryId}/toggle-block`, {
+    method: "POST",
+  });
 }
 
 export interface MyCommitsResponse {

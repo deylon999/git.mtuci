@@ -7,6 +7,50 @@ from app.models.user import User
 
 _GITEA_USER_RE = re.compile(r"[^a-zA-Z0-9._-]+")
 
+# Имена, которые Gitea не разрешает обычным пользователям (см. models/user/name.go).
+_GITEA_RESERVED_USERNAMES = frozenset(
+    {
+        "admin",
+        "api",
+        "git",
+        "assets",
+        "css",
+        "js",
+        "img",
+        "raw",
+        "avatars",
+        "explore",
+        "issues",
+        "pulls",
+        "orgs",
+        "org",
+        "user",
+        "repo",
+        "login",
+        "register",
+        "install",
+        "swagger",
+        "metrics",
+        "v2",
+        "team",
+        "administrator",
+        "ghost",
+        "notifications",
+        "settings",
+        "attachments",
+    }
+)
+
+
+def _normalize_login_candidate(raw: str) -> str | None:
+    login = raw.split("@", 1)[0].strip() if "@" in raw else raw.strip()
+    login = _GITEA_USER_RE.sub("-", login).strip("-._")
+    if not login:
+        return None
+    if login.lower() in _GITEA_RESERVED_USERNAMES:
+        return None
+    return login[:40]
+
 
 def resolve_gitea_username(user: User) -> str:
     """
@@ -21,12 +65,11 @@ def resolve_gitea_username(user: User) -> str:
         candidates.append(user.email.split("@", 1)[0].strip())
 
     for raw in candidates:
-        login = raw.split("@", 1)[0].strip() if "@" in raw else raw
-        login = _GITEA_USER_RE.sub("-", login).strip("-._")
+        login = _normalize_login_candidate(raw)
         if login:
-            return login[:40]
+            return login
 
-    fallback = str(user.id).replace("-", "")[:12]
+    fallback = f"u{str(user.id).replace('-', '')[:12]}"
     return fallback or "student"
 
 

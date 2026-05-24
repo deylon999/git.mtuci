@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.data.repo_create_templates import build_readme_markdown
+from app.data.repo_create_templates import build_readme_markdown, resolve_gitea_license_key
 from app.services.gitea_service import create_repo_file, create_repository_for_owner
 
 
@@ -22,7 +22,7 @@ async def create_personal_repository_in_gitea(
   Uses Gitea native gitignores/license/readme when possible; custom README when only readme is requested.
     """
     gitignore = (gitignore_template or "").strip() or None
-    license_key = (license_template or "").strip() or None
+    license_key = resolve_gitea_license_key(license_template)
 
     if not add_readme and not gitignore and not license_key:
         return await create_repository_for_owner(

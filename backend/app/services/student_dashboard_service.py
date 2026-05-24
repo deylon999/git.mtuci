@@ -48,6 +48,10 @@ from app.schemas.student_dashboard import (
 )
 from app.services.activity_service import log_repo_deleted
 from app.services.course_service import list_student_courses
+from app.services.repository_access_service import (
+    raise_if_repository_blocked,
+    repository_not_blocked_clause,
+)
 from app.utils.gitea_user import resolve_gitea_username
 from app.services.gitea_repo_cache import (
     RepoGiteaSnapshot,
@@ -156,7 +160,10 @@ async def _student_repo_specs(
     specs: list[tuple[str, str]] = []
 
     personal_result = await session.execute(
-        select(Repository).where(Repository.owner_id == student_id)
+        select(Repository).where(
+            Repository.owner_id == student_id,
+            repository_not_blocked_clause(),
+        )
     )
     for repo in personal_result.scalars().all():
         repo_name = (repo.gitea_repo_name or repo.name or "").strip()
@@ -248,7 +255,10 @@ async def _student_repositories_stats_db(
 ) -> StudentRepositoriesStatsRead:
     """Repository counters for profile bundle — DB only, no Gitea HTTP."""
     personal_result = await session.execute(
-        select(Repository).where(Repository.owner_id == student_id)
+        select(Repository).where(
+            Repository.owner_id == student_id,
+            repository_not_blocked_clause(),
+        )
     )
     personal_repos = list(personal_result.scalars().all())
 
@@ -481,6 +491,7 @@ async def resolve_student_repo_gitea_target(
     )
     repo = personal.scalar_one_or_none()
     if repo:
+        raise_if_repository_blocked(repo)
         await sync_personal_repository_to_gitea(session, student_user=student_user, repo=repo)
         repo_name = (repo.gitea_repo_name or repo.name or "").strip()
         if not repo_name:
@@ -1073,6 +1084,7 @@ async def delete_student_personal_repository(
     )
     repo = result.scalar_one_or_none()
     if repo:
+        raise_if_repository_blocked(repo)
         repo_name = repo.gitea_repo_name or repo.name
         owner = await resolve_repo_owner(primary_owner=primary_owner, repo_name=repo_name)
         await delete_gitea_repository(owner=owner, repo_name=repo_name)
@@ -1542,7 +1554,10 @@ async def get_student_repositories(
 
     personal_result = await session.execute(
         select(Repository)
-        .where(Repository.owner_id == student_id)
+        .where(
+            Repository.owner_id == student_id,
+            repository_not_blocked_clause(),
+        )
         .order_by(Repository.updated_at.desc())
     )
     personal_repos = list(personal_result.scalars().all())
@@ -1658,7 +1673,10 @@ async def get_student_recent_repositories(
 
     p_result = await session.execute(
         select(Repository)
-        .where(Repository.owner_id == student_id)
+        .where(
+            Repository.owner_id == student_id,
+            repository_not_blocked_clause(),
+        )
         .order_by(Repository.updated_at.desc())
         .limit(limit * 2)
     )

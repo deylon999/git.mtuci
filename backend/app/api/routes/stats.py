@@ -544,6 +544,7 @@ async def get_my_commits(
         select(Repository)
         .where(Repository.owner_id == current_user.id)
         .where(Repository.gitea_repo_name.is_not(None))
+        .where(Repository.is_blocked.is_(False))
     )
     repos = result.scalars().all()
     
@@ -584,7 +585,10 @@ async def get_active_repositories(
     result = await session.execute(
         select(Repository, User.full_name)
         .join(User, Repository.owner_id == User.id)
-        .where(Repository.gitea_repo_name.is_not(None))
+        .where(
+            Repository.gitea_repo_name.is_not(None),
+            Repository.is_blocked.is_(False),
+        )
         .order_by(Repository.updated_at.desc())
         .limit(limit)
     )

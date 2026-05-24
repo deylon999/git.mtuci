@@ -520,8 +520,6 @@ useEffect(() => {
     }
   };
 
-  // Theme-based colors
-  const pageBgStyle = isDarkTheme ? { backgroundColor: "#0f0f10" } : { backgroundColor: "#f8fafc" };
   const textPrimary = isDarkTheme ? "text-white" : "text-slate-900";
   const cardBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-slate-100 border-slate-200 shadow-sm";
   const cardHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-200";
@@ -532,22 +530,23 @@ useEffect(() => {
   const dividerColor = isDarkTheme ? "divide-[#2d2d2d]" : "divide-slate-200";
   const tableHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-100";
   // Table specific colors
-  const tableBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-slate-100";
+  const tableBg = isDarkTheme ? "bg-[#111111]" : "bg-slate-100";
   const tableBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-slate-200";
   const tableHeaderText = isDarkTheme ? "text-[#6e7681]" : "text-slate-400";
   const tableRowBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-slate-200";
-  const tableRowHover = isDarkTheme ? "hover:bg-[#1f2937]" : "hover:bg-slate-200";
+  const tableRowBg = isDarkTheme ? "bg-[#111111]" : "";
+  const tableRowHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-200";
   const tableCellText = isDarkTheme ? "text-[#8b949e]" : "text-slate-500";
   const tableNameText = isDarkTheme ? "text-[#ccd0d4]" : "text-slate-900";
   const tableEmailText = isDarkTheme ? "text-[#6e7681]" : "text-slate-400";
   const checkboxBorder = isDarkTheme ? "border-[#484f58]" : "border-gray-400";
   const checkboxHoverBorder = isDarkTheme ? "hover:border-[#6e7681]" : "hover:border-gray-500";
-  const iconBg = isDarkTheme ? "bg-[#1f2937]" : "bg-gray-200";
+  const iconBg = isDarkTheme ? "bg-[#252525]" : "bg-gray-200";
   const iconColor = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
   const actionBtnHover = isDarkTheme ? "hover:bg-[#30363d] hover:text-[#ccd0d4]" : "hover:bg-gray-300 hover:text-gray-900";
   const actionBtnColor = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
   // Modal colors
-  const modalBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-slate-100";
+  const modalBg = isDarkTheme ? "bg-[#111111]" : "bg-slate-100";
   const modalBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-gray-200";
   const modalText = isDarkTheme ? "text-[#ccd0d4]" : "text-gray-900";
   const modalLabel = isDarkTheme ? "text-[#8b949e]" : "text-gray-600";
@@ -556,14 +555,14 @@ useEffect(() => {
   const modalBtnHover = isDarkTheme ? "hover:bg-[#30363d]" : "hover:bg-gray-300";
   const modalBtnText = isDarkTheme ? "text-[#6e7681]" : "text-gray-600";
   // Pagination colors
-  const paginationBtn = isDarkTheme ? "bg-[#0f0f10] border-[#30363d] text-[#8b949e] hover:text-[#ccd0d4]" : "bg-slate-100 border-gray-300 text-gray-600 hover:text-gray-900";
+  const paginationBtn = isDarkTheme ? "bg-[#111111] border-[#30363d] text-[#8b949e] hover:text-[#ccd0d4]" : "bg-slate-100 border-gray-300 text-gray-600 hover:text-gray-900";
   const paginationDropdown = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d] text-[#ccd0d4]" : "bg-gray-100 border-gray-300 text-gray-700";
-  const paginationDropdownBg = isDarkTheme ? "bg-[#0f0f10] border-[#2d2d2d]" : "bg-slate-100 border-gray-200";
-  const paginationDropdownItem = isDarkTheme ? "text-[#8b949e] hover:bg-[#1f2937]" : "text-gray-600 hover:bg-gray-200";
+  const paginationDropdownBg = isDarkTheme ? "bg-[#111111] border-[#2d2d2d]" : "bg-slate-100 border-gray-200";
+  const paginationDropdownItem = isDarkTheme ? "text-[#8b949e] hover:bg-[#252525]" : "text-gray-600 hover:bg-gray-200";
 
   return (
     <div className={`h-full overflow-y-auto ${textPrimary} transition-colors`}>
-      <div className="max-w-7xl mx-auto py-6 px-6 pr-2 space-y-6 pb-20">
+      <div className="max-w-7xl mx-auto py-6 px-6 space-y-6 pb-20">
         {/* Header */}
         <AdminPageHeader
           isDarkTheme={isDarkTheme}
@@ -786,7 +785,7 @@ useEffect(() => {
                 </tr>
               ) : (
                 filteredUsers.map((user) => (
-                  <tr key={user.id} className={`border-b ${tableRowBorder} last:border-b-0 ${tableRowHover} transition-colors`}>
+                  <tr key={user.id} className={`border-b ${tableRowBorder} last:border-b-0 ${tableRowBg} ${tableRowHover} transition-colors`}>
                   <td className="px-4 py-3">
                     <div
                       onClick={() => toggleSelectUser(user.id)}
@@ -825,7 +824,7 @@ useEffect(() => {
                   <td className={`px-4 py-3 text-sm ${tableCellText}`}>{user.group}</td>
                   <td className="px-4 py-3">{getRoleBadge(user.role, isDarkTheme)}</td>
                   <td className="px-4 py-3">{getStatusBadge(user.status, isDarkTheme)}</td>
-                  <td className={`px-4 py-3 text-sm ${tableCellText}`}>{user.repos} {t("admin.users.reposCount").replace("{n}", String(user.repos))}</td>
+                  <td className={`px-4 py-3 text-sm ${tableCellText}`}>{tp("admin.users.reposCount", { n: user.repos })}</td>
                   <td className={`px-4 py-3 text-sm ${tableCellText}`}>{user.lastLogin}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
@@ -943,7 +942,7 @@ useEffect(() => {
                   <div className="relative">
                     <button
                       onClick={() => setShowPerPageDropdown(!showPerPageDropdown)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${paginationDropdown} ${isDarkTheme ? "hover:bg-[#0f0f10]" : "hover:bg-gray-200"}`}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${paginationDropdown} ${isDarkTheme ? "hover:bg-[#1a1a1a]" : "hover:bg-gray-200"}`}
                     >
                       {itemsPerPage}
                       <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showPerPageDropdown ? "rotate-180" : ""}`} />
@@ -1129,7 +1128,7 @@ useEffect(() => {
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => setEditUser(null)}
-                  className={`flex-1 px-4 py-2 border rounded-lg ${isDarkTheme ? "border-[#30363d] hover:bg-[#1f2937]" : "border-gray-300 hover:bg-gray-100"} ${modalLabel}`}
+                  className={`flex-1 px-4 py-2 border rounded-lg ${isDarkTheme ? "border-[#30363d] hover:bg-[#252525]" : "border-gray-300 hover:bg-gray-100"} ${modalLabel}`}
                 >
                   {t("common.cancel")}
                 </button>

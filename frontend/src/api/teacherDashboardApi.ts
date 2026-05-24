@@ -1,6 +1,13 @@
 import { tr } from "../utils/i18nLabels";
 import { apiRequest } from "./client";
 
+export interface TeacherGradingQueueStats {
+  pending: number;
+  stale: number;
+  graded_today: number;
+  avg_waiting_hours: number | null;
+}
+
 export interface TeacherGradingQueueItem {
   submission_id: string;
   student_id: string;
@@ -69,6 +76,7 @@ export interface TeacherCourseListItem {
   target_groups: string[];
   nearest_deadline: string | null;
   nearest_deadline_title: string | null;
+  submitted_percent: number | null;
 }
 
 export interface TeacherStudentListItem {
@@ -110,8 +118,18 @@ export function getTeacherDashboardFull(): Promise<TeacherDashboardFull> {
   return apiRequest<TeacherDashboardFull>("/teachers/me/dashboard/full");
 }
 
-export function getTeacherGradingQueue(limit = 100): Promise<TeacherGradingQueueItem[]> {
-  return apiRequest<TeacherGradingQueueItem[]>(`/teachers/me/grading-queue?limit=${limit}`);
+export function getTeacherGradingQueue(
+  limit = 100,
+  courseId?: string,
+): Promise<TeacherGradingQueueItem[]> {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (courseId) q.set("course_id", courseId);
+  return apiRequest<TeacherGradingQueueItem[]>(`/teachers/me/grading-queue?${q}`);
+}
+
+export function getTeacherGradingQueueStats(courseId?: string): Promise<TeacherGradingQueueStats> {
+  const q = courseId ? `?course_id=${encodeURIComponent(courseId)}` : "";
+  return apiRequest<TeacherGradingQueueStats>(`/teachers/me/grading-queue/stats${q}`);
 }
 
 export function getTeacherCoursesList(): Promise<TeacherCourseListItem[]> {

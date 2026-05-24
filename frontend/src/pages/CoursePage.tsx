@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAuthUser } from "../context/AuthUserContext";
-import { getAssignments, getCourses } from "../api/coursesApi";
+import { getAssignments, getCourse } from "../api/coursesApi";
 import StudentCourseView from "../components/StudentCourseView";
 import TeacherCourseView from "../components/teacher/TeacherCourseView";
 import { useUserPreferences } from "../context/UserPreferencesContext";
@@ -29,8 +29,11 @@ export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
   const [error, setError] = useState<string | null>(null);
   const { user: me, loading: authLoading } = useAuthUser();
 
+  const isTeacher = me?.role === "teacher" || me?.role === "laborant";
+  const isStudent = me?.role === "student";
+
   useEffect(() => {
-    if (!courseId || authLoading) return;
+    if (!courseId || authLoading || isTeacher) return;
     let cancelled = false;
     const courseIdStr = courseId;
 
@@ -38,28 +41,22 @@ export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
       setLoading(true);
       setError(null);
       try {
-        const [as, cs] = await Promise.allSettled([
+        const [as, courseResult] = await Promise.allSettled([
           getAssignments(courseIdStr),
-          getCourses(),
+          getCourse(courseIdStr),
         ]);
 
         if (as.status === "fulfilled" && !cancelled) setAssignments(as.value);
-        if (cs.status === "fulfilled" && !cancelled) {
-          const found = cs.value.find((c) => c.id === courseIdStr);
-          if (found) {
-            setCourseTitle(found.title);
-            setCourseData(found);
-          }
+        if (courseResult.status === "fulfilled" && !cancelled) {
+          setCourseTitle(courseResult.value.title);
+          setCourseData(courseResult.value);
         }
-        if (
-          !cancelled &&
-          (as.status === "rejected" || cs.status === "rejected")
-        ) {
+        if (!cancelled && (as.status === "rejected" || courseResult.status === "rejected")) {
           const reason =
             as.status === "rejected" && as.reason instanceof Error
               ? as.reason.message
-              : cs.status === "rejected" && cs.reason instanceof Error
-                ? cs.reason.message
+              : courseResult.status === "rejected" && courseResult.reason instanceof Error
+                ? courseResult.reason.message
                 : t("student.errors.loadCourses");
           setError(reason);
         }
@@ -70,31 +67,16 @@ export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
       }
     }
 
-    load();
+    void load();
     return () => {
       cancelled = true;
     };
-  }, [courseId, authLoading, t]);
-
-  const isTeacher = me?.role === "teacher" || me?.role === "laborant";
-  const isStudent = me?.role === "student";
+  }, [courseId, authLoading, isTeacher, t]);
 
   if (!courseId) return null;
 
   if (isTeacher) {
-    return (
-      <div className={`mx-auto max-w-7xl px-4 ${pageBg} min-h-screen py-4`}>
-        <div className={`mb-3 text-sm ${textSecondary}`}>
-          <Link to="/teacher/courses" className={`${breadcrumbText} ${breadcrumbHover}`}>
-            {t("teacher.coursePage.breadcrumbCourses")}
-          </Link>
-          <span className={`mx-2 ${textTertiary}`}>&gt;</span>
-          <span className={`font-medium ${textPrimary}`}>{courseTitle ?? t("teacher.coursePage.courseFallback")}</span>
-        </div>
-        <h1 className={`text-2xl font-semibold mb-4 ${textPrimary}`}>{courseTitle ?? t("teacher.coursePage.courseFallback")}</h1>
-        <TeacherCourseView courseId={courseId} course={courseData} isDarkTheme={isDarkTheme} />
-      </div>
-    );
+    return <TeacherCourseView courseId={courseId} isDarkTheme={isDarkTheme} />;
   }
 
   return (
@@ -117,13 +99,13 @@ export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
         />
       ) : null}
 
-      {authLoading || (!isStudent && !isTeacher && loading) ? (
+      {authLoading || (!isStudent && loading) ? (
         <div className={`text-sm ${textSecondary}`}>{t("common.loading")}</div>
       ) : null}
       {!authLoading && !me ? (
         <div className={`text-sm ${textSecondary}`}>{t("auth.loginRequired")}</div>
       ) : null}
-      {!authLoading && me && !isStudent && !isTeacher && !loading ? (
+      {!authLoading && me && !isStudent && !loading ? (
         <div className={`text-sm ${textSecondary}`}>{t("coursesRoute.noAccess")}</div>
       ) : null}
       {error ? (

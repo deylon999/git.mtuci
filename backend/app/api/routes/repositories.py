@@ -22,6 +22,7 @@ from app.data.repo_create_templates import (
     LICENSE_OPTIONS,
     VALID_GITIGNORE_IDS,
     VALID_LICENSE_IDS,
+    resolve_gitea_license_key,
 )
 from app.schemas.repository import (
     RepositoryCreateRequest,
@@ -32,7 +33,17 @@ from app.schemas.repository import (
 )
 from app.services.repo_init_service import create_personal_repository_in_gitea
 from app.services.activity_service import log_repo_created, log_repo_deleted
-from app.services.gitea_service import build_clone_url, ensure_repo_webhook
+from app.services.gitea_service import (
+    build_clone_url,
+    ensure_repo_webhook,
+    get_repo_metadata,
+    resolve_repo_owner,
+)
+from app.services.repository_access_service import (
+    ensure_repository_accessible,
+    repository_not_blocked_clause,
+)
+from app.services.repository_presenter import build_repository_read
 from app.services.logging_service import log_info, log_warning, log_event_background
 from app.utils.gitea_user import gitea_owner_path, resolve_gitea_username
 
@@ -225,7 +236,12 @@ async def list_my_repositories(
 ):
     """List all repositories owned by the current user."""
     result = await session.execute(
-        select(Repository).where(Repository.owner_id == current_user.id).order_by(Repository.created_at.desc())
+        select(Repository)
+        .where(
+            Repository.owner_id == current_user.id,
+            repository_not_blocked_clause(),
+        )
+        .order_by(Repository.created_at.desc())
     )
     repositories = result.scalars().all()
     return [RepositoryRead.model_validate(repo) for repo in repositories]
@@ -267,22 +283,22 @@ async def create_repository(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Unknown gitignore template",
             )
-        if license_tpl and license_tpl not in VALID_LICENSE_IDS:
+        if license_tpl and resolve_gitea_license_key(license_tpl) is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Unknown license template",
             )
+        license_tpl = resolve_gitea_license_key(license_tpl) or None
 
         is_private = payload.visibility == "private"
         repo_type = payload.repo_type or (
             RepositoryType.private if is_private else RepositoryType.public
         )
 
-        clone_url = None
-        gitea_repo_name = None
-        gitea_success = False
+        owner_username = resolve_gitea_username(current_user)
+        gitea_repo_name: str | None = None
+        clone_url: str | None = None
         try:
-            owner_username = resolve_gitea_username(current_user)
             logger.info(f"Creating Gitea repo for {owner_username}: {payload.name}")
             gitea_repo = await create_personal_repository_in_gitea(
                 owner_username=owner_username,
@@ -294,13 +310,30 @@ async def create_repository(
                 license_template=license_tpl,
             )
             gitea_repo_name = gitea_repo.get("name") or payload.name
-            clone_url = build_clone_url(owner_username, gitea_repo_name)
-            gitea_success = True
+            actual_owner = await resolve_repo_owner(
+                primary_owner=owner_username,
+                repo_name=gitea_repo_name,
+            )
+            meta = await get_repo_metadata(owner=actual_owner, repo=gitea_repo_name)
+            if not meta:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Gitea не подтвердил создание репозитория. Проверьте логи API и Gitea.",
+                )
+            clone_url = build_clone_url(actual_owner, gitea_repo_name)
             logger.info(f"Gitea repo created successfully: {clone_url}")
-
-            await ensure_repo_webhook(owner=owner_username, repo_name=gitea_repo_name)
+            await ensure_repo_webhook(owner=actual_owner, repo_name=gitea_repo_name)
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.warning(f"Gitea repo creation failed (will create in DB only): {e}")
+            logger.warning(f"Gitea repo creation failed: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=(
+                    "Не удалось создать репозиторий в Gitea. "
+                    "Проверьте GITEA_URL, GITEA_ADMIN_USERNAME и GITEA_ADMIN_PASSWORD в .env."
+                ),
+            ) from e
 
         repository = Repository(
             name=payload.name,
@@ -314,7 +347,6 @@ async def create_repository(
         await session.commit()
         await session.refresh(repository)
 
-        # Log repository creation in system logs (background)
         asyncio.create_task(log_event_background(
             level=LogLevel.INFO,
             source=LogSource.repositories,
@@ -326,17 +358,6 @@ async def create_repository(
             http_status=201,
         ))
 
-        if not gitea_success:
-            asyncio.create_task(log_event_background(
-                level=LogLevel.WARNING,
-                source=LogSource.repositories,
-                message=f"Repository created in DB but Gitea creation failed: {payload.name}",
-                ip_address=ip_address,
-                user_id=current_user.id,
-                user_email=current_user.email,
-                user_full_name=current_user.full_name,
-            ))
-
         # Log repository creation activity
         await log_repo_created(
             session=session,
@@ -345,7 +366,7 @@ async def create_repository(
             ip_address=None,
         )
 
-        return RepositoryRead.model_validate(repository)
+        return await build_repository_read(repository, current_user)
     except HTTPException:
         raise
     except Exception as e:
@@ -377,7 +398,8 @@ async def get_repository(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Repository not found",
         )
-    return RepositoryRead.model_validate(repository)
+    await ensure_repository_accessible(repository, current_user, session)
+    return await build_repository_read(repository, current_user)
 
 
 @router.patch("/{repository_id}", response_model=RepositoryRead)
@@ -401,6 +423,7 @@ async def update_repository(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Repository not found",
         )
+    await ensure_repository_accessible(repository, current_user, session)
 
     # Check name uniqueness if name is being updated
     if payload.name and payload.name != repository.name:
@@ -450,10 +473,15 @@ async def delete_repository(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Repository not found",
         )
+    await ensure_repository_accessible(repository, current_user, session)
 
-    # Delete from Gitea first
-    owner_username = current_user.email.split("@")[0]
-    await delete_gitea_repository(owner_username, repository.gitea_repo_name or repository.name)
+    owner_username = resolve_gitea_username(current_user)
+    repo_name = repository.gitea_repo_name or repository.name
+    actual_owner = await resolve_repo_owner(
+        primary_owner=owner_username,
+        repo_name=repo_name,
+    )
+    await delete_gitea_repository(actual_owner, repo_name)
 
     repo_name = repository.name
     await session.delete(repository)

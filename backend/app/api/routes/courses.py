@@ -50,6 +50,7 @@ from app.services.course_service import (
     create_course,
     delete_teacher_course,
     enroll_student_to_course,
+    get_course_for_user,
     list_student_courses,
     list_teacher_courses,
 )
@@ -66,11 +67,48 @@ from app.services.course_roster_service import (
     unenroll_student_from_course,
 )
 from app.services.grades_export_service import build_course_grades_csv
-from app.services.student_repository_service import get_student_repo_name
+from app.services.student_repository_service import (
+    get_student_repo_name,
+    resolve_assignment_repo_owner_and_name,
+)
 
 router = APIRouter(tags=["courses"])
 
-GITEA_ADMIN_USERNAME = os.getenv("GITEA_ADMIN_USERNAME", "gitea_admin")
+
+def _as_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _start_of_utc_day(dt: datetime) -> datetime:
+    utc = _as_utc(dt)
+    return utc.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _ensure_date_not_before_today(*, label: str, dt: datetime) -> None:
+    today = _start_of_utc_day(datetime.now(timezone.utc))
+    if _start_of_utc_day(dt) < today:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{label} cannot be before today",
+        )
+
+
+async def _assignment_gitea_owner_and_repo(
+    session: AsyncSession,
+    *,
+    assignment_id: UUID,
+    student_id: UUID,
+) -> tuple[str, str]:
+    try:
+        return await resolve_assignment_repo_owner_and_name(
+            session,
+            assignment_id=assignment_id,
+            student_id=student_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 def _parse_gitea_datetime(value: str | None) -> datetime | None:
@@ -208,6 +246,27 @@ async def list_courses_endpoint(
         return [CourseRead.model_validate(c) for c in courses]
 
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+
+@router.get("/courses/{course_id}", response_model=CourseRead)
+async def get_course_endpoint(
+    course_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(get_current_user),
+) -> CourseRead:
+    if current_user.role not in {UserRole.teacher, UserRole.laborant, UserRole.student}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    try:
+        course = await get_course_for_user(
+            session,
+            user=current_user,
+            course_id=course_id,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return CourseRead.model_validate(course)
 
 
 @router.delete("/courses/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -417,12 +476,9 @@ async def create_assignment_endpoint(
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date format")
     
-    # Validate deadline is not in the past
-    now = datetime.now(timezone.utc)
-    if deadline_dt < now:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Deadline cannot be in the past")
-    
-    # Validate start_date is not after deadline
+    _ensure_date_not_before_today(label="Start date", dt=start_dt)
+    _ensure_date_not_before_today(label="Deadline", dt=deadline_dt)
+
     if start_dt > deadline_dt:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Start date cannot be after deadline")
 
@@ -549,17 +605,23 @@ async def list_commits_endpoint(
     if current_user.role == UserRole.teacher:
         await _ensure_teacher_owns_course(course=course, current_user=current_user)
     await _get_assignment_or_404(session, course_id=course_id, assignment_id=assignment_id)
-    repo_name = await _get_repo_name_for_requester(
-        session,
-        course_id=course_id,
-        assignment_id=assignment_id,
-        current_user=current_user,
-        student_id=student_id,
-    )
+    if current_user.role == UserRole.teacher:
+        if not student_id:
+            raise HTTPException(status_code=400, detail="student_id is required for teacher")
+        target_student_id = student_id
+        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=student_id)
+    else:
+        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=current_user.id)
+        target_student_id = current_user.id
 
     try:
+        owner, repo_name = await _assignment_gitea_owner_and_repo(
+            session,
+            assignment_id=assignment_id,
+            student_id=target_student_id,
+        )
         commits_raw: list[dict] = await list_repo_commits(
-            owner=GITEA_ADMIN_USERNAME,
+            owner=owner,
             repo=repo_name,
             limit=100,
             max_pages=20,
@@ -639,16 +701,16 @@ async def list_submissions_endpoint(
     last_commit_at_by_student_id: dict[UUID, datetime | None] = {s.id: None for s in students}
     for student in students:
         try:
-            repo_name = await get_student_repo_name(
+            owner, repo_name = await _assignment_gitea_owner_and_repo(
                 session,
                 assignment_id=assignment_id,
                 student_id=student.id,
             )
-        except ValueError:
+        except HTTPException:
             continue
         try:
             commits_raw = await list_repo_commits(
-                owner=GITEA_ADMIN_USERNAME,
+                owner=owner,
                 repo=repo_name,
                 limit=100,
                 max_pages=10,
@@ -739,18 +801,15 @@ async def grade_submission_endpoint(
     if not student:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
 
+    last_commit_at: datetime | None = None
     try:
-        repo_name = await get_student_repo_name(
+        owner, repo_name = await _assignment_gitea_owner_and_repo(
             session,
             assignment_id=assignment_id,
             student_id=student_id,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    last_commit_at: datetime | None = None
-    try:
         commits_raw: list[dict] = await list_repo_commits(
-            owner=GITEA_ADMIN_USERNAME,
+            owner=owner,
             repo=repo_name,
             limit=100,
             max_pages=20,
@@ -971,16 +1030,22 @@ async def list_files_root_endpoint(
     if current_user.role == UserRole.teacher:
         await _ensure_teacher_owns_course(course=course, current_user=current_user)
     await _get_assignment_or_404(session, course_id=course_id, assignment_id=assignment_id)
-    repo_name = await _get_repo_name_for_requester(
-        session,
-        course_id=course_id,
-        assignment_id=assignment_id,
-        current_user=current_user,
-        student_id=student_id,
-    )
+    if current_user.role == UserRole.teacher:
+        if not student_id:
+            raise HTTPException(status_code=400, detail="student_id is required for teacher")
+        target_student_id = student_id
+        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=student_id)
+    else:
+        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=current_user.id)
+        target_student_id = current_user.id
 
     try:
-        contents = await get_repo_contents(owner=GITEA_ADMIN_USERNAME, repo=repo_name, filepath="")
+        owner, repo_name = await _assignment_gitea_owner_and_repo(
+            session,
+            assignment_id=assignment_id,
+            student_id=target_student_id,
+        )
+        contents = await get_repo_contents(owner=owner, repo=repo_name, filepath="")
     except RuntimeError as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
     if not isinstance(contents, list):
@@ -1021,17 +1086,23 @@ async def get_file_content_endpoint(
     if current_user.role == UserRole.teacher:
         await _ensure_teacher_owns_course(course=course, current_user=current_user)
     await _get_assignment_or_404(session, course_id=course_id, assignment_id=assignment_id)
-    repo_name = await _get_repo_name_for_requester(
-        session,
-        course_id=course_id,
-        assignment_id=assignment_id,
-        current_user=current_user,
-        student_id=student_id,
-    )
+    if current_user.role == UserRole.teacher:
+        if not student_id:
+            raise HTTPException(status_code=400, detail="student_id is required for teacher")
+        target_student_id = student_id
+        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=student_id)
+    else:
+        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=current_user.id)
+        target_student_id = current_user.id
 
     try:
+        owner, repo_name = await _assignment_gitea_owner_and_repo(
+            session,
+            assignment_id=assignment_id,
+            student_id=target_student_id,
+        )
         content = await get_repo_file_content(
-            owner=GITEA_ADMIN_USERNAME,
+            owner=owner,
             repo=repo_name,
             filepath=filepath,
         )

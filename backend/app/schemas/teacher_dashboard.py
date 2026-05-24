@@ -6,6 +6,13 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class TeacherGradingQueueStatsRead(BaseModel):
+    pending: int
+    stale: int
+    graded_today: int
+    avg_waiting_hours: float | None = None
+
+
 class TeacherGradingQueueItemRead(BaseModel):
     submission_id: UUID
     student_id: UUID
@@ -170,3 +177,4 @@ class TeacherCourseListItemRead(BaseModel):
     target_groups: list[str] = Field(default_factory=list)
     nearest_deadline: datetime | None = None
     nearest_deadline_title: str | None = None
+    submitted_percent: float | None = None

@@ -29,7 +29,8 @@ DEFAULT_PERMISSIONS = {
     UserRole.teacher: {
         "repo_view", "repo_view_students", "repo_create", "repo_comment",
         "user_view", "user_edit", "group_manage",
-        "assignment_view", "assignment_create", "grade_edit", "lab_accept", "grade_view_groups",
+        "assignment_view", "assignment_create", "assignment_delete",
+        "grade_edit", "lab_accept", "grade_view_groups",
         "settings_view", "logs_view",
     },
     UserRole.laborant: {
