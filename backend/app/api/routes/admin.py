@@ -53,9 +53,15 @@ from app.services.user_service import (
 from app.services.logging_service import log_event_background
 
 
+class TableSizeEntry(BaseModel):
+    name: str
+    size: str
+    size_mb: float
+
+
 class DatabaseMetrics(BaseModel):
     connections_active: int | None = None
-    connections_max: int
+    connections_max: int | None = None
     size_mb: float | None = None
     tables_count: int | None = None
     queries_per_sec: float | None = None
@@ -63,21 +69,21 @@ class DatabaseMetrics(BaseModel):
     cache_hit_rate: float | None = None
     deadlocks: int | None = None
     last_migration: str | None = None
-    top_tables: list[dict] | None = None
+    top_tables: list[TableSizeEntry] | None = None
 
 
 class SystemMetrics(BaseModel):
-    cpu_percent: float
-    cpu_model: str
-    memory_percent: float
-    memory_used_gb: float
-    memory_total_gb: float
-    disk_percent: float
-    disk_used_gb: float
-    disk_total_gb: float
-    network_upload_mbps: float
-    network_download_mbps: float
-    load_avg: list[float]
+    cpu_percent: float | None = None
+    cpu_model: str | None = None
+    memory_percent: float | None = None
+    memory_used_gb: float | None = None
+    memory_total_gb: float | None = None
+    disk_percent: float | None = None
+    disk_used_gb: float | None = None
+    disk_total_gb: float | None = None
+    network_upload_mbps: float | None = None
+    network_download_mbps: float | None = None
+    load_avg: list[float] | None = None
     requests_total_hour: int | None = None
     requests_errors_hour: int | None = None
     avg_response_ms: float | None = None
@@ -87,10 +93,21 @@ class SystemMetrics(BaseModel):
     database: DatabaseMetrics
 
 
+class MonitoredServiceRead(BaseModel):
+    id: str
+    name: str
+    port: str
+    online: bool
+    uptime: str | None = None
+    detail: str | None = None
+
+
 class ServiceStatus(BaseModel):
     git: bool
     db: bool
     api: bool
+    frontend: bool = False
+    websocket: bool = False
     git_uptime: str | None = None
     git_version: str | None = None
     db_uptime: str | None = None
@@ -98,6 +115,9 @@ class ServiceStatus(BaseModel):
     api_uptime: str | None = None
     api_version: str | None = None
     git_repos_count: int | None = None
+    websocket_connections: int | None = None
+    frontend_url: str | None = None
+    services: list[MonitoredServiceRead] = []
 
 
 class BackupInfo(BaseModel):
@@ -541,151 +561,49 @@ async def admin_system_metrics(
     current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> SystemMetrics:
+    from app.core.metrics_middleware import get_http_metrics
+    from app.services.monitoring_service import (
+        collect_database_metrics,
+        read_cpu_model,
+        sample_network_mbps,
+    )
 
-    # CPU
-    cpu_percent = psutil.cpu_percent(interval=1)
-    # Get CPU model name
-    cpu_model = "Unknown"
-    try:
-        cpu_info = psutil.cpu_freq()
-        if hasattr(psutil, "cpu_count"):
-            cpu_count = psutil.cpu_count(logical=False) or psutil.cpu_count()
-        else:
-            cpu_count = 1
-        # Try to get brand from cpuinfo if available (Linux)
-        if os.path.exists("/proc/cpuinfo"):
-            with open("/proc/cpuinfo", "r") as f:
-                for line in f:
-                    if "model name" in line:
-                        cpu_model = line.split(":")[1].strip()
-                        break
-        else:
-            cpu_model = f"{cpu_count} cores @ {cpu_info.max:.0f}MHz" if cpu_info else f"{cpu_count} cores"
-    except Exception:
-        pass
+    cpu_percent = psutil.cpu_percent(interval=0.3)
+    cpu_model = read_cpu_model()
 
-    # Memory
     mem = psutil.virtual_memory()
     memory_percent = mem.percent
     memory_used_gb = round(mem.used / (1024**3), 2)
     memory_total_gb = round(mem.total / (1024**3), 2)
 
-    # Disk
     disk = psutil.disk_usage("/")
     disk_percent = disk.percent
     disk_used_gb = round(disk.used / (1024**3), 2)
     disk_total_gb = round(disk.total / (1024**3), 2)
 
-    # Network
-    net_io = psutil.net_io_counters()
-    network_upload_mbps = round((net_io.bytes_sent / (1024 * 1024)) / 10, 2)  # Last 10 seconds avg
-    network_download_mbps = round((net_io.bytes_recv / (1024 * 1024)) / 10, 2)
+    network_upload_mbps, network_download_mbps = sample_network_mbps()
 
-    # Load average (Linux only, fallback for Windows)
     try:
         load_avg = [round(x, 2) for x in psutil.getloadavg()]
     except (AttributeError, OSError):
-        load_avg = [round(cpu_percent / 100, 2), round(cpu_percent / 100, 2), round(cpu_percent / 100, 2)]
+        load_avg = [0.0, 0.0, 0.0]
 
-    # HTTP request metrics from middleware
-    from app.core.metrics_middleware import get_http_metrics
     http_metrics = get_http_metrics()
-    requests_total_hour = http_metrics["requests_total_hour"]
-    requests_errors_hour = http_metrics["requests_errors_hour"]
-    avg_response_ms = http_metrics["avg_response_ms"]
-    p95_response_ms = http_metrics["p95_response_ms"]
-    error_rate = http_metrics["error_rate"]
-    rps = http_metrics["rps"]
-
-    # Database metrics from actual queries
-    try:
-        # Active connections
-        result = await session.execute(text("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()"))
-        connections_active = result.scalar()
-
-        # Database size in MB
-        result = await session.execute(text("SELECT pg_database_size(current_database()) / 1024 / 1024"))
-        size_mb = round(result.scalar(), 1)
-
-        # Tables count
-        result = await session.execute(text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"))
-        tables_count = result.scalar()
-
-        # Last migration from alembic_version
-        result = await session.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num DESC LIMIT 1"))
-        last_migration = result.scalar()
-
-        # Cache hit rate from pg_stat_database
-        result = await session.execute(text("""
-            SELECT
-                round(sum(blks_hit)::numeric / nullif(sum(blks_hit + blks_read), 0) * 100, 2)
-            FROM pg_stat_database
-            WHERE datname = current_database()
-        """))
-        cache_hit_rate = result.scalar()
-
-        # Deadlocks from pg_stat_database
-        result = await session.execute(text("""
-            SELECT deadlocks
-            FROM pg_stat_database
-            WHERE datname = current_database()
-        """))
-        deadlocks = result.scalar()
-
-        # Top tables by size
-        result = await session.execute(text("""
-            SELECT
-                schemaname,
-                tablename,
-                pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size,
-                pg_total_relation_size(schemaname||'.'||tablename) as size_bytes
-            FROM pg_tables
-            WHERE schemaname = 'public'
-            ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
-            LIMIT 5
-        """))
-        top_tables = [{"name": row.tablename, "size": row.size, "size_mb": round(row.size_bytes / 1024 / 1024, 1)} for row in result]
-
-        # Queries per second and avg query time from pg_stat_statements
-        try:
-            result = await session.execute(text("""
-                SELECT
-                    sum(calls) as total_calls,
-                    sum(total_exec_time) as total_time,
-                    avg(mean_exec_time) as avg_time
-                FROM pg_stat_statements
-            """))
-            row = result.fetchone()
-            if row and row.total_calls:
-                queries_per_sec = round(row.total_calls / 3600, 1)  # за час
-                avg_query_ms = round(row.avg_time, 1)
-            else:
-                queries_per_sec = 0
-                avg_query_ms = 0
-        except:
-            queries_per_sec = None
-            avg_query_ms = None
-    except:
-        connections_active = None
-        size_mb = None
-        tables_count = None
-        last_migration = None
-        cache_hit_rate = None
-        deadlocks = None
-        top_tables = None
-        queries_per_sec = None
-        avg_query_ms = None
+    db_raw = await collect_database_metrics(session)
+    top_tables = None
+    if db_raw.get("top_tables"):
+        top_tables = [TableSizeEntry.model_validate(row) for row in db_raw["top_tables"]]
 
     database = DatabaseMetrics(
-        connections_active=connections_active,
-        connections_max=100,
-        size_mb=size_mb,
-        tables_count=tables_count,
-        queries_per_sec=queries_per_sec,
-        avg_query_ms=avg_query_ms,
-        cache_hit_rate=cache_hit_rate,
-        deadlocks=deadlocks,
-        last_migration=str(last_migration) if last_migration else None,
+        connections_active=db_raw.get("connections_active"),
+        connections_max=db_raw.get("connections_max"),
+        size_mb=db_raw.get("size_mb"),
+        tables_count=db_raw.get("tables_count"),
+        queries_per_sec=db_raw.get("queries_per_sec"),
+        avg_query_ms=db_raw.get("avg_query_ms"),
+        cache_hit_rate=db_raw.get("cache_hit_rate"),
+        deadlocks=db_raw.get("deadlocks"),
+        last_migration=db_raw.get("last_migration"),
         top_tables=top_tables,
     )
 
@@ -701,12 +619,12 @@ async def admin_system_metrics(
         network_upload_mbps=network_upload_mbps,
         network_download_mbps=network_download_mbps,
         load_avg=load_avg,
-        requests_total_hour=requests_total_hour,
-        requests_errors_hour=requests_errors_hour,
-        avg_response_ms=avg_response_ms,
-        p95_response_ms=p95_response_ms,
-        error_rate=error_rate,
-        rps=rps,
+        requests_total_hour=http_metrics["requests_total_hour"],
+        requests_errors_hour=http_metrics["requests_errors_hour"],
+        avg_response_ms=http_metrics["avg_response_ms"],
+        p95_response_ms=http_metrics["p95_response_ms"],
+        error_rate=http_metrics["error_rate"],
+        rps=http_metrics["rps"],
         database=database,
     )
 
@@ -717,86 +635,18 @@ async def admin_service_status(
     current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> ServiceStatus:
+    from app.services.monitoring_service import build_service_status
 
-    # Check Git service (Gitea)
-    git_status = False
-    git_version = None
-    git_repos_count = None
-    git_uptime = None
-    try:
-        response = httpx.get("http://gitea:3000/api/v1/version", timeout=2)
-        if response.status_code == 200:
-            git_status = True
-            git_version = response.text.strip('"')
-            # Cannot get uptime from inside container, set to None
-            git_uptime = None
-            # Try to get repo count
-            try:
-                repo_response = httpx.get("http://gitea:3000/api/v1/user/repos", timeout=2, params={"limit": 1})
-                if repo_response.status_code == 200:
-                    repos = repo_response.json()
-                    git_repos_count = len(repos) if isinstance(repos, list) else 0
-            except:
-                pass
-    except:
-        pass
-
-    # API is online since we got here
-    api_status = True
-    api_version = "1.0.0"
-    # Calculate API uptime using process uptime
-    try:
-        uptime_seconds = time.time() - psutil.Process().create_time()
-        days = int(uptime_seconds // 86400)
-        hours = int((uptime_seconds % 86400) // 3600)
-        api_uptime = f"{days}д {hours}ч"
-    except:
-        api_uptime = None
-
-    # DB check via simple query would be done in get_session
-    # If this endpoint works, DB is up
-    db_status = True
-    # Get PostgreSQL uptime from pg_stat_activity
-    try:
-        result = await session.execute(text("SELECT pg_postmaster_start_time()"))
-        start_time = result.scalar()
-        if start_time:
-            uptime = datetime.now(timezone.utc) - start_time.replace(tzinfo=timezone.utc)
-            days = uptime.days
-            hours = uptime.seconds // 3600
-            db_uptime = f"{days}д {hours}ч"
-    except:
-        db_uptime = None
-    # Get PostgreSQL version
-    try:
-        result = await session.execute(text("SELECT version()"))
-        version_str = result.scalar()
-        if version_str:
-            # Extract version number from "PostgreSQL 15.2 ..."
-            match = re.search(r"PostgreSQL (\d+\.\d+)", version_str)
-            if match:
-                db_version = match.group(1)
-    except:
-        db_version = None
-
-    return ServiceStatus(
-        git=git_status,
-        db=db_status,
-        api=api_status,
-        git_uptime=git_uptime if git_status else None,
-        git_version=git_version,
-        db_uptime=db_uptime if db_status else None,
-        db_version=db_version,
-        api_uptime=api_uptime,
-        api_version=api_version,
-        git_repos_count=git_repos_count,
-    )
+    payload = await build_service_status(session)
+    services = [MonitoredServiceRead.model_validate(s) for s in payload.pop("services", [])]
+    return ServiceStatus(**payload, services=services)
 
 
 @router.post("/restart")
 @require_permission("admin")
 async def restart_api(
     current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
 ):
     """Restart the API service (Linux/Docker only)."""
     import subprocess

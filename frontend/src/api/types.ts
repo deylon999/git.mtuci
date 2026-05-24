@@ -56,42 +56,61 @@ export interface AdminReviewQueueItem {
   urgency: "urgent" | "today" | "normal";
 }
 
+export interface TableSizeEntry {
+  name: string;
+  size: string;
+  size_mb: number;
+}
+
 export interface SystemMetrics {
-  cpu_percent: number;
-  memory_percent: number;
-  memory_used_gb: number;
-  memory_total_gb: number;
-  disk_percent: number;
-  disk_used_gb: number;
-  disk_total_gb: number;
-  network_upload_mbps: number;
-  network_download_mbps: number;
-  load_avg: number[];
-  requests_total_hour: number;
-  requests_errors_hour: number;
-  avg_response_ms: number;
-  p95_response_ms: number;
-  error_rate: number;
-  rps: number;
-  database: DatabaseMetrics;
+  cpu_percent: number | null;
+  cpu_model: string | null;
+  memory_percent: number | null;
+  memory_used_gb: number | null;
+  memory_total_gb: number | null;
+  disk_percent: number | null;
+  disk_used_gb: number | null;
+  disk_total_gb: number | null;
+  network_upload_mbps: number | null;
+  network_download_mbps: number | null;
+  load_avg: number[] | null;
+  requests_total_hour: number | null;
+  requests_errors_hour: number | null;
+  avg_response_ms: number | null;
+  p95_response_ms: number | null;
+  error_rate: number | null;
+  rps: number | null;
+  database: DatabaseMetrics | null;
 }
 
 export interface DatabaseMetrics {
-  connections_active: number;
-  connections_max: number;
-  size_mb: number;
-  tables_count: number;
-  queries_per_sec: number;
-  avg_query_ms: number;
-  cache_hit_rate: number;
-  deadlocks: number;
-  last_migration: string;
+  connections_active: number | null;
+  connections_max: number | null;
+  size_mb: number | null;
+  tables_count: number | null;
+  queries_per_sec: number | null;
+  avg_query_ms: number | null;
+  cache_hit_rate: number | null;
+  deadlocks: number | null;
+  last_migration: string | null;
+  top_tables: TableSizeEntry[] | null;
+}
+
+export interface MonitoredService {
+  id: string;
+  name: string;
+  port: string;
+  online: boolean;
+  uptime: string | null;
+  detail: string | null;
 }
 
 export interface ServiceStatus {
   git: boolean;
   db: boolean;
   api: boolean;
+  frontend: boolean;
+  websocket: boolean;
   git_uptime: string | null;
   git_version: string | null;
   db_uptime: string | null;
@@ -99,6 +118,9 @@ export interface ServiceStatus {
   api_uptime: string | null;
   api_version: string | null;
   git_repos_count: number | null;
+  websocket_connections: number | null;
+  frontend_url: string | null;
+  services: MonitoredService[];
 }
 
 export interface BackupInfo {

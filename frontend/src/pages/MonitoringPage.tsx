@@ -1,23 +1,21 @@
 import { useState, useEffect } from "react";
 import { RefreshCw, Clock, AlertTriangle, CheckCircle, XCircle, Activity, HardDrive, Database, Server, Zap, TrendingUp, GitBranch } from "lucide-react";
 import { getSystemMetrics, getServiceStatus, getBackups, getLogs, createBackup, restartAPI } from "../api/adminApi";
+import type { ServiceStatus, SystemMetrics, TableSizeEntry } from "../api/types";
 import { getTheme } from "../theme";
 import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 
-interface ServiceConfig {
-  name: string;
-  port: string;
-  statusKey?: keyof any;
+const EMPTY = "—";
+
+function displayNum(value: number | null | undefined, format?: (n: number) => string): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return EMPTY;
+  return format ? format(value) : String(value);
 }
 
-const SERVICES_CONFIG: ServiceConfig[] = [
-  { name: "FastAPI (mtuci-api)", port: ":8000", statusKey: "api" },
-  { name: "PostgreSQL (mtuci-postgres)", port: ":5432", statusKey: "db" },
-  { name: "Gitea (mtuci-gitea)", port: ":3000", statusKey: "git" },
-  { name: "React Frontend (mtuci-frontend)", port: ":3001" },
-  { name: "WebSocket (/ws/activity)", port: "ws" },
-];
+function displayStr(value: string | null | undefined): string {
+  return value && value.trim() ? value : EMPTY;
+}
 
 interface MonitoringPageProps {
   isDarkTheme?: boolean;
@@ -26,11 +24,12 @@ interface MonitoringPageProps {
 export default function MonitoringPage({ isDarkTheme = false }: MonitoringPageProps) {
   const { t, tp, language } = useUserPreferences();
   const dateLocale = language === "en" ? "en-US" : "ru-RU";
-  const [metrics, setMetrics] = useState<any>(null);
-  const [serviceStatus, setServiceStatus] = useState<any>(null);
-  const [backups, setBackups] = useState<any>(null);
-  const [incidents, setIncidents] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
+  const [serviceStatus, setServiceStatus] = useState<ServiceStatus | null>(null);
+  const [backups, setBackups] = useState<Awaited<ReturnType<typeof getBackups>> | null>(null);
+  const [incidents, setIncidents] = useState<Array<{ level: string; message: string; created_at: string }>>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<string>("");
   const [secondsSinceUpdate, setSecondsSinceUpdate] = useState(0);
   const [showRestartModal, setShowRestartModal] = useState(false);
@@ -51,10 +50,12 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
       setServiceStatus(statusData);
       setBackups(backupsData);
       setIncidents([...(errorLogs?.logs || []), ...(warningLogs?.logs || [])].slice(0, 10));
+      setFetchError(!metricsData && !statusData);
       setLastUpdate(new Date().toLocaleTimeString(dateLocale));
       setSecondsSinceUpdate(0);
     } catch (error) {
       console.error("Failed to fetch monitoring data:", error);
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -119,6 +120,16 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
     border: `1px solid ${color}40`,
   });
 
+  const services = serviceStatus?.services ?? [];
+  const topTables: TableSizeEntry[] = metrics?.database?.top_tables ?? [];
+  const topTablesMaxMb = Math.max(...topTables.map((t) => t.size_mb), 1);
+
+  const serviceDetail = (svc: (typeof services)[number]) => {
+    if (svc.uptime) return tp("admin.monitoring.uptime", { value: svc.uptime });
+    if (svc.detail) return svc.detail;
+    return EMPTY;
+  };
+
   const headerBtnStyle = {
     display: "inline-flex" as const,
     alignItems: "center" as const,
@@ -159,9 +170,9 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               alignItems: "center",
               gap: "5px",
               fontSize: "11px",
-              color: theme.success,
-              backgroundColor: `${theme.success}15`,
-              border: `1px solid ${theme.success}40`,
+              color: fetchError ? theme.warning : theme.success,
+              backgroundColor: fetchError ? `${theme.warning}15` : `${theme.success}15`,
+              border: `1px solid ${fetchError ? theme.warning : theme.success}40`,
               borderRadius: "6px",
               padding: "4px 10px",
             }}
@@ -171,11 +182,11 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 width: "6px",
                 height: "6px",
                 borderRadius: "50%",
-                backgroundColor: theme.success,
-                animation: "pulse 1.5s infinite",
+                backgroundColor: fetchError ? theme.warning : theme.success,
+                animation: loading ? "pulse 1.5s infinite" : undefined,
               }}
             />
-            Live
+            {fetchError ? t("admin.monitoring.degraded") : t("admin.monitoring.live")}
           </div>
           <button
             type="button"
@@ -266,7 +277,12 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 {serviceStatus?.db ? "Online" : "Offline"}
               </div>
               <div style={{ fontSize: "10px", color: theme.text2, marginTop: "1px" }}>
-                {tp("admin.monitoring.dbConnections", { n: metrics?.database?.connections_active || 0, version: serviceStatus?.db_version || "15.2" })}
+                {serviceStatus?.db_version
+                  ? tp("admin.monitoring.dbConnections", {
+                      n: metrics?.database?.connections_active ?? 0,
+                      version: serviceStatus.db_version,
+                    })
+                  : `${displayNum(metrics?.database?.connections_active)} ${t("admin.monitoring.connectionsShort")}`}
               </div>
             </div>
             <span style={{
@@ -299,7 +315,12 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 {serviceStatus?.git ? "Online" : "Offline"}
               </div>
               <div style={{ fontSize: "10px", color: theme.text2, marginTop: "1px" }}>
-                {tp("admin.monitoring.gitRepos", { n: serviceStatus?.git_repos_count || 0, version: serviceStatus?.git_version || "1.21.4" })}
+                {serviceStatus?.git_version
+                  ? tp("admin.monitoring.gitRepos", {
+                      n: serviceStatus.git_repos_count ?? 0,
+                      version: serviceStatus.git_version,
+                    })
+                  : `${displayNum(serviceStatus?.git_repos_count)} ${t("admin.monitoring.reposShort")}`}
               </div>
             </div>
             <span style={{
@@ -443,7 +464,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.cpuModel")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
-                  {metrics?.cpu_model || "Unknown"}
+                  {displayStr(metrics?.cpu_model)}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
@@ -467,13 +488,15 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.diskFree")}</span>
                 <span style={{ fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px", color: metrics?.disk_percent > 80 ? theme.warning : theme.text }}>
-                  {(metrics?.disk_total_gb - metrics?.disk_used_gb)?.toFixed(1) || 0} {t("admin.monitoring.gb")}
+                  {metrics?.disk_total_gb != null && metrics?.disk_used_gb != null
+                    ? `${(metrics.disk_total_gb - metrics.disk_used_gb).toFixed(1)} ${t("admin.monitoring.gb")}`
+                    : EMPTY}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>Load average</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
-                  {metrics?.load_avg ? metrics.load_avg.join(" / ") : "0.00 / 0.00 / 0.00"}
+                  {metrics?.load_avg?.length ? metrics.load_avg.join(" / ") : EMPTY}
                 </span>
               </div>
             </div>
@@ -490,37 +513,54 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             </div>
 
             <div>
-              {SERVICES_CONFIG.map((svc, i, arr) => {
-                const status = svc.statusKey ? serviceStatus?.[svc.statusKey] : true;
-                return (
-                  <div key={svc.name} style={{
-                    display: "flex", alignItems: "center", gap: "10px",
-                    padding: "9px 14px",
-                    borderBottom: i < arr.length - 1 ? `1px solid ${ac.border}` : "none"
-                  }}>
-                    <div style={{
-                      width: "8px", height: "8px", borderRadius: "50%",
-                      flexShrink: 0, backgroundColor: getStatusColor(status)
-                    }} />
+              {services.length === 0 ? (
+                <div style={{ padding: "14px", fontSize: "12px", color: theme.text2, textAlign: "center" }}>
+                  {EMPTY}
+                </div>
+              ) : (
+                services.map((svc, i, arr) => (
+                  <div
+                    key={svc.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      padding: "9px 14px",
+                      borderBottom: i < arr.length - 1 ? `1px solid ${ac.border}` : "none",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        flexShrink: 0,
+                        backgroundColor: getStatusColor(svc.online),
+                      }}
+                    />
                     <div style={{ fontSize: "12px", color: theme.text, flex: 1 }}>{svc.name}</div>
                     <span style={{ fontSize: "11px", color: theme.text2 }}>{svc.port}</span>
-                    <span style={{
-                      display: "inline-flex", alignItems: "center",
-                      borderRadius: "6px", padding: "2px 7px", marginLeft: "8px",
-                      fontSize: "10px", fontWeight: "500", whiteSpace: "nowrap",
-                      ...getBadgeStyle(getStatusColor(status))
-                    }}>
-                      {status ? "Online" : "Offline"}
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        borderRadius: "6px",
+                        padding: "2px 7px",
+                        marginLeft: "8px",
+                        fontSize: "10px",
+                        fontWeight: "500",
+                        whiteSpace: "nowrap",
+                        ...getBadgeStyle(getStatusColor(svc.online)),
+                      }}
+                    >
+                      {svc.online ? t("admin.monitoring.online") : t("admin.monitoring.offline")}
                     </span>
-                    <span style={{ fontSize: "10px", color: theme.text2, marginLeft: "8px" }}>
-                      {svc.name.includes("FastAPI") && serviceStatus?.api_uptime ? serviceStatus.api_uptime :
-                       svc.name.includes("PostgreSQL") && serviceStatus?.db_uptime ? serviceStatus.db_uptime :
-                       svc.name.includes("Gitea") && serviceStatus?.git_uptime ? serviceStatus.git_uptime :
-                       status ? "Online" : "Offline"}
+                    <span style={{ fontSize: "10px", color: theme.text2, marginLeft: "8px", minWidth: "72px", textAlign: "right" }}>
+                      {serviceDetail(svc)}
                     </span>
                   </div>
-                );
-              })}
+                ))
+              )}
             </div>
 
             <div style={{ padding: "14px", borderTop: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}` }}>
@@ -548,7 +588,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.next")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
-                  {backups?.next_backup || "03:00"}
+                  {displayStr(backups?.next_backup)}
                 </span>
               </div>
             </div>
@@ -628,7 +668,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.activeConnections")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
-                  {metrics?.database?.connections_active || 0} / {metrics?.database?.connections_max || 100}
+                  {displayNum(metrics?.database?.connections_active)} / {displayNum(metrics?.database?.connections_max)}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
@@ -670,7 +710,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.lastMigration")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
-                  {metrics?.database?.last_migration || "—"}
+                  {displayStr(metrics?.database?.last_migration)}
                 </span>
               </div>
             </div>
@@ -678,27 +718,49 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               <div style={{ fontSize: "11px", color: theme.text2, marginBottom: "8px", fontWeight: "500", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                 {t("admin.monitoring.topTables")}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-                <span style={{ width: "100px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>activity_log</span>
-                <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
-                  <div style={{ height: "100%", borderRadius: "3px", width: "80%", backgroundColor: theme.accent2, opacity: 0.6 }} />
-                </div>
-                <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>82 MB</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "5px", fontSize: "11px" }}>
-                <span style={{ width: "100px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>repositories</span>
-                <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
-                  <div style={{ height: "100%", borderRadius: "3px", width: "45%", backgroundColor: theme.accent2, opacity: 0.6 }} />
-                </div>
-                <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>46 MB</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "5px", fontSize: "11px" }}>
-                <span style={{ width: "100px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>users</span>
-                <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
-                  <div style={{ height: "100%", borderRadius: "3px", width: "22%", backgroundColor: theme.accent2, opacity: 0.6 }} />
-                </div>
-                <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>23 MB</span>
-              </div>
+              {topTables.length === 0 ? (
+                <div style={{ fontSize: "12px", color: theme.text2, textAlign: "center", padding: "8px 0" }}>{EMPTY}</div>
+              ) : (
+                topTables.map((table, idx) => (
+                  <div
+                    key={table.name}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      marginTop: idx === 0 ? 0 : "5px",
+                      fontSize: "11px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: "100px",
+                        color: theme.text2,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {table.name}
+                    </span>
+                    <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
+                      <div
+                        style={{
+                          height: "100%",
+                          borderRadius: "3px",
+                          width: `${Math.max(8, (table.size_mb / topTablesMaxMb) * 100)}%`,
+                          backgroundColor: theme.accent2,
+                          opacity: 0.6,
+                        }}
+                      />
+                    </div>
+                    <span style={{ width: "48px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>
+                      {table.size}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -720,6 +782,18 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: "12px", color: theme.text, lineHeight: 1.4 }}>
 {tp("admin.monitoring.diskAlert", { n: metrics.disk_percent.toFixed(0) })}
+                    </div>
+                    <div style={{ fontSize: "10px", color: theme.text3, marginTop: "2px" }}>{t("admin.monitoring.active")}</div>
+                  </div>
+                </div>
+              )}
+
+              {serviceStatus && !serviceStatus.frontend && (
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                  <div style={{ width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0, marginTop: "3px", backgroundColor: theme.warning }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "12px", color: theme.text, lineHeight: 1.4 }}>
+                      {t("admin.monitoring.frontendDownAlert")}
                     </div>
                     <div style={{ fontSize: "10px", color: theme.text3, marginTop: "2px" }}>{t("admin.monitoring.active")}</div>
                   </div>
@@ -755,7 +829,12 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 </div>
               ))}
 
-              {metrics?.disk_percent <= 80 && serviceStatus?.api && serviceStatus?.db && serviceStatus?.git && incidents.length === 0 && (
+              {metrics?.disk_percent != null && metrics.disk_percent <= 80
+                && serviceStatus?.api
+                && serviceStatus?.db
+                && serviceStatus?.git
+                && serviceStatus?.frontend
+                && incidents.length === 0 && (
                 <div style={{ fontSize: "12px", color: theme.text2, textAlign: "center", padding: "20px 0" }}>
                   {t("admin.monitoring.noIncidents")}
                 </div>

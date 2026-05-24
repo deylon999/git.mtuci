@@ -84,8 +84,12 @@ class Settings(BaseModel):
     # Base URL Gitea uses to call our webhooks (Docker service name or public API host)
     WEBHOOK_BASE_URL: str = Field(default_factory=lambda: os.getenv("WEBHOOK_BASE_URL", "http://api:8000/webhooks"))
 
-    # Frontend URL for password reset links
+    # Frontend URL for password reset links (browser / CORS)
     FRONTEND_URL: str = Field(default_factory=lambda: os.getenv("FRONTEND_URL", "http://localhost:3001"))
+    # Optional URL for health checks from API container (e.g. http://frontend:3001 in Docker)
+    FRONTEND_HEALTH_URL: str | None = Field(
+        default_factory=lambda: os.getenv("FRONTEND_HEALTH_URL") or None
+    )
 
     # SMTP settings for password recovery emails
     SMTP_HOST: str = Field(default_factory=lambda: os.getenv("SMTP_HOST", ""))
