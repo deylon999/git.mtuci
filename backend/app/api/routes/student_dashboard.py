@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.security import get_current_user
+from app.core.permission_checks import ensure_assignment_read, ensure_permission, ensure_repo_content_access
 from app.models.user import User, UserRole
 from app.schemas.student_dashboard import (
     StudentActivityFeedItemRead,
@@ -80,13 +81,18 @@ def _require_student(user: User) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Student access only")
 
 
+async def _ensure_student_perm(user: User, session: AsyncSession, permission_id: str) -> None:
+    _require_student(user)
+    await ensure_permission(user, session, permission_id)
+
+
 @router.get("/deadlines", response_model=list[StudentDeadlineDetailRead])
 async def student_deadlines(
     limit: int = Query(default=100, ge=1, le=200),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[StudentDeadlineDetailRead]:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "assignment_view")
     return await get_student_deadlines(
         session,
         student_id=current_user.id,
@@ -101,7 +107,7 @@ async def student_grades(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentGradesSummaryRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "assignment_view")
     return await get_student_grades(
         session,
         student_id=current_user.id,
@@ -116,7 +122,7 @@ async def student_forks(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[StudentForkItemRead]:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     return await get_student_forks(session, student_id=current_user.id, limit=limit)
 
 
@@ -126,7 +132,7 @@ async def student_fork_sync(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     from app.services.student_forks_service import merge_fork_upstream
     from app.utils.gitea_user import resolve_gitea_username
 
@@ -147,7 +153,7 @@ async def student_assignments(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[StudentAssignmentListItemRead]:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "assignment_view")
     return await get_student_assignments(
         session,
         student_id=current_user.id,
@@ -163,7 +169,7 @@ async def student_dashboard_bundle(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentDashboardBundleRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "assignment_view")
     return await get_student_dashboard_bundle(
         session,
         user=current_user,
@@ -177,7 +183,7 @@ async def student_dashboard_stats(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentDashboardStatsRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "assignment_view")
     return await get_student_dashboard_stats(
         session,
         student_id=current_user.id,
@@ -191,7 +197,7 @@ async def student_merged_courses(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentMergedCoursesRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "assignment_view")
     courses, lk_warning = await get_student_merged_courses(
         session,
         user=current_user,
@@ -206,7 +212,7 @@ async def student_profile_bundle(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentProfileBundleRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "assignment_view")
     return await get_student_profile_bundle(
         session,
         user=current_user,
@@ -224,7 +230,7 @@ async def student_repositories(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepositoriesRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     mode = gitea if gitea in ("none", "lite", "full") else "lite"
     return await get_student_repositories(
         session,
@@ -240,7 +246,7 @@ async def student_recent_repositories(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[StudentRecentRepositoryRead]:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     return await get_student_recent_repositories(session, student_id=current_user.id, limit=limit)
 
 
@@ -253,7 +259,7 @@ async def student_repository_commits(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepoCommitsRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     try:
         data = await get_student_repository_commits(
             session,
@@ -278,7 +284,7 @@ async def student_repository_clone_info(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepoCloneInfoRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     try:
         data = await get_student_repository_clone_info(
             session,
@@ -301,7 +307,7 @@ async def student_repository_lint_file(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepoLintRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     try:
         await resolve_student_repo_gitea_target(
             session,
@@ -323,7 +329,7 @@ async def student_repository_summary(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepoSummaryRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     try:
         data = await get_student_repository_summary(
             session,
@@ -349,7 +355,7 @@ async def student_repository_issues(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepoIssuesRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     try:
         data = await get_student_repository_issues(
             session,
@@ -377,7 +383,8 @@ async def student_repository_pulls(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepoPullsRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
+    await _ensure_student_perm(current_user, session, "repo_comment")
     try:
         data = await get_student_repository_pulls(
             session,
@@ -402,7 +409,7 @@ async def student_repository_wiki_pages(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepoWikiPagesRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     try:
         data = await get_student_repository_wiki_pages(
             session,
@@ -425,7 +432,7 @@ async def student_repository_wiki_page(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepoWikiContentRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     try:
         data = await get_student_repository_wiki_content(
             session,
@@ -448,7 +455,7 @@ async def student_repository_branches(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepoBranchesRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     try:
         data = await get_student_repository_branches(
             session,
@@ -475,7 +482,7 @@ async def student_repository_files_search(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[StudentRepoFileSearchItemRead]:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     try:
         paths = await search_student_repository_files(
             session,
@@ -500,7 +507,7 @@ async def student_repository_create_file(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepoFileRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_create")
     if ".." in body.path.split("/"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filepath")
     try:
@@ -537,7 +544,7 @@ async def student_repository_files(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[StudentRepoFileRead]:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     try:
         rows = await list_student_repository_files(
             session,
@@ -563,7 +570,7 @@ async def student_repository_file_content(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepoFileContentRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     if ".." in filepath.split("/"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filepath")
     try:
@@ -589,7 +596,7 @@ async def student_delete_repository(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> None:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_delete")
     try:
         await delete_student_personal_repository(
             session,
@@ -608,7 +615,7 @@ async def student_activity_summary(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentActivitySummaryRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "assignment_view")
     return await get_student_activity_summary(
         session,
         student_id=current_user.id,
@@ -622,7 +629,7 @@ async def student_activity_feed(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[StudentActivityFeedItemRead]:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "assignment_view")
     return await get_student_activity_feed(
         session,
         student_id=current_user.id,
@@ -636,7 +643,7 @@ async def student_group_ranking(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentGroupRankingRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "assignment_view")
     return await get_student_group_ranking(
         session,
         student_id=current_user.id,
@@ -647,9 +654,10 @@ async def student_group_ranking(
 
 @router.get("/git-clone-token", response_model=StudentGitCloneTokenStatusRead)
 async def student_git_clone_token_status(
+    session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentGitCloneTokenStatusRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     data = await get_student_git_clone_token_status(current_user)
     return StudentGitCloneTokenStatusRead.model_validate(data)
 
@@ -659,7 +667,7 @@ async def student_git_clone_token_regenerate(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentGitCloneTokenRegenerateRead:
-    _require_student(current_user)
+    await _ensure_student_perm(current_user, session, "repo_view")
     try:
         data = await regenerate_student_git_clone_token(session, current_user)
     except Exception as exc:

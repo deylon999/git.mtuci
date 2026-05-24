@@ -36,6 +36,7 @@ import toast from "react-hot-toast";
 import AdminPageHeader from "../components/AdminPageHeader";
 import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+import { usePermissions } from "../hooks/usePermissions";
 import { pluralWord } from "../i18n/plural";
 
 type RoleType = "admin" | "teacher" | "student" | "laborant";
@@ -140,6 +141,7 @@ interface RolesPageProps {
 
 export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
   const { t, tp, language } = useUserPreferences();
+  const { refreshPermissions } = usePermissions();
   const dateLocale = language === "en" ? "en-US" : "ru-RU";
 
   const mapCategoryTitle = (title: string) => {
@@ -306,6 +308,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
       console.log("Save result:", result);
       // Update initial state to reflect saved changes
       setInitialCategories(categories);
+      await refreshPermissions();
       toast.success(t("admin.roles.permissionsSaved"));
     } catch (error) {
       console.error("Save error:", error);
@@ -322,6 +325,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
       const mappedCategories = mapApiCategories(defaultPerms);
       setCategories(mappedCategories);
       setInitialCategories(mappedCategories);
+      await refreshPermissions();
       toast.success(t("admin.roles.permissionsReset"));
     } catch (error) {
       console.error("Reset error:", error);

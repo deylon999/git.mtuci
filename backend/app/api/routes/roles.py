@@ -22,6 +22,11 @@ from app.models.role_permissions import RolePermission, TrustedAssistant
 from app.models.permission_audit import PermissionAudit
 from app.services.permission_service import log_permission_change, get_audit_logs
 from app.services.logging_service import log_event_background
+from app.core.permission_catalog import (
+    CATEGORY_NAMES,
+    PERMISSION_DEFINITIONS,
+    PERMISSION_TEMPLATES,
+)
 
 router = APIRouter(prefix="/roles", tags=["roles"])
 
@@ -87,91 +92,6 @@ ROLE_DEFINITIONS = {
 }
 
 
-# Permission templates by role
-PERMISSION_TEMPLATES = {
-    "admin": {
-        "repo_view": True,
-        "repo_view_students": True,
-        "repo_create": True,
-        "repo_delete": True,
-        "repo_comment": True,
-        "user_view": True,
-        "user_edit": True,
-        "group_manage": True,
-        "assignment_view": True,
-        "assignment_create": True,
-        "grade_edit": True,
-        "lab_accept": True,
-        "grade_view_groups": True,
-        "settings_view": True,
-        "settings_edit": True,
-        "logs_view": True,
-    },
-    "teacher": {
-        "repo_view": True,
-        "repo_view_students": True,
-        "repo_create": True,
-        "repo_comment": True,
-        "user_view": True,
-        "user_edit": True,
-        "group_manage": True,
-        "assignment_view": True,
-        "assignment_create": True,
-        "grade_edit": True,
-        "lab_accept": True,
-        "grade_view_groups": True,
-        "settings_view": True,
-        "logs_view": True,
-    },
-    "laborant": {
-        "repo_view": True,
-        "repo_view_students": True,
-        "repo_comment": True,
-        "user_view": True,
-        "assignment_view": True,
-        "lab_accept": True,
-        "grade_view_groups": True,
-        "settings_view": True,
-        "logs_view": True,
-    },
-    "student": {
-        "repo_view": True,
-        "repo_create": True,
-        "user_view": True,
-        "assignment_view": True,
-        "settings_view": True,
-    },
-}
-
-
-PERMISSION_DEFINITIONS = {
-    "repo_view": {"name": "Просмотр репозиториев", "description": "Видеть список и содержимое репозиториев", "category": "repositories", "level": "read"},
-    "repo_view_students": {"name": "Просмотр репозиториев студентов", "description": "Доступ к репозиториям студентов по поручению преподавателя", "category": "repositories", "level": "read"},
-    "repo_create": {"name": "Создание репозиториев", "description": "Создавать новые репозитории", "category": "repositories", "level": "write"},
-    "repo_delete": {"name": "Удаление репозиториев", "description": "Удалять репозитории", "category": "repositories", "level": "delete"},
-    "repo_comment": {"name": "Добавление комментариев к коду", "description": "Оставлять комментарии в pull requests", "category": "repositories", "level": "write"},
-    "user_view": {"name": "Просмотр пользователей", "description": "Видеть профили других пользователей", "category": "users", "level": "read"},
-    "user_edit": {"name": "Редактирование пользователей", "description": "Изменять данные пользователей", "category": "users", "level": "write"},
-    "group_manage": {"name": "Управление группами", "description": "Создавать и редактировать группы", "category": "users", "level": "write"},
-    "assignment_view": {"name": "Просмотр заданий", "description": "Видеть список всех заданий", "category": "assignments", "level": "read"},
-    "assignment_create": {"name": "Создание заданий", "description": "Создавать новые задания", "category": "assignments", "level": "write"},
-    "grade_edit": {"name": "Выставление оценок", "description": "Изменять оценки студентов", "category": "assignments", "level": "write"},
-    "lab_accept": {"name": "Прием лабораторных работ", "description": "Смена статуса на 'Зачтено/Пересдача'", "category": "assignments", "level": "write"},
-    "grade_view_groups": {"name": "Просмотр оценок в своих группах", "description": "Видеть оценки студентов по поручению преподавателя", "category": "assignments", "level": "read"},
-    "settings_view": {"name": "Просмотр настроек", "description": "Видеть системные настройки", "category": "system", "level": "read"},
-    "settings_edit": {"name": "Изменение настроек", "description": "Модифицировать системные параметры", "category": "system", "level": "delete"},
-    "logs_view": {"name": "Просмотр логов", "description": "Доступ к системным логам", "category": "system", "level": "read"},
-}
-
-
-CATEGORY_NAMES = {
-    "repositories": "РЕПОЗИТОРИИ",
-    "users": "ПОЛЬЗОВАТЕЛИ И ГРУППЫ",
-    "assignments": "ОЦЕНКИ И ЗАДАНИЯ",
-    "system": "СИСТЕМА",
-}
-
-
 @router.get("")
 async def get_roles(
     current_user: User = Depends(get_current_user),
@@ -210,8 +130,9 @@ async def get_role_permissions(
     if role.value not in PERMISSION_TEMPLATES:
         raise HTTPException(status_code=404, detail="Role not found")
     
-    # Get default template
-    template = dict(PERMISSION_TEMPLATES[role.value])
+    # Full matrix: unknown keys default off, then role template, then DB overrides
+    template = {perm_id: False for perm_id in PERMISSION_DEFINITIONS}
+    template.update(PERMISSION_TEMPLATES[role.value])
     
     # Load custom permissions from DB
     result = await session.execute(

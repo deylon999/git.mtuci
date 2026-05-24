@@ -14,6 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.core.security import get_current_user
 from app.core.permissions import require_permission
+from app.core.permission_checks import (
+    ensure_assignment_read,
+    ensure_grade_view,
+    ensure_lab_workflow,
+    ensure_permission,
+    ensure_repo_content_access,
+)
 from app.models.assignment import Assignment
 from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
@@ -163,6 +170,55 @@ async def _ensure_teacher_owns_course(*, course: Course, current_user) -> None:
         raise HTTPException(status_code=403, detail="Teacher access only for this course")
 
 
+_STAFF_ROLES = {UserRole.teacher, UserRole.laborant}
+
+
+async def _ensure_staff_course_access(
+    *,
+    session: AsyncSession,
+    course,
+    current_user,
+    course_id: UUID,
+) -> None:
+    if current_user.role == UserRole.teacher:
+        await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    elif current_user.role == UserRole.laborant:
+        try:
+            await get_course_for_user(session, user=current_user, course_id=course_id)
+        except PermissionError as e:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+
+async def _resolve_assignment_repo_target(
+    *,
+    session: AsyncSession,
+    course_id: UUID,
+    current_user,
+    student_id: UUID | None,
+) -> UUID:
+    """Resolve target student for assignment repo access; enforces permissions."""
+    await ensure_assignment_read(current_user, session)
+    if current_user.role in _STAFF_ROLES:
+        if not student_id:
+            raise HTTPException(status_code=400, detail="student_id is required for teacher")
+        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=student_id)
+        await ensure_repo_content_access(
+            current_user, session, target_student_id=student_id
+        )
+        return student_id
+    if current_user.role == UserRole.student:
+        await _ensure_student_enrolled(
+            session=session, course_id=course_id, student_id=current_user.id
+        )
+        await ensure_repo_content_access(
+            current_user, session, target_student_id=current_user.id
+        )
+        return current_user.id
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+
 async def _ensure_student_enrolled(*, session: AsyncSession, course_id: UUID, student_id: UUID) -> None:
     q = await session.execute(
         select(CourseEnrollment).where(
@@ -233,6 +289,7 @@ async def list_courses_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
+    await ensure_assignment_read(current_user, session)
     if current_user.role == UserRole.teacher:
         courses = await list_teacher_courses(session, teacher_id=current_user.id)
         return [CourseRead.model_validate(c) for c in courses]
@@ -256,6 +313,7 @@ async def get_course_endpoint(
 ) -> CourseRead:
     if current_user.role not in {UserRole.teacher, UserRole.laborant, UserRole.student}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    await ensure_assignment_read(current_user, session)
     try:
         course = await get_course_for_user(
             session,
@@ -425,6 +483,8 @@ async def assignment_stats_endpoint(
 ) -> AssignmentStatsRead:
     if current_user.role != UserRole.teacher:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    await ensure_assignment_read(current_user, session)
+    await ensure_grade_view(current_user, session)
     course = await _get_course_or_404(session, course_id=course_id)
     await _ensure_teacher_owns_course(course=course, current_user=current_user)
     try:
@@ -537,6 +597,7 @@ async def list_assignments_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
+    await ensure_assignment_read(current_user, session)
     if current_user.role == UserRole.teacher:
         try:
             assignments = await list_assignments_for_teacher(
@@ -602,17 +663,17 @@ async def list_commits_endpoint(
     current_user=Depends(get_current_user),
 ):
     course = await _get_course_or_404(session, course_id=course_id)
-    if current_user.role == UserRole.teacher:
-        await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    if current_user.role in _STAFF_ROLES:
+        await _ensure_staff_course_access(
+            session=session, course=course, current_user=current_user, course_id=course_id
+        )
     await _get_assignment_or_404(session, course_id=course_id, assignment_id=assignment_id)
-    if current_user.role == UserRole.teacher:
-        if not student_id:
-            raise HTTPException(status_code=400, detail="student_id is required for teacher")
-        target_student_id = student_id
-        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=student_id)
-    else:
-        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=current_user.id)
-        target_student_id = current_user.id
+    target_student_id = await _resolve_assignment_repo_target(
+        session=session,
+        course_id=course_id,
+        current_user=current_user,
+        student_id=student_id,
+    )
 
     try:
         owner, repo_name = await _assignment_gitea_owner_and_repo(
@@ -675,6 +736,8 @@ async def list_submissions_endpoint(
 ):
     if current_user.role != UserRole.teacher:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    await ensure_lab_workflow(current_user, session)
+    await ensure_grade_view(current_user, session)
 
     course = await _get_course_or_404(session, course_id=course_id)
     await _ensure_teacher_owns_course(course=course, current_user=current_user)
@@ -781,6 +844,7 @@ async def grade_submission_endpoint(
 ):
     if current_user.role != UserRole.teacher:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    await ensure_lab_workflow(current_user, session)
 
     course = await _get_course_or_404(session, course_id=course_id)
     await _ensure_teacher_owns_course(course=course, current_user=current_user)
@@ -900,6 +964,7 @@ async def get_my_grade_endpoint(
 ):
     if current_user.role != UserRole.student:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Student access only")
+    await ensure_assignment_read(current_user, session)
 
     course = await _get_course_or_404(session, course_id=course_id)
     await _ensure_student_enrolled(session=session, course_id=course_id, student_id=current_user.id)
@@ -955,6 +1020,8 @@ async def compare_students_endpoint(
 ):
     if current_user.role != UserRole.teacher:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    await ensure_assignment_read(current_user, session)
+    await ensure_permission(current_user, session, "repo_view_students")
 
     course = await _get_course_or_404(session, course_id=course_id)
     await _ensure_teacher_owns_course(course=course, current_user=current_user)
@@ -992,6 +1059,8 @@ async def check_plagiarism_endpoint(
 ):
     if current_user.role != UserRole.teacher:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    await ensure_assignment_read(current_user, session)
+    await ensure_permission(current_user, session, "repo_view_students")
 
     course = await _get_course_or_404(session, course_id=course_id)
     await _ensure_teacher_owns_course(course=course, current_user=current_user)
@@ -1027,17 +1096,17 @@ async def list_files_root_endpoint(
     current_user=Depends(get_current_user),
 ):
     course = await _get_course_or_404(session, course_id=course_id)
-    if current_user.role == UserRole.teacher:
-        await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    if current_user.role in _STAFF_ROLES:
+        await _ensure_staff_course_access(
+            session=session, course=course, current_user=current_user, course_id=course_id
+        )
     await _get_assignment_or_404(session, course_id=course_id, assignment_id=assignment_id)
-    if current_user.role == UserRole.teacher:
-        if not student_id:
-            raise HTTPException(status_code=400, detail="student_id is required for teacher")
-        target_student_id = student_id
-        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=student_id)
-    else:
-        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=current_user.id)
-        target_student_id = current_user.id
+    target_student_id = await _resolve_assignment_repo_target(
+        session=session,
+        course_id=course_id,
+        current_user=current_user,
+        student_id=student_id,
+    )
 
     try:
         owner, repo_name = await _assignment_gitea_owner_and_repo(
@@ -1083,17 +1152,17 @@ async def get_file_content_endpoint(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filepath")
 
     course = await _get_course_or_404(session, course_id=course_id)
-    if current_user.role == UserRole.teacher:
-        await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    if current_user.role in _STAFF_ROLES:
+        await _ensure_staff_course_access(
+            session=session, course=course, current_user=current_user, course_id=course_id
+        )
     await _get_assignment_or_404(session, course_id=course_id, assignment_id=assignment_id)
-    if current_user.role == UserRole.teacher:
-        if not student_id:
-            raise HTTPException(status_code=400, detail="student_id is required for teacher")
-        target_student_id = student_id
-        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=student_id)
-    else:
-        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=current_user.id)
-        target_student_id = current_user.id
+    target_student_id = await _resolve_assignment_repo_target(
+        session=session,
+        course_id=course_id,
+        current_user=current_user,
+        student_id=student_id,
+    )
 
     try:
         owner, repo_name = await _assignment_gitea_owner_and_repo(

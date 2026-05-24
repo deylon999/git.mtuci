@@ -13,6 +13,8 @@ import Footer from "./components/Footer";
 import { PendingCountProvider } from "./context/PendingCountContext";
 import { StudentNavCountsProvider } from "./context/StudentNavCountsContext";
 import { AuthUserProvider, useAuthUser } from "./context/AuthUserContext";
+import { PermissionsProvider } from "./context/PermissionsContext";
+import RequirePermission from "./components/RequirePermission";
 import { UserPreferencesProvider, useUserPreferences } from "./context/UserPreferencesContext";
 import StudentShellBootstrapRunner from "./components/StudentShellBootstrapRunner";
 import AppErrorBoundary from "./components/AppErrorBoundary";
@@ -72,8 +74,10 @@ export default function App() {
   return (
     <UserPreferencesProvider isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme}>
       <AuthUserProvider>
-        <StudentShellBootstrapRunner />
-        <AppShell isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme} />
+        <PermissionsProvider>
+          <StudentShellBootstrapRunner />
+          <AppShell isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme} />
+        </PermissionsProvider>
       </AuthUserProvider>
     </UserPreferencesProvider>
   );
@@ -137,16 +141,22 @@ function AppShell({
 
                 <Route element={<AuthRequired />}>
                   <Route path="/profile" element={<ProfilePage isDarkTheme={isDarkTheme} />} />
-                  <Route path="/courses" element={<CoursesRoute isDarkTheme={isDarkTheme} />} />
-                  <Route path="/courses/:courseId" element={<CoursePage />} />
-                  <Route
-                    path="/courses/:courseId/assignments/:assignmentId"
-                    element={<AssignmentPage />}
-                  />
-                  {/* Placeholder routes for new sidebar items */}
+                  <Route element={<RequirePermission permission="assignment_view" />}>
+                    <Route path="/courses" element={<CoursesRoute isDarkTheme={isDarkTheme} />} />
+                    <Route path="/courses/:courseId" element={<CoursePage />} />
+                    <Route
+                      path="/courses/:courseId/assignments/:assignmentId"
+                      element={<AssignmentPage />}
+                    />
+                    <Route path="/assignments" element={<StudentAssignmentsPage isDarkTheme={isDarkTheme} />} />
+                    <Route path="/deadlines" element={<StudentDeadlinesPage isDarkTheme={isDarkTheme} />} />
+                    <Route path="/grades" element={<StudentGradesPage isDarkTheme={isDarkTheme} />} />
+                  </Route>
                   <Route path="/dashboard" element={<DashboardRoute isDarkTheme={isDarkTheme} />} />
                   <Route path="/projects" element={<ProjectsRoute isDarkTheme={isDarkTheme} />} />
-                  <Route path="/repositories" element={<RepositoriesRoute isDarkTheme={isDarkTheme} />} />
+                  <Route element={<RequirePermission permission="repo_view" />}>
+                    <Route path="/repositories" element={<RepositoriesRoute isDarkTheme={isDarkTheme} />} />
+                    <Route path="/repositories/forks" element={<StudentForksPage isDarkTheme={isDarkTheme} />} />
                   <Route
                     path="/repositories/:repoId"
                     element={<StudentRepositoryLayout isDarkTheme={isDarkTheme} />}
@@ -174,29 +184,49 @@ function AppShell({
                       element={<StudentRepositoryCommitsPage isDarkTheme={isDarkTheme} />}
                     />
                   </Route>
-                  <Route path="/assignments" element={<StudentAssignmentsPage isDarkTheme={isDarkTheme} />} />
-                  <Route path="/deadlines" element={<StudentDeadlinesPage isDarkTheme={isDarkTheme} />} />
-                  <Route path="/repositories/new" element={<StudentCreateRepoPage isDarkTheme={isDarkTheme} />} />
-                  <Route path="/repositories/forks" element={<StudentForksPage isDarkTheme={isDarkTheme} />} />
-                  <Route path="/grades" element={<StudentGradesPage isDarkTheme={isDarkTheme} />} />
+                  </Route>
+                  <Route element={<RequirePermission permission="repo_create" />}>
+                    <Route path="/repositories/new" element={<StudentCreateRepoPage isDarkTheme={isDarkTheme} />} />
+                  </Route>
                   <Route path="/grading-queue" element={<Navigate to="/teacher/code-review" replace />} />
-                  <Route path="/teacher/courses" element={<TeacherCoursesPage isDarkTheme={isDarkTheme} />} />
-                  <Route path="/teacher/students" element={<TeacherStudentsPage isDarkTheme={isDarkTheme} />} />
-                  <Route path="/teacher/code-review" element={<TeacherCodeReviewPage isDarkTheme={isDarkTheme} />} />
-                  <Route path="/teacher/templates" element={<TeacherTemplatesPage isDarkTheme={isDarkTheme} />} />
-                  <Route path="/teacher/activity" element={<TeacherActivityPage isDarkTheme={isDarkTheme} />} />
+                  <Route element={<RequirePermission permission="assignment_view" />}>
+                    <Route path="/teacher/courses" element={<TeacherCoursesPage isDarkTheme={isDarkTheme} />} />
+                  </Route>
+                  <Route element={<RequirePermission permission="user_view" />}>
+                    <Route path="/teacher/students" element={<TeacherStudentsPage isDarkTheme={isDarkTheme} />} />
+                  </Route>
+                  <Route element={<RequirePermission anyOf={["grade_edit", "repo_view_students", "lab_accept"]} />}>
+                    <Route path="/teacher/code-review" element={<TeacherCodeReviewPage isDarkTheme={isDarkTheme} />} />
+                  </Route>
+                  <Route element={<RequirePermission permission="repo_view" />}>
+                    <Route path="/teacher/templates" element={<TeacherTemplatesPage isDarkTheme={isDarkTheme} />} />
+                  </Route>
+                  <Route element={<RequirePermission permission="repo_view_students" />}>
+                    <Route path="/teacher/activity" element={<TeacherActivityPage isDarkTheme={isDarkTheme} />} />
+                  </Route>
                   <Route path="/submissions" element={<Navigate to="/teacher/code-review" replace />} />
                   <Route path="/students" element={<Navigate to="/teacher/students" replace />} />
                   <Route path="/settings" element={<SettingsPage isDarkTheme={isDarkTheme} onToggleTheme={toggleTheme} />} />
                   <Route element={<AdminRequired />}>
                     <Route path="/admin" element={<AdminPage isDarkTheme={isDarkTheme} />} />
-                    <Route path="/users" element={<UsersPage isDarkTheme={isDarkTheme} />} />
                     <Route path="/roles" element={<RolesPage isDarkTheme={isDarkTheme} />} />
-                    <Route path="/admin/forks" element={<ForksPage isDarkTheme={isDarkTheme} />} />
-                    <Route path="/admin/activity" element={<ActivityPage isDarkTheme={isDarkTheme} />} />
-                    <Route path="/admin/monitoring" element={<MonitoringPage isDarkTheme={isDarkTheme} />} />
-                    <Route path="/admin/settings" element={<AdminSettingsPage isDarkTheme={isDarkTheme} />} />
-                    <Route path="/logs" element={<LogsPage isDarkTheme={isDarkTheme} />} />
+                    <Route element={<RequirePermission permission="user_view" />}>
+                      <Route path="/users" element={<UsersPage isDarkTheme={isDarkTheme} />} />
+                    </Route>
+                    <Route element={<RequirePermission permission="repo_view" />}>
+                      <Route path="/repositories" element={<RepositoriesRoute isDarkTheme={isDarkTheme} />} />
+                      <Route path="/admin/forks" element={<ForksPage isDarkTheme={isDarkTheme} />} />
+                    </Route>
+                    <Route element={<RequirePermission permission="settings_view" />}>
+                      <Route path="/admin/activity" element={<ActivityPage isDarkTheme={isDarkTheme} />} />
+                      <Route path="/admin/monitoring" element={<MonitoringPage isDarkTheme={isDarkTheme} />} />
+                    </Route>
+                    <Route element={<RequirePermission permission="settings_edit" />}>
+                      <Route path="/admin/settings" element={<AdminSettingsPage isDarkTheme={isDarkTheme} />} />
+                    </Route>
+                    <Route element={<RequirePermission permission="logs_view" />}>
+                      <Route path="/logs" element={<LogsPage isDarkTheme={isDarkTheme} />} />
+                    </Route>
                   </Route>
                 </Route>
 

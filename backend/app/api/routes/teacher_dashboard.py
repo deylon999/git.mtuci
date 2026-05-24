@@ -6,6 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.security import get_current_user
+from app.core.permission_checks import (
+    ensure_assignment_read,
+    ensure_grade_view,
+    ensure_lab_workflow,
+    ensure_permission,
+    ensure_repo_content_access,
+)
 from app.models.user import User, UserRole
 from app.schemas.teacher_dashboard import (
     TeacherActivityItemRead,
@@ -39,12 +46,17 @@ def _require_teacher_or_laborant(user: User) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
 
 
+async def _ensure_dashboard_read(user: User, session: AsyncSession) -> None:
+    _require_teacher_or_laborant(user)
+    await ensure_assignment_read(user, session)
+
+
 @router.get("/dashboard", response_model=TeacherDashboardRead)
 async def teacher_dashboard(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> TeacherDashboardRead:
-    _require_teacher_or_laborant(current_user)
+    await _ensure_dashboard_read(current_user, session)
     return await get_teacher_dashboard(session, user=current_user)
 
 
@@ -53,7 +65,7 @@ async def teacher_dashboard_full(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> TeacherDashboardFullRead:
-    _require_teacher_or_laborant(current_user)
+    await _ensure_dashboard_read(current_user, session)
     return await get_teacher_dashboard_full(session, user=current_user)
 
 
@@ -64,6 +76,8 @@ async def teacher_grading_queue_stats(
     current_user: User = Depends(get_current_user),
 ) -> TeacherGradingQueueStatsRead:
     _require_teacher_or_laborant(current_user)
+    await ensure_lab_workflow(current_user, session)
+    await ensure_permission(current_user, session, "grade_edit")
     return await get_teacher_grading_queue_stats(
         session, user=current_user, course_id=course_id
     )
@@ -77,6 +91,8 @@ async def teacher_grading_queue(
     current_user: User = Depends(get_current_user),
 ) -> list[TeacherGradingQueueItemRead]:
     _require_teacher_or_laborant(current_user)
+    await ensure_lab_workflow(current_user, session)
+    await ensure_permission(current_user, session, "grade_edit")
     return await get_teacher_grading_queue(
         session, user=current_user, limit=limit, course_id=course_id
     )
@@ -87,7 +103,7 @@ async def teacher_courses_list(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[TeacherCourseListItemRead]:
-    _require_teacher_or_laborant(current_user)
+    await _ensure_dashboard_read(current_user, session)
     return await list_teacher_courses_enriched(session, user=current_user)
 
 
@@ -98,6 +114,8 @@ async def teacher_students_list(
     current_user: User = Depends(get_current_user),
 ) -> TeacherStudentsSummaryRead:
     _require_teacher_or_laborant(current_user)
+    await ensure_permission(current_user, session, "user_view")
+    await ensure_grade_view(current_user, session)
     return await list_teacher_students(session, user=current_user, limit=limit)
 
 
@@ -109,6 +127,7 @@ async def teacher_activity_feed(
     current_user: User = Depends(get_current_user),
 ) -> list[TeacherActivityItemRead]:
     _require_teacher_or_laborant(current_user)
+    await ensure_permission(current_user, session, "repo_view_students")
     return await list_teacher_activity(
         session, user=current_user, limit=limit, course_id=course_id
     )
@@ -120,7 +139,7 @@ async def teacher_course_detail(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> TeacherCourseDetailRead:
-    _require_teacher_or_laborant(current_user)
+    await _ensure_dashboard_read(current_user, session)
     try:
         return await get_teacher_course_detail(session, user=current_user, course_id=course_id)
     except PermissionError as e:
@@ -135,6 +154,7 @@ async def teacher_templates(
     current_user: User = Depends(get_current_user),
 ) -> list[TeacherTemplateRepoRead]:
     _require_teacher_or_laborant(current_user)
+    await ensure_repo_content_access(current_user, session, target_student_id=current_user.id)
     return await list_teacher_templates(session, user=current_user)
 
 
@@ -144,6 +164,8 @@ async def teacher_students_export(
     current_user: User = Depends(get_current_user),
 ) -> PlainTextResponse:
     _require_teacher_or_laborant(current_user)
+    await ensure_permission(current_user, session, "user_view")
+    await ensure_grade_view(current_user, session)
     csv_body = await build_teacher_students_csv(session, user=current_user)
     return PlainTextResponse(
         content=csv_body,

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.core.security import get_current_user
 from app.core.permissions import require_permission
+from app.core.permission_checks import ensure_repo_content_access
 from app.models.repository import Repository, RepositoryType
 from app.models.system_log import LogLevel, LogSource
 from app.models.user import User
@@ -235,6 +236,7 @@ async def list_my_repositories(
     session: AsyncSession = Depends(get_session),
 ):
     """List all repositories owned by the current user."""
+    await ensure_repo_content_access(current_user, session, target_student_id=current_user.id)
     result = await session.execute(
         select(Repository)
         .where(
@@ -386,6 +388,7 @@ async def get_repository(
     session: AsyncSession = Depends(get_session),
 ):
     """Get a specific repository by ID."""
+    await ensure_repo_content_access(current_user, session, target_student_id=current_user.id)
     result = await session.execute(
         select(Repository).where(
             Repository.id == repository_id,

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { getTeacherDashboard } from "../api/teacherDashboardApi";
 import { useAuthUser } from "../context/AuthUserContext";
+import { usePermissions } from "../context/PermissionsContext";
 import { getUserStats, getSystemMetrics, getServiceStatus } from "../api/adminApi";
 import { usePendingCount } from "../context/PendingCountContext";
 import { useStudentNavCountsOptional } from "../context/StudentNavCountsContext";
@@ -33,10 +34,35 @@ interface MenuItem {
   path: string;
   labelKey: string;
   icon: React.ElementType;
+  permission?: string;
+  anyPermission?: string[];
   badge?: {
     text: string;
     variant: "red" | "orange";
   };
+}
+
+function itemVisible(
+  item: MenuItem,
+  hasPermission: (id: string) => boolean,
+  hasAnyPermission: (...ids: string[]) => boolean,
+): boolean {
+  if (item.permission) return hasPermission(item.permission);
+  if (item.anyPermission?.length) return hasAnyPermission(...item.anyPermission);
+  return true;
+}
+
+function filterMenuSections(
+  sections: MenuSection[],
+  hasPermission: (id: string) => boolean,
+  hasAnyPermission: (...ids: string[]) => boolean,
+): MenuSection[] {
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => itemVisible(item, hasPermission, hasAnyPermission)),
+    }))
+    .filter((section) => section.items.length > 0);
 }
 
 interface MenuSection {
@@ -50,24 +76,24 @@ function buildAdminMenu(): MenuSection[] {
     {
       titleKey: "sidebar.users",
       items: [
-        { path: "/users", labelKey: "sidebar.allUsers", icon: Users },
+        { path: "/users", labelKey: "sidebar.allUsers", icon: Users, permission: "user_view" },
         { path: "/roles", labelKey: "sidebar.roles", icon: Briefcase },
       ],
     },
     {
       titleKey: "sidebar.repositories",
       items: [
-        { path: "/repositories", labelKey: "sidebar.allRepositories", icon: FileText },
-        { path: "/admin/forks", labelKey: "sidebar.forks", icon: GitFork },
-        { path: "/admin/activity", labelKey: "sidebar.activity", icon: TrendingUp },
+        { path: "/repositories", labelKey: "sidebar.allRepositories", icon: FileText, permission: "repo_view" },
+        { path: "/admin/forks", labelKey: "sidebar.forks", icon: GitFork, permission: "repo_view" },
+        { path: "/admin/activity", labelKey: "sidebar.activity", icon: TrendingUp, permission: "settings_view" },
       ],
     },
     {
       titleKey: "sidebar.system",
       items: [
-        { path: "/logs", labelKey: "sidebar.logs", icon: FileCode },
-        { path: "/admin/monitoring", labelKey: "sidebar.monitoring", icon: Clock },
-        { path: "/admin/settings", labelKey: "sidebar.settings", icon: Settings },
+        { path: "/logs", labelKey: "sidebar.logs", icon: FileCode, permission: "logs_view" },
+        { path: "/admin/monitoring", labelKey: "sidebar.monitoring", icon: Clock, permission: "settings_view" },
+        { path: "/admin/settings", labelKey: "sidebar.settings", icon: Settings, permission: "settings_edit" },
       ],
     },
   ];
@@ -79,22 +105,27 @@ function buildTeacherMenu(): MenuSection[] {
     {
       titleKey: "sidebar.myCourses",
       items: [
-        { path: "/teacher/courses", labelKey: "sidebar.allCourses", icon: BookOpen },
-        { path: "/courses?create=1", labelKey: "sidebar.createCourse", icon: Plus },
+        { path: "/teacher/courses", labelKey: "sidebar.allCourses", icon: BookOpen, permission: "assignment_view" },
+        { path: "/courses?create=1", labelKey: "sidebar.createCourse", icon: Plus, permission: "assignment_create" },
       ],
     },
     {
       titleKey: "sidebar.students",
       items: [
-        { path: "/teacher/students", labelKey: "sidebar.allStudents", icon: GraduationCap },
-        { path: "/teacher/code-review", labelKey: "sidebar.codeReview", icon: ClipboardCheck },
+        { path: "/teacher/students", labelKey: "sidebar.allStudents", icon: GraduationCap, permission: "user_view" },
+        {
+          path: "/teacher/code-review",
+          labelKey: "sidebar.codeReview",
+          icon: ClipboardCheck,
+          anyPermission: ["grade_edit", "repo_view_students", "lab_accept"],
+        },
       ],
     },
     {
       titleKey: "sidebar.repositories",
       items: [
-        { path: "/teacher/templates", labelKey: "sidebar.templateRepos", icon: FolderGit2 },
-        { path: "/teacher/activity", labelKey: "sidebar.studentActivity", icon: Activity },
+        { path: "/teacher/templates", labelKey: "sidebar.templateRepos", icon: FolderGit2, permission: "repo_view" },
+        { path: "/teacher/activity", labelKey: "sidebar.studentActivity", icon: Activity, permission: "repo_view_students" },
       ],
     },
     {
@@ -113,17 +144,17 @@ function buildStudentMenu(): MenuSection[] {
     {
       titleKey: "sidebar.myRepositories",
       items: [
-        { path: "/repositories", labelKey: "sidebar.allRepositories", icon: FileText },
-        { path: "/repositories/forks", labelKey: "sidebar.forks", icon: GitFork },
+        { path: "/repositories", labelKey: "sidebar.allRepositories", icon: FileText, permission: "repo_view" },
+        { path: "/repositories/forks", labelKey: "sidebar.forks", icon: GitFork, permission: "repo_view" },
       ],
     },
     {
       titleKey: "sidebar.study",
       items: [
-        { path: "/courses", labelKey: "sidebar.myCoursesStudent", icon: BookOpen },
-        { path: "/assignments", labelKey: "sidebar.assignments", icon: ClipboardList },
-        { path: "/deadlines", labelKey: "sidebar.deadlines", icon: Clock },
-        { path: "/grades", labelKey: "sidebar.grades", icon: TrendingUp },
+        { path: "/courses", labelKey: "sidebar.myCoursesStudent", icon: BookOpen, permission: "assignment_view" },
+        { path: "/assignments", labelKey: "sidebar.assignments", icon: ClipboardList, permission: "assignment_view" },
+        { path: "/deadlines", labelKey: "sidebar.deadlines", icon: Clock, permission: "assignment_view" },
+        { path: "/grades", labelKey: "sidebar.grades", icon: TrendingUp, permission: "assignment_view" },
       ],
     },
     {
@@ -143,6 +174,7 @@ interface SidebarProps {
 export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   const location = useLocation();
   const { user } = useAuthUser();
+  const { hasPermission, hasAnyPermission, loading: permissionsLoading } = usePermissions();
   const userRole = (user?.role ?? null) as UserRole | null;
   const { pendingCount, setPendingCount } = usePendingCount();
   const studentNav = useStudentNavCountsOptional();
@@ -262,9 +294,10 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   };
 
   const menuSections = useMemo(() => {
-    if (userRole === "admin") return buildAdminMenu();
-    if (userRole === "teacher" || userRole === "laborant") {
-      return buildTeacherMenu().map((section) => ({
+    let sections: MenuSection[];
+    if (userRole === "admin") sections = buildAdminMenu();
+    else if (userRole === "teacher" || userRole === "laborant") {
+      sections = buildTeacherMenu().map((section) => ({
         ...section,
         items: section.items.map((item) => {
           if (item.path === "/teacher/code-review" && teacherPending > 0) {
@@ -276,10 +309,9 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
           return item;
         }),
       }));
-    }
-    if (userRole !== "student") return buildStudentMenu();
+    } else if (userRole === "student") {
     const sidebar = studentNav?.sidebar;
-    return buildStudentMenu().map((section) => ({
+    sections = buildStudentMenu().map((section) => ({
       ...section,
       items: section.items.map((item) => {
         let badge = item.badge;
@@ -292,12 +324,16 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
         return { ...item, badge };
       }),
     }));
-  }, [userRole, studentNav?.sidebar, teacherPending, teacherCoursesCount, t]);
+    } else {
+      sections = [];
+    }
+    return filterMenuSections(sections, hasPermission, hasAnyPermission);
+  }, [userRole, studentNav?.sidebar, teacherPending, teacherCoursesCount, hasPermission, hasAnyPermission]);
 
   const isTeacherLike = userRole === "teacher" || userRole === "laborant";
 
   // While loading, show nothing or student menu to avoid flashing admin menu
-  if (userRole === null) {
+  if (userRole === null || permissionsLoading) {
     console.log("[Sidebar] Role is null, showing loading state");
     return (
       <aside className={`w-[260px] flex-shrink-0 h-full border-r`} style={{ backgroundColor: theme.bg, borderColor: theme.border }}>

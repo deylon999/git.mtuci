@@ -16,32 +16,11 @@ from app.core.database import get_session
 from app.core.security import get_current_user
 from app.models.user import User, UserRole
 from app.models.role_permissions import RolePermission
+from app.core.permission_catalog import build_default_permissions
 
 
 # Default permissions for each role (fallback if no custom permissions in DB)
-DEFAULT_PERMISSIONS = {
-    UserRole.admin: {
-        "repo_view", "repo_view_students", "repo_create", "repo_delete", "repo_comment",
-        "user_view", "user_edit", "user_delete", "group_manage",
-        "assignment_view", "assignment_create", "grade_edit", "lab_accept", "grade_view_groups",
-        "settings_view", "settings_edit", "logs_view", "repo_edit", "assignment_delete",
-    },
-    UserRole.teacher: {
-        "repo_view", "repo_view_students", "repo_create", "repo_comment",
-        "user_view", "user_edit", "group_manage",
-        "assignment_view", "assignment_create", "assignment_delete",
-        "grade_edit", "lab_accept", "grade_view_groups",
-        "settings_view", "logs_view",
-    },
-    UserRole.laborant: {
-        "repo_view", "repo_view_students", "repo_comment",
-        "user_view", "assignment_view", "lab_accept", "grade_view_groups",
-        "settings_view", "logs_view",
-    },
-    UserRole.student: {
-        "repo_view", "repo_create", "user_view", "assignment_view", "settings_view",
-    },
-}
+DEFAULT_PERMISSIONS = build_default_permissions()
 
 
 # Simple in-memory cache: {user_id: (permissions_set, timestamp)}
