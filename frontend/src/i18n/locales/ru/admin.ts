@@ -90,6 +90,8 @@ export const adminRu = {
     roleFallback: "Роль",
     accessRights: "права доступа",
     reset: "Сбросить",
+    resetToDefaults: "Сбросить",
+    resetting: "Сброс…",
     save: "Сохранить",
     permissionHistory: "История изменений прав",
     noHistory: "Нет записей для этой роли",

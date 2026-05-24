@@ -90,6 +90,8 @@ export const adminEn = {
     roleFallback: "Role",
     accessRights: "access rights",
     reset: "Reset",
+    resetToDefaults: "Reset",
+    resetting: "Resetting…",
     save: "Save",
     permissionHistory: "Permission change history",
     noHistory: "No entries for this role",

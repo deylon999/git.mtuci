@@ -27,7 +27,7 @@ import {
   untrustLaborant,
   getAuditLogs,
   type Role,
-  type PermissionCategory,
+  type PermissionCategory as ApiPermissionCategory,
   type Laborant,
   type AuditLog
 } from "../api/rolesApi";
@@ -54,6 +54,26 @@ interface PermissionCategoryState {
   title: string;
   icon: React.ElementType;
   permissions: Permission[];
+}
+
+const categoryIconMap: Record<string, React.ElementType> = {
+  REPOS: GitBranch,
+  REPOSITORIES: GitBranch,
+  "РЕПОЗИТОРИИ": GitBranch,
+  "ПОЛЬЗОВАТЕЛИ И ГРУППЫ": Users,
+  "USERS & GROUPS": Users,
+  "ОЦЕНКИ И ЗАДАНИЯ": GraduationCap,
+  "GRADES & ASSIGNMENTS": GraduationCap,
+  SYSTEM: Settings,
+  СИСТЕМА: Settings,
+};
+
+function mapApiCategories(permsData: ApiPermissionCategory[]): PermissionCategoryState[] {
+  return permsData.map((cat) => ({
+    title: cat.title,
+    icon: categoryIconMap[cat.title] || Settings,
+    permissions: cat.permissions,
+  }));
 }
 
 // Icon mapping for role icons from API
@@ -147,6 +167,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [showAuditLogs, setShowAuditLogs] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Check if permissions have changed
   const hasChanges = JSON.stringify(categories) !== JSON.stringify(initialCategories);
@@ -206,21 +227,8 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
           setAllowAssistantGrading(meData.allow_assistant_grading);
         }
         
-        // Map API categories to component format with icons
-        const mappedCategories: PermissionCategoryState[] = permsData.map((cat) => {
-          const iconMap: Record<string, React.ElementType> = {
-            "REPOS": GitBranch,
-            "ПОЛЬЗОВАТЕЛИ И ГРУППЫ": Users,
-            "ОЦЕНКИ И ЗАДАНИЯ": GraduationCap,
-            "СИСТЕМА": Settings,
-          };
-          return {
-            title: cat.title,
-            icon: iconMap[cat.title] || Settings,
-            permissions: cat.permissions,
-          };
-        });
-        
+        const mappedCategories = mapApiCategories(permsData);
+
         setCategories(mappedCategories);
         setInitialCategories(mappedCategories);
         setAssistants(laborantsData);
@@ -305,23 +313,21 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
     }
   };
 
-  // Reset permissions to defaults
+  // Reset permissions to defaults (persists on server; available even when nothing unsaved)
   const handleReset = async () => {
-    if (!currentRole) return;
+    if (!currentRole || resetting) return;
+    setResetting(true);
     try {
-      console.log("Resetting permissions for role:", currentRole.id);
       const defaultPerms = await resetRolePermissions(currentRole.id);
-      console.log("Reset result:", defaultPerms);
-      const mappedCategories: PermissionCategoryState[] = defaultPerms.map((cat) => ({
-        title: cat.title,
-        icon: iconMap[cat.title] || Settings,
-        permissions: cat.permissions,
-      }));
+      const mappedCategories = mapApiCategories(defaultPerms);
       setCategories(mappedCategories);
+      setInitialCategories(mappedCategories);
       toast.success(t("admin.roles.permissionsReset"));
     } catch (error) {
       console.error("Reset error:", error);
       toast.error(t("admin.roles.permissionsResetError"));
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -446,12 +452,17 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={handleReset}
-                  disabled={permissionsLoading || (!hasChanges && categories.length > 0)}
+                  type="button"
+                  onClick={() => void handleReset()}
+                  disabled={permissionsLoading || resetting}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${headerActionBg} ${headerActionHover} ${ui.tableCellText}`}
                 >
-                  <RotateCcw className="h-4 w-4" />
-                  {t("admin.roles.reset")}
+                  {resetting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-4 w-4" />
+                  )}
+                  {resetting ? t("admin.roles.resetting") : t("admin.roles.resetToDefaults")}
                 </button>
                 <button
                   onClick={handleSave}
