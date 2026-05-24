@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Users,
@@ -12,10 +12,8 @@ import {
   Info,
   AlertOctagon,
   GitCommit,
-  Cloud,
   RotateCcw,
   Database,
-  Mail,
   CheckCircle2,
   AlertTriangle,
   GitPullRequest,
@@ -34,9 +32,7 @@ import {
   createBackup,
   getCommitsByFaculty,
   getActiveRepositories,
-  getAdminReportsOverview,
   getAdminReviewQueue,
-  type AdminReportsOverview,
 } from "../api/adminApi";
 import {
   getNotifications,
@@ -44,7 +40,15 @@ import {
   markAllNotificationsAsRead,
 } from "../api/notificationsApi";
 import type { AdminReviewQueueItem } from "../api/types";
-import type { SystemMetrics, ServiceStatus, BackupInfo, FacultyCommitsStat, ActiveRepositoryStat } from "../api/types";
+import type {
+  SystemMetrics,
+  ServiceStatus,
+  BackupInfo,
+  FacultyCommitsStat,
+  ActiveRepositoryStat,
+  MonitoredService,
+} from "../api/types";
+import type { ThemeColors } from "../theme";
 import { usePermissions } from "../hooks/usePermissions";
 import toast from "react-hot-toast";
 import AdminPageHeader from "../components/AdminPageHeader";
@@ -74,70 +78,65 @@ interface AdminPageProps {
   isDarkTheme?: boolean;
 }
 
-function ReportsOverviewBlock({
-  data,
-  isDarkTheme,
-}: {
-  data: AdminReportsOverview;
-  isDarkTheme: boolean;
-}) {
-  const { t } = useUserPreferences();
-  const ui = getAdminPageTheme(isDarkTheme);
-  const c = ui.colors;
-  return (
-    <div
-      className={`mb-6 rounded-xl border p-4 ${ui.tableBg} ${ui.tableBorder}`}
-    >
-      <h2 className={`mb-3 text-lg font-semibold ${ui.textPrimary}`}>
-        {t("admin.dashboard.overviewTitle")}
-      </h2>
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        {[
-          [t("admin.dashboard.statUsers"), data.total_users],
-          [t("admin.dashboard.statPending"), data.pending_users],
-          [t("admin.dashboard.statCourses"), data.total_courses],
-          [t("admin.dashboard.statSubmissions"), data.submissions_pending_grade],
-        ].map(([label, value]) => (
-          <div key={String(label)} className={`rounded-lg border p-3 ${ui.tableBorder}`} style={{ backgroundColor: c.input }}>
-            <p className={`text-xs ${ui.tableHeaderText}`}>
-              {label}
-            </p>
-            <p className={`text-xl font-semibold ${ui.textPrimary}`}>
-              {value}
-            </p>
-          </div>
-        ))}
-      </div>
-      {data.courses.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className={ui.tableHeaderText}>
-              <tr>
-                <th className="py-2 text-left">{t("admin.dashboard.colCourse")}</th>
-                <th className="py-2 text-left">{t("admin.dashboard.colTeacher")}</th>
-                <th className="py-2 text-left">{t("admin.dashboard.colStudents")}</th>
-                <th className="py-2 text-left">{t("admin.dashboard.colAssignments")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.courses.map((course) => (
-                <tr key={course.id} className={`border-t ${ui.tableBorder}`}>
-                  <td className={`py-2 ${ui.tableNameText}`}>
-                    {course.title}
-                  </td>
-                  <td className={`py-2 ${ui.tableCellText}`}>
-                    {course.teacher_name}
-                  </td>
-                  <td className={`py-2 ${ui.tableCellText}`}>{course.students_count}</td>
-                  <td className={`py-2 ${ui.tableCellText}`}>{course.assignments_count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-    </div>
-  );
+const DASH_EMPTY = "—";
+
+function roundPercent(value: number | null | undefined): number | null {
+  if (value == null || Number.isNaN(value)) return null;
+  return Math.round(value);
+}
+
+function metricBarColor(theme: ThemeColors, metric: "cpu" | "memory" | "disk", percent: number): string {
+  if (percent >= 95) return theme.danger;
+  if (percent >= 80) return theme.warning;
+  if (metric === "memory") return theme.success;
+  if (metric === "disk") return percent > 80 ? theme.warning : theme.accent2;
+  return theme.accent2;
+}
+
+function buildServicesFromStatus(status: ServiceStatus): MonitoredService[] {
+  return [
+    {
+      id: "api",
+      name: "FastAPI (mtuci-api)",
+      port: ":8000",
+      online: status.api,
+      uptime: status.api_uptime,
+      detail: status.api_version,
+    },
+    {
+      id: "db",
+      name: "PostgreSQL (mtuci-postgres)",
+      port: ":5432",
+      online: status.db,
+      uptime: status.db_uptime,
+      detail: status.db_version,
+    },
+    {
+      id: "git",
+      name: "Gitea (mtuci-gitea)",
+      port: ":3000",
+      online: status.git,
+      uptime: status.git_uptime,
+      detail: status.git_version,
+    },
+    {
+      id: "frontend",
+      name: "React Frontend (mtuci-frontend)",
+      port: ":3001",
+      online: status.frontend,
+      uptime: null,
+      detail: status.frontend_url,
+    },
+    {
+      id: "websocket",
+      name: "WebSocket (/ws/activity)",
+      port: "ws",
+      online: status.websocket,
+      uptime: null,
+      detail:
+        status.websocket_connections != null ? String(status.websocket_connections) : null,
+    },
+  ];
 }
 
 interface Notification {
@@ -226,13 +225,10 @@ function getStatusBadge(status: string, t: (key: string) => string) {
 export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   const { t, tp, language } = useUserPreferences();
   const dateLocale = language === "en" ? "en-US" : "ru-RU";
-  const [activeTab, setActiveTab] = useState("overview");
   const { hasPermission } = usePermissions();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<AdminUserRead[]>([]);
   const [stats, setStats] = useState<Stats>({ total: 0, active: 0, pending: 0, blocked: 0 });
-  const [systemStatus, setSystemStatus] = useState<{ api: "online" | "offline"; db: "online" | "offline" }>({ api: "offline", db: "offline" });
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus | null>(null);
   const [backupInfo, setBackupInfo] = useState<BackupInfo | null>(null);
@@ -245,7 +241,6 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [reviewQueue, setReviewQueue] = useState<AdminReviewQueueItem[]>([]);
-  const [reportsOverview, setReportsOverview] = useState<AdminReportsOverview | null>(null);
 
   const clearAllNotifications = async () => {
     try {
@@ -262,7 +257,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
     setFacultyStatsLoading(true);
     setActiveRepositoriesLoading(true);
     try {
-      const [list, sysMetrics, svcStatus, backups, facultyData, repoData, reports, reviewData, appNotifs] =
+      const [list, sysMetrics, svcStatus, backups, facultyData, repoData, reviewData, appNotifs] =
         await Promise.all([
         getAdminUsers(),
         getSystemMetrics().catch(() => null),
@@ -270,7 +265,6 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
         getBackups().catch(() => null),
         getCommitsByFaculty().catch(() => []),
         getActiveRepositories(5).catch(() => []),
-        getAdminReportsOverview().catch(() => null),
         getAdminReviewQueue(5).catch(() => []),
         getNotifications().catch(() => []),
       ]);
@@ -286,11 +280,9 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
       setBackupInfo(backups);
       setFacultyStats(facultyData);
       setActiveRepositories(repoData);
-      setReportsOverview(reports);
       setReviewQueue(reviewData);
 
       const loc = getI18nLocale();
-      const justNow = translate(loc, "time.justNow");
 
       const inboxNotifications: Notification[] = appNotifs
         .filter((n) => !n.read)
@@ -311,64 +303,9 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
         category: "edu",
       }));
 
-      const metricNotifications: Notification[] = [];
-
-      if (sysMetrics) {
-        const newNotifications: Notification[] = [];
-
-        if (sysMetrics.disk_percent >= 85) {
-          newNotifications.push({
-            id: `disk-${Date.now()}`,
-            type: sysMetrics.disk_percent >= 95 ? "critical" : "warning",
-            title: translate(loc, "admin.dashboard.alertDiskFull"),
-            message: translateWithParams(loc, "admin.dashboard.alertDiskFullMsg", { n: sysMetrics.disk_percent }),
-            timestamp: justNow,
-            category: "server",
-          });
-        }
-
-        if (sysMetrics.memory_percent >= 90) {
-          newNotifications.push({
-            id: `mem-${Date.now()}`,
-            type: "critical",
-            title: translate(loc, "admin.dashboard.alertRamHigh"),
-            message: translateWithParams(loc, "admin.dashboard.alertRamHighMsg", { n: sysMetrics.memory_percent }),
-            timestamp: justNow,
-            category: "server",
-          });
-        }
-
-        if (sysMetrics.cpu_percent >= 95) {
-          newNotifications.push({
-            id: `cpu-${Date.now()}`,
-            type: "warning",
-            title: translate(loc, "admin.dashboard.alertCpuHigh"),
-            message: translateWithParams(loc, "admin.dashboard.alertCpuHighMsg", { n: sysMetrics.cpu_percent }),
-            timestamp: justNow,
-            category: "server",
-          });
-        }
-
-        if (svcStatus && !svcStatus.git) {
-          newNotifications.push({
-            id: `git-${Date.now()}`,
-            type: "critical",
-            title: translate(loc, "admin.dashboard.alertGitDown"),
-            message: translate(loc, "admin.dashboard.alertGitDownMsg"),
-            timestamp: justNow,
-            category: "git",
-          });
-        }
-        
-        metricNotifications.push(...newNotifications);
-      }
-      setNotifications([...inboxNotifications, ...metricNotifications]);
-      setSystemStatus({
-        api: svcStatus?.api ? "online" : "offline",
-        db: svcStatus?.db ? "online" : "offline",
-      });
+      setNotifications(inboxNotifications);
     } catch {
-      setSystemStatus({ api: "offline", db: "offline" });
+      // keep previous data
     } finally {
       setLoading(false);
       setFacultyStatsLoading(false);
@@ -459,6 +396,10 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
     return tp("admin.dashboard.trendWeek", { sign, n: diff });
   };
 
+  const recentUsers = [...users]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 8);
+
   const statCards = [
     { title: t("admin.dashboard.cardTotal"), value: stats.total.toLocaleString(), trend: formatTrend(currentNew, prevNew), trendUp: currentNew >= prevNew, icon: Users },
     { title: t("admin.dashboard.cardActive"), value: stats.active.toLocaleString(), trend: formatTrend(currentActive, prevActive), trendUp: currentActive >= prevActive, icon: GitBranch },
@@ -468,7 +409,13 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
 
   const theme = getTheme(isDarkTheme);
   const ui = getAdminPageTheme(isDarkTheme);
-  const adminColors = ui.colors;
+  const c = ui.colors;
+
+  const systemServices = useMemo((): MonitoredService[] | null => {
+    if (!serviceStatus) return null;
+    if (serviceStatus.services.length > 0) return serviceStatus.services;
+    return buildServicesFromStatus(serviceStatus);
+  }, [serviceStatus]);
 
   return (
     <div className={`h-full overflow-auto transition-colors ${ui.pageWrapper}`}>
@@ -478,7 +425,6 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
           <AdminPageHeader
             isDarkTheme={isDarkTheme}
             title={t("admin.dashboard.title")}
-            subtitle={`API: ${systemStatus.api === "online" ? "● Online" : "● Offline"} | DB: ${systemStatus.db === "online" ? "● Online" : "● Offline"}`}
             actions={
               <>
                 <button
@@ -506,10 +452,6 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
             <StatCard key={stat.title} {...stat} isDarkTheme={isDarkTheme} />
           ))}
         </div>
-
-        {reportsOverview ? (
-          <ReportsOverviewBlock data={reportsOverview} isDarkTheme={isDarkTheme} />
-        ) : null}
 
         {/* Bottom Row - 2 Columns */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-6">
@@ -543,7 +485,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map((user, rowIdx) => (
+                    {recentUsers.map((user, rowIdx) => (
                       <tr
                         key={user.id}
                         className="transition-colors"
@@ -576,7 +518,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                         </td>
                       </tr>
                     ))}
-                    {users.length === 0 && (
+                    {recentUsers.length === 0 && (
                       <tr>
                         <td colSpan={5} className="py-8 text-center text-sm"
                         style={{ color: theme.text2 }}>{t("admin.dashboard.noData")}</td>
@@ -589,8 +531,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
           </div>
 
           {/* Right - Active Repositories (40%) */}
-          <div className="lg:col-span-2 rounded-xl border shadow-sm transition-colors"
-          style={{ backgroundColor: adminColors.card, borderColor: adminColors.border }}>
+          <div className={`lg:col-span-2 rounded-xl border shadow-sm transition-colors ${ui.tableBg} ${ui.tableBorder}`}>
             <div className="p-5 flex items-center justify-between border-b"
             style={{ borderColor: theme.border }}>
               <h2 className="text-lg font-semibold transition-colors"
@@ -679,12 +620,9 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
         {/* Third Row - 3 Columns */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Notifications */}
-          <div className="rounded-xl border shadow-sm transition-colors"
-          style={{ backgroundColor: adminColors.card, borderColor: adminColors.border }}>
-            <div className="p-5 flex items-center justify-between border-b"
-            style={{ borderColor: theme.border }}>
-              <h2 className="text-lg font-semibold transition-colors"
-              style={{ color: theme.text }}>{t("admin.dashboard.notifications")}</h2>
+          <div className={`rounded-xl border shadow-sm transition-colors ${ui.tableBg} ${ui.tableBorder}`}>
+            <div className={`p-5 flex items-center justify-between border-b ${ui.tableBorder}`}>
+              <h2 className={`text-lg font-semibold transition-colors ${ui.textPrimary}`}>{t("admin.dashboard.notifications")}</h2>
               {notifications.length > 0 && (
                 <button
                   onClick={clearAllNotifications}
@@ -742,12 +680,9 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
           </div>
 
           {/* Commits by Department */}
-          <div className="rounded-xl border shadow-sm transition-colors"
-          style={{ backgroundColor: adminColors.card, borderColor: adminColors.border }}>
-            <div className="p-5 border-b"
-            style={{ borderColor: theme.border }}>
-              <h2 className="text-lg font-semibold transition-colors"
-              style={{ color: theme.text }}>{t("admin.dashboard.commitsByFaculty")}</h2>
+          <div className={`rounded-xl border shadow-sm transition-colors ${ui.tableBg} ${ui.tableBorder}`}>
+            <div className={`p-5 border-b ${ui.tableBorder}`}>
+              <h2 className={`text-lg font-semibold transition-colors ${ui.textPrimary}`}>{t("admin.dashboard.commitsByFaculty")}</h2>
             </div>
             <div className="p-5">
               <div className="space-y-4 mb-6">
@@ -770,7 +705,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                         style={{ color: theme.text }}>{dept.commits}</span>
                       </div>
                       <div className="h-2 rounded-full overflow-hidden"
-                      style={{ backgroundColor: adminColors.iconBg }}>
+                      style={{ backgroundColor: c.iconBg }}>
                         <div className={`h-full rounded-full ${dept.color}`} style={{ width: `${(dept.commits / Math.max(...facultyStats.map(s => s.commits))) * 100}%` }} />
                       </div>
                     </div>
@@ -857,78 +792,90 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
             </div>
           </div>
 
-          {/* System Status */}
-          <div className="rounded-xl border shadow-sm transition-colors"
-          style={{ backgroundColor: adminColors.card, borderColor: adminColors.border }}>
-            <div className="p-5 border-b"
-            style={{ borderColor: theme.border }}>
-              <h2 className="text-lg font-semibold transition-colors"
-              style={{ color: theme.text }}>{t("admin.dashboard.systemState")}</h2>
+          {/* System Status — metrics: /admin/system-metrics, services: /admin/service-status, backup: /admin/backups */}
+          <div className={`rounded-xl border shadow-sm transition-colors ${ui.tableBg} ${ui.tableBorder}`}>
+            <div className={`p-5 border-b ${ui.tableBorder}`}>
+              <h2 className={`text-lg font-semibold transition-colors ${ui.textPrimary}`}>
+                {t("admin.dashboard.systemState")}
+              </h2>
             </div>
             <div className="p-5">
-              {/* Progress bars */}
-              <div className="space-y-4 mb-6">
-                {metrics ? [
-                  { label: "CPU", value: Math.round(metrics.cpu_percent), color: "bg-blue-500" },
-                  { label: "RAM", value: Math.round(metrics.memory_percent), color: "bg-green-500" },
-                  { label: t("admin.dashboard.disk"), value: Math.round(metrics.disk_percent), color: "bg-red-500" },
-                ].map((metric) => (
-                  <div key={metric.label}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm"
-                      style={{ color: theme.text3 }}>{metric.label}</span>
-                      <span className="text-sm font-medium"
-                      style={{ color: theme.text }}>{metric.value}%</span>
+              <div className="space-y-4 mb-4">
+                {metrics ? (
+                  (
+                    [
+                      { key: "cpu" as const, label: "CPU", percent: roundPercent(metrics.cpu_percent) },
+                      { key: "memory" as const, label: "RAM", percent: roundPercent(metrics.memory_percent) },
+                      {
+                        key: "disk" as const,
+                        label: t("admin.dashboard.disk"),
+                        percent: roundPercent(metrics.disk_percent),
+                      },
+                    ] as const
+                  ).map((metric) => (
+                    <div key={metric.key}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`text-sm ${ui.tableCellText}`}>{metric.label}</span>
+                        <span className={`text-sm font-medium ${ui.textPrimary}`}>
+                          {metric.percent != null ? `${metric.percent}%` : DASH_EMPTY}
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: c.iconBg }}>
+                        {metric.percent != null ? (
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${Math.min(100, metric.percent)}%`,
+                              backgroundColor: metricBarColor(theme, metric.key, metric.percent),
+                            }}
+                          />
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="h-2 rounded-full overflow-hidden"
-                    style={{ backgroundColor: theme.bg4 }}>
-                      <div className={`h-full rounded-full ${metric.color} ${metric.value > 80 ? "brightness-110" : ""}`} style={{ width: `${metric.value}%` }} />
-                    </div>
-                  </div>
-                )) : (
-                  <div className="text-sm"
-                  style={{ color: theme.text2 }}>{t("admin.dashboard.loadingMetrics")}</div>
+                  ))
+                ) : (
+                  <div className={`text-sm ${ui.tableCellText}`}>{t("admin.dashboard.loadingMetrics")}</div>
                 )}
               </div>
 
-              {/* Service status */}
               <div className="space-y-3 mb-6">
-                {[
-                  { icon: GitBranch, label: t("admin.dashboard.gitService"), status: serviceStatus?.git ? "Online" : "Offline", statusColor: serviceStatus?.git ? isDarkTheme ? "text-green-400" : "text-green-600" : isDarkTheme ? "text-red-400" : "text-red-600" },
-                  { icon: Database, label: t("admin.dashboard.dbLabel"), status: serviceStatus?.db ? "Online" : "Offline", statusColor: serviceStatus?.db ? isDarkTheme ? "text-green-400" : "text-green-600" : isDarkTheme ? "text-red-400" : "text-red-600" },
-                  { icon: Mail, label: "API", status: serviceStatus?.api ? "Online" : "Offline", statusColor: serviceStatus?.api ? isDarkTheme ? "text-green-400" : "text-green-600" : isDarkTheme ? "text-red-400" : "text-red-600" },
-                ].map((svc) => (
-                  <div key={svc.label} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <svc.icon className="h-4 w-4"
-                      style={{ color: theme.text2 }} />
-                      <span className="text-sm"
-                      style={{ color: theme.text3 }}>{svc.label}</span>
-                    </div>
-                    <span className="flex items-center gap-1 text-xs font-medium"
-                    style={{ color: svc.statusColor }}>
-                      {svc.status === "Online" ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
-                      {svc.status}
-                    </span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Cloud className="h-4 w-4"
-                    style={{ color: theme.text2 }} />
-                    <span className="text-sm"
-                    style={{ color: theme.text3 }}>{t("admin.dashboard.backupLabel")}</span>
-                  </div>
-                  <span className="text-xs"
-                  style={{ color: theme.text2 }}>
+                {systemServices === null ? (
+                  <div className={`text-sm ${ui.tableCellText}`}>{t("common.loading")}</div>
+                ) : (
+                  systemServices.map((svc) => {
+                    const statusColor = svc.online ? theme.success : theme.danger;
+                    const statusLabel = svc.online
+                      ? t("admin.monitoring.online")
+                      : t("admin.monitoring.offline");
+                    return (
+                      <div key={svc.id} className="flex items-center justify-between gap-2">
+                        <span className={`text-sm truncate ${ui.tableCellText}`} title={svc.name}>
+                          {svc.name}
+                        </span>
+                        <span
+                          className="inline-flex items-center gap-1 text-xs font-medium shrink-0"
+                          style={{ color: statusColor }}
+                        >
+                          {svc.online ? (
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          ) : (
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                          )}
+                          {statusLabel}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`text-sm ${ui.tableCellText}`}>{t("admin.dashboard.backupLabel")}</span>
+                  <span className="text-xs text-right" style={{ color: theme.text2 }}>
                     {backupInfo?.last_backup || t("admin.dashboard.noBackupData")}
                   </span>
                 </div>
               </div>
 
-              {/* Action buttons */}
-              <div className="flex gap-3 pt-4 border-t"
-              style={{ borderColor: theme.border }}>
+              <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={load}
