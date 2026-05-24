@@ -3,10 +3,14 @@ import type { FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { BookOpen, Plus, Users, X } from "lucide-react";
 import { getMe } from "../api/authApi";
+import { getAdminUsers } from "../api/adminApi";
 import { createCourse, deleteCourse, getCourses, getGroups } from "../api/coursesApi";
+import type { AdminUserRead } from "../api/types";
 import { getTheme } from "../theme";
 import type { Course, UserRead } from "../api/types";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+import { usePermissions } from "../hooks/usePermissions";
+import { useAuthUser } from "../context/AuthUserContext";
 import { pluralWord } from "../i18n/plural";
 
 interface CoursesPageProps {
@@ -23,6 +27,8 @@ function fieldLabel(theme: ReturnType<typeof getTheme>, text: string) {
 
 export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
   const { t, tp, language } = useUserPreferences();
+  const { hasPermission } = usePermissions();
+  const { user: authUser } = useAuthUser();
   const theme = getTheme(isDarkTheme);
   const [searchParams] = useSearchParams();
   const searchQuery = (searchParams.get("q") ?? "").trim().toLowerCase();
@@ -43,6 +49,8 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
 
   const [availableGroups, setAvailableGroups] = useState<string[]>([]);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [teacherOptions, setTeacherOptions] = useState<AdminUserRead[]>([]);
+  const [createTeacherId, setCreateTeacherId] = useState("");
 
   const inputClass = "w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none transition";
   const inputStyle = {
@@ -97,7 +105,27 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
     };
   }, []);
 
-  const canCreateCourse = me?.role === "teacher";
+  const isAdmin = me?.role === "admin" || authUser?.role === "admin";
+  const canCreateCourse =
+    hasPermission("assignment_create") && (me?.role === "teacher" || isAdmin);
+
+  useEffect(() => {
+    if (!isAdmin || !showCreateForm) return;
+    let cancelled = false;
+    void getAdminUsers()
+      .then((users) => {
+        if (cancelled) return;
+        const teachers = users.filter((u) => u.role === "teacher" && !u.is_blocked);
+        setTeacherOptions(teachers);
+        setCreateTeacherId((prev) => prev || teachers[0]?.id || "");
+      })
+      .catch(() => {
+        if (!cancelled) setTeacherOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, showCreateForm]);
 
   const filteredCourses = useMemo(() => {
     if (!searchQuery) return courses;
@@ -114,6 +142,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
     setCreateDescription("");
     setCreateGradeMax(10);
     setSelectedGroups([]);
+    setCreateTeacherId("");
     setCreateError(null);
   }
 
@@ -126,11 +155,16 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
         setCreateError(t("admin.courses.gradeMaxError"));
         return;
       }
+      if (isAdmin && !createTeacherId) {
+        setCreateError(t("admin.courses.teacherRequired"));
+        return;
+      }
       const created = await createCourse({
         title: createTitle.trim(),
         description: createDescription.trim(),
         grade_max: createGradeMax,
         target_groups: selectedGroups.length > 0 ? selectedGroups : undefined,
+        ...(isAdmin ? { teacher_id: createTeacherId } : {}),
       });
       setCourses((prev) => [created, ...prev]);
       resetCreateForm();
@@ -222,6 +256,25 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
 
           <div className="grid gap-6 p-6 lg:grid-cols-2">
             <div className="flex flex-col gap-4">
+              {isAdmin ? (
+                <>
+                  {fieldLabel(theme, t("admin.courses.fieldTeacher"))}
+                  <select
+                    value={createTeacherId}
+                    onChange={(e) => setCreateTeacherId(e.target.value)}
+                    className={inputClass}
+                    style={inputStyle}
+                    required
+                  >
+                    <option value="">{t("admin.courses.selectTeacher")}</option>
+                    {teacherOptions.map((teacher) => (
+                      <option key={teacher.id} value={teacher.id}>
+                        {teacher.full_name || teacher.email}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : null}
               {fieldLabel(theme, t("admin.courses.fieldTitle"))}
               <input
                 type="text"

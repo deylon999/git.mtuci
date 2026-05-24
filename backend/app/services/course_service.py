@@ -93,6 +93,15 @@ async def _get_enrolled_counts(session: AsyncSession, course_ids: list[UUID]) ->
     return {row[0]: row[1] for row in result.all()}
 
 
+async def list_all_courses(session: AsyncSession) -> list[Course]:
+    result = await session.execute(select(Course).order_by(Course.created_at.desc()))
+    courses = list(result.scalars().all())
+    counts = await _get_enrolled_counts(session, [c.id for c in courses])
+    for course in courses:
+        course._enrolled_count = counts.get(course.id, 0)
+    return courses
+
+
 async def list_teacher_courses(session: AsyncSession, *, teacher_id: UUID) -> list[Course]:
     result = await session.execute(
         select(Course).where(Course.teacher_id == teacher_id).order_by(Course.created_at.desc())

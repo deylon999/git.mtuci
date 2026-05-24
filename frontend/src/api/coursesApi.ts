@@ -24,6 +24,7 @@ export async function createCourse(payload: {
   description: string;
   grade_max: number;
   target_groups?: string[];
+  teacher_id?: string;
 }): Promise<Course> {
   return apiRequest<Course>("/courses", {
     method: "POST",

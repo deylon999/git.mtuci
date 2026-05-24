@@ -12,6 +12,7 @@ class CourseCreateRequest(BaseModel):
     description: Optional[str] = None
     grade_max: int = 100
     target_groups: Optional[List[str]] = None
+    teacher_id: Optional[UUID] = None
 
 
 class CourseUpdateRequest(BaseModel):

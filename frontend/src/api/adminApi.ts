@@ -227,6 +227,51 @@ export async function getAdminReportsOverview(): Promise<AdminReportsOverview> {
   return apiRequest<AdminReportsOverview>("/admin/reports/overview");
 }
 
+function csvCell(value: string | number | null | undefined): string {
+  const s = value == null ? "" : String(value);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function downloadCsv(filename: string, rows: string[][]): void {
+  const body = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+  const blob = new Blob(["\uFEFF", body], { type: "text/csv;charset=utf-8" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
+/** CSV-отчёт по данным GET /admin/reports/overview */
+export async function exportAdminReportsCSV(): Promise<void> {
+  const data = await getAdminReportsOverview();
+  const date = new Date().toISOString().slice(0, 10);
+  const rows: string[][] = [
+    ["metric", "value"],
+    ["total_users", data.total_users],
+    ["pending_users", data.pending_users],
+    ["total_students", data.total_students],
+    ["total_teachers", data.total_teachers],
+    ["total_courses", data.total_courses],
+    ["total_repositories", data.total_repositories],
+    ["submissions_pending_grade", data.submissions_pending_grade],
+    ["activity_today", data.activity_today],
+    [],
+    ["course", "teacher", "students", "assignments"],
+    ...data.courses.map((c) => [
+      c.title,
+      c.teacher_name,
+      c.students_count,
+      c.assignments_count,
+    ]),
+  ];
+  downloadCsv(`platform_report_${date}.csv`, rows);
+}
+
 export async function getAdminCoursesSummary(limit = 50): Promise<AdminCourseSummary[]> {
   return apiRequest<AdminCourseSummary[]>(`/admin/courses?limit=${limit}`);
 }

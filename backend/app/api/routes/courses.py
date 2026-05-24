@@ -58,6 +58,7 @@ from app.services.course_service import (
     delete_teacher_course,
     enroll_student_to_course,
     get_course_for_user,
+    list_all_courses,
     list_student_courses,
     list_teacher_courses,
 )
@@ -266,13 +267,31 @@ async def create_course_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role != UserRole.teacher:
+    if current_user.role == UserRole.teacher:
+        teacher_id = current_user.id
+    elif current_user.role == UserRole.admin:
+        if payload.teacher_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="teacher_id is required for admin",
+            )
+        result = await session.execute(
+            select(User).where(User.id == payload.teacher_id, User.role == UserRole.teacher)
+        )
+        teacher = result.scalar_one_or_none()
+        if not teacher:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Teacher not found",
+            )
+        teacher_id = teacher.id
+    else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
 
     try:
         course = await create_course(
             session,
-            teacher_id=current_user.id,
+            teacher_id=teacher_id,
             title=payload.title,
             description=payload.description,
             grade_max=payload.grade_max,
@@ -300,6 +319,10 @@ async def list_courses_endpoint(
             student_id=current_user.id,
             group_name=current_user.group_name
         )
+        return [CourseRead.model_validate(c) for c in courses]
+
+    if current_user.role == UserRole.admin:
+        courses = await list_all_courses(session)
         return [CourseRead.model_validate(c) for c in courses]
 
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")

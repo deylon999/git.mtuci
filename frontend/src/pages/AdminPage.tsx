@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Users,
   GitBranch,
@@ -33,6 +33,7 @@ import {
   getCommitsByFaculty,
   getActiveRepositories,
   getAdminReviewQueue,
+  exportAdminReportsCSV,
 } from "../api/adminApi";
 import {
   getNotifications,
@@ -224,6 +225,7 @@ function getStatusBadge(status: string, t: (key: string) => string) {
 
 export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   const { t, tp, language } = useUserPreferences();
+  const navigate = useNavigate();
   const dateLocale = language === "en" ? "en-US" : "ru-RU";
   const { hasPermission } = usePermissions();
   const [loading, setLoading] = useState(true);
@@ -241,6 +243,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [reviewQueue, setReviewQueue] = useState<AdminReviewQueueItem[]>([]);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const clearAllNotifications = async () => {
     try {
@@ -411,6 +414,30 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   const ui = getAdminPageTheme(isDarkTheme);
   const c = ui.colors;
 
+  const handleExportReport = async () => {
+    if (!hasPermission("settings_view")) {
+      toast.error(t("admin.dashboard.exportReportNoPermission"));
+      return;
+    }
+    setExportLoading(true);
+    try {
+      await exportAdminReportsCSV();
+      toast.success(t("admin.dashboard.exportReportSuccess"));
+    } catch {
+      toast.error(t("admin.dashboard.exportReportError"));
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleNewCourse = () => {
+    if (hasPermission("assignment_create")) {
+      navigate("/courses?create=1");
+      return;
+    }
+    toast.error(t("admin.dashboard.newCourseNoPermission"));
+  };
+
   const systemServices = useMemo((): MonitoredService[] | null => {
     if (!serviceStatus) return null;
     if (serviceStatus.services.length > 0) return serviceStatus.services;
@@ -429,13 +456,16 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
               <>
                 <button
                   type="button"
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition-colors shadow-sm ${ui.cardBg} ${ui.cardHover}`}
+                  disabled={exportLoading}
+                  onClick={() => void handleExportReport()}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition-colors shadow-sm disabled:opacity-50 ${ui.cardBg} ${ui.cardHover}`}
                 >
-                  <Download className="h-4 w-4" />
-                  {t("admin.dashboard.exportReport")}
+                  <Download className={`h-4 w-4 ${exportLoading ? "animate-pulse" : ""}`} />
+                  {exportLoading ? t("admin.dashboard.exportingReport") : t("admin.dashboard.exportReport")}
                 </button>
                 <button
                   type="button"
+                  onClick={handleNewCourse}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded-lg text-sm font-medium text-white hover:bg-blue-700 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
