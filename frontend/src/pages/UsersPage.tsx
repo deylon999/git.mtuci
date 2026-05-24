@@ -34,6 +34,7 @@ import { usePendingCount } from "../context/PendingCountContext";
 import type { AdminUserRead, UserRole, UserRead } from "../api/types";
 import AdminPageHeader from "../components/AdminPageHeader";
 import { getTheme } from "../theme";
+import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { tr } from "../utils/i18nLabels";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { pluralWord } from "../i18n/plural";
@@ -520,48 +521,44 @@ useEffect(() => {
     }
   };
 
-  const textPrimary = isDarkTheme ? "text-white" : "text-slate-900";
-  const cardBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-slate-100 border-slate-200 shadow-sm";
-  const cardHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-200";
-  const textSecondary = isDarkTheme ? "text-gray-400" : "text-slate-500";
-  const textTertiary = isDarkTheme ? "text-gray-300" : "text-slate-400";
-  const headerBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-slate-100 border-slate-200";
-  const inputBg = isDarkTheme ? "bg-[#252525] border-[#3d3d3d]" : "bg-slate-200 border-slate-300";
+  const ui = getAdminPageTheme(isDarkTheme);
+  const textPrimary = ui.textPrimary;
+  const cardBg = ui.cardBg;
+  const cardHover = ui.cardHover;
+  const textSecondary = ui.textSecondary;
+  const textTertiary = ui.textTertiary;
   const dividerColor = isDarkTheme ? "divide-[#2d2d2d]" : "divide-slate-200";
-  const tableHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-100";
-  // Table specific colors
-  const tableBg = isDarkTheme ? "bg-[#111111]" : "bg-slate-100";
-  const tableBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-slate-200";
-  const tableHeaderText = isDarkTheme ? "text-[#6e7681]" : "text-slate-400";
-  const tableRowBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-slate-200";
-  const tableRowBg = isDarkTheme ? "bg-[#111111]" : "";
-  const tableRowHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-200";
-  const tableCellText = isDarkTheme ? "text-[#8b949e]" : "text-slate-500";
-  const tableNameText = isDarkTheme ? "text-[#ccd0d4]" : "text-slate-900";
-  const tableEmailText = isDarkTheme ? "text-[#6e7681]" : "text-slate-400";
+  const tableHover = ui.tableRowHover;
+  const tableBg = ui.tableBg;
+  const tableBorder = ui.tableBorder;
+  const tableHeaderText = ui.tableHeaderText;
+  const tableRowBorder = ui.tableBorder;
+  const tableRowBg = ui.tableRowBg;
+  const tableRowHover = ui.tableRowHover;
+  const tableCellText = ui.tableCellText;
+  const tableNameText = ui.tableNameText;
+  const tableEmailText = ui.tableHeaderText;
   const checkboxBorder = isDarkTheme ? "border-[#484f58]" : "border-gray-400";
   const checkboxHoverBorder = isDarkTheme ? "hover:border-[#6e7681]" : "hover:border-gray-500";
-  const iconBg = isDarkTheme ? "bg-[#252525]" : "bg-gray-200";
-  const iconColor = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  const actionBtnHover = isDarkTheme ? "hover:bg-[#30363d] hover:text-[#ccd0d4]" : "hover:bg-gray-300 hover:text-gray-900";
-  const actionBtnColor = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  // Modal colors
-  const modalBg = isDarkTheme ? "bg-[#111111]" : "bg-slate-100";
-  const modalBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-gray-200";
-  const modalText = isDarkTheme ? "text-[#ccd0d4]" : "text-gray-900";
-  const modalLabel = isDarkTheme ? "text-[#8b949e]" : "text-gray-600";
-  const modalInputBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d]" : "bg-gray-100 border-gray-300";
+  const iconBg = ui.iconBg;
+  const iconColor = ui.iconColor;
+  const actionBtnHover = ui.actionBtnHover;
+  const actionBtnColor = ui.actionBtnColor;
+  const modalBg = ui.tableBg;
+  const modalBorder = ui.tableBorder;
+  const modalText = ui.tableNameText;
+  const modalLabel = ui.tableCellText;
+  const modalInputBg = ui.inputBg;
   const modalCardBg = isDarkTheme ? "bg-[#0d0d0d]" : "bg-gray-200";
-  const modalBtnHover = isDarkTheme ? "hover:bg-[#30363d]" : "hover:bg-gray-300";
-  const modalBtnText = isDarkTheme ? "text-[#6e7681]" : "text-gray-600";
-  // Pagination colors
-  const paginationBtn = isDarkTheme ? "bg-[#111111] border-[#30363d] text-[#8b949e] hover:text-[#ccd0d4]" : "bg-slate-100 border-gray-300 text-gray-600 hover:text-gray-900";
+  const modalBtnHover = ui.actionBtnHover;
+  const modalBtnText = ui.actionBtnColor;
+  const paginationBtn = ui.paginationBtn;
   const paginationDropdown = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d] text-[#ccd0d4]" : "bg-gray-100 border-gray-300 text-gray-700";
-  const paginationDropdownBg = isDarkTheme ? "bg-[#111111] border-[#2d2d2d]" : "bg-slate-100 border-gray-200";
+  const paginationDropdownBg = `${ui.tableBg} ${ui.tableBorder}`;
   const paginationDropdownItem = isDarkTheme ? "text-[#8b949e] hover:bg-[#252525]" : "text-gray-600 hover:bg-gray-200";
 
   return (
-    <div className={`h-full overflow-y-auto ${textPrimary} transition-colors`}>
+    <div className={`h-full overflow-y-auto ${ui.pageWrapper} transition-colors`}>
       <div className="max-w-7xl mx-auto py-6 px-6 space-y-6 pb-20">
         {/* Header */}
         <AdminPageHeader

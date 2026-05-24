@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, Search } from "lucide-react";
 import AdminPageHeader from "../components/AdminPageHeader";
 import { getAdminForks, type AdminForkEvent } from "../api/adminApi";
-import { getTheme } from "../theme";
+import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface ForksPageProps {
@@ -75,7 +75,7 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
     [events, query],
   );
 
-  const theme = getTheme(isDarkTheme);
+  const ui = getAdminPageTheme(isDarkTheme);
   const dateLocale = language === "en" ? "en-US" : "ru-RU";
 
   const statCards = [
@@ -94,15 +94,14 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
   ];
 
   return (
-    <div className="h-full overflow-y-auto" style={{ backgroundColor: theme.bg, color: theme.text }}>
-      <div className="mx-auto max-w-[2100px] px-6 py-6 pb-10">
-        <div className="mb-4 flex items-start justify-between gap-4">
+    <div className={`h-full overflow-y-auto ${ui.pageWrapper}`}>
+      <div className="mx-auto max-w-7xl px-6 py-6 pb-20 space-y-6">
+        <div className="flex items-start justify-between gap-4">
           <AdminPageHeader isDarkTheme={isDarkTheme} title={t("admin.forks.title")} />
           <div className="mt-1 flex gap-2">
             <button
               type="button"
-              className="h-8 rounded-md border px-3 text-xs"
-              style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition-colors shadow-sm ${ui.cardBg} ${ui.cardHover}`}
             >
               <Download className="mr-1 inline h-3.5 w-3.5" />
               {t("admin.forks.exportCsv")}
@@ -110,61 +109,47 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
           </div>
         </div>
 
-        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {statCards.map(([title, value]) => (
-            <div
-              key={title}
-              className="rounded-xl border p-4"
-              style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
-            >
-              <p className="text-xs" style={{ color: theme.text2 }}>
-                {title}
-              </p>
-              <p className="mt-1 text-2xl font-semibold">{value}</p>
+            <div key={title} className={`rounded-xl border p-5 ${ui.tableBg} ${ui.tableBorder}`}>
+              <p className={`text-sm mb-1 ${ui.tableHeaderText}`}>{title}</p>
+              <p className={`text-2xl font-bold ${ui.textPrimary}`}>{value}</p>
             </div>
           ))}
         </div>
 
-        <div className="rounded-xl border" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
-          <div
-            className="flex flex-wrap items-center gap-2 border-b border-inherit p-3"
-            style={{ borderColor: theme.border }}
-          >
-            <div
-              className="flex h-8 min-w-[200px] flex-1 items-center gap-2 rounded-md border px-2"
-              style={{ backgroundColor: theme.inputBg, borderColor: theme.border }}
-            >
-              <Search className="h-3.5 w-3.5" style={{ color: theme.text2 }} />
+        <div className={`rounded-xl border ${ui.tableBg} ${ui.tableBorder}`}>
+          <div className={`flex flex-wrap items-center gap-3 border-b p-4 ${ui.tableBorder}`}>
+            <div className={`flex min-w-[200px] flex-1 items-center gap-2 rounded-lg border px-3 py-2 ${ui.inputBg}`}>
+              <Search className={`h-4 w-4 ${ui.tableHeaderText}`} />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="w-full bg-transparent text-sm outline-none"
-                style={{ color: theme.text }}
+                className={`w-full bg-transparent text-sm outline-none ${ui.tableNameText} placeholder-[#6e7681]`}
                 placeholder={t("admin.forks.searchPlaceholder")}
               />
             </div>
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
-              className="h-8 rounded-md border px-2 text-xs"
-              style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
+              className={`rounded-lg border px-3 py-2 text-sm ${ui.inputBg} ${ui.tableNameText}`}
             >
               <option value="all">{t("admin.forks.filterAll")}</option>
               <option value="fork">{t("admin.forks.filterForkOnly")}</option>
               <option value="repo_created">{t("admin.forks.filterCreateOnly")}</option>
             </select>
-            <span className="text-xs" style={{ color: theme.text2 }}>
+            <span className={`text-sm ${ui.tableCellText}`}>
               {tp("admin.forks.uniqueUsers", { n: stats.unique_users })}
             </span>
           </div>
 
           {loading ? (
-            <p className="p-4 text-sm">{t("common.loading")}</p>
+            <p className={`p-4 text-sm ${ui.tableCellText}`}>{t("common.loading")}</p>
           ) : error ? (
             <p className="p-4 text-sm text-red-500">{error}</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-xs uppercase" style={{ color: theme.text2 }}>
+              <thead className={`text-xs font-medium uppercase tracking-wider ${ui.tableHeaderText}`}>
                 <tr>
                   {tableHeaders.map((h) => (
                     <th key={h} className="px-3 py-3 text-left">
@@ -175,21 +160,21 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
               </thead>
               <tbody>
                 {filtered.slice(0, 50).map((row) => (
-                  <tr key={row.id} className="border-t border-inherit" style={{ borderColor: theme.border }}>
-                    <td className="px-3 py-3">
-                      <p className="font-medium">{row.user_full_name}</p>
-                      <p className="text-xs" style={{ color: theme.text2 }}>
+                  <tr key={row.id} className={`border-t ${ui.tableBorder} ${ui.tableRowHover} transition-colors`}>
+                    <td className="px-4 py-3">
+                      <p className={`font-medium ${ui.tableNameText}`}>{row.user_full_name}</p>
+                      <p className={`text-xs ${ui.tableHeaderText}`}>
                         {row.user_login || row.user_id}
                       </p>
                     </td>
-                    <td className="px-3 py-3">
-                      <span className="rounded-full bg-[#1f6feb]/20 px-2 py-1 text-xs text-[#58a6ff]">
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center rounded-full bg-blue-500/20 px-2.5 py-1 text-xs font-medium text-blue-400">
                         {eventLabel[row.event_type]}
                       </span>
                     </td>
-                    <td className="px-3 py-3">{row.source_repo || "—"}</td>
-                    <td className="px-3 py-3">{row.target_repo || "—"}</td>
-                    <td className="px-3 py-3" style={{ color: theme.text2 }}>
+                    <td className={`px-4 py-3 ${ui.tableCellText}`}>{row.source_repo || "—"}</td>
+                    <td className={`px-4 py-3 ${ui.tableCellText}`}>{row.target_repo || "—"}</td>
+                    <td className={`px-4 py-3 ${ui.tableCellText}`}>
                       {new Date(row.created_at).toLocaleString(dateLocale)}
                     </td>
                   </tr>

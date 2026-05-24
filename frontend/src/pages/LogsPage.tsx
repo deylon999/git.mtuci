@@ -5,6 +5,8 @@ import { exportLogs, deleteOldLogs } from "../api/adminApi";
 import ConfirmModal from "../components/ConfirmModal";
 import type { LogEntry } from "../api/types";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+import { getAdminPageTheme } from "../layout/adminPageTheme";
+import AdminPageHeader from "../components/AdminPageHeader";
 
 interface LogsPageProps {
   isDarkTheme?: boolean;
@@ -240,70 +242,71 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
 
   const totalPages = Math.ceil(total / limit);
 
-  const bgColor = isDarkTheme ? "bg-[#0f0f10]" : "bg-gray-50";
-  const cardBg = isDarkTheme ? "bg-[#0f0f10] border-[#2d2d2d]" : "bg-gray-100 border-gray-200";
-  const cardBg2 = isDarkTheme ? "#1e1e1e" : "#ffffff";
-  const borderColor = isDarkTheme ? "#30363d" : "#e0e0e0";
-  const inputBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d]" : "bg-gray-100 border-gray-300";
-  const textMain = isDarkTheme ? "text-white" : "text-gray-900";
-  const textMuted = isDarkTheme ? "text-gray-500" : "text-gray-500";
-  const textDim = isDarkTheme ? "text-[#6e7681]" : "text-gray-400";
-  const hoverBg = isDarkTheme ? "hover:bg-[#1f2937]" : "hover:bg-gray-200";
+  const ui = getAdminPageTheme(isDarkTheme);
+  const c = ui.colors;
+  const cardBg = `${ui.tableBg} border ${ui.tableBorder}`;
+  const inputBg = ui.inputBg;
+  const textMain = ui.textPrimary;
+  const textMuted = ui.textSecondary;
+  const textDim = ui.tableHeaderText;
+  const hoverBg = ui.tableRowHover;
 
   return (
-    <div className={`min-h-screen ${bgColor} ${textMain}`}>
-      <div className="p-5 max-w-[1600px] mx-auto">
-        {/* Page Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-lg font-semibold">{t("admin.logs.title")}</h1>
-            <p className={`text-xs ${textMuted} mt-0.5`}>{t("admin.logs.subtitle")}</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleExport}
-              disabled={isExporting}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border ${cardBg} ${hoverBg} transition-colors disabled:opacity-60`}
-            >
-              <Download className="w-3.5 h-3.5" />
-              {isExporting ? t("admin.logs.exporting") : t("admin.logs.export")}
-            </button>
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border bg-red-500/10 text-red-500 border-red-500/30 hover:bg-red-500/20 transition-colors`}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              {t("admin.logs.deleteOld")}
-            </button>
-          </div>
-        </div>
+    <div className={`min-h-screen ${ui.pageWrapper}`}>
+      <div className="max-w-7xl mx-auto py-6 px-6 pb-20 space-y-6">
+        <AdminPageHeader
+          isDarkTheme={isDarkTheme}
+          title={t("admin.logs.title")}
+          subtitle={t("admin.logs.subtitle")}
+          actions={
+            <>
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={isExporting}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition-colors shadow-sm ${ui.cardBg} ${ui.cardHover} disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                <Download className="h-4 w-4" />
+                {isExporting ? t("admin.logs.exporting") : t("admin.logs.export")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors border bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20"
+              >
+                <Trash2 className="h-4 w-4" />
+                {t("admin.logs.deleteOld")}
+              </button>
+            </>
+          }
+        />
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-2.5 mb-4">
-          <div style={{ background: cardBg2, border: `1px solid ${borderColor}`, borderRadius: "10px", padding: "14px 16px" }}>
+        <div className="grid grid-cols-4 gap-4">
+          <div style={{ background: c.card, border: `1px solid ${c.border}`, borderRadius: "12px", padding: "20px" }}>
             <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>{t("admin.logs.statTotal")}</div>
             <div style={{ fontSize: "22px", fontWeight: 600, color: textMain }}>{stats?.total ?? "-"}</div>
             <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>{t("admin.logs.periodAllTime")}</div>
           </div>
-          <div style={{ background: cardBg2, border: `1px solid ${borderColor}`, borderRadius: "10px", padding: "14px 16px" }}>
-            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>{t("admin.logs.statErrorsToday")}</div>
+          <div style={{ background: c.card, border: `1px solid ${c.border}`, borderRadius: "12px", padding: "20px" }}>
+            <div style={{ fontSize: "11px", color: c.textMuted, marginBottom: "4px" }}>{t("admin.logs.statErrorsToday")}</div>
             <div style={{ fontSize: "22px", fontWeight: 600, color: "#e24b4a" }}>{stats?.errors_today ?? "-"}</div>
             <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>{t("admin.logs.periodToday")}</div>
           </div>
-          <div style={{ background: cardBg2, border: `1px solid ${borderColor}`, borderRadius: "10px", padding: "14px 16px" }}>
-            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>{t("admin.logs.statWarnings")}</div>
+          <div style={{ background: c.card, border: `1px solid ${c.border}`, borderRadius: "12px", padding: "20px" }}>
+            <div style={{ fontSize: "11px", color: c.textMuted, marginBottom: "4px" }}>{t("admin.logs.statWarnings")}</div>
             <div style={{ fontSize: "22px", fontWeight: 600, color: "#f59e0b" }}>{stats?.warnings_today ?? "-"}</div>
             <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>{t("admin.logs.periodToday")}</div>
           </div>
-          <div style={{ background: cardBg2, border: `1px solid ${borderColor}`, borderRadius: "10px", padding: "14px 16px" }}>
-            <div style={{ fontSize: "11px", color: textMuted, marginBottom: "4px" }}>{t("admin.logs.statSuccess")}</div>
+          <div style={{ background: c.card, border: `1px solid ${c.border}`, borderRadius: "12px", padding: "20px" }}>
+            <div style={{ fontSize: "11px", color: c.textMuted, marginBottom: "4px" }}>{t("admin.logs.statSuccess")}</div>
             <div style={{ fontSize: "22px", fontWeight: 600, color: "#4caf50" }}>{stats?.success_today ?? "-"}</div>
             <div style={{ fontSize: "10px", color: textMuted, marginTop: "3px" }}>{t("admin.logs.periodToday")}</div>
           </div>
         </div>
 
         {/* Toolbar */}
-        <div className={`flex items-center gap-2 p-3 rounded-xl border mb-4 ${cardBg}`}>
+        <div className={`flex items-center gap-3 p-4 rounded-xl border ${cardBg}`}>
           <div className={`flex items-center gap-1.5 flex-1 px-2.5 py-1.5 rounded-lg border ${inputBg}`}>
             <Search className="w-3.5 h-3.5 text-gray-500" />
             <input
@@ -315,7 +318,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
               className={`bg-transparent border-none outline-none text-xs flex-1 ${textMain} placeholder-gray-500`}
             />
           </div>
-          <div className={`w-px h-5 ${isDarkTheme ? "bg-[#30363d]" : "bg-gray-300"}`}></div>
+          <div className={`w-px h-5 ${isDarkTheme ? "bg-[#2d2d2d]" : "bg-gray-300"}`}></div>
           <select
             value={level}
             onChange={(e) => handleFilterChange(() => setLevel(e.target.value as any))}
@@ -351,7 +354,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
             <option value="week">{t("admin.logs.periodWeek")}</option>
             <option value="month">{t("admin.logs.periodMonth")}</option>
           </select>
-          <div className={`w-px h-5 ${isDarkTheme ? "bg-[#30363d]" : "bg-gray-300"}`}></div>
+          <div className={`w-px h-5 ${isDarkTheme ? "bg-[#2d2d2d]" : "bg-gray-300"}`}></div>
           <select
             value={sort}
             onChange={(e) => handleFilterChange(() => setSort(e.target.value as any))}

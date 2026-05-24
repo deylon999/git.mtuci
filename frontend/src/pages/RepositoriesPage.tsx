@@ -28,6 +28,7 @@ import { getSystemInfo } from "../api/systemApi";
 import { useAuthUser } from "../context/AuthUserContext";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getGiteaPublicBase, resolveRepoLinks } from "../utils/giteaLinks";
+import { getAdminPageTheme } from "../layout/adminPageTheme";
 
 type Repository = AdminRepository;
 
@@ -234,12 +235,13 @@ function Dropdown({ label, value, options, onChange, isDarkTheme = true }: {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const dropdownBtnBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d]" : "bg-gray-100 border-gray-300";
-  const dropdownBtnText = isDarkTheme ? "text-[#ccd0d4]" : "text-slate-900";
-  const dropdownIconColor = isDarkTheme ? "text-[#8b949e]" : "text-slate-500";
-  const dropdownBg = isDarkTheme ? "bg-[#111111] border-[#2d2d2d]" : "bg-slate-100 border-slate-200";
-  const dropdownItemHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-200";
-  const dropdownItemText = isDarkTheme ? "text-[#8b949e]" : "text-slate-500";
+  const ui = getAdminPageTheme(isDarkTheme);
+  const dropdownBtnBg = ui.inputBg;
+  const dropdownBtnText = ui.tableNameText;
+  const dropdownIconColor = ui.tableCellText;
+  const dropdownBg = `${ui.tableBg} ${ui.tableBorder} border`;
+  const dropdownItemHover = ui.tableRowHover;
+  const dropdownItemText = ui.tableCellText;
 
   const selectedLabel = options.find((o) => o.value === value)?.label || label;
 
@@ -572,7 +574,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
 
   if (error) {
     return (
-      <div className={`min-h-[40vh] flex items-center justify-center ${isDarkTheme ? "bg-[#0f0f10] text-white" : "bg-gray-50 text-gray-900"}`}>
+      <div className={`min-h-[40vh] flex items-center justify-center ${getAdminPageTheme(isDarkTheme).pageWrapper}`}>
         <div className="text-center">
           <p className="text-red-400 mb-2">{t("repo.repositories.loadError")}</p>
           <p className={isDarkTheme ? "text-[#8b949e]" : "text-gray-500"}>{error}</p>
@@ -587,32 +589,32 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
     );
   }
 
-  const pageBg = isDarkTheme ? "bg-[#0f0f10] text-white" : "bg-slate-50 text-slate-900";
-  const cardBg = isDarkTheme ? "bg-[#111111]" : "bg-slate-100 shadow-sm";
-  const headerActionBg = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-slate-100 border-slate-200 shadow-sm";
-  const headerActionHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-200";
-  const filterInputBg = isDarkTheme ? "bg-[#0d0d0d] border-[#30363d]" : "bg-gray-100 border-gray-300";
-  const cardBgLight = isDarkTheme ? "bg-[#0d0d0d]" : "bg-slate-200";
-  const textPrimary = isDarkTheme ? "text-white" : "text-slate-900";
-  const textSecondary = isDarkTheme ? "text-gray-500" : "text-slate-500";
-  const textTertiary = isDarkTheme ? "text-[#8b949e]" : "text-slate-400";
+  const ui = getAdminPageTheme(isDarkTheme);
+  const cardBg = ui.tableBg;
+  const headerActionBg = ui.cardBg;
+  const headerActionHover = ui.cardHover;
+  const filterInputBg = ui.inputBg;
+  const cardBgLight = ui.inputBg.split(" ")[0];
+  const textPrimary = ui.textPrimary;
+  const textSecondary = ui.textSecondary;
+  const textTertiary = ui.textTertiary;
   const inputBg = filterInputBg;
-  const inputText = isDarkTheme ? "text-[#ccd0d4]" : "text-slate-900";
+  const inputText = ui.tableNameText;
   const inputPlaceholder = isDarkTheme ? "placeholder-[#6e7681]" : "placeholder-slate-400";
-  const tableHeaderText = isDarkTheme ? "text-[#6e7681]" : "text-slate-400";
-  const tableRowBg = isDarkTheme ? "bg-[#111111]" : "";
-  const tableRowHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-100";
-  const tableBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-slate-200";
-  const btnBg = isDarkTheme ? "bg-[#111111] border-[#30363d] hover:bg-[#252525]" : "bg-slate-100 border-slate-200 hover:bg-slate-200";
-  const btnText = isDarkTheme ? "text-[#8b949e]" : "text-slate-500";
+  const tableHeaderText = ui.tableHeaderText;
+  const tableRowBg = ui.tableRowBg;
+  const tableRowHover = ui.tableRowHover;
+  const tableBorder = ui.tableBorder;
+  const btnBg = `${ui.tableBg} border ${isDarkTheme ? "border-[#30363d]" : "border-slate-200"} ${ui.tableRowHover}`;
+  const btnText = ui.tableCellText;
   const btnTextHover = isDarkTheme ? "hover:text-[#ccd0d4]" : "hover:text-slate-900";
-  const actionBtnHover = isDarkTheme ? "hover:bg-[#30363d] hover:text-[#ccd0d4]" : "hover:bg-gray-300 hover:text-gray-900";
-  const actionBtnColor = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  const menuItemText = isDarkTheme ? "text-[#ccd0d4]" : "text-slate-900";
-  const menuItemHover = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-slate-200";
+  const actionBtnHover = ui.actionBtnHover;
+  const actionBtnColor = ui.actionBtnColor;
+  const menuItemText = ui.tableNameText;
+  const menuItemHover = ui.tableRowHover;
 
   return (
-    <div className={pageBg}>
+    <div className={ui.pageWrapper}>
       <div className="mx-auto w-full max-w-7xl space-y-6 pb-20">
         <AdminPageHeader
           isDarkTheme={isDarkTheme}

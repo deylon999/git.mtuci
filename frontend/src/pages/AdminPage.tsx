@@ -45,6 +45,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import toast from "react-hot-toast";
 import AdminPageHeader from "../components/AdminPageHeader";
 import { getTheme } from "../theme";
+import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { translate, translateWithParams } from "../i18n";
 import { getI18nLocale } from "../i18n/runtime";
@@ -77,13 +78,13 @@ function ReportsOverviewBlock({
   isDarkTheme: boolean;
 }) {
   const { t } = useUserPreferences();
-  const theme = getTheme(isDarkTheme);
+  const ui = getAdminPageTheme(isDarkTheme);
+  const c = ui.colors;
   return (
     <div
-      className="mb-6 rounded-xl border p-4"
-      style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
+      className={`mb-6 rounded-xl border p-4 ${ui.tableBg} ${ui.tableBorder}`}
     >
-      <h2 className="mb-3 text-lg font-semibold" style={{ color: theme.text }}>
+      <h2 className={`mb-3 text-lg font-semibold ${ui.textPrimary}`}>
         {t("admin.dashboard.overviewTitle")}
       </h2>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -93,11 +94,11 @@ function ReportsOverviewBlock({
           [t("admin.dashboard.statCourses"), data.total_courses],
           [t("admin.dashboard.statSubmissions"), data.submissions_pending_grade],
         ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-lg border p-3" style={{ borderColor: theme.border }}>
-            <p className="text-xs" style={{ color: theme.text2 }}>
+          <div key={String(label)} className={`rounded-lg border p-3 ${ui.tableBorder}`} style={{ backgroundColor: c.input }}>
+            <p className={`text-xs ${ui.tableHeaderText}`}>
               {label}
             </p>
-            <p className="text-xl font-semibold" style={{ color: theme.text }}>
+            <p className={`text-xl font-semibold ${ui.textPrimary}`}>
               {value}
             </p>
           </div>
@@ -106,7 +107,7 @@ function ReportsOverviewBlock({
       {data.courses.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead style={{ color: theme.text2 }}>
+            <thead className={ui.tableHeaderText}>
               <tr>
                 <th className="py-2 text-left">{t("admin.dashboard.colCourse")}</th>
                 <th className="py-2 text-left">{t("admin.dashboard.colTeacher")}</th>
@@ -115,16 +116,16 @@ function ReportsOverviewBlock({
               </tr>
             </thead>
             <tbody>
-              {data.courses.map((c) => (
-                <tr key={c.id} className="border-t" style={{ borderColor: theme.border }}>
-                  <td className="py-2" style={{ color: theme.text }}>
-                    {c.title}
+              {data.courses.map((course) => (
+                <tr key={course.id} className={`border-t ${ui.tableBorder}`}>
+                  <td className={`py-2 ${ui.tableNameText}`}>
+                    {course.title}
                   </td>
-                  <td className="py-2" style={{ color: theme.text2 }}>
-                    {c.teacher_name}
+                  <td className={`py-2 ${ui.tableCellText}`}>
+                    {course.teacher_name}
                   </td>
-                  <td className="py-2">{c.students_count}</td>
-                  <td className="py-2">{c.assignments_count}</td>
+                  <td className={`py-2 ${ui.tableCellText}`}>{course.students_count}</td>
+                  <td className={`py-2 ${ui.tableCellText}`}>{course.assignments_count}</td>
                 </tr>
               ))}
             </tbody>
@@ -175,20 +176,23 @@ function getNotificationColor(type: Notification['type']): string {
 }
 
 function StatCard({ title, value, trend, trendUp, icon: Icon, isDarkTheme = true }: StatCardProps) {
+  const ui = getAdminPageTheme(isDarkTheme);
   const theme = getTheme(isDarkTheme);
 
   return (
-    <div className="rounded-xl border p-5 transition-colors" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
+    <div
+      className={`rounded-xl border p-5 transition-colors ${ui.tableBg} ${ui.tableBorder}`}
+    >
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm font-medium" style={{ color: theme.text2 }}>{title}</p>
-          <p className="mt-2 text-3xl font-bold" style={{ color: theme.text }}>{value}</p>
+          <p className={`text-sm font-medium ${ui.tableHeaderText}`}>{title}</p>
+          <p className={`mt-2 text-3xl font-bold ${ui.textPrimary}`}>{value}</p>
           <p className="mt-1 text-xs font-medium" style={{ color: trendUp ? theme.accent : theme.danger }}>
             {trendUp ? "↑" : "↓"} {trend}
           </p>
         </div>
-        <div className="rounded-lg p-3" style={{ backgroundColor: theme.bg4 }}>
-          <Icon className="h-6 w-6" style={{ color: theme.text3 }} />
+        <div className={`rounded-lg p-3 ${ui.iconBg}`}>
+          <Icon className={`h-6 w-6 ${ui.iconColor}`} />
         </div>
       </div>
     </div>
@@ -450,10 +454,12 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   ];
 
   const theme = getTheme(isDarkTheme);
+  const ui = getAdminPageTheme(isDarkTheme);
+  const adminColors = ui.colors;
 
   return (
-    <div className="h-full overflow-auto transition-colors">
-      <div className="max-w-7xl mx-auto p-6">
+    <div className={`h-full overflow-auto transition-colors ${ui.pageWrapper}`}>
+      <div className="max-w-7xl mx-auto py-6 px-6 pb-20 space-y-6">
         {/* Header */}
         <div className="mb-8">
           <AdminPageHeader
@@ -464,8 +470,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
               <>
                 <button
                   type="button"
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
-                  style={{ backgroundColor: theme.bg2, borderColor: theme.border, color: theme.text2 }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition-colors shadow-sm ${ui.cardBg} ${ui.cardHover}`}
                 >
                   <Download className="h-4 w-4" />
                   {t("admin.dashboard.exportReport")}
@@ -496,12 +501,9 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
         {/* Bottom Row - 2 Columns */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-6">
           {/* Left - New Users Table (60%) */}
-          <div className="lg:col-span-3 rounded-xl border shadow-sm transition-colors"
-          style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
-            <div className="p-5 flex items-center justify-between border-b"
-            style={{ borderColor: theme.border }}>
-              <h2 className="text-lg font-semibold transition-colors"
-              style={{ color: theme.text }}>{t("admin.dashboard.newUsers")}</h2>
+          <div className={`lg:col-span-3 rounded-xl border shadow-sm transition-colors ${ui.tableBg} ${ui.tableBorder}`}>
+            <div className={`p-5 flex items-center justify-between border-b ${ui.tableBorder}`}>
+              <h2 className={`text-lg font-semibold transition-colors ${ui.textPrimary}`}>{t("admin.dashboard.newUsers")}</h2>
               <Link to="/users" className="group text-sm flex items-center gap-1 font-medium"
               style={{ color: theme.accent }}>
                 {t("admin.dashboard.viewAll")} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -575,7 +577,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
 
           {/* Right - Active Repositories (40%) */}
           <div className="lg:col-span-2 rounded-xl border shadow-sm transition-colors"
-          style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
+          style={{ backgroundColor: adminColors.card, borderColor: adminColors.border }}>
             <div className="p-5 flex items-center justify-between border-b"
             style={{ borderColor: theme.border }}>
               <h2 className="text-lg font-semibold transition-colors"
@@ -665,7 +667,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Notifications */}
           <div className="rounded-xl border shadow-sm transition-colors"
-          style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
+          style={{ backgroundColor: adminColors.card, borderColor: adminColors.border }}>
             <div className="p-5 flex items-center justify-between border-b"
             style={{ borderColor: theme.border }}>
               <h2 className="text-lg font-semibold transition-colors"
@@ -728,7 +730,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
 
           {/* Commits by Department */}
           <div className="rounded-xl border shadow-sm transition-colors"
-          style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
+          style={{ backgroundColor: adminColors.card, borderColor: adminColors.border }}>
             <div className="p-5 border-b"
             style={{ borderColor: theme.border }}>
               <h2 className="text-lg font-semibold transition-colors"
@@ -755,7 +757,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                         style={{ color: theme.text }}>{dept.commits}</span>
                       </div>
                       <div className="h-2 rounded-full overflow-hidden"
-                      style={{ backgroundColor: theme.bg4 }}>
+                      style={{ backgroundColor: adminColors.iconBg }}>
                         <div className={`h-full rounded-full ${dept.color}`} style={{ width: `${(dept.commits / Math.max(...facultyStats.map(s => s.commits))) * 100}%` }} />
                       </div>
                     </div>
@@ -844,7 +846,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
 
           {/* System Status */}
           <div className="rounded-xl border shadow-sm transition-colors"
-          style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
+          style={{ backgroundColor: adminColors.card, borderColor: adminColors.border }}>
             <div className="p-5 border-b"
             style={{ borderColor: theme.border }}>
               <h2 className="text-lg font-semibold transition-colors"

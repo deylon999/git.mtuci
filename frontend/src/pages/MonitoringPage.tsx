@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { RefreshCw, Clock, AlertTriangle, CheckCircle, XCircle, Activity, HardDrive, Database, Server, Zap, TrendingUp, GitBranch } from "lucide-react";
 import { getSystemMetrics, getServiceStatus, getBackups, getLogs, createBackup, restartAPI } from "../api/adminApi";
 import { getTheme } from "../theme";
+import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface ServiceConfig {
@@ -105,6 +106,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
   }, []);
 
   const theme = getTheme(isDarkTheme);
+  const ac = getAdminPageTheme(isDarkTheme).colors;
 
   const getStatusColor = (status: boolean | undefined) => {
     if (status === undefined) return theme.warning;
@@ -117,81 +119,103 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
     border: `1px solid ${color}40`,
   });
 
+  const headerBtnStyle = {
+    display: "inline-flex" as const,
+    alignItems: "center" as const,
+    gap: "4px",
+    fontSize: "11px",
+    fontWeight: 500,
+    padding: "6px 12px",
+    borderRadius: "7px",
+    border: `${isDarkTheme ? "0.5px" : "1px"} solid ${ac.borderInput}`,
+    backgroundColor: ac.cardElevated,
+    color: ac.text,
+    cursor: "pointer" as const,
+  };
+
   return (
-    <div style={{ backgroundColor: theme.bg, color: theme.text, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      {/* Page Header */}
-      <div style={{ padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: theme.bg }}>
+    <div style={{ backgroundColor: ac.pageBg, color: ac.text, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      {/* Page Header — исходная раскладка, без сжатия в max-w-7xl */}
+      <div
+        style={{
+          padding: "20px 24px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          backgroundColor: ac.pageBg,
+          flexShrink: 0,
+        }}
+      >
         <div>
-          <div style={{ fontSize: "18px", fontWeight: "600", color: theme.text }}>{t("admin.monitoring.title")}</div>
-          <div style={{ fontSize: "12px", color: theme.text2, marginTop: "2px" }}>
+          <div style={{ fontSize: "18px", fontWeight: 600, color: ac.text }}>{t("admin.monitoring.title")}</div>
+          <div style={{ fontSize: "12px", color: ac.textSecondary, marginTop: "2px" }}>
             {t("admin.monitoring.subtitle")}
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: "5px",
-            fontSize: "11px", color: theme.success,
-            backgroundColor: `${theme.success}15`,
-            border: `1px solid ${theme.success}40`,
-            borderRadius: "6px", padding: "4px 10px"
-          }}>
-            <div style={{
-              width: "6px", height: "6px", borderRadius: "50%",
-              backgroundColor: theme.success,
-              animation: "pulse 1.5s infinite"
-            }} />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              fontSize: "11px",
+              color: theme.success,
+              backgroundColor: `${theme.success}15`,
+              border: `1px solid ${theme.success}40`,
+              borderRadius: "6px",
+              padding: "4px 10px",
+            }}
+          >
+            <div
+              style={{
+                width: "6px",
+                height: "6px",
+                borderRadius: "50%",
+                backgroundColor: theme.success,
+                animation: "pulse 1.5s infinite",
+              }}
+            />
             Live
           </div>
           <button
+            type="button"
             onClick={handleCreateBackup}
             disabled={backupLoading}
             style={{
-              display: "inline-flex", alignItems: "center", gap: "4px",
-              fontSize: "11px", fontWeight: "500", padding: "6px 12px",
-              borderRadius: "7px", border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`,
-              backgroundColor: theme.bg3, color: theme.text,
+              ...headerBtnStyle,
               cursor: backupLoading ? "not-allowed" : "pointer",
-              opacity: backupLoading ? 0.5 : 1
+              opacity: backupLoading ? 0.5 : 1,
             }}
           >
             <RefreshCw className="h-3.5 w-3.5" style={{ animation: backupLoading ? "spin 1s linear infinite" : "none" }} />
             {backupLoading ? t("admin.dashboard.backupCreating") : t("admin.monitoring.createBackup")}
           </button>
-          <button
-            onClick={() => setShowRestartModal(true)}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: "4px",
-              fontSize: "11px", fontWeight: "500", padding: "6px 12px",
-              borderRadius: "7px", border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`,
-              backgroundColor: theme.bg3, color: theme.text,
-              cursor: "pointer"
-            }}
-          >
+          <button type="button" onClick={() => setShowRestartModal(true)} style={headerBtnStyle}>
             {t("admin.monitoring.restartApi")}
           </button>
-          <button
-            onClick={fetchData}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: "4px",
-              fontSize: "11px", fontWeight: "500", padding: "6px 12px",
-              borderRadius: "7px", border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`,
-              backgroundColor: theme.bg3, color: theme.text,
-              cursor: "pointer"
-            }}
-          >
+          <button type="button" onClick={fetchData} style={headerBtnStyle}>
             <RefreshCw className="h-3.5 w-3.5" style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
             {t("admin.monitoring.refresh")}
           </button>
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 20px", display: "flex", flexDirection: "column", gap: "14px", backgroundColor: theme.bg }}>
-
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "0 24px 20px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "14px",
+          backgroundColor: ac.pageBg,
+        }}
+      >
         {/* Status Cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
           {/* FastAPI */}
           <div style={{
-            backgroundColor: theme.bg3, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`,
+            backgroundColor: ac.card, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`,
             borderRadius: "10px", padding: "14px 16px",
             display: "flex", alignItems: "center", gap: "12px",
             boxShadow: isDarkTheme ? 'none' : theme.shadow
@@ -224,7 +248,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
 
           {/* PostgreSQL */}
           <div style={{
-            backgroundColor: theme.bg3, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`,
+            backgroundColor: ac.card, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`,
             borderRadius: "10px", padding: "14px 16px",
             display: "flex", alignItems: "center", gap: "12px",
             boxShadow: isDarkTheme ? 'none' : theme.shadow
@@ -257,7 +281,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
 
           {/* Gitea */}
           <div style={{
-            backgroundColor: theme.bg3, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`,
+            backgroundColor: ac.card, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`,
             borderRadius: "10px", padding: "14px 16px",
             display: "flex", alignItems: "center", gap: "12px",
             boxShadow: isDarkTheme ? 'none' : theme.shadow
@@ -290,8 +314,8 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
 
           {/* Disk */}
           <div style={{
-            backgroundColor: theme.bg3,
-            border: metrics?.disk_percent > 80 ? `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.warning}60` : `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`,
+            backgroundColor: ac.card,
+            border: metrics?.disk_percent > 80 ? `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.warning}60` : `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`,
             borderRadius: "10px", padding: "14px 16px",
             display: "flex", alignItems: "center", gap: "12px",
             boxShadow: isDarkTheme ? 'none' : theme.shadow
@@ -327,12 +351,12 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
 
           {/* Server Resources */}
-          <div style={{ backgroundColor: theme.bg3, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, borderRadius: "10px", overflow: "hidden", boxShadow: isDarkTheme ? 'none' : theme.shadow }}>
+          <div style={{ backgroundColor: ac.card, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, borderRadius: "10px", overflow: "hidden", boxShadow: isDarkTheme ? 'none' : theme.shadow }}>
             <div style={{
-              padding: "10px 14px", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`,
+              padding: "10px 14px", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`,
               fontSize: "11px", fontWeight: "600", color: theme.text,
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              backgroundColor: theme.bg2
+              backgroundColor: ac.input
             }}>
               {t("admin.monitoring.serverResources")}
               <span style={{ fontSize: "10px", color: theme.text2, fontWeight: "400" }}>
@@ -343,7 +367,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               {/* CPU */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
                 <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>CPU</span>
-                <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
+                <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: "3px", transition: "width 0.3s",
                     width: `${metrics?.cpu_percent || 0}%`,
@@ -358,7 +382,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               {/* RAM */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
                 <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>RAM</span>
-                <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
+                <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: "3px", transition: "width 0.3s",
                     width: `${metrics?.memory_percent || 0}%`,
@@ -373,7 +397,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               {/* Disk */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
                 <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>{t("admin.dashboard.disk")}</span>
-                <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
+                <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: "3px", transition: "width 0.3s",
                     width: `${metrics?.disk_percent || 0}%`,
@@ -389,7 +413,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               {/* Network Upload */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
                 <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>{t("admin.monitoring.networkUp")}</span>
-                <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
+                <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: "3px", transition: "width 0.3s",
                     width: `${(metrics?.network_upload_mbps || 0) * 10}%`, backgroundColor: theme.success, opacity: 0.7
@@ -403,7 +427,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               {/* Network Download */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
                 <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>{t("admin.monitoring.networkDown")}</span>
-                <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
+                <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: "3px", transition: "width 0.3s",
                     width: `${(metrics?.network_download_mbps || 0) * 10}%`, backgroundColor: theme.success, opacity: 0.7
@@ -416,31 +440,31 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             </div>
 
             <div style={{ padding: "0 14px 14px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.cpuModel")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.cpu_model || "Unknown"}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.ramTotal")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.memory_total_gb?.toFixed(0) || 0} {t("admin.monitoring.gb")}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.ramUsed")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.memory_used_gb?.toFixed(1) || 0} {t("admin.monitoring.gb")}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.diskTotal")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.disk_total_gb?.toFixed(1) || 0} {t("admin.monitoring.gb")}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.diskFree")}</span>
                 <span style={{ fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px", color: metrics?.disk_percent > 80 ? theme.warning : theme.text }}>
                   {(metrics?.disk_total_gb - metrics?.disk_used_gb)?.toFixed(1) || 0} {t("admin.monitoring.gb")}
@@ -456,11 +480,11 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
           </div>
 
           {/* Services Status */}
-          <div style={{ backgroundColor: theme.bg3, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, borderRadius: "10px", overflow: "hidden", boxShadow: isDarkTheme ? 'none' : theme.shadow }}>
+          <div style={{ backgroundColor: ac.card, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, borderRadius: "10px", overflow: "hidden", boxShadow: isDarkTheme ? 'none' : theme.shadow }}>
             <div style={{
-              padding: "10px 14px", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`,
+              padding: "10px 14px", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`,
               fontSize: "11px", fontWeight: "600", color: theme.text,
-              backgroundColor: theme.bg2
+              backgroundColor: ac.input
             }}>
               {t("admin.monitoring.servicesState")}
             </div>
@@ -472,7 +496,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                   <div key={svc.name} style={{
                     display: "flex", alignItems: "center", gap: "10px",
                     padding: "9px 14px",
-                    borderBottom: i < arr.length - 1 ? `1px solid ${theme.border}` : "none"
+                    borderBottom: i < arr.length - 1 ? `1px solid ${ac.border}` : "none"
                   }}>
                     <div style={{
                       width: "8px", height: "8px", borderRadius: "50%",
@@ -499,9 +523,9 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               })}
             </div>
 
-            <div style={{ padding: "14px", borderTop: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}` }}>
+            <div style={{ padding: "14px", borderTop: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}` }}>
               <div style={{ padding: "0 0 10px", fontSize: "11px", fontWeight: "500", color: theme.text }}>{t("admin.monitoring.lastBackup")}</div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.date")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {backups?.last_backup
@@ -509,13 +533,13 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                     : t("admin.dashboard.noBackupData")}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.size")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {backups?.last_backup_size_mb?.toFixed(0) || 0} {t("admin.monitoring.mb")}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.status")}</span>
                 <span style={{ fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px", color: backups?.last_backup ? theme.success : theme.warning }}>
                   {backups?.last_backup ? t("admin.monitoring.success") : t("admin.dashboard.noBackupData")}
@@ -535,12 +559,12 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" }}>
 
           {/* HTTP Requests */}
-          <div style={{ backgroundColor: theme.bg3, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, borderRadius: "10px", overflow: "hidden", boxShadow: isDarkTheme ? 'none' : theme.shadow }}>
+          <div style={{ backgroundColor: ac.card, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, borderRadius: "10px", overflow: "hidden", boxShadow: isDarkTheme ? 'none' : theme.shadow }}>
             <div style={{
-              padding: "10px 14px", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`,
+              padding: "10px 14px", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`,
               fontSize: "11px", fontWeight: "600", color: theme.text,
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              backgroundColor: theme.bg2
+              backgroundColor: ac.input
             }}>
               {t("admin.monitoring.httpRequests")}
               <span style={{ fontSize: "10px", color: theme.text2, fontWeight: "400" }}>{t("admin.monitoring.lastHour")}</span>
@@ -562,19 +586,19 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               </div>
             </div>
             <div style={{ padding: "14px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>Avg response</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.avg_response_ms?.toFixed(0) || 0} {t("admin.monitoring.ms")}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>P95 response</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.p95_response_ms?.toFixed(0) || 0} {t("admin.monitoring.ms")}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>Error rate</span>
                 <span style={{ fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px", color: (metrics?.error_rate || 0) > 5 ? theme.danger : (metrics?.error_rate || 0) > 1 ? theme.warning : theme.text }}>
                   {(metrics?.error_rate || 0).toFixed(1)}%
@@ -590,54 +614,54 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
           </div>
 
           {/* PostgreSQL */}
-          <div style={{ backgroundColor: theme.bg3, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, borderRadius: "10px", overflow: "hidden", boxShadow: isDarkTheme ? 'none' : theme.shadow }}>
+          <div style={{ backgroundColor: ac.card, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, borderRadius: "10px", overflow: "hidden", boxShadow: isDarkTheme ? 'none' : theme.shadow }}>
             <div style={{
-              padding: "10px 14px", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`,
+              padding: "10px 14px", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`,
               fontSize: "11px", fontWeight: "600", color: theme.text,
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              backgroundColor: theme.bg2
+              backgroundColor: ac.input
             }}>
               PostgreSQL
               <span style={{ fontSize: "10px", color: theme.text2, fontWeight: "400" }}>v{serviceStatus?.db_version || "16"}</span>
             </div>
             <div style={{ padding: "14px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.activeConnections")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.database?.connections_active || 0} / {metrics?.database?.connections_max || 100}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.dbSize")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.database?.size_mb || 0} {t("admin.monitoring.mb")}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.tables")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.database?.tables_count || 0}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.queriesPerSec")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.database?.queries_per_sec || 0}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>Avg query time</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.database?.avg_query_ms || 0} {t("admin.monitoring.ms")}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>Cache hit rate</span>
                 <span style={{ fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px", color: (metrics?.database?.cache_hit_rate || 0) > 95 ? theme.success : theme.text }}>
                   {metrics?.database?.cache_hit_rate?.toFixed(1) || 0}%
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, fontSize: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>Deadlocks</span>
                 <span style={{ fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px", color: (metrics?.database?.deadlocks || 0) > 0 ? theme.danger : theme.text }}>
                   {metrics?.database?.deadlocks || 0}
@@ -656,21 +680,21 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
                 <span style={{ width: "100px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>activity_log</span>
-                <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
+                <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{ height: "100%", borderRadius: "3px", width: "80%", backgroundColor: theme.accent2, opacity: 0.6 }} />
                 </div>
                 <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>82 MB</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "5px", fontSize: "11px" }}>
                 <span style={{ width: "100px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>repositories</span>
-                <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
+                <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{ height: "100%", borderRadius: "3px", width: "45%", backgroundColor: theme.accent2, opacity: 0.6 }} />
                 </div>
                 <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>46 MB</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "5px", fontSize: "11px" }}>
                 <span style={{ width: "100px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>users</span>
-                <div style={{ flex: 1, height: "6px", backgroundColor: theme.bg4, borderRadius: "3px", overflow: "hidden" }}>
+                <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{ height: "100%", borderRadius: "3px", width: "22%", backgroundColor: theme.accent2, opacity: 0.6 }} />
                 </div>
                 <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>23 MB</span>
@@ -679,12 +703,12 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
           </div>
 
           {/* Incidents */}
-          <div style={{ backgroundColor: theme.bg3, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`, borderRadius: "10px", overflow: "hidden", boxShadow: isDarkTheme ? 'none' : theme.shadow }}>
+          <div style={{ backgroundColor: ac.card, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, borderRadius: "10px", overflow: "hidden", boxShadow: isDarkTheme ? 'none' : theme.shadow }}>
             <div style={{
-              padding: "10px 14px", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`,
+              padding: "10px 14px", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`,
               fontSize: "11px", fontWeight: "600", color: theme.text,
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              backgroundColor: theme.bg2
+              backgroundColor: ac.input
             }}>
               {t("admin.monitoring.incidents")}
               <span style={{ fontSize: "10px", color: theme.text2, fontWeight: "400" }}>{t("admin.monitoring.last24h")}</span>
@@ -739,7 +763,6 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             </div>
           </div>
         </div>
-
       </div>
 
       {/* Restart Modal */}
@@ -751,8 +774,8 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
           zIndex: 9999
         }}>
           <div style={{
-            backgroundColor: theme.bg3,
-            border: `1px solid ${theme.border}`,
+            backgroundColor: ac.card,
+            border: `1px solid ${ac.border}`,
             borderRadius: "12px",
             padding: "24px",
             maxWidth: "400px",
@@ -771,7 +794,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 style={{
                   padding: "8px 16px",
                   borderRadius: "8px",
-                  border: `1px solid ${theme.border}`,
+                  border: `1px solid ${ac.border}`,
                   backgroundColor: "transparent",
                   color: theme.text,
                   fontSize: "14px",

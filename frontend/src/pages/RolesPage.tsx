@@ -34,6 +34,7 @@ import {
 import { getMe, updateAssistantGrading } from "../api/authApi";
 import toast from "react-hot-toast";
 import AdminPageHeader from "../components/AdminPageHeader";
+import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { pluralWord } from "../i18n/plural";
 
@@ -321,35 +322,34 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
     );
   }
 
-  // Theme-based colors
-  const pageBg = isDarkTheme ? "bg-[#0f0f10] text-white" : "bg-[#f8f9fa] text-gray-900";
-  const cardBg = isDarkTheme ? "bg-[#0f0f10] border-[#2d2d2d]" : "bg-gray-100 border-gray-200";
-  const cardBgLight = isDarkTheme ? "bg-[#252525]" : "bg-gray-200";
-  const cardBgLighter = isDarkTheme ? "bg-[#1e1e1e]" : "bg-gray-100";
-  const textPrimary = isDarkTheme ? "text-[#ccd0d4]" : "text-gray-900";
-  const textSecondary = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  const textTertiary = isDarkTheme ? "text-[#8b949e]" : "text-gray-600";
-  const roleCardText = isDarkTheme ? "text-[#ccd0d4]" : "text-gray-900";
-  const roleCardDesc = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  const roleCardCount = isDarkTheme ? "text-[#8b949e]" : "text-gray-600";
-  const headerText = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
+  const ui = getAdminPageTheme(isDarkTheme);
+  const cardBg = `border ${ui.tableBorder} ${ui.tableBg}`;
+  const cardBgLight = ui.iconBg;
+  const cardBgLighter = ui.tableBg;
+  const textPrimary = ui.tableNameText;
+  const textSecondary = ui.tableHeaderText;
+  const textTertiary = ui.tableCellText;
+  const roleCardText = ui.tableNameText;
+  const roleCardDesc = ui.tableHeaderText;
+  const roleCardCount = ui.tableCellText;
+  const headerText = ui.tableHeaderText;
   const activeBadge = isDarkTheme ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-700";
   const systemBadge = isDarkTheme ? "bg-[#2d2d2d] text-[#6e7681]" : "bg-gray-200 text-gray-500";
-  const dividerColor = isDarkTheme ? "border-[#2d2d2d]" : "border-gray-200";
-  const hoverBg = isDarkTheme ? "hover:bg-[#252525]" : "hover:bg-gray-200";
-  const resetBtn = isDarkTheme ? "bg-[#252525] border-[#2d2d2d] text-[#8b949e] hover:text-white" : "bg-gray-200 border-gray-300 text-gray-600 hover:text-gray-900";
+  const dividerColor = ui.tableBorder;
+  const hoverBg = ui.tableRowHover;
+  const resetBtn = `${ui.iconBg} border ${ui.tableBorder} ${ui.tableCellText} ${isDarkTheme ? "hover:text-white" : "hover:text-gray-900"}`;
   const saveBtnActive = "bg-blue-600 text-white hover:bg-blue-700";
   const saveBtnInactive = isDarkTheme ? "bg-[#2d2d2d] text-[#6e7681] cursor-not-allowed" : "bg-gray-300 text-gray-500 cursor-not-allowed";
-  const sectionHeader = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  const assistantCard = isDarkTheme ? "bg-[#1e1e1e] border-[#30363d]" : "bg-gray-100 border-gray-200";
-  const assistantHeader = isDarkTheme ? "bg-[#252525]" : "bg-gray-200";
+  const sectionHeader = ui.tableHeaderText;
+  const assistantCard = `${ui.tableBg} border ${isDarkTheme ? "border-[#30363d]" : "border-gray-200"}`;
+  const assistantHeader = ui.iconBg;
   const trustedText = isDarkTheme ? "text-emerald-400" : "text-emerald-600";
-  const untrustedText = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  const auditCard = isDarkTheme ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-gray-100 border-gray-200";
-  const auditTag = isDarkTheme ? "bg-[#252525] text-[#8b949e]" : "bg-gray-200 text-gray-600";
+  const untrustedText = ui.tableHeaderText;
+  const auditCard = `${ui.tableBg} border ${ui.tableBorder}`;
+  const auditTag = `${ui.iconBg} ${ui.tableCellText}`;
 
   return (
-    <div className={`h-full overflow-y-auto ${pageBg}`}>
+    <div className={`h-full overflow-y-auto ${ui.pageWrapper}`}>
       <div className="max-w-7xl mx-auto py-6 px-6 pr-2 space-y-6 pb-20">
         {/* Header */}
         <AdminPageHeader

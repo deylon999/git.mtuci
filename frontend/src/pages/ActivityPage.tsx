@@ -4,29 +4,33 @@ import AdminPageHeader from "../components/AdminPageHeader";
 import { getTodayStats, getHotRepos, getTopUsers, getHourlyActivity, getRecentActivity } from "../api/adminApi";
 import type { TodayStats, HotRepoStat, TopUserStat, HourlyActivity, ActivityItem } from "../api/types";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+import { getAdminPageTheme } from "../layout/adminPageTheme";
 
 interface ActivityPageProps {
   isDarkTheme?: boolean;
 }
 
-// Цвета в зависимости от темы
-const getColors = (isDark: boolean) => ({
-  pageBg: isDark ? "#0f0f10" : "#f5f5f5",
-  cardBg: isDark ? "#1e1e1e" : "#ffffff",
-  cardBg2: isDark ? "#0f0f10" : "#f0f0f0",
-  border: isDark ? "#30363d" : "#e0e0e0",
-  accent: "#2563eb",
-  accent2: "#3b82f6",
-  danger: "#e24b4a",
-  success: "#4caf50",
-  warning: "#f59e0b",
-  purple: "#8b5cf6",
-  teal: "#14b8a6",
-  violet: "#7c3aed",
-  textPrimary: isDark ? "#e6e6e6" : "#1a1a1a",
-  textSecondary: isDark ? "#888888" : "#666666",
-  textMuted: isDark ? "#444444" : "#999999",
-});
+const getColors = (isDark: boolean) => {
+  const ui = getAdminPageTheme(isDark);
+  const c = ui.colors;
+  return {
+    pageBg: c.pageBg,
+    cardBg: c.card,
+    cardBg2: c.input,
+    border: c.borderInput,
+    accent: "#2563eb",
+    accent2: "#3b82f6",
+    danger: "#e24b4a",
+    success: "#4caf50",
+    warning: "#f59e0b",
+    purple: "#8b5cf6",
+    teal: "#14b8a6",
+    violet: "#7c3aed",
+    textPrimary: c.text,
+    textSecondary: c.textCell,
+    textMuted: c.textMuted,
+  };
+};
 
 // Иконки событий
 const EventIcons = {
