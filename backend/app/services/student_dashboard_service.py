@@ -53,6 +53,7 @@ from app.services.repository_access_service import (
     repository_not_blocked_clause,
 )
 from app.utils.gitea_user import resolve_gitea_username
+from app.utils.repo_name import assignment_repo_display_name
 from app.services.gitea_repo_cache import (
     RepoGiteaSnapshot,
     batch_repo_snapshots,
@@ -245,7 +246,10 @@ def _apply_repo_snapshot(
         except ValueError:
             pass
 
-    repo_name = item.name
+    if item.gitea_path and "/" in item.gitea_path:
+        repo_name = item.gitea_path.split("/", 1)[1]
+    else:
+        repo_name = item.name
     resolved_owner = snap.resolved_owner
     commits_count = snap.commits_total if include_commit_totals and gitea_available else None
     commits_approx = snap.commits_total_approx if include_commit_totals else False
@@ -550,10 +554,21 @@ async def resolve_student_repo_gitea_target(
                 f"Не удалось открыть репозиторий задания ({repo_name}). "
                 "Откройте задание в курсе или удалите запись и создайте заново."
             ) from exc
+        assign_row = await session.execute(
+            select(Assignment.title, Course.title)
+            .join(Course, Course.id == Assignment.course_id)
+            .where(Assignment.id == student_repo.assignment_id)
+        )
+        assign_meta = assign_row.one_or_none()
+        display_name = (
+            assignment_repo_display_name(assign_meta[0], course_title=assign_meta[1])
+            if assign_meta
+            else student_repo.repo_name
+        )
         return StudentRepoGiteaTarget(
             owner=owner,
             repo_name=repo_name,
-            display_name=student_repo.repo_name,
+            display_name=display_name,
             source="assignment",
         )
 
@@ -1638,10 +1653,14 @@ async def get_student_repositories(
     for student_repo, assignment, course in ar_result.all():
         course_count += 1
         repo_specs.append((primary_owner, student_repo.repo_name))
+        display_name = assignment_repo_display_name(
+            assignment.title,
+            course_title=course.title,
+        )
         items.append(
             StudentRepositoryItemRead(
                 id=str(student_repo.id),
-                name=student_repo.repo_name,
+                name=display_name,
                 description=assignment.description,
                 gitea_path=f"{primary_owner}/{student_repo.repo_name}",
                 gitea_web_url=build_repo_web_url(primary_owner, student_repo.repo_name),
@@ -1650,7 +1669,7 @@ async def get_student_repositories(
                 commits_count=None,
                 visibility="course",
                 source="assignment",
-                assignment_label=f"{course.title} · {assignment.title}",
+                assignment_label=course.title,
                 course_id=course.id,
                 assignment_id=assignment.id,
                 can_delete=False,
@@ -1693,7 +1712,9 @@ async def get_student_recent_repositories(
     student_id: UUID,
     limit: int = 5,
 ) -> list[StudentRecentRepositoryRead]:
-    items: list[StudentRecentRepositoryRead] = []
+    user_row = await session.get(User, student_id)
+    primary_owner = resolve_gitea_username(user_row) if user_row else "user"
+    rows: list[tuple[StudentRecentRepositoryRead, str | None]] = []
 
     p_result = await session.execute(
         select(Repository)
@@ -1706,17 +1727,21 @@ async def get_student_recent_repositories(
     )
     for repo in p_result.scalars().all():
         visibility = repo.repo_type.value if hasattr(repo.repo_type, "value") else str(repo.repo_type)
-        items.append(
-            StudentRecentRepositoryRead(
-                id=str(repo.id),
-                name=repo.name,
-                assignment_label=None,
-                language=repo.language,
-                commits_count=None,
-                updated_at=repo.updated_at,
-                visibility=visibility,
-                source="personal",
-                repository_id=repo.id,
+        gitea_name = (repo.gitea_repo_name or repo.name or "").strip() or None
+        rows.append(
+            (
+                StudentRecentRepositoryRead(
+                    id=str(repo.id),
+                    name=repo.name,
+                    assignment_label=None,
+                    language=repo.language,
+                    commits_count=None,
+                    updated_at=repo.updated_at,
+                    visibility=visibility,
+                    source="personal",
+                    repository_id=repo.id,
+                ),
+                gitea_name,
             )
         )
 
@@ -1729,40 +1754,51 @@ async def get_student_recent_repositories(
         .limit(limit * 2)
     )
     for student_repo, assignment, course in ar_result.all():
-        items.append(
-            StudentRecentRepositoryRead(
-                id=str(student_repo.id),
-                name=student_repo.repo_name,
-                assignment_label=f"{course.title} · {assignment.title}",
-                language=None,
-                commits_count=None,
-                updated_at=student_repo.created_at,
-                visibility="private",
-                source="assignment",
-                course_id=course.id,
-                assignment_id=assignment.id,
+        gitea_name = (student_repo.repo_name or "").strip() or None
+        rows.append(
+            (
+                StudentRecentRepositoryRead(
+                    id=str(student_repo.id),
+                    name=assignment_repo_display_name(assignment.title, course_title=course.title),
+                    assignment_label=course.title,
+                    language=None,
+                    commits_count=None,
+                    updated_at=student_repo.created_at,
+                    visibility="private",
+                    source="assignment",
+                    course_id=course.id,
+                    assignment_id=assignment.id,
+                ),
+                gitea_name,
             )
         )
 
-    items.sort(key=lambda x: x.updated_at, reverse=True)
-    trimmed = items[:limit]
+    rows.sort(key=lambda pair: pair[0].updated_at, reverse=True)
+    trimmed_rows = rows[:limit]
 
-    if trimmed:
-        user_row = await session.get(User, student_id)
-        primary_owner = resolve_gitea_username(user_row) if user_row else "user"
-        specs = [(primary_owner, item.name) for item in trimmed]
+    specs = [(primary_owner, gn) for _, gn in trimmed_rows if gn]
+    if specs:
         snapshots = await batch_repo_snapshots(specs, mode="lite")
-        trimmed = [
-            item.model_copy(
-                update={
-                    "language": item.language or snap.parsed_stats.get("language"),
-                    "commits_count": None,
-                }
+        snap_by_repo = {s.repo_name: s for s in snapshots}
+        trimmed_rows = [
+            (
+                item.model_copy(
+                    update={
+                        "language": item.language
+                        or (
+                            snap_by_repo[gitea_name].parsed_stats.get("language")
+                            if gitea_name and gitea_name in snap_by_repo
+                            else None
+                        ),
+                        "commits_count": None,
+                    }
+                ),
+                gitea_name,
             )
-            for item, snap in zip(trimmed, snapshots, strict=True)
+            for item, gitea_name in trimmed_rows
         ]
 
-    return trimmed
+    return [item for item, _ in trimmed_rows]
 
 
 async def _load_student_app_shell(

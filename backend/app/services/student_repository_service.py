@@ -5,6 +5,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.assignment import Assignment
+from app.models.course import Course
 from app.models.student_repository import StudentRepository
 from app.models.user import User
 from app.services.gitea_service import (
@@ -14,10 +16,22 @@ from app.services.gitea_service import (
     resolve_repo_owner,
 )
 from app.utils.gitea_user import resolve_gitea_username
+from app.utils.repo_name import build_student_assignment_repo_name
 
 
-def build_student_repo_name(*, assignment_id: UUID, student_id: UUID) -> str:
-    return f"assignment_{assignment_id}_student_{student_id}"
+def build_student_repo_name(
+    *,
+    course_title: str,
+    assignment_title: str,
+    assignment_id: UUID,
+    student_login: str,
+) -> str:
+    return build_student_assignment_repo_name(
+        course_title=course_title,
+        assignment_title=assignment_title,
+        assignment_id=assignment_id,
+        student_login=student_login,
+    )
 
 
 async def ensure_student_repository(
@@ -40,13 +54,28 @@ async def ensure_student_repository(
     if not student:
         raise ValueError("Student not found")
 
+    row = await session.execute(
+        select(Assignment.title, Course.title)
+        .join(Course, Course.id == Assignment.course_id)
+        .where(Assignment.id == assignment_id)
+    )
+    meta = row.one_or_none()
+    if not meta:
+        raise ValueError("Assignment not found")
+    assignment_title, course_title = meta[0], meta[1]
+
     owner = resolve_gitea_username(student)
-    repo_name = build_student_repo_name(assignment_id=assignment_id, student_id=student_id)
+    repo_name = build_student_repo_name(
+        course_title=course_title,
+        assignment_title=assignment_title,
+        assignment_id=assignment_id,
+        student_login=owner,
+    )
 
     await create_repository_for_owner(
         owner_username=owner,
         name=repo_name,
-        description="Assignment repository",
+        description=f"{course_title} · {assignment_title}",
         private=True,
         auto_init=True,
     )
