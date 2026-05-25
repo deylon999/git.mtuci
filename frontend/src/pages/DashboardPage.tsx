@@ -446,7 +446,12 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
           </Card>
 
           <Card theme={theme}>
-            <CardHead title={t("student.dashboard.reposTitle")} theme={theme} action={{ label: t("student.dashboard.viewAll"), to: "/repositories" }} />
+            <CardHead
+              title={t("student.dashboard.reposTitle")}
+              subtitle={t("student.dashboard.reposSubtitle")}
+              theme={theme}
+              action={{ label: t("student.dashboard.viewAll"), to: "/repositories" }}
+            />
             {loading ? (
               <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>{t("common.loading")}</div>
             ) : recentRepos.length === 0 ? (

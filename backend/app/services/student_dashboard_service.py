@@ -1720,6 +1720,7 @@ async def get_student_recent_repositories(
     *,
     student_id: UUID,
     limit: int = 5,
+    personal_only: bool = False,
 ) -> list[StudentRecentRepositoryRead]:
     user_row = await session.get(User, student_id)
     primary_owner = resolve_gitea_username(user_row) if user_row else "user"
@@ -1754,33 +1755,34 @@ async def get_student_recent_repositories(
             )
         )
 
-    ar_result = await session.execute(
-        select(StudentRepository, Assignment, Course)
-        .join(Assignment, Assignment.id == StudentRepository.assignment_id)
-        .join(Course, Course.id == Assignment.course_id)
-        .where(StudentRepository.student_id == student_id)
-        .order_by(StudentRepository.created_at.desc())
-        .limit(limit * 2)
-    )
-    for student_repo, assignment, course in ar_result.all():
-        gitea_name = (student_repo.repo_name or "").strip() or None
-        rows.append(
-            (
-                StudentRecentRepositoryRead(
-                    id=str(student_repo.id),
-                    name=(assignment.title or "").strip() or "Задание",
-                    assignment_label=(course.title or "").strip() or None,
-                    language=None,
-                    commits_count=None,
-                    updated_at=student_repo.created_at,
-                    visibility="private",
-                    source="assignment",
-                    course_id=course.id,
-                    assignment_id=assignment.id,
-                ),
-                gitea_name,
-            )
+    if not personal_only:
+        ar_result = await session.execute(
+            select(StudentRepository, Assignment, Course)
+            .join(Assignment, Assignment.id == StudentRepository.assignment_id)
+            .join(Course, Course.id == Assignment.course_id)
+            .where(StudentRepository.student_id == student_id)
+            .order_by(StudentRepository.created_at.desc())
+            .limit(limit * 2)
         )
+        for student_repo, assignment, course in ar_result.all():
+            gitea_name = (student_repo.repo_name or "").strip() or None
+            rows.append(
+                (
+                    StudentRecentRepositoryRead(
+                        id=str(student_repo.id),
+                        name=(assignment.title or "").strip() or "Задание",
+                        assignment_label=(course.title or "").strip() or None,
+                        language=None,
+                        commits_count=None,
+                        updated_at=student_repo.created_at,
+                        visibility="private",
+                        source="assignment",
+                        course_id=course.id,
+                        assignment_id=assignment.id,
+                    ),
+                    gitea_name,
+                )
+            )
 
     rows.sort(key=lambda pair: pair[0].updated_at, reverse=True)
     trimmed_rows = rows[:limit]
@@ -1893,7 +1895,10 @@ async def get_student_dashboard_bundle(
         group_name=group_name,
     )
     recent_repositories = await get_student_recent_repositories(
-        session, student_id=student_id, limit=recent_limit
+        session,
+        student_id=student_id,
+        limit=recent_limit,
+        personal_only=True,
     )
     activity_summary = await get_student_activity_summary(
         session,

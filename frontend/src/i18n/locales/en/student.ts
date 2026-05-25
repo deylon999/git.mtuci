@@ -69,6 +69,7 @@ export const studentEn = {
     submitted: "Submitted",
     inReview: "In review",
     reposTitle: "My repositories",
+    reposSubtitle: "Created by you",
     viewAll: "All →",
     noRepos: "No repositories",
     createRepo: "Create repository",

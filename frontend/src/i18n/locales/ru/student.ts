@@ -69,6 +69,7 @@ export const studentRu = {
     submitted: "Сдано",
     inReview: "На ревью",
     reposTitle: "Мои репозитории",
+    reposSubtitle: "Созданные вами лично",
     viewAll: "Все →",
     noRepos: "Нет репозиториев",
     createRepo: "Создать репозиторий",
