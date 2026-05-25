@@ -188,6 +188,7 @@ PERMISSION_TEMPLATES: dict[str, dict[str, bool]] = {
     "student": {
         "repo_view": True,
         "repo_create": True,
+        "repo_delete": True,
         "repo_comment": True,
         "user_view": True,
         "assignment_view": True,

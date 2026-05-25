@@ -375,7 +375,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
             <>
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className={`border-b ${ui.tableBorder}`}>
+                  <tr className={`border-b ${ui.tableBorder} ${ui.sectionHeaderBg}`}>
                     <th className={`text-xs font-medium uppercase tracking-wider text-left px-4 py-3 ${ui.tableHeaderText} w-[120px]`}>{t("admin.logs.colTime")}</th>
                     <th className={`text-xs font-medium uppercase tracking-wider text-left px-4 py-3 ${ui.tableHeaderText} w-[90px]`}>{t("admin.logs.colLevel")}</th>
                     <th className={`text-xs font-medium uppercase tracking-wider text-left px-4 py-3 ${ui.tableHeaderText} w-[110px]`}>{t("admin.logs.colModule")}</th>

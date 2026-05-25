@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Calendar, List } from "lucide-react";
 import { getStudentDeadlines } from "../api/studentDashboardApi";
 import {
+  computeDeadlineStats,
   deadlineDatesSet,
   deadlineWeekdayLabels,
   daysInMonth,
@@ -37,6 +38,7 @@ function urgencyColor(urgency: string, theme: ReturnType<typeof getTheme>) {
 
 function groupTitleColor(key: DeadlineGroupKey, theme: ReturnType<typeof getTheme>) {
   switch (key) {
+    case "overdue":
     case "today":
       return theme.danger;
     case "tomorrow":
@@ -126,34 +128,10 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
   const groups = useMemo(() => groupDeadlinesByPeriod(filtered, new Date(), language), [filtered, language]);
   const deadlineDays = useMemo(() => deadlineDatesSet(filtered), [filtered]);
 
-  const deadlineStats = useMemo(() => {
-    const now = new Date();
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-    const tomorrowStart = new Date(todayStart);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-    const weekEnd = new Date(todayStart);
-    weekEnd.setDate(weekEnd.getDate() + 7);
-    const monthEnd = new Date(todayStart);
-    monthEnd.setDate(monthEnd.getDate() + 31);
-
-    let today = 0;
-    let week = 0;
-    let month = 0;
-    let overdue = 0;
-    for (const item of items) {
-      const submitted = submittedMap[item.id] ?? false;
-      const d = item.deadline;
-      if (!submitted && d < now) {
-        overdue += 1;
-        continue;
-      }
-      if (d >= todayStart && d < tomorrowStart) today += 1;
-      if (d >= todayStart && d <= weekEnd) week += 1;
-      if (d >= todayStart && d <= monthEnd) month += 1;
-    }
-    return { today, week, month, overdue };
-  }, [items, submittedMap]);
+  const deadlineStats = useMemo(
+    () => computeDeadlineStats(items, submittedMap, new Date()),
+    [items, submittedMap],
+  );
 
   const filters: { key: FilterKey; label: string }[] = [
     { key: "all", label: t("student.deadlines.filterAll") },

@@ -2,7 +2,7 @@ import { translate, translateWithParams, type Locale } from "../i18n";
 import { getI18nLocale } from "../i18n/runtime";
 import type { StudentDeadlineItem } from "./studentDeadlines";
 
-export type DeadlineGroupKey = "today" | "tomorrow" | "week" | "later";
+export type DeadlineGroupKey = "overdue" | "today" | "tomorrow" | "week" | "later";
 
 export interface DeadlineGroup {
   key: DeadlineGroupKey;
@@ -11,6 +11,7 @@ export interface DeadlineGroup {
 }
 
 const GROUP_TITLE_KEYS: Record<DeadlineGroupKey, string> = {
+  overdue: "student.deadline.groupOverdue",
   today: "student.deadline.groupToday",
   tomorrow: "student.deadline.groupTomorrow",
   week: "student.deadline.groupWeek",
@@ -33,6 +34,53 @@ function addDays(d: Date, days: number): Date {
   return x;
 }
 
+/** Monday 00:00 (local) for the week containing `d`. */
+function startOfCalendarWeek(d: Date): Date {
+  const x = startOfDay(d);
+  const dow = x.getDay();
+  const daysFromMonday = dow === 0 ? 6 : dow - 1;
+  return addDays(x, -daysFromMonday);
+}
+
+export interface DeadlineStats {
+  today: number;
+  week: number;
+  month: number;
+  overdue: number;
+}
+
+/** KPI counts for pending (not submitted) deadlines by calendar period. */
+export function computeDeadlineStats(
+  items: StudentDeadlineItem[],
+  submittedMap: Record<string, boolean>,
+  now = new Date(),
+): DeadlineStats {
+  const todayStart = startOfDay(now);
+  const weekStart = startOfCalendarWeek(now);
+  const weekEnd = addDays(weekStart, 6);
+  const month = now.getMonth();
+  const year = now.getFullYear();
+
+  let today = 0;
+  let week = 0;
+  let monthCount = 0;
+  let overdue = 0;
+
+  for (const item of items) {
+    if (submittedMap[item.id]) continue;
+
+    const d = item.deadline;
+    const dDay = startOfDay(d);
+
+    if (d.getTime() < now.getTime()) overdue += 1;
+    if (dDay.getTime() === todayStart.getTime()) today += 1;
+    if (dDay >= weekStart && dDay <= weekEnd) week += 1;
+    if (dDay.getMonth() === month && dDay.getFullYear() === year) monthCount += 1;
+  }
+
+  return { today, week, month: monthCount, overdue };
+}
+
 export function groupDeadlinesByPeriod(
   items: StudentDeadlineItem[],
   now = new Date(),
@@ -43,6 +91,7 @@ export function groupDeadlinesByPeriod(
   const weekEnd = addDays(today, 7);
 
   const buckets: Record<DeadlineGroupKey, StudentDeadlineItem[]> = {
+    overdue: [],
     today: [],
     tomorrow: [],
     week: [],
@@ -51,13 +100,14 @@ export function groupDeadlinesByPeriod(
 
   for (const item of items) {
     const d = startOfDay(item.deadline);
-    if (d.getTime() <= today.getTime()) buckets.today.push(item);
+    if (d.getTime() < today.getTime()) buckets.overdue.push(item);
+    else if (d.getTime() === today.getTime()) buckets.today.push(item);
     else if (d.getTime() === tomorrow.getTime()) buckets.tomorrow.push(item);
     else if (item.deadline <= weekEnd) buckets.week.push(item);
     else buckets.later.push(item);
   }
 
-  return (["today", "tomorrow", "week", "later"] as const)
+  return (["overdue", "today", "tomorrow", "week", "later"] as const)
     .map((key) => ({
       key,
       title: translate(locale, GROUP_TITLE_KEYS[key]),

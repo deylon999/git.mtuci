@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Users,
@@ -69,8 +69,7 @@ interface Stats {
 interface StatCardProps {
   title: string;
   value: string;
-  trend: string;
-  trendUp: boolean;
+  trendDelta: number;
   icon: React.ElementType;
   isDarkTheme?: boolean;
 }
@@ -179,23 +178,73 @@ function getNotificationColor(type: Notification['type']): string {
   }
 }
 
-function StatCard({ title, value, trend, trendUp, icon: Icon, isDarkTheme = true }: StatCardProps) {
+function StatCard({ title, value, trendDelta, icon: Icon, isDarkTheme = true }: StatCardProps) {
+  const { t } = useUserPreferences();
   const ui = getAdminPageTheme(isDarkTheme);
+  const c = ui.colors;
   const theme = getTheme(isDarkTheme);
+
+  const renderTrend = (delta: number) => {
+    const footerStyle: CSSProperties = {
+      fontSize: "10px",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "4px",
+    };
+    if (delta === 0) {
+      return (
+        <span style={{ ...footerStyle, color: c.textMuted }}>
+          <span>—</span>
+          <span>{t("admin.dashboard.vsLastWeek")}</span>
+        </span>
+      );
+    }
+    const isPositive = delta > 0;
+    const color = isPositive ? theme.success : theme.danger;
+    const arrow = isPositive ? "↑" : "↓";
+    const sign = isPositive ? "+" : "−";
+    return (
+      <span style={footerStyle}>
+        <span style={{ color, fontWeight: 500 }}>
+          {arrow} {sign}
+          {Math.abs(delta)}
+        </span>
+        <span style={{ color: c.textMuted, fontWeight: 400 }}>{t("admin.dashboard.vsLastWeek")}</span>
+      </span>
+    );
+  };
 
   return (
     <div
-      className={`rounded-xl border p-5 transition-colors ${ui.tableBg} ${ui.tableBorder}`}
+      style={{
+        background: c.card,
+        border: `1px solid ${c.borderInput}`,
+        borderRadius: "12px",
+        padding: "20px",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "104px",
+      }}
     >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className={`text-sm font-medium ${ui.tableHeaderText}`}>{title}</p>
-          <p className={`mt-2 text-3xl font-bold ${ui.textPrimary}`}>{value}</p>
-          <p className="mt-1 text-xs font-medium" style={{ color: trendUp ? theme.accent : theme.danger }}>
-            {trendUp ? "↑" : "↓"} {trend}
-          </p>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "64px" }}>
+          <div style={{ fontSize: "11px", color: c.textMuted, marginBottom: "4px" }}>{title}</div>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              fontSize: "22px",
+              fontWeight: 600,
+              color: c.text,
+              lineHeight: 1,
+            }}
+          >
+            {value}
+          </div>
+          <div style={{ marginTop: "3px" }}>{renderTrend(trendDelta)}</div>
         </div>
-        <div className={`rounded-lg p-3 ${ui.iconBg}`}>
+        <div className={`rounded-lg p-3 shrink-0 ${ui.iconBg}`}>
           <Icon className={`h-6 w-6 ${ui.iconColor}`} />
         </div>
       </div>
@@ -274,7 +323,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
       setUsers(list);
       setStats({
         total: list.length,
-        active: list.filter((u) => !u.is_blocked).length,
+        active: list.filter((u) => !u.is_blocked && !u.is_pending).length,
         pending: list.filter((u) => u.is_pending).length,
         blocked: list.filter((u) => u.is_blocked).length,
       });
@@ -381,33 +430,30 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
     return d >= start && d < end;
   };
 
-  // Current week (last 7 days)
-  const currentNew = users.filter((u) => isInRange(u.created_at, oneWeekAgo, now)).length;
-  const currentActive = users.filter((u) => !u.is_blocked && isInRange(u.created_at, oneWeekAgo, now)).length;
-  const currentPending = users.filter((u) => u.is_pending && isInRange(u.created_at, oneWeekAgo, now)).length;
-  const currentBlocked = users.filter((u) => u.is_blocked && isInRange(u.created_at, oneWeekAgo, now)).length;
+  const isActiveUser = (u: AdminUserRead) => !u.is_blocked && !u.is_pending;
+  const countNewInRange = (start: Date, end: Date, match: (u: AdminUserRead) => boolean) =>
+    users.filter((u) => isInRange(u.created_at, start, end) && match(u)).length;
 
-  // Previous week (7-14 days ago)
-  const prevNew = users.filter((u) => isInRange(u.created_at, twoWeeksAgo, oneWeekAgo)).length;
-  const prevActive = users.filter((u) => !u.is_blocked && isInRange(u.created_at, twoWeeksAgo, oneWeekAgo)).length;
-  const prevPending = users.filter((u) => u.is_pending && isInRange(u.created_at, twoWeeksAgo, oneWeekAgo)).length;
-  const prevBlocked = users.filter((u) => u.is_blocked && isInRange(u.created_at, twoWeeksAgo, oneWeekAgo)).length;
+  const currentNew = countNewInRange(oneWeekAgo, now, () => true);
+  const prevNew = countNewInRange(twoWeeksAgo, oneWeekAgo, () => true);
+  const currentActive = countNewInRange(oneWeekAgo, now, isActiveUser);
+  const prevActive = countNewInRange(twoWeeksAgo, oneWeekAgo, isActiveUser);
+  const currentPending = countNewInRange(oneWeekAgo, now, (u) => u.is_pending);
+  const prevPending = countNewInRange(twoWeeksAgo, oneWeekAgo, (u) => u.is_pending);
+  const currentBlocked = countNewInRange(oneWeekAgo, now, (u) => u.is_blocked);
+  const prevBlocked = countNewInRange(twoWeeksAgo, oneWeekAgo, (u) => u.is_blocked);
 
-  const formatTrend = (current: number, previous: number) => {
-    const diff = current - previous;
-    const sign = diff >= 0 ? "+" : "";
-    return tp("admin.dashboard.trendWeek", { sign, n: diff });
-  };
+  const weekDelta = (currentWeek: number, previousWeek: number) => currentWeek - previousWeek;
 
   const recentUsers = [...users]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 8);
 
   const statCards = [
-    { title: t("admin.dashboard.cardTotal"), value: stats.total.toLocaleString(), trend: formatTrend(currentNew, prevNew), trendUp: currentNew >= prevNew, icon: Users },
-    { title: t("admin.dashboard.cardActive"), value: stats.active.toLocaleString(), trend: formatTrend(currentActive, prevActive), trendUp: currentActive >= prevActive, icon: GitBranch },
-    { title: t("admin.dashboard.cardPending"), value: stats.pending.toLocaleString(), trend: formatTrend(currentPending, prevPending), trendUp: currentPending >= prevPending, icon: TrendingUp },
-    { title: t("admin.dashboard.cardBlocked"), value: stats.blocked.toLocaleString(), trend: formatTrend(currentBlocked, prevBlocked), trendUp: currentBlocked >= prevBlocked, icon: Clock },
+    { title: t("admin.dashboard.cardTotal"), value: stats.total.toLocaleString(), icon: Users, trendDelta: weekDelta(currentNew, prevNew) },
+    { title: t("admin.dashboard.cardActive"), value: stats.active.toLocaleString(), icon: GitBranch, trendDelta: weekDelta(currentActive, prevActive) },
+    { title: t("admin.dashboard.cardPending"), value: stats.pending.toLocaleString(), icon: TrendingUp, trendDelta: weekDelta(currentPending, prevPending) },
+    { title: t("admin.dashboard.cardBlocked"), value: stats.blocked.toLocaleString(), icon: Clock, trendDelta: weekDelta(currentBlocked, prevBlocked) },
   ];
 
   const theme = getTheme(isDarkTheme);
@@ -446,7 +492,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
 
   return (
     <div className={`h-full overflow-auto transition-colors ${ui.pageWrapper}`}>
-      <div className="max-w-7xl mx-auto py-6 px-6 pb-20 space-y-6">
+      <div className="max-w-7xl mx-auto py-6 px-6 space-y-6">
         {/* Header */}
         <div className="mb-8">
           <AdminPageHeader
@@ -486,8 +532,8 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
         {/* Bottom Row - 2 Columns */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-6">
           {/* Left - New Users Table (60%) */}
-          <div className={`lg:col-span-3 rounded-xl border shadow-sm transition-colors ${ui.tableBg} ${ui.tableBorder}`}>
-            <div className={`p-5 flex items-center justify-between border-b ${ui.tableBorder}`}>
+          <div className={`lg:col-span-3 ${ui.cardShell}`}>
+            <div className={`p-5 flex items-center justify-between border-b ${ui.tableBorder} ${ui.sectionHeaderBg}`}>
               <h2 className={`text-lg font-semibold transition-colors ${ui.textPrimary}`}>{t("admin.dashboard.newUsers")}</h2>
               <Link to="/users" className="group text-sm flex items-center gap-1 font-medium"
               style={{ color: theme.accent }}>
@@ -561,11 +607,9 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
           </div>
 
           {/* Right - Active Repositories (40%) */}
-          <div className={`lg:col-span-2 rounded-xl border shadow-sm transition-colors ${ui.tableBg} ${ui.tableBorder}`}>
-            <div className="p-5 flex items-center justify-between border-b"
-            style={{ borderColor: theme.border }}>
-              <h2 className="text-lg font-semibold transition-colors"
-              style={{ color: theme.text }}>{t("admin.dashboard.activeRepos")}</h2>
+          <div className={`lg:col-span-2 ${ui.cardShell}`}>
+            <div className={`p-5 flex items-center justify-between border-b ${ui.tableBorder} ${ui.sectionHeaderBg}`}>
+              <h2 className={`text-lg font-semibold transition-colors ${ui.textPrimary}`}>{t("admin.dashboard.activeRepos")}</h2>
               <div className="relative repo-dropdown-container">
                 <button
                   onClick={() => setShowRepoDropdown(!showRepoDropdown)}
@@ -650,8 +694,8 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
         {/* Third Row - 3 Columns */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Notifications */}
-          <div className={`rounded-xl border shadow-sm transition-colors ${ui.tableBg} ${ui.tableBorder}`}>
-            <div className={`p-5 flex items-center justify-between border-b ${ui.tableBorder}`}>
+          <div className={ui.cardShell}>
+            <div className={`p-5 flex items-center justify-between border-b ${ui.tableBorder} ${ui.sectionHeaderBg}`}>
               <h2 className={`text-lg font-semibold transition-colors ${ui.textPrimary}`}>{t("admin.dashboard.notifications")}</h2>
               {notifications.length > 0 && (
                 <button
@@ -710,8 +754,8 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
           </div>
 
           {/* Commits by Department */}
-          <div className={`rounded-xl border shadow-sm transition-colors ${ui.tableBg} ${ui.tableBorder}`}>
-            <div className={`p-5 border-b ${ui.tableBorder}`}>
+          <div className={ui.cardShell}>
+            <div className={`p-5 border-b ${ui.tableBorder} ${ui.sectionHeaderBg}`}>
               <h2 className={`text-lg font-semibold transition-colors ${ui.textPrimary}`}>{t("admin.dashboard.commitsByFaculty")}</h2>
             </div>
             <div className="p-5">
@@ -823,8 +867,8 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
           </div>
 
           {/* System Status — metrics: /admin/system-metrics, services: /admin/service-status, backup: /admin/backups */}
-          <div className={`rounded-xl border shadow-sm transition-colors ${ui.tableBg} ${ui.tableBorder}`}>
-            <div className={`p-5 border-b ${ui.tableBorder}`}>
+          <div className={ui.cardShell}>
+            <div className={`p-5 border-b ${ui.tableBorder} ${ui.sectionHeaderBg}`}>
               <h2 className={`text-lg font-semibold transition-colors ${ui.textPrimary}`}>
                 {t("admin.dashboard.systemState")}
               </h2>

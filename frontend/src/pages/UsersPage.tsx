@@ -734,7 +734,7 @@ useEffect(() => {
         <div className={`${tableBg} rounded-xl border ${tableBorder} overflow-hidden`}>
           <table className="w-full">
             <thead>
-              <tr className={`border-b ${tableRowBorder}`}>
+              <tr className={`border-b ${tableRowBorder} ${ui.sectionHeaderBg}`}>
                 <th className="px-4 py-3 text-left">
                   <div
                     onClick={toggleSelectAll}

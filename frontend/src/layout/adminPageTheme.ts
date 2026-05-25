@@ -18,6 +18,10 @@ export type AdminPageTheme = {
   tableNameText: string;
   cardBg: string;
   cardHover: string;
+  /** Карточка/таблица: чёткая рамка без тени (как UsersPage) */
+  cardShell: string;
+  /** Заголовок карточки / thead — rgb(13, 13, 13) в тёмной теме */
+  sectionHeaderBg: string;
   inputBg: string;
   iconBg: string;
   iconColor: string;
@@ -28,6 +32,7 @@ export type AdminPageTheme = {
     pageBg: string;
     card: string;
     cardElevated: string;
+    sectionHeader: string;
     border: string;
     borderInput: string;
     input: string;
@@ -58,6 +63,8 @@ export function getAdminPageTheme(isDark: boolean): AdminPageTheme {
       tableNameText: "text-[#ccd0d4]",
       cardBg: "bg-[#1e1e1e] border-[#2d2d2d]",
       cardHover: "hover:bg-[#252525]",
+      cardShell: "rounded-xl border border-[#2d2d2d] bg-[#111111] overflow-hidden",
+      sectionHeaderBg: "bg-[rgb(13,13,13)]",
       inputBg: "bg-[#0d0d0d] border-[#30363d]",
       iconBg: "bg-[#252525]",
       iconColor: "text-[#6e7681]",
@@ -69,6 +76,7 @@ export function getAdminPageTheme(isDark: boolean): AdminPageTheme {
         pageBg: "#0f0f10",
         card: "#111111",
         cardElevated: "#1e1e1e",
+        sectionHeader: "rgb(13, 13, 13)",
         border: "#2d2d2d",
         borderInput: "#30363d",
         input: "#0d0d0d",
@@ -96,8 +104,10 @@ export function getAdminPageTheme(isDark: boolean): AdminPageTheme {
     tableRowHover: "hover:bg-slate-200",
     tableCellText: "text-slate-500",
     tableNameText: "text-slate-900",
-    cardBg: "bg-slate-100 border-slate-200 shadow-sm",
+    cardBg: "bg-slate-100 border-slate-200",
     cardHover: "hover:bg-slate-200",
+    cardShell: "rounded-xl border border-slate-200 bg-slate-100 overflow-hidden",
+    sectionHeaderBg: "bg-slate-50",
     inputBg: "bg-gray-100 border-gray-300",
     iconBg: "bg-gray-200",
     iconColor: "text-gray-500",
@@ -108,6 +118,7 @@ export function getAdminPageTheme(isDark: boolean): AdminPageTheme {
       pageBg: "#f8fafc",
       card: "#f1f5f9",
       cardElevated: "#f1f5f9",
+      sectionHeader: "#f8fafc",
       border: "#e2e8f0",
       borderInput: "#d1d5db",
       input: "#f3f4f6",

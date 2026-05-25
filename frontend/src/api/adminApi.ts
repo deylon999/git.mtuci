@@ -112,7 +112,7 @@ export async function getUserStats(): Promise<UserStats> {
   const users = await getAdminUsers();
   return {
     total: users.length,
-    active: users.filter((u) => !u.is_blocked).length,
+    active: users.filter((u) => !u.is_blocked && !u.is_pending).length,
     pending: users.filter((u) => u.is_pending).length,
     blocked: users.filter((u) => u.is_blocked).length,
   };

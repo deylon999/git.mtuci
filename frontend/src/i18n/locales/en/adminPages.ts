@@ -1,7 +1,7 @@
 /** Extended admin UI strings (merged into root locale tree). */
 export const adminPagesEn = {
   dashboard: {
-    trendWeek: "{sign}{n} this week",
+    vsLastWeek: "vs last week",
     exportReport: "Export report",
     exportingReport: "Exporting…",
     exportReportSuccess: "Report downloaded",

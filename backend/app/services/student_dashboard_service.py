@@ -108,6 +108,28 @@ def _deadline_urgency(deadline: datetime, now: datetime) -> str:
     return "muted"
 
 
+def _assignments_for_deadline_list(
+    assignments: list,
+    submissions_map: dict,
+    *,
+    now: datetime,
+    today_start: datetime,
+) -> list:
+    """Upcoming (from today) plus unsubmitted past-deadline work (assignments «overdue»)."""
+    upcoming = [a for a in assignments if a.deadline >= today_start]
+    overdue: list = []
+    for a in assignments:
+        if a.deadline >= now:
+            continue
+        sub = submissions_map.get(a.id)
+        if sub and sub.submitted_at:
+            continue
+        overdue.append(a)
+    upcoming_ids = {a.id for a in upcoming}
+    merged = overdue + [a for a in upcoming if a.id not in upcoming_ids]
+    return sorted(merged, key=lambda a: a.deadline)
+
+
 def _deadlines_today_sub(titles: list[str], next_title: str | None) -> str:
     if titles:
         return " и ".join(titles[:2])
@@ -1309,13 +1331,15 @@ async def get_student_deadlines(
     today_start = _start_of_day(now)
     ctx = await _load_student_assignment_context(session, student_id=student_id, group_name=group_name)
 
-    upcoming = sorted(
-        [a for a in ctx.all_assignments if a.deadline >= today_start],
-        key=lambda a: a.deadline,
+    deadline_assignments = _assignments_for_deadline_list(
+        ctx.all_assignments,
+        ctx.submissions_map,
+        now=now,
+        today_start=today_start,
     )
 
     items: list[StudentDeadlineDetailRead] = []
-    for a in upcoming[:limit]:
+    for a in deadline_assignments[:limit]:
         sub = ctx.submissions_map.get(a.id)
         submitted = bool(sub and sub.submitted_at)
         items.append(

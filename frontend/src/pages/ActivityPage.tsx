@@ -25,7 +25,7 @@ const getColors = (isDark: boolean) => {
     pageBg: c.pageBg,
     cardBg: c.card,
     cardBg2: c.input,
-    border: c.borderInput,
+    border: c.border,
     accent: "#2563eb",
     accent2: "#3b82f6",
     danger: "#e24b4a",

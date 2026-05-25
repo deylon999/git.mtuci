@@ -33,6 +33,7 @@ export const studentEn = {
     nextPrefix: "Next: {name}",
     loading: "Loading deadlines…",
     todayCount: "Today {n} {word}",
+    groupOverdue: "Overdue",
     groupToday: "Today",
     groupTomorrow: "Tomorrow",
     groupWeek: "This week",

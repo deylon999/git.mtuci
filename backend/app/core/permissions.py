@@ -48,10 +48,13 @@ async def get_user_permissions(
     )
     custom_perms = result.scalars().all()
     
+    perms = DEFAULT_PERMISSIONS.get(user.role, set()).copy()
     if custom_perms:
-        perms = {p.permission_id for p in custom_perms if p.enabled}
-    else:
-        perms = DEFAULT_PERMISSIONS.get(user.role, set()).copy()
+        for p in custom_perms:
+            if p.enabled:
+                perms.add(p.permission_id)
+            else:
+                perms.discard(p.permission_id)
     
     # Update cache
     _perms_cache[user.id] = (perms, now)

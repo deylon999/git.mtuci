@@ -33,6 +33,7 @@ export const studentRu = {
     nextPrefix: "Ближайший: {name}",
     loading: "Загрузка дедлайнов…",
     todayCount: "Сегодня {n} {word}",
+    groupOverdue: "Просрочено",
     groupToday: "Сегодня",
     groupTomorrow: "Завтра",
     groupWeek: "На этой неделе",
