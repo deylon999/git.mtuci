@@ -338,47 +338,48 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
         </div>
       ) : null}
 
-      {!loading && deadlinesToday > 0 ? (
-        <div
-          className="flex items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium"
-          style={{
-            backgroundColor: `${theme.danger}14`,
-            borderColor: `${theme.danger}55`,
-            color: theme.danger,
-          }}
-        >
-          <AlertCircle className="h-5 w-5 shrink-0" />
-          <span>
-            {tp("student.deadline.todayCount", {
-              n: deadlinesToday,
-              word: pluralDeadlines(deadlinesToday, language),
-            })}
-            {deadlinesTodaySub ? ` — ${deadlinesTodaySub}` : ""}
-          </span>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-lg font-semibold" style={{ color: theme.text }}>
+              {tp("student.dashboard.greeting", { name: welcomeName })}
+            </h1>
+            <p className="mt-0.5 text-sm" style={{ color: theme.text2 }}>
+              {groupLine} · {formatTodayLong(new Date(), language)}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled
+              title={t("student.dashboard.importGithubTitle")}
+              className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium opacity-50 cursor-not-allowed"
+              style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text }}
+            >
+              <Github className="h-3.5 w-3.5" />
+              {t("student.dashboard.importGithub")}
+            </button>
+          </div>
         </div>
-      ) : null}
-
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold" style={{ color: theme.text }}>
-            {tp("student.dashboard.greeting", { name: welcomeName })}
-          </h1>
-          <p className="mt-0.5 text-sm" style={{ color: theme.text2 }}>
-            {groupLine} · {formatTodayLong(new Date(), language)}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled
-            title={t("student.dashboard.importGithubTitle")}
-            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium opacity-50 cursor-not-allowed"
-            style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text }}
+        {!loading && deadlinesToday > 0 ? (
+          <div
+            className="flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium"
+            style={{
+              backgroundColor: `${theme.danger}14`,
+              borderColor: `${theme.danger}55`,
+              color: theme.danger,
+            }}
           >
-            <Github className="h-3.5 w-3.5" />
-            {t("student.dashboard.importGithub")}
-          </button>
-        </div>
+            <AlertCircle className="h-5 w-5 shrink-0" />
+            <span>
+              {tp("student.deadline.todayCount", {
+                n: deadlinesToday,
+                word: pluralDeadlines(deadlinesToday, language),
+              })}
+              {deadlinesTodaySub ? ` — ${deadlinesTodaySub}` : ""}
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
