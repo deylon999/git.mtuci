@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -56,9 +56,11 @@ type VisibilityFilter = "all" | "public" | "private" | "course";
 type SortKey = "activity" | "date" | "commits" | "name";
 
 function repoInitials(name: string): string {
-  const parts = name.split(/[-_]/).filter(Boolean);
-  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  return name.slice(0, 2).toUpperCase();
+  const head = name.split("·")[0]?.trim() || name;
+  const parts = head.split(/[-_\s.]+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+  if (head.length >= 2) return head.slice(0, 2).toUpperCase();
+  return (head[0] ?? "?").toUpperCase();
 }
 
 function avatarStyle(id: string) {
@@ -466,21 +468,198 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
               navigate(`/repositories/${repo.id}/code`, { state: browseState });
             };
 
-            return (
-              <article
+            const subtitle =
+              repo.source === "assignment"
+                ? repo.assignment_label
+                : repo.description || repo.assignment_label;
+
+            const badgeRow = (
+              <>
+                {isFork ? (
+                  <span
+                    className="inline-flex items-center gap-0.5 rounded-md px-2 py-0.5 text-[10px] font-medium"
+                    style={{ backgroundColor: `${theme.accent}20`, color: theme.accent2 }}
+                  >
+                    <GitFork className="h-2.5 w-2.5" />
+                    Fork
+                  </span>
+                ) : null}
+                <span
+                  className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium"
+                  style={{
+                    backgroundColor:
+                      badge.variant === "ok"
+                        ? `${theme.success}20`
+                        : badge.variant === "info"
+                          ? `${theme.accent}20`
+                          : theme.bg4,
+                    color:
+                      badge.variant === "ok"
+                        ? theme.success
+                        : badge.variant === "info"
+                          ? theme.accent2
+                          : theme.text2,
+                    border: badge.variant === "gray" ? `1px solid ${theme.border}` : undefined,
+                  }}
+                >
+                  {badge.label}
+                </span>
+                {!giteaOk ? (
+                  <span
+                    className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium"
+                    style={{ backgroundColor: `${theme.warning}20`, color: theme.warning }}
+                  >
+                    {t("student.repos.giteaMissing")}
+                  </span>
+                ) : null}
+              </>
+            );
+
+            const metaRow = (
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]" style={{ color: theme.text2 }}>
+                {repo.language ? (
+                  <span className="inline-flex items-center gap-1">
+                    <span
+                      className="inline-block h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: langColor }}
+                    />
+                    {capitalizeLanguage(repo.language)}
+                  </span>
+                ) : null}
+                {repo.commits_count != null ? (
+                  <span className="inline-flex items-center gap-1">
+                    <GitCommit className="h-3 w-3" />
+                    {formatCommitCount(repo.commits_count, repo.commits_count_approx, language)}
+                  </span>
+                ) : null}
+                {repo.forks_count != null && repo.forks_count > 0 ? (
+                  <span className="inline-flex items-center gap-1">
+                    <GitBranch className="h-3 w-3" />
+                    {repo.forks_count} {pluralWord(language, "student.plural.forks", repo.forks_count)}
+                  </span>
+                ) : null}
+                {repo.open_pr_count != null && repo.open_pr_count > 0 ? (
+                  <span className="inline-flex items-center gap-1" style={{ color: theme.warning }}>
+                    <GitPullRequest className="h-3 w-3" />
+                    {repo.open_pr_count} PR
+                  </span>
+                ) : null}
+                {repo.stars_count != null && repo.stars_count > 0 ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Star className="h-3 w-3" />
+                    {repo.stars_count} {pluralWord(language, "student.plural.stars", repo.stars_count)}
+                  </span>
+                ) : null}
+              </div>
+            );
+
+            const actionButtons = (
+              <div className="flex gap-1" onClick={(e) => e.preventDefault()}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openRepo();
+                  }}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
+                  style={{ borderColor: theme.border, color: theme.text2 }}
+                  title={t("student.repos.viewFiles")}
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                </button>
+                {(repo.clone_url || repo.gitea_path) && viewMode === "list" ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void handleCopyClone(repo);
+                    }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
+                    style={{ borderColor: theme.border, color: theme.text2 }}
+                    title={t("common.copy")}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+                {repo.source === "assignment" && repo.course_id && repo.assignment_id ? (
+                  <Link
+                    to={`/courses/${repo.course_id}/assignments/${repo.assignment_id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
+                    style={{ borderColor: theme.border, color: theme.text2 }}
+                    title={t("student.repos.goToAssignment")}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Link>
+                ) : repo.repository_id && repo.source === "personal" ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setEditRepo(repo);
+                    }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
+                    style={{ borderColor: theme.border, color: theme.text2 }}
+                    title={t("common.edit")}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                ) : webUrl ? (
+                  <a
+                    href={`${webUrl}/settings`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
+                    style={{ borderColor: theme.border, color: theme.text2 }}
+                    title={t("student.repos.giteaSettings")}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </a>
+                ) : null}
+                {repo.can_delete ? (
+                  <button
+                    type="button"
+                    disabled={deletingId === repo.id}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDeleteRepo(repo);
+                    }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors disabled:opacity-50"
+                    style={{ borderColor: theme.border, color: theme.danger }}
+                    title={t("common.delete")}
+                  >
+                    {deletingId === repo.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                ) : null}
+              </div>
+            );
+
+            const cardHandlers = {
+              onClick: openRepo,
+              onKeyDown: (e: KeyboardEvent) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openRepo();
+                }
+              },
+            };
+
+            if (viewMode === "list") {
+              return (
+                <article
                   key={repo.id}
                   role="button"
                   tabIndex={0}
-                  onClick={openRepo}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      openRepo();
-                    }
-                  }}
-                  className={`flex gap-2.5 rounded-xl border p-4 transition-colors hover:border-opacity-80 cursor-pointer ${
-                    viewMode === "list" ? "flex-row items-center" : "flex-col flex-1 min-h-0"
-                  }`}
+                  {...cardHandlers}
+                  className="flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors cursor-pointer"
                   style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = theme.accent2;
@@ -489,212 +668,125 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                     e.currentTarget.style.borderColor = theme.border;
                   }}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold"
-                      style={{ backgroundColor: av.bg, color: av.color }}
-                    >
-                      {repoInitials(repo.name)}
-                    </div>
-                    <div className="flex flex-wrap gap-1 justify-end">
-                      {isFork ? (
-                        <span
-                          className="inline-flex items-center gap-0.5 rounded-md px-2 py-0.5 text-[10px] font-medium"
-                          style={{ backgroundColor: `${theme.accent}20`, color: theme.accent2 }}
-                        >
-                          <GitFork className="h-2.5 w-2.5" />
-                          Fork
-                        </span>
-                      ) : null}
-                      <span
-                        className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium"
-                        style={{
-                          backgroundColor:
-                            badge.variant === "ok"
-                              ? `${theme.success}20`
-                              : badge.variant === "info"
-                                ? `${theme.accent}20`
-                                : theme.bg4,
-                          color:
-                            badge.variant === "ok"
-                              ? theme.success
-                              : badge.variant === "info"
-                                ? theme.accent2
-                                : theme.text2,
-                          border: badge.variant === "gray" ? `1px solid ${theme.border}` : undefined,
-                        }}
-                      >
-                        {badge.label}
-                      </span>
-                      {!giteaOk ? (
-                        <span
-                          className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium"
-                          style={{ backgroundColor: `${theme.warning}20`, color: theme.warning }}
-                        >
-                          {t("student.repos.giteaMissing")}
-                        </span>
-                      ) : null}
-                    </div>
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold"
+                    style={{ backgroundColor: av.bg, color: av.color }}
+                  >
+                    {repoInitials(repo.name)}
                   </div>
-
-                  <div>
-                    <h2 className="text-sm font-medium truncate" style={{ color: theme.text }}>
-                      {repo.name}
-                    </h2>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <h2 className="text-sm font-medium truncate" style={{ color: theme.text }}>
+                        {repo.name}
+                      </h2>
+                      <div className="flex flex-wrap gap-1">{badgeRow}</div>
+                    </div>
                     {repo.gitea_path ? (
-                      <p className="text-[10px] font-mono truncate mt-0.5" style={{ color: theme.text2 }}>
+                      <p className="text-[10px] font-mono truncate" style={{ color: theme.text2 }}>
                         {repo.gitea_path}
                       </p>
                     ) : null}
-                  </div>
-
-                  {repo.description || repo.assignment_label ? (
-                    <p className="text-xs leading-relaxed line-clamp-2 flex-1" style={{ color: theme.text2 }}>
-                      {repo.description ?? repo.assignment_label}
-                    </p>
-                  ) : (
-                    <div className="flex-1" />
-                  )}
-
-                  {(repo.clone_url || repo.gitea_path) && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        void handleCopyClone(repo);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left font-mono text-[10px] truncate transition-colors"
-                      style={{ backgroundColor: theme.bg, borderColor: theme.border, color: theme.text2 }}
-                    >
-                      <Copy className="h-3 w-3 shrink-0" />
-                      <span className="truncate flex-1">
-                        {repo.clone_url ?? `git clone …/${repo.gitea_path}.git`}
-                      </span>
-                      {copyId === repo.id ? (
-                        <span className="text-[10px] shrink-0" style={{ color: theme.success }}>
-                          {t("common.copied")}
-                        </span>
-                      ) : null}
-                    </button>
-                  )}
-
-                  <div className="flex flex-wrap items-center gap-2.5 text-[11px]" style={{ color: theme.text2 }}>
-                    {repo.language ? (
-                      <span className="inline-flex items-center gap-1">
-                        <span
-                          className="inline-block h-1.5 w-1.5 rounded-full"
-                          style={{ backgroundColor: langColor }}
-                        />
-                        {capitalizeLanguage(repo.language)}
-                      </span>
+                    {subtitle ? (
+                      <p className="text-xs truncate mt-0.5" style={{ color: theme.text2 }}>
+                        {subtitle}
+                      </p>
                     ) : null}
-                    {repo.commits_count != null ? (
-                      <span className="inline-flex items-center gap-1">
-                        <GitCommit className="h-3 w-3" />
-                        {formatCommitCount(repo.commits_count, repo.commits_count_approx, language)}
+                    <div className="mt-1">{metaRow}</div>
+                    <div className="flex sm:hidden items-center justify-between gap-2 mt-2">
+                      <span className="text-[10px]" style={{ color: theme.text3 }}>
+                        {formatRelativeTime(repo.updated_at, new Date(), language)}
                       </span>
-                    ) : null}
-                    {repo.forks_count != null && repo.forks_count > 0 ? (
-                      <span className="inline-flex items-center gap-1">
-                        <GitBranch className="h-3 w-3" />
-                        {repo.forks_count} {pluralWord(language, "student.plural.forks", repo.forks_count)}
-                      </span>
-                    ) : null}
-                    {repo.open_pr_count != null && repo.open_pr_count > 0 ? (
-                      <span className="inline-flex items-center gap-1" style={{ color: theme.warning }}>
-                        <GitPullRequest className="h-3 w-3" />
-                        {repo.open_pr_count} PR
-                      </span>
-                    ) : null}
-                    {repo.stars_count != null && repo.stars_count > 0 ? (
-                      <span className="inline-flex items-center gap-1">
-                        <Star className="h-3 w-3" />
-                        {repo.stars_count}{" "}
-                        {pluralWord(language, "student.plural.stars", repo.stars_count)}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <div
-                    className="flex items-center justify-between pt-2 border-t"
-                    style={{ borderColor: theme.border }}
-                  >
-                    <span className="text-[10px]" style={{ color: theme.text3 }}>
-                      {formatRelativeTime(repo.updated_at, new Date(), language)}
-                    </span>
-                    <div className="flex gap-1" onClick={(e) => e.preventDefault()}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openRepo();
-                        }}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
-                        style={{ borderColor: theme.border, color: theme.text2 }}
-                        title={t("student.repos.viewFiles")}
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                      </button>
-                      {repo.source === "assignment" && repo.course_id && repo.assignment_id ? (
-                        <Link
-                          to={`/courses/${repo.course_id}/assignments/${repo.assignment_id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
-                          style={{ borderColor: theme.border, color: theme.text2 }}
-                          title={t("student.repos.goToAssignment")}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Link>
-                      ) : repo.repository_id && repo.source === "personal" ? (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setEditRepo(repo);
-                          }}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
-                          style={{ borderColor: theme.border, color: theme.text2 }}
-                          title={t("common.edit")}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      ) : webUrl ? (
-                        <a
-                          href={`${webUrl}/settings`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors hover:opacity-90"
-                          style={{ borderColor: theme.border, color: theme.text2 }}
-                          title={t("student.repos.giteaSettings")}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </a>
-                      ) : null}
-                      {repo.can_delete ? (
-                        <button
-                          type="button"
-                          disabled={deletingId === repo.id}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setDeleteRepo(repo);
-                          }}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors disabled:opacity-50"
-                          style={{ borderColor: theme.border, color: theme.danger }}
-                          title={t("common.delete")}
-                        >
-                          {deletingId === repo.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-3.5 w-3.5" />
-                          )}
-                        </button>
-                      ) : null}
+                      {actionButtons}
                     </div>
                   </div>
+                  <div className="hidden sm:flex flex-col items-end gap-1.5 shrink-0">
+                    <span className="text-[10px] whitespace-nowrap" style={{ color: theme.text3 }}>
+                      {formatRelativeTime(repo.updated_at, new Date(), language)}
+                    </span>
+                    {actionButtons}
+                  </div>
+                </article>
+              );
+            }
+
+            return (
+              <article
+                key={repo.id}
+                role="button"
+                tabIndex={0}
+                {...cardHandlers}
+                className="flex flex-col flex-1 min-h-0 gap-2.5 rounded-xl border p-4 transition-colors cursor-pointer"
+                style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = theme.accent2;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = theme.border;
+                }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold"
+                    style={{ backgroundColor: av.bg, color: av.color }}
+                  >
+                    {repoInitials(repo.name)}
+                  </div>
+                  <div className="flex flex-wrap gap-1 justify-end">{badgeRow}</div>
+                </div>
+
+                <div>
+                  <h2 className="text-sm font-medium truncate" style={{ color: theme.text }}>
+                    {repo.name}
+                  </h2>
+                  {repo.gitea_path ? (
+                    <p className="text-[10px] font-mono truncate mt-0.5" style={{ color: theme.text2 }}>
+                      {repo.gitea_path}
+                    </p>
+                  ) : null}
+                </div>
+
+                {subtitle ? (
+                  <p className="text-xs leading-relaxed line-clamp-2 flex-1" style={{ color: theme.text2 }}>
+                    {subtitle}
+                  </p>
+                ) : (
+                  <div className="flex-1" />
+                )}
+
+                {(repo.clone_url || repo.gitea_path) && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void handleCopyClone(repo);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left font-mono text-[10px] truncate transition-colors"
+                    style={{ backgroundColor: theme.bg, borderColor: theme.border, color: theme.text2 }}
+                  >
+                    <Copy className="h-3 w-3 shrink-0" />
+                    <span className="truncate flex-1">
+                      {repo.clone_url ?? `git clone …/${repo.gitea_path}.git`}
+                    </span>
+                    {copyId === repo.id ? (
+                      <span className="text-[10px] shrink-0" style={{ color: theme.success }}>
+                        {t("common.copied")}
+                      </span>
+                    ) : null}
+                  </button>
+                )}
+
+                {metaRow}
+
+                <div
+                  className="flex items-center justify-between pt-2 border-t"
+                  style={{ borderColor: theme.border }}
+                >
+                  <span className="text-[10px]" style={{ color: theme.text3 }}>
+                    {formatRelativeTime(repo.updated_at, new Date(), language)}
+                  </span>
+                  {actionButtons}
+                </div>
               </article>
             );
           })}
@@ -702,7 +794,9 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="flex min-h-[200px] flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed p-4 text-center opacity-80 transition-opacity hover:opacity-100"
+            className={`flex flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed p-4 text-center opacity-80 transition-opacity hover:opacity-100 ${
+              viewMode === "list" ? "min-h-0 py-6" : "min-h-[200px]"
+            }`}
             style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
           >
             <div

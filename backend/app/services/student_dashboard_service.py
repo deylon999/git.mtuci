@@ -1653,14 +1653,11 @@ async def get_student_repositories(
     for student_repo, assignment, course in ar_result.all():
         course_count += 1
         repo_specs.append((primary_owner, student_repo.repo_name))
-        display_name = assignment_repo_display_name(
-            assignment.title,
-            course_title=course.title,
-        )
+        assignment_title = (assignment.title or "").strip() or "Задание"
         items.append(
             StudentRepositoryItemRead(
                 id=str(student_repo.id),
-                name=display_name,
+                name=assignment_title,
                 description=assignment.description,
                 gitea_path=f"{primary_owner}/{student_repo.repo_name}",
                 gitea_web_url=build_repo_web_url(primary_owner, student_repo.repo_name),
@@ -1669,7 +1666,7 @@ async def get_student_repositories(
                 commits_count=None,
                 visibility="course",
                 source="assignment",
-                assignment_label=course.title,
+                assignment_label=(course.title or "").strip() or None,
                 course_id=course.id,
                 assignment_id=assignment.id,
                 can_delete=False,
@@ -1679,11 +1676,23 @@ async def get_student_repositories(
 
     if repo_specs and gitea_mode != "none":
         snapshots = await batch_repo_snapshots(repo_specs, since_week=week_ago, mode=gitea_mode)
+        snap_by_repo = {s.repo_name: s for s in snapshots}
         include_totals = gitea_mode == "full"
-        items = [
-            _apply_repo_snapshot(item, snap, include_commit_totals=include_totals)
-            for item, snap in zip(items, snapshots, strict=True)
-        ]
+        merged: list[StudentRepositoryItemRead] = []
+        for item in items:
+            gitea_repo = (
+                item.gitea_path.split("/", 1)[1]
+                if item.gitea_path and "/" in item.gitea_path
+                else None
+            )
+            snap = snap_by_repo.get(gitea_repo) if gitea_repo else None
+            if snap is None:
+                merged.append(item)
+            else:
+                merged.append(
+                    _apply_repo_snapshot(item, snap, include_commit_totals=include_totals)
+                )
+        items = merged
 
     items.sort(key=lambda x: x.updated_at, reverse=True)
 
@@ -1759,8 +1768,8 @@ async def get_student_recent_repositories(
             (
                 StudentRecentRepositoryRead(
                     id=str(student_repo.id),
-                    name=assignment_repo_display_name(assignment.title, course_title=course.title),
-                    assignment_label=course.title,
+                    name=(assignment.title or "").strip() or "Задание",
+                    assignment_label=(course.title or "").strip() or None,
                     language=None,
                     commits_count=None,
                     updated_at=student_repo.created_at,

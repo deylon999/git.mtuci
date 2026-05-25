@@ -16,11 +16,14 @@ from app.core.database import get_session
 from app.core.security import get_current_user
 from app.models.user import User, UserRole
 from app.models.role_permissions import RolePermission
-from app.core.permission_catalog import build_default_permissions
+from app.core.permission_catalog import build_default_permissions, permission_ids_from_template
 
 
 # Default permissions for each role (fallback if no custom permissions in DB)
 DEFAULT_PERMISSIONS = build_default_permissions()
+
+# Student essentials — cannot be revoked via role_permissions UI (create/view own repos, etc.)
+_STUDENT_CORE_PERMISSIONS = permission_ids_from_template("student")
 
 
 # Simple in-memory cache: {user_id: (permissions_set, timestamp)}
@@ -53,6 +56,8 @@ async def get_user_permissions(
         for p in custom_perms:
             if p.enabled:
                 perms.add(p.permission_id)
+            elif user.role == UserRole.student and p.permission_id in _STUDENT_CORE_PERMISSIONS:
+                continue
             else:
                 perms.discard(p.permission_id)
     
