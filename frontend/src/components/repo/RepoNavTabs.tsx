@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import {
   CircleDot,
   Code2,
+  GitBranch,
   GitPullRequest,
   BookOpen,
   Settings,
@@ -9,7 +10,7 @@ import {
 import type { ThemeColors } from "../../theme";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
 
-export type RepoNavTabId = "code" | "issues" | "pulls" | "wiki" | "settings";
+export type RepoNavTabId = "code" | "branches" | "issues" | "pulls" | "wiki" | "settings";
 
 interface RepoNavTabsProps {
   theme: ThemeColors;
@@ -28,6 +29,7 @@ const TABS: {
   countKey?: "issues" | "pulls";
 }[] = [
   { id: "code", labelKey: "repo.tabs.code", icon: Code2, segment: "code" },
+  { id: "branches", label: "Branches", icon: GitBranch, segment: "branches" },
   { id: "issues", label: "Issues", icon: CircleDot, segment: "issues", countKey: "issues" },
   { id: "pulls", label: "Pull requests", icon: GitPullRequest, segment: "pulls", countKey: "pulls" },
   { id: "wiki", label: "Wiki", icon: BookOpen, segment: "wiki" },

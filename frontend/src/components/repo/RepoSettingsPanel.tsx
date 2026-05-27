@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Copy,
   GitBranch,
@@ -11,10 +11,17 @@ import {
   Webhook,
 } from "lucide-react";
 import type { StudentRepoSummary } from "../../api/studentDashboardApi";
+import { deleteRepository, updateRepository } from "../../api/repositoriesApi";
+import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
 import { pluralWord } from "../../i18n/plural";
 import type { StudentRepoMeta } from "../../hooks/useStudentRepoWorkspace";
 import type { ThemeColors } from "../../theme";
+import { useRepoApi } from "../../context/RepoApiContext";
+import { useStudentRepoWorkspaceContext } from "../../context/StudentRepoWorkspaceContext";
+import { setCachedRepoWorkspace } from "../../utils/repoWorkspaceCache";
+import { getStudentRepositories } from "../../api/studentDashboardApi";
 
 const SETTINGS_SECTIONS = [
   { id: "general", labelKey: "repo.settings.sectionGeneral", icon: Settings },
@@ -57,9 +64,86 @@ function PlaceholderBlock({
 
 export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettingsPanelProps) {
   const { t, tp } = useUserPreferences();
+  const api = useRepoApi();
+  const navigate = useNavigate();
+  const workspace = useStudentRepoWorkspaceContext();
   const [section, setSection] = useState<SettingsSectionId>("general");
   const [copied, setCopied] = useState(false);
   const cloneUrl = meta?.cloneUrl ?? "";
+  const isBlocked = !!summary?.is_blocked;
+  const readOnly = api.mode === "teacher" || isBlocked;
+
+  const repoId = workspace.repoId;
+
+  const [name, setName] = useState(meta?.name ?? "");
+  const [description, setDescription] = useState(summary?.description ?? meta?.description ?? "");
+  const [visibility, setVisibility] = useState<"public" | "private">(
+    meta?.visibility === "private" ? "private" : "public",
+  );
+  const [savingGeneral, setSavingGeneral] = useState(false);
+  const [savingVisibility, setSavingVisibility] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [dangerText, setDangerText] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const initial = useMemo(
+    () => ({
+      name: meta?.name ?? "",
+      description: summary?.description ?? meta?.description ?? "",
+      visibility: meta?.visibility === "private" ? ("private" as const) : ("public" as const),
+    }),
+    [meta?.name, meta?.description, meta?.visibility, summary?.description],
+  );
+
+  const dirtyGeneral =
+    name.trim() !== initial.name.trim() || (description ?? "") !== (initial.description ?? "");
+  const dirtyVisibility = visibility !== initial.visibility;
+
+  useEffect(() => {
+    // Keep form in sync if workspace meta/summary refreshes.
+    setName(initial.name);
+    setDescription(initial.description);
+    setVisibility(initial.visibility);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial.name, initial.description, initial.visibility]);
+
+  const syncMetaFromList = async () => {
+    if (api.mode !== "student") return;
+    try {
+      const list = await getStudentRepositories("lite");
+      const repo = list.repositories.find((r) => r.id === repoId);
+      if (!repo || !workspace.meta) return;
+      const nextMeta: StudentRepoMeta = {
+        ...workspace.meta,
+        name: repo.name,
+        giteaPath: repo.gitea_path,
+        giteaWebUrl: repo.gitea_web_url,
+        cloneUrl: repo.clone_url,
+        description: repo.description,
+        language: repo.language,
+        visibility: repo.visibility,
+        source: repo.source,
+        courseId: repo.course_id ?? null,
+        assignmentId: repo.assignment_id ?? null,
+        assignmentLabel: repo.assignment_label ?? null,
+      };
+      workspace.setMeta(nextMeta);
+      setCachedRepoWorkspace(repoId, { meta: nextMeta, summary: workspace.summary });
+    } catch {
+      // ignore
+    }
+  };
+
+  const refreshSummary = async () => {
+    try {
+      const next = await api.getSummary(repoId);
+      workspace.setSummary(next);
+      if (workspace.meta) {
+        setCachedRepoWorkspace(repoId, { meta: workspace.meta, summary: next });
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const copyClone = async () => {
     if (!cloneUrl) return;
@@ -117,40 +201,89 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
       </nav>
 
       <div className="flex-1 min-w-0 p-4 md:p-5 space-y-4">
+        {error ? (
+          <div
+            className="rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: theme.danger, backgroundColor: `${theme.danger}14`, color: theme.text }}
+          >
+            {error}
+          </div>
+        ) : null}
         {section === "general" && (
           <>
             <h2 className="text-base font-semibold" style={{ color: theme.text }}>
               {t("repo.settings.generalTitle")}
             </h2>
-            <dl className="grid gap-3 text-sm">
-              {[
-                { label: t("repo.settings.labelRepoName"), value: meta?.name ?? "—" },
-                { label: t("repo.settings.labelDescription"), value: summary?.description || meta?.description || "—" },
-                {
-                  label: t("repo.settings.labelVisibility"),
-                  value:
-                    meta?.visibility === "public"
-                      ? t("student.repos.visibilityPublic")
-                      : t("student.repos.visibilityPrivate"),
-                },
-                { label: t("repo.settings.labelDefaultBranch"), value: defaultBranch },
-                { label: "Primary language", value: summary?.language || meta?.language || "—" },
-                {
-                  label: "Size",
-                  value:
-                    summary?.size_kb != null
-                      ? summary.size_kb < 1024
-                        ? `${summary.size_kb} KB`
-                        : `${(summary.size_kb / 1024).toFixed(1)} MB`
-                      : "—",
-                },
-              ].map((row) => (
-                <div key={row.label} className="grid grid-cols-[minmax(0,140px)_1fr] gap-3">
-                  <dt style={{ color: theme.text3 }}>{row.label}</dt>
-                  <dd style={{ color: theme.text }}>{row.value}</dd>
-                </div>
-              ))}
-            </dl>
+            <PlaceholderBlock theme={theme} title={t("repo.settings.labelRepoName")}>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={readOnly || savingGeneral || savingVisibility || deleting}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+              />
+              <p className="text-[11px] mt-1" style={{ color: theme.text3 }}>
+                {readOnly ? "Read-only" : "Renames repository (also in Gitea when available)."}
+              </p>
+            </PlaceholderBlock>
+
+            <PlaceholderBlock theme={theme} title={t("repo.settings.labelDescription")}>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                disabled={readOnly || savingGeneral || savingVisibility || deleting}
+                rows={4}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+              />
+            </PlaceholderBlock>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                disabled={readOnly || savingGeneral || savingVisibility || deleting || !repoId || !dirtyGeneral}
+                onClick={() => {
+                  void (async () => {
+                    if (!repoId) return;
+                    setSavingGeneral(true);
+                    setError(null);
+                    try {
+                      await updateRepository(repoId, { name: name.trim(), description });
+                      toast.success("Saved");
+                      // First update local meta quickly for UI responsiveness.
+                      if (workspace.meta) {
+                        const nextMeta: StudentRepoMeta = {
+                          ...workspace.meta,
+                          name: name.trim(),
+                          description,
+                        };
+                        workspace.setMeta(nextMeta);
+                        setCachedRepoWorkspace(repoId, { meta: nextMeta, summary: workspace.summary });
+                      }
+                      // Then refresh summary and pull the authoritative meta (clone url/path) from list.
+                      await refreshSummary();
+                      await syncMetaFromList();
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : "Failed to save settings");
+                      toast.error("Save failed");
+                    } finally {
+                      setSavingGeneral(false);
+                    }
+                  })();
+                }}
+                className="rounded-lg border px-3 py-2 text-xs font-medium"
+                style={{
+                  borderColor: `${theme.success}55`,
+                  backgroundColor: `${theme.success}14`,
+                  color: theme.success,
+                  opacity: readOnly || savingGeneral || savingVisibility || deleting || !dirtyGeneral ? 0.55 : 1,
+                }}
+                title={!dirtyGeneral ? "No changes" : undefined}
+              >
+                {savingGeneral ? "Saving…" : "Save changes"}
+              </button>
+            </div>
+
             {cloneUrl ? (
               <PlaceholderBlock theme={theme} title={t("repo.settings.labelClone")}>
                 <div className="flex gap-2 items-center">
@@ -180,13 +313,88 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
           <>
             <h2 className="text-base font-semibold flex items-center gap-2" style={{ color: theme.text }}>
               <Users className="h-4 w-4" />
-              Collaborators & teams
+              Access
             </h2>
-            <PlaceholderBlock theme={theme} title="Access">
-              <p className="text-sm" style={{ color: theme.text2 }}>
-                {t("repo.settings.collaboratorsHint")}
-              </p>
-              <p className="text-xs mt-2 flex items-center gap-1.5" style={{ color: theme.text3 }}>
+
+            <PlaceholderBlock theme={theme} title="Visibility">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={readOnly || savingGeneral || savingVisibility || deleting}
+                  onClick={() => setVisibility("public")}
+                  className="rounded-lg border px-3 py-2 text-xs font-medium inline-flex items-center gap-1.5"
+                  style={{
+                    borderColor: theme.border,
+                    backgroundColor: visibility === "public" ? `${theme.accent}18` : theme.bg,
+                    color: visibility === "public" ? theme.accent2 : theme.text2,
+                    opacity: readOnly ? 0.55 : 1,
+                  }}
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  {t("student.repos.visibilityPublic")}
+                </button>
+                <button
+                  type="button"
+                  disabled={readOnly || savingGeneral || savingVisibility || deleting}
+                  onClick={() => setVisibility("private")}
+                  className="rounded-lg border px-3 py-2 text-xs font-medium inline-flex items-center gap-1.5"
+                  style={{
+                    borderColor: theme.border,
+                    backgroundColor: visibility === "private" ? `${theme.accent}18` : theme.bg,
+                    color: visibility === "private" ? theme.accent2 : theme.text2,
+                    opacity: readOnly ? 0.55 : 1,
+                  }}
+                >
+                  <Lock className="h-3.5 w-3.5" />
+                  {t("student.repos.visibilityPrivate")}
+                </button>
+              </div>
+              <div className="flex justify-end mt-3">
+                <button
+                  type="button"
+                  disabled={readOnly || savingGeneral || savingVisibility || deleting || !repoId || !dirtyVisibility}
+                  onClick={() => {
+                    void (async () => {
+                      if (!repoId) return;
+                      setSavingVisibility(true);
+                      setError(null);
+                      try {
+                        await updateRepository(repoId, { repo_type: visibility });
+                        toast.success("Visibility updated");
+                        if (workspace.meta) {
+                          const nextMeta: StudentRepoMeta = {
+                            ...workspace.meta,
+                            visibility,
+                          };
+                          workspace.setMeta(nextMeta);
+                          setCachedRepoWorkspace(repoId, { meta: nextMeta, summary: workspace.summary });
+                        }
+                        await refreshSummary();
+                        await syncMetaFromList();
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Failed to update visibility");
+                        toast.error("Update failed");
+                      } finally {
+                        setSavingVisibility(false);
+                      }
+                    })();
+                  }}
+                  className="rounded-lg border px-3 py-2 text-xs font-medium"
+                  style={{
+                    borderColor: `${theme.success}55`,
+                    backgroundColor: `${theme.success}14`,
+                    color: theme.success,
+                    opacity: readOnly || savingGeneral || savingVisibility || deleting || !dirtyVisibility ? 0.55 : 1,
+                  }}
+                  title={!dirtyVisibility ? "No changes" : undefined}
+                >
+                  {savingVisibility ? "Updating…" : "Update visibility"}
+                </button>
+              </div>
+            </PlaceholderBlock>
+
+            <PlaceholderBlock theme={theme} title="Owner">
+              <p className="text-xs flex items-center gap-1.5" style={{ color: theme.text3 }}>
                 <Lock className="h-3.5 w-3.5" />
                 {tp("repo.settings.ownerLabel", { name: ownerName })}
               </p>
@@ -257,6 +465,66 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                   {t("repo.settings.vulnScanSoon")}
                 </li>
               </ul>
+            </PlaceholderBlock>
+
+            <PlaceholderBlock theme={theme} title="Danger zone">
+              <p className="text-sm" style={{ color: theme.text2 }}>
+                Delete repository permanently. Type <span className="font-mono">{meta?.name ?? "repo"}</span> to confirm.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                <input
+                  value={dangerText}
+                  onChange={(e) => setDangerText(e.target.value)}
+                  disabled={readOnly || savingGeneral || savingVisibility || deleting}
+                  className="flex-1 rounded-lg border px-3 py-2 text-sm"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                  placeholder="Type repo name…"
+                />
+                <button
+                  type="button"
+                  disabled={
+                    readOnly ||
+                    savingGeneral ||
+                    savingVisibility ||
+                    deleting ||
+                    !repoId ||
+                    dangerText.trim() !== (meta?.name ?? "")
+                  }
+                  onClick={() => {
+                    void (async () => {
+                      if (!repoId) return;
+                      setDeleting(true);
+                      setError(null);
+                      try {
+                        await deleteRepository(repoId);
+                        toast.success("Repository deleted");
+                        navigate("/repositories", { replace: true });
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Failed to delete repository");
+                        toast.error("Delete failed");
+                      } finally {
+                        setDeleting(false);
+                      }
+                    })();
+                  }}
+                  className="rounded-lg border px-3 py-2 text-xs font-medium"
+                  style={{
+                    borderColor: `${theme.danger}55`,
+                    backgroundColor: `${theme.danger}14`,
+                    color: theme.danger,
+                    opacity:
+                      readOnly ||
+                      savingGeneral ||
+                      savingVisibility ||
+                      deleting ||
+                      dangerText.trim() !== (meta?.name ?? "")
+                        ? 0.55
+                        : 1,
+                  }}
+                >
+                  {deleting ? "Deleting…" : "Delete repository"}
+                </button>
+              </div>
             </PlaceholderBlock>
           </>
         )}

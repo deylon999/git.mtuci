@@ -74,6 +74,7 @@ export const studentEn = {
     noRepos: "No repositories",
     createRepo: "Create repository",
     activityFeedTitle: "Recent activity",
+    activityFeedSubtitle: "Last 14 days, up to 12 events",
     noActivity: "No events yet",
     deadlinesTitle: "Deadlines",
     noUpcomingDeadlines: "No upcoming deadlines",

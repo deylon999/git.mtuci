@@ -396,6 +396,21 @@ async def get_student_repository_clone_info(
     student_id: UUID,
     repo_item_id: str,
 ) -> dict:
+    # Block clone for blocked personal repositories (view-only allowed).
+    try:
+        item_uuid = UUID(repo_item_id)
+        repo_row = await session.execute(
+            select(Repository).where(
+                Repository.id == item_uuid,
+                Repository.owner_id == student_id,
+            )
+        )
+        personal_repo = repo_row.scalar_one_or_none()
+        if personal_repo:
+            raise_if_repository_blocked(personal_repo)
+    except ValueError:
+        pass
+
     target = await resolve_student_repo_gitea_target(
         session,
         student_id=student_id,
@@ -517,7 +532,6 @@ async def resolve_student_repo_gitea_target(
     )
     repo = personal.scalar_one_or_none()
     if repo:
-        raise_if_repository_blocked(repo)
         await sync_personal_repository_to_gitea(session, student_user=student_user, repo=repo)
         repo_name = (repo.gitea_repo_name or repo.name or "").strip()
         if not repo_name:
@@ -716,6 +730,21 @@ async def get_student_repository_summary(
         student_id=student_id,
         repo_item_id=repo_item_id,
     )
+
+    # "Blocked" is a DB flag for personal repositories. For assignment repos it's always False.
+    is_blocked = False
+    try:
+        item_uuid = UUID(repo_item_id)
+        repo_row = await session.execute(
+            select(Repository.is_blocked).where(
+                Repository.id == item_uuid,
+                Repository.owner_id == student_id,
+            )
+        )
+        is_blocked = bool(repo_row.scalar_one_or_none() or False)
+    except ValueError:
+        is_blocked = False
+
     meta = await get_repo_metadata(owner=target.owner, repo=target.repo_name)
     default_branch = "main"
     forks = stars = open_pr = open_issues = watchers = size_kb = None
@@ -792,6 +821,7 @@ async def get_student_repository_summary(
     return {
         "description": description or None,
         "language": language,
+        "is_blocked": is_blocked,
         "default_branch": default_branch,
         "commits_count": count,
         "commits_count_approx": approx,
@@ -882,6 +912,75 @@ async def get_student_repository_branches(
     }
 
 
+async def create_student_repository_branch(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    name: str,
+    from_ref: str,
+) -> None:
+    """Create branch for personal repository (assignment repos are read-only here)."""
+    from app.services.gitea_service import create_repo_branch
+
+    try:
+        item_uuid = UUID(repo_item_id)
+    except ValueError as exc:
+        raise ValueError("Cannot create branches for this repository") from exc
+
+    repo_row = await session.execute(
+        select(Repository).where(
+            Repository.id == item_uuid,
+            Repository.owner_id == student_id,
+        )
+    )
+    personal_repo = repo_row.scalar_one_or_none()
+    if not personal_repo:
+        raise ValueError("Cannot create branches for this repository")
+    raise_if_repository_blocked(personal_repo)
+
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    await create_repo_branch(owner=target.owner, repo=target.repo_name, name=name, from_ref=from_ref)
+
+
+async def delete_student_repository_branch(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    name: str,
+) -> None:
+    """Delete branch for personal repository (assignment repos are read-only here)."""
+    from app.services.gitea_service import delete_repo_branch
+
+    try:
+        item_uuid = UUID(repo_item_id)
+    except ValueError as exc:
+        raise ValueError("Cannot delete branches for this repository") from exc
+
+    repo_row = await session.execute(
+        select(Repository).where(
+            Repository.id == item_uuid,
+            Repository.owner_id == student_id,
+        )
+    )
+    personal_repo = repo_row.scalar_one_or_none()
+    if not personal_repo:
+        raise ValueError("Cannot delete branches for this repository")
+    raise_if_repository_blocked(personal_repo)
+
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    await delete_repo_branch(owner=target.owner, repo=target.repo_name, name=name)
+
+
 def _parse_gitea_issue(item: dict) -> dict:
     user = item.get("user") if isinstance(item.get("user"), dict) else {}
     labels = [
@@ -905,6 +1004,7 @@ def _parse_gitea_pull(item: dict) -> dict:
     user = item.get("user") if isinstance(item.get("user"), dict) else {}
     head = item.get("head") if isinstance(item.get("head"), dict) else {}
     base = item.get("base") if isinstance(item.get("base"), dict) else {}
+    commits_count = item.get("commits") if item.get("commits") is not None else item.get("commits_count")
     return {
         "number": int(item.get("number") or 0),
         "title": str(item.get("title") or "Без названия").strip(),
@@ -914,6 +1014,8 @@ def _parse_gitea_pull(item: dict) -> dict:
         "base_branch": str(base.get("ref") or "").strip() or None,
         "created_at": item.get("created_at"),
         "updated_at": item.get("updated_at"),
+        "merged": item.get("merged") if item.get("merged") is not None else None,
+        "commits_count": int(commits_count) if commits_count is not None else None,
     }
 
 
@@ -969,6 +1071,101 @@ async def get_student_repository_pulls(
     )
     pulls = [_parse_gitea_pull(p) for p in raw if isinstance(p, dict)]
     return {"pulls": pulls, "page": page, "has_more": has_more}
+
+
+async def create_student_repository_pull_request(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    title: str,
+    head: str,
+    base: str,
+    body: str | None = None,
+) -> dict:
+    from app.services.gitea_service import create_pull_request
+
+    # Only personal repos are writable; assignment repos are treated read-only in the app.
+    try:
+        item_uuid = UUID(repo_item_id)
+    except ValueError as exc:
+        raise ValueError("Cannot create pull requests for this repository") from exc
+
+    repo_row = await session.execute(
+        select(Repository).where(
+            Repository.id == item_uuid,
+            Repository.owner_id == student_id,
+        )
+    )
+    personal_repo = repo_row.scalar_one_or_none()
+    if not personal_repo:
+        raise ValueError("Cannot create pull requests for this repository")
+    raise_if_repository_blocked(personal_repo)
+
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    pr = await create_pull_request(
+        owner=target.owner,
+        repo=target.repo_name,
+        title=title,
+        head=head,
+        base=base,
+        body=body,
+    )
+    return _parse_gitea_pull(pr)
+
+
+async def get_student_repository_commit_diff(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    sha: str,
+) -> dict:
+    from app.services.gitea_service import get_commit_diff_text
+
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    diff = await get_commit_diff_text(owner=target.owner, repo=target.repo_name, sha=sha)
+    return {"sha": sha[:12], "diff": diff}
+
+
+async def list_student_repository_unmerged_branches(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    base_branch: str | None = None,
+    limit: int = 50,
+) -> list[str]:
+    from app.services.gitea_service import compare_branches, get_repo_metadata, list_repo_branches
+
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    meta = await get_repo_metadata(owner=target.owner, repo=target.repo_name)
+    base = (base_branch or str(meta.get("default_branch") if meta else "") or "main").strip() or "main"
+    raw = await list_repo_branches(owner=target.owner, repo=target.repo_name)
+    names = [str(b.get("name") or "").strip() for b in raw if isinstance(b, dict) and b.get("name")]
+    out: list[str] = []
+    for name in names:
+        if not name or name == base:
+            continue
+        cmp = await compare_branches(owner=target.owner, repo=target.repo_name, base=base, head=name)
+        ahead = cmp.get("ahead_by") if isinstance(cmp, dict) else None
+        if isinstance(ahead, int) and ahead > 0:
+            out.append(name)
+        if len(out) >= limit:
+            break
+    return out
 
 
 async def get_student_repository_wiki_pages(
@@ -1081,6 +1278,21 @@ async def create_student_repository_file(
     cleaned = path.strip().strip("/")
     if not cleaned or ".." in cleaned.split("/"):
         raise ValueError("Invalid filepath")
+
+    # Disallow writing to blocked personal repositories (view-only allowed).
+    try:
+        item_uuid = UUID(repo_item_id)
+        repo_row = await session.execute(
+            select(Repository).where(
+                Repository.id == item_uuid,
+                Repository.owner_id == student_id,
+            )
+        )
+        personal_repo = repo_row.scalar_one_or_none()
+        if personal_repo:
+            raise_if_repository_blocked(personal_repo)
+    except ValueError:
+        pass
 
     target = await resolve_student_repo_gitea_target(
         session,
@@ -2052,30 +2264,7 @@ async def get_student_activity_feed(
                     )
                 )
 
-    deadline_horizon = now + timedelta(days=3)
-    for assignment in ctx.all_assignments:
-        if assignment.deadline < now or assignment.deadline > deadline_horizon:
-            continue
-        sub = ctx.submissions_map.get(assignment.id)
-        if sub and sub.submitted_at:
-            continue
-        days_left = (_start_of_day(assignment.deadline) - _start_of_day(now)).days
-        days_label = "сегодня" if days_left <= 0 else f"{days_left} дн"
-        course_title = ctx.course_title_by_id.get(assignment.course_id, "—")
-        items.append(
-            StudentActivityFeedItemRead(
-                id=f"deadline-{assignment.id}",
-                type="deadline",
-                text="Дедлайн ",
-                bold=days_label,
-                text_after=f" — {assignment.title} · {course_title}",
-                time_label="Напоминание",
-                created_at=assignment.deadline,
-                badge=days_label,
-                badge_variant="err" if days_left <= 1 else "warn",
-                href=f"/courses/{assignment.course_id}/assignments/{assignment.id}",
-            )
-        )
+    # Дедлайны не дублируем здесь — на дашборде отдельный блок «Дедлайны».
 
     log_result = await session.execute(
         select(ActivityLog)

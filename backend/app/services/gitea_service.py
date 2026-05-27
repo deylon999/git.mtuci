@@ -466,6 +466,47 @@ async def delete_repository(*, owner: str, repo_name: str) -> None:
         logger.warning("Gitea delete %s/%s: %s", owner, repo_name, resp.status_code)
 
 
+async def update_repository_settings(
+    *,
+    owner: str,
+    repo: str,
+    name: str | None = None,
+    description: str | None = None,
+    private: bool | None = None,
+) -> dict[str, Any] | None:
+    """
+    PATCH /repos/{owner}/{repo}
+    Used for updating description / visibility; may also support rename depending on Gitea.
+    """
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}"
+    payload: dict[str, Any] = {}
+    if name is not None:
+        payload["name"] = name
+    if description is not None:
+        payload["description"] = description
+    if private is not None:
+        payload["private"] = private
+    if not payload:
+        return await get_repo_metadata(owner=owner, repo=repo)
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "PATCH",
+            api_url,
+            headers={"Content-Type": "application/json"},
+            json=payload,
+        )
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code not in (200, 201):
+        logger.warning("Gitea patch repo %s/%s: HTTP %s %s", owner, repo, resp.status_code, resp.text[:200])
+        return None
+    data = resp.json()
+    return data if isinstance(data, dict) else None
+
+
 async def ensure_repo_webhook(*, owner: str, repo_name: str) -> None:
     """Register push webhook on a repo (idempotent)."""
     base_url = settings.GITEA_URL.rstrip("/")
@@ -896,6 +937,157 @@ async def list_repo_pulls_page(
         has_more = len(data) == limit
     return items, has_more
 
+
+async def compare_branches(
+    *,
+    owner: str,
+    repo: str,
+    base: str,
+    head: str,
+) -> dict[str, Any] | None:
+    """
+    Compare two refs: GET /repos/{owner}/{repo}/compare/{base}...{head}
+    Returns a dict with ahead_by/behind_by/total_commits/files depending on Gitea version.
+    """
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}"
+        f"/compare/{quote(base, safe='')}...{quote(head, safe='')}"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", api_url)
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        logger.warning("Gitea compare %s/%s %s...%s: %s", owner, repo, base, head, resp.status_code)
+        return None
+    data = resp.json()
+    return data if isinstance(data, dict) else None
+
+
+async def create_repo_branch(
+    *,
+    owner: str,
+    repo: str,
+    name: str,
+    from_ref: str,
+) -> None:
+    """
+    Create branch in repo.
+    Gitea API supports: POST /repos/{owner}/{repo}/branches with {new_branch_name, old_ref_name}.
+    """
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    cleaned = name.strip()
+    base_ref = from_ref.strip() or "main"
+    if not cleaned or ".." in cleaned.split("/"):
+        raise ValueError("Invalid branch name")
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/branches"
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            api_url,
+            headers={"Content-Type": "application/json"},
+            json={"new_branch_name": cleaned, "old_ref_name": base_ref},
+        )
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code in (200, 201):
+        return
+    if resp.status_code == 409:
+        raise RuntimeError("Branch already exists")
+    raise RuntimeError(f"Gitea create branch failed: {resp.status_code} {resp.text[:300]}")
+
+
+async def delete_repo_branch(
+    *,
+    owner: str,
+    repo: str,
+    name: str,
+) -> None:
+    """Delete branch in repo: DELETE /repos/{owner}/{repo}/branches/{branch}."""
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    cleaned = name.strip()
+    if not cleaned or ".." in cleaned.split("/"):
+        raise ValueError("Invalid branch name")
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/branches/{quote(cleaned, safe='')}"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "DELETE", api_url)
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code in (200, 204, 404):
+        return
+    raise RuntimeError(f"Gitea delete branch failed: {resp.status_code} {resp.text[:300]}")
+
+
+async def get_commit_diff_text(
+    *,
+    owner: str,
+    repo: str,
+    sha: str,
+) -> str:
+    """
+    Get commit diff as plain text.
+    Uses Gitea endpoint: GET /repos/{owner}/{repo}/git/commits/{sha}/diff
+    """
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    cleaned = sha.strip()
+    if not cleaned:
+        raise ValueError("Invalid sha")
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/git/commits/{quote(cleaned, safe='')}/diff"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", api_url)
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code == 200:
+        return resp.text or ""
+    if resp.status_code == 404:
+        return ""
+    logger.warning("Gitea commit diff %s/%s %s: HTTP %s", owner, repo, cleaned, resp.status_code)
+    return ""
+
+
+async def create_pull_request(
+    *,
+    owner: str,
+    repo: str,
+    title: str,
+    head: str,
+    base: str,
+    body: str | None = None,
+) -> dict[str, Any]:
+    """Create PR: POST /repos/{owner}/{repo}/pulls."""
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    payload = {
+        "title": (title or "").strip() or "Pull request",
+        "head": head.strip(),
+        "base": base.strip() or "main",
+        "body": (body or "").strip(),
+    }
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/pulls"
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            api_url,
+            headers={"Content-Type": "application/json"},
+            json=payload,
+        )
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Gitea create PR failed: {resp.status_code} {resp.text[:300]}")
+    data = resp.json()
+    return data if isinstance(data, dict) else {}
 
 async def list_repo_wiki_pages(
     *,

@@ -453,6 +453,11 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
               cloneUrl: repo.clone_url,
               description: repo.description,
               language: repo.language,
+              visibility: repo.visibility,
+              source: repo.source,
+              courseId: repo.course_id ?? null,
+              assignmentId: repo.assignment_id ?? null,
+              assignmentLabel: repo.assignment_label ?? null,
             };
             const giteaOk = repo.gitea_available !== false;
             const assignmentHref =

@@ -35,6 +35,7 @@ export interface RepositoryCreateTemplates {
 export interface UpdateRepositoryRequest {
   name?: string;
   description?: string;
+  repo_type?: "public" | "private" | "course";
 }
 
 export async function getRepositoryCreateTemplates(): Promise<RepositoryCreateTemplates> {

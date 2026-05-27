@@ -27,6 +27,8 @@ interface RepoProjectSidebarProps {
   activeBranch?: string;
   onGoToReadme?: () => void;
   onOpenLicense?: (path: string) => void;
+  courseHref?: string | null;
+  assignmentLabel?: string | null;
 }
 
 const LANG_COLORS: Record<string, string> = {
@@ -146,6 +148,8 @@ export default function RepoProjectSidebar({
   activeBranch,
   onGoToReadme,
   onOpenLicense,
+  courseHref,
+  assignmentLabel,
 }: RepoProjectSidebarProps) {
   const { t, tp, language } = useUserPreferences();
   const dateLocale = language === "en" ? "en-US" : "ru-RU";
@@ -373,6 +377,21 @@ export default function RepoProjectSidebar({
                   </li>
                 ))}
               </ul>
+            </div>
+          ) : null}
+
+          {courseHref ? (
+            <div className="border-t pt-3" style={{ borderColor: theme.border }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: theme.text3 }}>
+                {t("repo.sidebar.assignment") ?? "Course & assignment"}
+              </p>
+              <Link
+                to={courseHref}
+                className="block rounded-lg border px-3 py-2 text-sm hover:opacity-90"
+                style={{ borderColor: theme.border, backgroundColor: theme.bg4, color: theme.accent2 }}
+              >
+                {assignmentLabel ?? "Open assignment"}
+              </Link>
             </div>
           ) : null}
         </div>

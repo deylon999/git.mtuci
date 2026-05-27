@@ -246,6 +246,11 @@ class StudentRepoBranchesRead(BaseModel):
     branches: list[StudentRepoBranchRead] = Field(default_factory=list)
 
 
+class StudentRepoCreateBranchBody(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    from_ref: str = Field(default="main", min_length=1, max_length=200)
+
+
 class StudentRepoRecentCommitRead(BaseModel):
     sha: str
     message: str
@@ -266,6 +271,7 @@ class StudentRepoGiteaLinksRead(BaseModel):
 class StudentRepoSummaryRead(BaseModel):
     description: str | None = None
     language: str | None = None
+    is_blocked: bool = False
     default_branch: str = "main"
     commits_count: int | None = None
     commits_count_approx: bool = False
@@ -319,6 +325,20 @@ class StudentRepoPullRead(BaseModel):
     base_branch: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    merged: bool | None = None
+    commits_count: int | None = None
+
+
+class StudentRepoCreatePullBody(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    head: str = Field(min_length=1, max_length=200)
+    base: str = Field(default="main", min_length=1, max_length=200)
+    body: str | None = Field(default=None, max_length=5000)
+
+
+class StudentRepoCommitDiffRead(BaseModel):
+    sha: str
+    diff: str
 
 
 class StudentRepoPullsRead(BaseModel):

@@ -14,11 +14,6 @@ import {
 } from "lucide-react";
 import {
   createStudentRepoFile,
-  getStudentRepoBranches,
-  getStudentRepoFileContent,
-  getStudentRepoFiles,
-  getStudentRepoSummary,
-  searchStudentRepoFiles,
   type StudentRepoSummary,
 } from "../api/studentDashboardApi";
 import RepoMarkdown from "./RepoMarkdown";
@@ -31,6 +26,7 @@ import RepoProjectSidebar from "./repo/RepoProjectSidebar";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { formatRelativeTime } from "../utils/formatRelativeTime";
 import { getTheme, type ThemeColors } from "../theme";
+import { useRepoApi } from "../context/RepoApiContext";
 
 export interface RepoBrowserFile {
   sha: string;
@@ -167,6 +163,7 @@ export default function RepoFileBrowser({
 }: RepoFileBrowserProps) {
   const theme = getTheme(isDarkTheme);
   const { t, tp, language } = useUserPreferences();
+  const api = useRepoApi();
   const sortLocale = language === "en" ? "en" : "ru";
 
   const [branch, setBranch] = useState("main");
@@ -224,7 +221,7 @@ export default function RepoFileBrowser({
     async function loadBranches() {
       setBranchLoading(true);
       try {
-        const data = await getStudentRepoBranches(repoId);
+        const data = await api.getBranches(repoId);
         if (cancelled) return;
         setBranches(data.branches);
         setBranch(data.default_branch || "main");
@@ -254,7 +251,7 @@ export default function RepoFileBrowser({
       void (async () => {
         setRepoSearchLoading(true);
         try {
-          const rows = await searchStudentRepoFiles(repoId, q, branch);
+          const rows = await api.searchFiles(repoId, q, branch);
           if (!cancelled) setRepoSearchResults(rows);
         } catch {
           if (!cancelled) setRepoSearchResults([]);
@@ -273,7 +270,7 @@ export default function RepoFileBrowser({
     setDirLoading(true);
     setDirError(null);
     try {
-      const list = await getStudentRepoFiles(repoId, currentPath, branch);
+      const list = await api.getFiles(repoId, currentPath, branch);
       setEntries(
         [...list].sort((a, b) => {
           if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
@@ -295,7 +292,7 @@ export default function RepoFileBrowser({
   const loadSummary = useCallback(async () => {
     setSummaryLoading(true);
     try {
-      const data = await getStudentRepoSummary(repoId, branch);
+      const data = await api.getSummary(repoId, branch);
       setSummary(data);
     } catch {
       setSummary(null);
@@ -338,7 +335,7 @@ export default function RepoFileBrowser({
     setFileError(null);
     setFileContent(null);
     try {
-      const res = await getStudentRepoFileContent(repoId, filepath, branch);
+      const res = await api.getFileContent(repoId, filepath, branch);
       setFileContent(res.content);
     } catch (e) {
       setFileError(e instanceof Error ? e.message : t("repo.browser.openFileFailed"));
@@ -398,7 +395,8 @@ export default function RepoFileBrowser({
     content: string;
     message: string;
   }) => {
-    await createStudentRepoFile(repoId, {
+    if (!api.createFile) throw new Error("Read-only repository");
+    await api.createFile(repoId, {
       ...payload,
       branch,
     });
@@ -436,6 +434,8 @@ export default function RepoFileBrowser({
       cloneUrl={cloneUrl}
       giteaWebUrl={giteaWebUrl}
       pageUrl={pageUrl}
+      readOnly={api.mode === "teacher" || summary?.is_blocked}
+      cloneDisabled={api.mode === "teacher" || summary?.is_blocked}
     />
   );
 

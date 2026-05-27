@@ -1,19 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   ChevronDown,
-  Copy,
-  ExternalLink,
   FilePlus,
   GitBranch,
-  Link2,
   Loader2,
   Search,
 } from "lucide-react";
-import toast from "react-hot-toast";
-import { getStudentRepoCloneInfo, type StudentRepoCloneInfo } from "../../api/studentDashboardApi";
 import type { ThemeColors } from "../../theme";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
+import RepoCloneMenuButton from "./RepoCloneMenuButton";
 
 export interface RepoCodeToolbarProps {
   theme: ThemeColors;
@@ -33,6 +28,8 @@ export interface RepoCodeToolbarProps {
   cloneUrl?: string | null;
   giteaWebUrl?: string | null;
   pageUrl?: string | null;
+  readOnly?: boolean;
+  cloneDisabled?: boolean;
 }
 
 export default function RepoCodeToolbar({
@@ -53,159 +50,26 @@ export default function RepoCodeToolbar({
   cloneUrl,
   giteaWebUrl,
   pageUrl,
+  readOnly,
+  cloneDisabled,
 }: RepoCodeToolbarProps) {
   const { t } = useUserPreferences();
   const [branchOpen, setBranchOpen] = useState(false);
-  const [cloneOpen, setCloneOpen] = useState(false);
-  const [cloneInfo, setCloneInfo] = useState<StudentRepoCloneInfo | null>(null);
-  const [cloneLoading, setCloneLoading] = useState(false);
-  const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
-  const cloneBtnRef = useRef<HTMLButtonElement>(null);
-  const cloneMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setSearchFocused(false);
       }
-      const target = e.target as Node;
-      if (
-        cloneOpen &&
-        !cloneBtnRef.current?.contains(target) &&
-        !cloneMenuRef.current?.contains(target)
-      ) {
-        setCloneOpen(false);
-      }
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, [cloneOpen]);
-
-  useEffect(() => {
-    if (!cloneOpen) {
-      setCloneInfo(null);
-      return;
-    }
-    if (cloneBtnRef.current) {
-      setMenuRect(cloneBtnRef.current.getBoundingClientRect());
-    }
-    let cancelled = false;
-    setCloneLoading(true);
-    getStudentRepoCloneInfo(repoId)
-      .then((data) => {
-        if (!cancelled) setCloneInfo(data);
-      })
-      .catch(() => {
-        if (!cancelled && cloneUrl) {
-          setCloneInfo({
-            clone_url: cloneUrl,
-            git_clone_command: `git clone ${cloneUrl}`,
-            auth_required: false,
-            note: t("repo.clone.tokenNote"),
-          });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setCloneLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [cloneOpen, repoId, cloneUrl]);
-
-  const copyText = async (text: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success(label);
-    } catch {
-      toast.error(t("repo.errors.copyFailed"));
-    }
-    setCloneOpen(false);
-  };
+  }, []);
 
   const showRepoSearch =
     searchFocused && repoSearchQuery.trim().length >= 1;
-
-  const cloneMenu =
-    cloneOpen && menuRect
-      ? createPortal(
-          <div
-            ref={cloneMenuRef}
-            className="fixed z-[9999] w-[min(100vw-1.5rem,22rem)] rounded-lg border py-1 shadow-2xl"
-            style={{
-              top: menuRect.bottom + 4,
-              right: Math.max(8, window.innerWidth - menuRect.right),
-              backgroundColor: theme.bg3,
-              borderColor: theme.border,
-            }}
-          >
-            {cloneLoading ? (
-              <p className="flex items-center gap-2 px-3 py-3 text-xs" style={{ color: theme.text2 }}>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {t("repo.clone.preparing")}
-              </p>
-            ) : cloneInfo ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void copyText(cloneInfo.git_clone_command, t("repo.clone.cloneCopied"))
-                  }
-                  className="w-full px-3 py-2 text-left text-xs hover:opacity-90"
-                  style={{ color: theme.text }}
-                >
-                  <Copy className="inline h-3 w-3 mr-1.5" />
-                  {cloneInfo.auth_required
-                    ? t("repo.clone.copyWithToken")
-                    : t("repo.clone.copyHttps")}
-                </button>
-                <p
-                  className="px-3 pb-2 text-[10px] font-mono break-all leading-snug max-h-24 overflow-y-auto"
-                  style={{ color: theme.text3 }}
-                >
-                  {cloneInfo.git_clone_command}
-                </p>
-                {cloneInfo.note ? (
-                  <p className="px-3 pb-2 text-[10px] leading-snug" style={{ color: theme.text3 }}>
-                    {cloneInfo.note}
-                  </p>
-                ) : null}
-              </>
-            ) : (
-              <p className="px-3 py-2 text-xs" style={{ color: theme.text3 }}>
-                {t("repo.clone.giteaUnavailable")}
-              </p>
-            )}
-            {pageUrl ? (
-              <button
-                type="button"
-                onClick={() => void copyText(pageUrl, t("repo.clone.pageLinkCopied"))}
-                className="w-full px-3 py-2 text-left text-xs hover:opacity-90 border-t"
-                style={{ color: theme.text2, borderColor: theme.border }}
-              >
-                <Link2 className="inline h-3 w-3 mr-1.5" />
-                {t("repo.clone.pageLink")}
-              </button>
-            ) : null}
-            {giteaWebUrl ? (
-              <a
-                href={giteaWebUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 w-full px-3 py-2 text-left text-xs hover:opacity-90"
-                style={{ color: theme.accent2 }}
-                onClick={() => setCloneOpen(false)}
-              >
-                <ExternalLink className="h-3 w-3" />
-                {t("repo.clone.openGitea")}
-              </a>
-            ) : null}
-          </div>,
-          document.body,
-        )
-      : null;
 
   return (
     <div
@@ -313,32 +177,29 @@ export default function RepoCodeToolbar({
 
       <button
         type="button"
+        disabled={readOnly}
         onClick={onAddFile}
         className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium shrink-0"
         style={{
           borderColor: `${theme.success}55`,
           backgroundColor: `${theme.success}14`,
-          color: theme.success,
+          color: readOnly ? theme.text3 : theme.success,
+          opacity: readOnly ? 0.55 : 1,
         }}
       >
         <FilePlus className="h-3.5 w-3.5" />
         {t("repo.toolbar.newFile")}
       </button>
 
-      <div className="relative shrink-0">
-        <button
-          ref={cloneBtnRef}
-          type="button"
-          onClick={() => setCloneOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium"
-          style={{ borderColor: theme.border, backgroundColor: theme.bg3, color: theme.text }}
-        >
-          <Copy className="h-3.5 w-3.5" />
-          {t("repo.clone.clone")}
-          <ChevronDown className="h-3 w-3 opacity-70" />
-        </button>
-        {cloneMenu}
-      </div>
+      <RepoCloneMenuButton
+        theme={theme}
+        repoId={repoId}
+        cloneUrl={cloneUrl}
+        giteaWebUrl={giteaWebUrl}
+        pageUrl={pageUrl}
+        disabled={cloneDisabled}
+        size="md"
+      />
     </div>
   );
 }

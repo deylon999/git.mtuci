@@ -6,7 +6,9 @@ import type { RepoNavTabId } from "../components/repo/RepoNavTabs";
 export interface StudentRepoWorkspaceContextValue {
   repoId: string;
   meta: StudentRepoMeta | null;
+  setMeta: (meta: StudentRepoMeta | null) => void;
   summary: StudentRepoSummary | null;
+  setSummary: (summary: StudentRepoSummary | null) => void;
   loading: boolean;
   error: string | null;
   activeTab: RepoNavTabId;

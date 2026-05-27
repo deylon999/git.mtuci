@@ -16,6 +16,10 @@ export interface StudentRepoMeta {
   description: string | null;
   language: string | null;
   visibility: string | null;
+  source?: "personal" | "assignment";
+  courseId?: string | null;
+  assignmentId?: string | null;
+  assignmentLabel?: string | null;
 }
 
 function metaFromPartial(initial?: Partial<StudentRepoMeta> | null): StudentRepoMeta | null {
@@ -28,6 +32,10 @@ function metaFromPartial(initial?: Partial<StudentRepoMeta> | null): StudentRepo
     description: initial.description ?? null,
     language: initial.language ?? null,
     visibility: initial.visibility ?? null,
+    source: initial.source,
+    courseId: initial.courseId ?? null,
+    assignmentId: initial.assignmentId ?? null,
+    assignmentLabel: initial.assignmentLabel ?? null,
   };
 }
 
@@ -76,6 +84,10 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
             description: repo.description,
             language: repo.language,
             visibility: repo.visibility,
+            source: repo.source,
+            courseId: repo.course_id ?? null,
+            assignmentId: repo.assignment_id ?? null,
+            assignmentLabel: repo.assignment_label ?? null,
           };
         }
         if (!cancelled) setMeta(nextMeta);
@@ -104,5 +116,5 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
     };
   }, [repoId, navigate, initialMeta]);
 
-  return { meta, summary, loading, error, setSummary };
+  return { meta, setMeta, summary, setSummary, loading, error };
 }

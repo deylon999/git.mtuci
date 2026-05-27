@@ -428,6 +428,17 @@ async def update_repository(
         )
     await ensure_repository_accessible(repository, current_user, session)
 
+    # Block any edits for blocked repositories (view-only).
+    if repository.is_blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Репозиторий заблокирован администратором. Доступно только чтение.",
+        )
+
+    old_repo_name = repository.gitea_repo_name or repository.name
+    old_description = repository.description or ""
+    old_private = repository.repo_type == RepositoryType.private
+
     # Check name uniqueness if name is being updated
     if payload.name and payload.name != repository.name:
         existing = await session.execute(
@@ -446,10 +457,43 @@ async def update_repository(
     if payload.description is not None:
         repository.description = payload.description
 
+    if payload.repo_type is not None:
+        repository.repo_type = payload.repo_type
+
     repository.updated_at = datetime.now(timezone.utc)
     session.add(repository)
     await session.commit()
     await session.refresh(repository)
+
+    # Best-effort sync settings to Gitea (description / private / name)
+    try:
+        owner_username = resolve_gitea_username(current_user)
+        actual_owner = await resolve_repo_owner(primary_owner=owner_username, repo_name=old_repo_name)
+        from app.services.gitea_service import update_repository_settings, get_repo_metadata
+
+        new_private = repository.repo_type == RepositoryType.private
+        new_description = repository.description or ""
+        new_name = (payload.name or "").strip() or None
+
+        await update_repository_settings(
+            owner=actual_owner,
+            repo=old_repo_name,
+            name=new_name if new_name and new_name != old_repo_name else None,
+            description=new_description if new_description != old_description else None,
+            private=new_private if new_private != old_private else None,
+        )
+        # If rename succeeded, refresh gitea_repo_name and clone_url
+        if new_name and new_name != old_repo_name:
+            meta = await get_repo_metadata(owner=actual_owner, repo=new_name)
+            if meta:
+                repository.gitea_repo_name = str(meta.get("name") or new_name)
+                repository.clone_url = build_clone_url(actual_owner, repository.gitea_repo_name)
+                session.add(repository)
+                await session.commit()
+                await session.refresh(repository)
+    except Exception:
+        # Do not fail the update if Gitea is temporarily unavailable.
+        pass
     return RepositoryRead.model_validate(repository)
 
 

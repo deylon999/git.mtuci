@@ -21,6 +21,7 @@ from app.api.routes.websocket import router as websocket_router
 from app.api.routes.activity import router as activity_router
 from app.api.routes.student_dashboard import router as student_dashboard_router
 from app.api.routes.teacher_dashboard import router as teacher_dashboard_router
+from app.api.routes.teacher_repositories import router as teacher_repositories_router
 from app.api.routes.assistants_dashboard import router as assistants_dashboard_router
 from app.api.routes.search import router as search_router
 from app.api.routes.notifications import router as notifications_router
@@ -83,6 +84,7 @@ app.include_router(websocket_router)
 app.include_router(activity_router)
 app.include_router(student_dashboard_router)
 app.include_router(teacher_dashboard_router)
+app.include_router(teacher_repositories_router)
 app.include_router(assistants_dashboard_router)
 app.include_router(search_router)
 app.include_router(notifications_router)

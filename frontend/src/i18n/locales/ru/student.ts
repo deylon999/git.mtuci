@@ -74,6 +74,7 @@ export const studentRu = {
     noRepos: "Нет репозиториев",
     createRepo: "Создать репозиторий",
     activityFeedTitle: "Последние действия",
+    activityFeedSubtitle: "За 14 дней, не более 12 событий",
     noActivity: "Пока нет событий",
     deadlinesTitle: "Дедлайны",
     noUpcomingDeadlines: "Нет предстоящих дедлайнов",

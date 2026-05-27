@@ -13,7 +13,6 @@ import { useStudentRepoWorkspaceContext } from "../context/StudentRepoWorkspaceC
 import RepoMarkdown from "../components/RepoMarkdown";
 import {
   getStudentRepoIssues,
-  getStudentRepoPulls,
   getStudentRepoWikiContent,
   getStudentRepoWikiPages,
   type StudentRepoIssue,
@@ -24,6 +23,7 @@ import { formatRelativeTime } from "../utils/formatRelativeTime";
 import { getTheme, type ThemeColors } from "../theme";
 import type { RepoNavTabId } from "../components/repo/RepoNavTabs";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+import { useRepoApi } from "../context/RepoApiContext";
 
 interface StudentRepositorySectionPageProps {
   isDarkTheme?: boolean;
@@ -130,7 +130,9 @@ function IssueRow({ theme, item }: { theme: ThemeColors; item: StudentRepoIssue 
 }
 
 function PullRow({ theme, item }: { theme: ThemeColors; item: StudentRepoPull }) {
-  const open = item.state === "open";
+  const merged = item.merged === true || item.state === "merged";
+  const open = item.state === "open" && !merged;
+  const statusLabel = merged ? "merged" : item.state;
   return (
     <li
       className="flex gap-3 px-4 py-3.5 border-t"
@@ -138,7 +140,7 @@ function PullRow({ theme, item }: { theme: ThemeColors; item: StudentRepoPull })
     >
       <GitPullRequest
         className="h-4 w-4 shrink-0 mt-0.5"
-        style={{ color: open ? theme.accent2 : theme.text3 }}
+        style={{ color: merged ? theme.success : open ? theme.accent2 : theme.text3 }}
       />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -148,12 +150,17 @@ function PullRow({ theme, item }: { theme: ThemeColors; item: StudentRepoPull })
           <span
             className="text-[10px] font-semibold uppercase rounded px-1.5 py-0.5"
             style={{
-              backgroundColor: open ? `${theme.accent}22` : theme.bg4,
-              color: open ? theme.accent2 : theme.text3,
+              backgroundColor: merged ? `${theme.success}22` : open ? `${theme.accent}22` : theme.bg4,
+              color: merged ? theme.success : open ? theme.accent2 : theme.text3,
             }}
           >
-            {item.state}
+            {statusLabel}
           </span>
+          {item.commits_count != null ? (
+            <span className="text-[10px] font-mono tabular-nums" style={{ color: theme.text3 }}>
+              {item.commits_count} commits
+            </span>
+          ) : null}
         </div>
         <p className="text-sm font-medium mt-0.5" style={{ color: theme.text }}>
           {item.title}
@@ -172,6 +179,7 @@ function PullRow({ theme, item }: { theme: ThemeColors; item: StudentRepoPull })
 
 function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
   const { t } = useUserPreferences();
+  const api = useRepoApi();
   const [state, setState] = useState("open");
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<StudentRepoIssue[]>([]);
@@ -187,7 +195,7 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
     async function load() {
       setLoading(true);
       try {
-        const res = await getStudentRepoIssues(repoId, state, page);
+        const res = await api.getIssues(repoId, state, page);
         if (cancelled) return;
         setItems((prev) => (page === 1 ? res.issues : [...prev, ...res.issues]));
         setHasMore(res.has_more);
@@ -251,22 +259,50 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
 
 function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
   const { t } = useUserPreferences();
+  const { summary } = useStudentRepoWorkspaceContext();
+  const api = useRepoApi();
+  const isBlocked = !!summary?.is_blocked;
   const [state, setState] = useState("open");
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<StudentRepoPull[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [headOptions, setHeadOptions] = useState<string[]>([]);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [head, setHead] = useState("");
+  const base = summary?.default_branch ?? "main";
+
   useEffect(() => {
     setPage(1);
   }, [state, repoId]);
+
+  useEffect(() => {
+    if (!createOpen || isBlocked) return;
+    let cancelled = false;
+    api.getUnmergedBranches(repoId, base, 50)
+      .then((rows) => {
+        if (cancelled) return;
+        setHeadOptions(rows);
+        if (!head && rows.length > 0) setHead(rows[0]);
+      })
+      .catch(() => {
+        if (!cancelled) setHeadOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [createOpen, repoId, base, isBlocked, head]);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setLoading(true);
       try {
-        const res = await getStudentRepoPulls(repoId, state, page);
+        const res = await api.getPulls(repoId, state, page);
         if (!cancelled) {
           setItems((prev) => (page === 1 ? res.pulls : [...prev, ...res.pulls]));
           setHasMore(res.has_more);
@@ -292,8 +328,131 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
         <h2 className="text-sm font-semibold" style={{ color: theme.text }}>
           Pull requests
         </h2>
-        <RepoStateTabs theme={theme} value={state} onChange={setState} />
+        <div className="flex items-center gap-2">
+          <RepoStateTabs theme={theme} value={state} onChange={setState} />
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            disabled={isBlocked}
+            className="rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+            style={{
+              borderColor: `${theme.accent}55`,
+              backgroundColor: `${theme.accent}14`,
+              color: isBlocked ? theme.text3 : theme.accent2,
+              opacity: isBlocked ? 0.55 : 1,
+            }}
+          >
+            {t("repo.section.createPr") ?? "Create PR"}
+          </button>
+        </div>
       </div>
+      {createOpen ? (
+        <div className="px-4 py-4 border-b space-y-3" style={{ borderColor: theme.border }}>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-semibold uppercase" style={{ color: theme.text3 }}>
+              Title
+            </label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+              placeholder="PR title"
+              disabled={createLoading || isBlocked}
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-semibold uppercase" style={{ color: theme.text3 }}>
+                Head (from)
+              </label>
+              <select
+                value={head}
+                onChange={(e) => setHead(e.target.value)}
+                className="rounded-lg border px-3 py-2 text-sm"
+                style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                disabled={createLoading || isBlocked}
+              >
+                {headOptions.length === 0 ? <option value="">—</option> : null}
+                {headOptions.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px]" style={{ color: theme.text3 }}>
+                Only branches ahead of <span className="font-mono">{base}</span> are shown.
+              </p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-semibold uppercase" style={{ color: theme.text3 }}>
+                Base (to)
+              </label>
+              <input
+                value={base}
+                readOnly
+                className="rounded-lg border px-3 py-2 text-sm font-mono"
+                style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text2 }}
+              />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-semibold uppercase" style={{ color: theme.text3 }}>
+              Description
+            </label>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={4}
+              className="rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+              disabled={createLoading || isBlocked}
+            />
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setCreateOpen(false)}
+              className="rounded-lg border px-3 py-2 text-xs font-medium"
+              style={{ borderColor: theme.border, backgroundColor: theme.bg4, color: theme.text2 }}
+              disabled={createLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void (async () => {
+                  if (!head || !title.trim()) return;
+                  setCreateLoading(true);
+                  try {
+                    if (!api.createPull) throw new Error("Read-only repository");
+                    const pr = await api.createPull(repoId, { title: title.trim(), head, base, body });
+                    setItems((prev) => [pr, ...prev]);
+                    setCreateOpen(false);
+                    setTitle("");
+                    setBody("");
+                  } catch {
+                    // ignore, list will refresh on next load
+                  } finally {
+                    setCreateLoading(false);
+                  }
+                })();
+              }}
+              className="rounded-lg border px-3 py-2 text-xs font-medium"
+              style={{
+                borderColor: `${theme.success}55`,
+                backgroundColor: `${theme.success}14`,
+                color: theme.success,
+                opacity: createLoading || !head || !title.trim() ? 0.55 : 1,
+              }}
+              disabled={createLoading || isBlocked || !head || !title.trim()}
+            >
+              Create
+            </button>
+          </div>
+        </div>
+      ) : null}
       {loading && page === 1 ? (
         <div className="flex justify-center py-14 gap-2 text-sm" style={{ color: theme.text2 }}>
           <Loader2 className="h-5 w-5 animate-spin" />
@@ -330,6 +489,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
 
 function WikiPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
   const { t } = useUserPreferences();
+  const api = useRepoApi();
   const [pages, setPages] = useState<StudentRepoWikiPage[]>([]);
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
   const [content, setContent] = useState("");
@@ -342,7 +502,7 @@ function WikiPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     async function load() {
       setLoadingList(true);
       try {
-        const res = await getStudentRepoWikiPages(repoId);
+        const res = await api.getWikiPages(repoId);
         if (cancelled) return;
         setPages(res.pages);
         if (res.pages.length > 0) setActiveSlug(res.pages[0].slug);
@@ -364,7 +524,7 @@ function WikiPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     async function load() {
       setLoadingPage(true);
       try {
-        const res = await getStudentRepoWikiContent(repoId, activeSlug);
+        const res = await api.getWikiContent(repoId, activeSlug);
         if (!cancelled) {
           setTitle(res.title);
           setContent(res.content);

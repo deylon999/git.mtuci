@@ -518,7 +518,11 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
           </Card>
 
           <Card theme={theme}>
-            <CardHead title={t("student.dashboard.activityFeedTitle")} theme={theme} />
+            <CardHead
+              title={t("student.dashboard.activityFeedTitle")}
+              subtitle={t("student.dashboard.activityFeedSubtitle")}
+              theme={theme}
+            />
             {loading ? (
               <div className="px-3.5 py-6 text-sm text-center" style={{ color: theme.text2 }}>
                 {t("common.loading")}

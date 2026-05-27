@@ -54,7 +54,9 @@ const TeacherCodeReviewPage = lazy(() => import("./pages/teacher/TeacherCodeRevi
 const TeacherTemplatesPage = lazy(() => import("./pages/teacher/TeacherTemplatesPage"));
 const TeacherActivityPage = lazy(() => import("./pages/teacher/TeacherActivityPage"));
 const StudentRepositoryCommitsPage = lazy(() => import("./pages/StudentRepositoryCommitsPage"));
+const StudentRepositoryBranchesPage = lazy(() => import("./pages/StudentRepositoryBranchesPage"));
 const StudentRepositorySectionPage = lazy(() => import("./pages/StudentRepositorySectionPage"));
+const StudentRepositoryCommitDiffPage = lazy(() => import("./pages/StudentRepositoryCommitDiffPage"));
 
 const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 
@@ -164,6 +166,10 @@ function AppShell({
                     <Route index element={<Navigate to="code" replace />} />
                     <Route path="code" element={<StudentRepoCodePanel isDarkTheme={isDarkTheme} />} />
                     <Route
+                      path="branches"
+                      element={<StudentRepositoryBranchesPage isDarkTheme={isDarkTheme} />}
+                    />
+                    <Route
                       path="issues"
                       element={<StudentRepositorySectionPage isDarkTheme={isDarkTheme} section="issues" />}
                     />
@@ -182,6 +188,10 @@ function AppShell({
                     <Route
                       path="commits"
                       element={<StudentRepositoryCommitsPage isDarkTheme={isDarkTheme} />}
+                    />
+                    <Route
+                      path="commits/:sha"
+                      element={<StudentRepositoryCommitDiffPage isDarkTheme={isDarkTheme} />}
                     />
                   </Route>
                   </Route>

@@ -439,6 +439,7 @@ export interface StudentRepoGiteaLinks {
 export interface StudentRepoSummary {
   description: string | null;
   language: string | null;
+  is_blocked: boolean;
   default_branch: string;
   commits_count: number | null;
   commits_count_approx: boolean;
@@ -484,6 +485,33 @@ export function getStudentRepoCommits(
 export function getStudentRepoSummary(repoId: string, branch?: string): Promise<StudentRepoSummary> {
   return apiRequest<StudentRepoSummary>(
     `/students/me/repositories/${repoId}/summary${repoQuery({ branch })}`,
+  );
+}
+
+export interface StudentRepoCreateBranchBody {
+  name: string;
+  from_ref?: string;
+}
+
+export function createStudentRepoBranch(repoId: string, body: StudentRepoCreateBranchBody): Promise<void> {
+  return apiRequest<void>(`/students/me/repositories/${repoId}/branches`, {
+    method: "POST",
+    body,
+  });
+}
+
+export function deleteStudentRepoBranch(repoId: string, branch: string): Promise<void> {
+  return apiRequest<void>(`/students/me/repositories/${repoId}/branches/${encodeURIComponent(branch)}`, {
+    method: "DELETE",
+  });
+}
+
+export function getStudentRepoUnmergedBranches(repoId: string, base?: string, limit = 50): Promise<string[]> {
+  return apiRequest<string[]>(
+    `/students/me/repositories/${repoId}/unmerged-branches${repoQuery({
+      base,
+      limit: String(limit),
+    })}`,
   );
 }
 
@@ -609,6 +637,8 @@ export interface StudentRepoPull {
   base_branch: string | null;
   created_at: string | null;
   updated_at: string | null;
+  merged?: boolean | null;
+  commits_count?: number | null;
 }
 
 export interface StudentRepoPullsResponse {
@@ -625,6 +655,29 @@ export function getStudentRepoPulls(
   return apiRequest<StudentRepoPullsResponse>(
     `/students/me/repositories/${repoId}/pulls${repoQuery({ state, page: String(page) })}`,
   );
+}
+
+export interface StudentRepoCreatePullBody {
+  title: string;
+  head: string;
+  base?: string;
+  body?: string | null;
+}
+
+export function createStudentRepoPull(repoId: string, body: StudentRepoCreatePullBody): Promise<StudentRepoPull> {
+  return apiRequest<StudentRepoPull>(`/students/me/repositories/${repoId}/pulls`, {
+    method: "POST",
+    body,
+  });
+}
+
+export interface StudentRepoCommitDiff {
+  sha: string;
+  diff: string;
+}
+
+export function getStudentRepoCommitDiff(repoId: string, sha: string): Promise<StudentRepoCommitDiff> {
+  return apiRequest<StudentRepoCommitDiff>(`/students/me/repositories/${repoId}/commits/${encodeURIComponent(sha)}/diff`);
 }
 
 export interface StudentRepoWikiPage {
