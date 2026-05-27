@@ -164,6 +164,7 @@ SMTP_PASS=...
 | Переменная | Описание |
 |------------|----------|
 | `JWT_SECRET_KEY` | Секрет подписи JWT — обязательно сменить в продакшене |
+| `MTUCI_CREDENTIALS_SECRET` | Стабильный секрет для шифрования паролей ЛК МТУСИ в базе. Если не задан, используется `JWT_SECRET_KEY` |
 | `FRONTEND_URL` | Базовый URL фронтенда (ссылки в письмах, CORS) |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Учётная запись супер-админа при первом старте |
 
@@ -348,6 +349,7 @@ docker compose restart api
 ## Безопасность (продакшен)
 
 - Смените `JWT_SECRET_KEY`, пароли админа и Gitea  
+- Задайте стабильный `MTUCI_CREDENTIALS_SECRET` и храните его вне репозитория
 - Задайте надёжный `GITEA_WEBHOOK_SECRET`  
 - Используйте HTTPS для `GITEA_PUBLIC_URL` и `FRONTEND_URL`  
 - Ограничьте `GITEA__webhook__ALLOWED_HOST_LIST` в `docker-compose.yml`  

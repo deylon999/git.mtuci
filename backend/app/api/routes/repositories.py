@@ -381,6 +381,100 @@ async def create_repository(
         )
 
 
+# NOTE: Keep static routes ABOVE "/{repository_id}" to avoid them being swallowed
+# by the dynamic UUID route (Starlette matches by declaration order).
+
+
+@router.get("/all", response_model=list[RepositoryRead])
+@require_permission("repo_view")
+async def list_all_repositories(
+    repo_type: RepositoryType | None = Query(None, description="Filter by repository type"),
+    language: str | None = Query(None, description="Filter by programming language"),
+    faculty_id: UUID | None = Query(None, description="Filter by faculty"),
+    is_blocked: bool | None = Query(None, description="Filter by blocked status"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(20, ge=1, le=100, description="Number of records to return"),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[RepositoryRead]:
+    """Get all repositories with optional filters and pagination (admin/teacher only)."""
+    # Build query with filters
+    query = select(Repository, User.full_name.label("owner_name")).join(
+        User, Repository.owner_id == User.id
+    )
+    
+    if repo_type:
+        query = query.where(Repository.repo_type == repo_type)
+    if language:
+        query = query.where(Repository.language == language)
+    if faculty_id:
+        query = query.where(Repository.faculty_id == faculty_id)
+    if is_blocked is not None:
+        query = query.where(Repository.is_blocked == is_blocked)
+    
+    # Order by created_at desc and apply pagination
+    query = query.order_by(Repository.created_at.desc()).offset(skip).limit(limit)
+    
+    result = await session.execute(query)
+    repos_with_owners = result.all()
+    
+    # Convert to RepositoryRead with owner_full_name
+    repositories = []
+    for repo, owner_name in repos_with_owners:
+        repo_dict = {
+            "id": repo.id,
+            "name": repo.name,
+            "description": repo.description,
+            "gitea_repo_name": repo.gitea_repo_name,
+            "clone_url": repo.clone_url,
+            "owner_id": repo.owner_id,
+            "owner_full_name": owner_name,
+            "commits_count": 0,  # Can be populated from Gitea if needed
+            "is_public": repo.repo_type == RepositoryType.public,
+            "repo_type": repo.repo_type,
+            "language": repo.language,
+            "is_blocked": repo.is_blocked,
+            "faculty_id": repo.faculty_id,
+            "created_at": repo.created_at,
+            "updated_at": repo.updated_at,
+        }
+        repositories.append(RepositoryRead.model_validate(repo_dict))
+    
+    return repositories
+
+
+@router.get("/stats", response_model=dict)
+@require_permission("repo_view")
+async def get_repository_stats(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Get repository statistics (admin/teacher only)."""
+    # Total count
+    total_result = await session.execute(select(func.count(Repository.id)))
+    total = total_result.scalar() or 0
+    
+    # Count by type
+    type_counts = {}
+    for repo_type in RepositoryType:
+        count_result = await session.execute(
+            select(func.count(Repository.id)).where(Repository.repo_type == repo_type)
+        )
+        type_counts[repo_type.value] = count_result.scalar() or 0
+    
+    # Blocked count
+    blocked_result = await session.execute(
+        select(func.count(Repository.id)).where(Repository.is_blocked == True)
+    )
+    blocked = blocked_result.scalar() or 0
+    
+    return {
+        "total": total,
+        "by_type": type_counts,
+        "blocked": blocked,
+    }
+
+
 @router.get("/{repository_id}", response_model=RepositoryRead)
 async def get_repository(
     repository_id: UUID,
@@ -555,93 +649,3 @@ async def delete_repository(
     )
 
     return None
-
-
-@router.get("/all", response_model=list[RepositoryRead])
-@require_permission("repo_view")
-async def list_all_repositories(
-    repo_type: RepositoryType | None = Query(None, description="Filter by repository type"),
-    language: str | None = Query(None, description="Filter by programming language"),
-    faculty_id: UUID | None = Query(None, description="Filter by faculty"),
-    is_blocked: bool | None = Query(None, description="Filter by blocked status"),
-    skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(20, ge=1, le=100, description="Number of records to return"),
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> list[RepositoryRead]:
-    """Get all repositories with optional filters and pagination (admin/teacher only)."""
-    # Build query with filters
-    query = select(Repository, User.full_name.label("owner_name")).join(
-        User, Repository.owner_id == User.id
-    )
-    
-    if repo_type:
-        query = query.where(Repository.repo_type == repo_type)
-    if language:
-        query = query.where(Repository.language == language)
-    if faculty_id:
-        query = query.where(Repository.faculty_id == faculty_id)
-    if is_blocked is not None:
-        query = query.where(Repository.is_blocked == is_blocked)
-    
-    # Order by created_at desc and apply pagination
-    query = query.order_by(Repository.created_at.desc()).offset(skip).limit(limit)
-    
-    result = await session.execute(query)
-    repos_with_owners = result.all()
-    
-    # Convert to RepositoryRead with owner_full_name
-    repositories = []
-    for repo, owner_name in repos_with_owners:
-        repo_dict = {
-            "id": repo.id,
-            "name": repo.name,
-            "description": repo.description,
-            "gitea_repo_name": repo.gitea_repo_name,
-            "clone_url": repo.clone_url,
-            "owner_id": repo.owner_id,
-            "owner_full_name": owner_name,
-            "commits_count": 0,  # Can be populated from Gitea if needed
-            "is_public": repo.repo_type == RepositoryType.public,
-            "repo_type": repo.repo_type,
-            "language": repo.language,
-            "is_blocked": repo.is_blocked,
-            "faculty_id": repo.faculty_id,
-            "created_at": repo.created_at,
-            "updated_at": repo.updated_at,
-        }
-        repositories.append(RepositoryRead.model_validate(repo_dict))
-    
-    return repositories
-
-
-@router.get("/stats", response_model=dict)
-@require_permission("repo_view")
-async def get_repository_stats(
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> dict:
-    """Get repository statistics (admin/teacher only)."""
-    # Total count
-    total_result = await session.execute(select(func.count(Repository.id)))
-    total = total_result.scalar() or 0
-    
-    # Count by type
-    type_counts = {}
-    for repo_type in RepositoryType:
-        count_result = await session.execute(
-            select(func.count(Repository.id)).where(Repository.repo_type == repo_type)
-        )
-        type_counts[repo_type.value] = count_result.scalar() or 0
-    
-    # Blocked count
-    blocked_result = await session.execute(
-        select(func.count(Repository.id)).where(Repository.is_blocked == True)
-    )
-    blocked = blocked_result.scalar() or 0
-    
-    return {
-        "total": total,
-        "by_type": type_counts,
-        "blocked": blocked,
-    }

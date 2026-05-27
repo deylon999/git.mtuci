@@ -205,6 +205,7 @@ DEFERRED.local.md
 *.pid.lock
 
 /backups/
+backend/backups/
 test-repo
 
 teacher-app.html

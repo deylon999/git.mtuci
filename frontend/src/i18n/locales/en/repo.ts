@@ -55,6 +55,7 @@ export const repoEn = {
   },
   tabs: {
     code: "Code",
+    settings: "Settings",
     sectionsAria: "Repository sections",
     open: "Open",
     closed: "Closed",
@@ -75,6 +76,8 @@ export const repoEn = {
   },
   clone: {
     tokenNote: "Could not get token — you may need your Gitea login for a private repo.",
+    searchFiles: "Search files",
+    searchfilters: "Search filters",
     copyWithToken: "Copy git clone (with token)",
     copyHttps: "Copy git clone (HTTPS)",
     cloneCopied: "git clone command copied",
@@ -95,6 +98,9 @@ export const repoEn = {
     branchMany: "branches",
     tagOne: "tag",
     tagMany: "tags",
+    issueOne: "issue",
+    issueFew: "issues",
+    issueMany: "issues",
     projectInfo: "About this repository",
     loading: "Loading…",
     noDescription: "No description",

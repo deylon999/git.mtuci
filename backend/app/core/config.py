@@ -70,6 +70,10 @@ class Settings(BaseModel):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
         default_factory=lambda: int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
     )
+    MTUCI_CREDENTIALS_SECRET: str = Field(
+        default_factory=lambda: os.getenv("MTUCI_CREDENTIALS_SECRET")
+        or os.getenv("JWT_SECRET_KEY", "change-me")
+    )
 
     # Gitea (REST API — internal URL for backend → Gitea in Docker/network)
     GITEA_URL: str = Field(default_factory=lambda: os.getenv("GITEA_URL", "http://gitea:3000"))

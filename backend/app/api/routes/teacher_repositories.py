@@ -123,6 +123,23 @@ async def teacher_repo_files(
     return [StudentRepoFileRead.model_validate(r) for r in rows]
 
 
+@router.get("/{repo_item_id}/files/search", response_model=list[dict])
+async def teacher_repo_files_search(
+    repo_item_id: str,
+    q: str = Query(min_length=1, max_length=200),
+    branch: str | None = Query(default=None, max_length=200),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[dict]:
+    owner_id = await _resolve_repo_owner_id(session, repo_item_id)
+    await ensure_repo_content_access(current_user, session, target_student_id=owner_id)
+    try:
+        paths = await search_student_repository_files(session, student_id=owner_id, repo_item_id=repo_item_id, query=q, branch=branch)
+    except Exception as exc:
+        raise _http_from_exc(exc)
+    return [{"path": p} for p in paths]
+
+
 @router.get("/{repo_item_id}/files/{filepath:path}", response_model=StudentRepoFileContentRead)
 async def teacher_repo_file_content(
     repo_item_id: str,
@@ -142,23 +159,6 @@ async def teacher_repo_file_content(
     except Exception as exc:
         raise _http_from_exc(exc)
     return StudentRepoFileContentRead(filepath=filepath, content=content)
-
-
-@router.get("/{repo_item_id}/files/search", response_model=list[dict])
-async def teacher_repo_files_search(
-    repo_item_id: str,
-    q: str = Query(min_length=1, max_length=200),
-    branch: str | None = Query(default=None, max_length=200),
-    session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-) -> list[dict]:
-    owner_id = await _resolve_repo_owner_id(session, repo_item_id)
-    await ensure_repo_content_access(current_user, session, target_student_id=owner_id)
-    try:
-        paths = await search_student_repository_files(session, student_id=owner_id, repo_item_id=repo_item_id, query=q, branch=branch)
-    except Exception as exc:
-        raise _http_from_exc(exc)
-    return [{"path": p} for p in paths]
 
 
 @router.get("/{repo_item_id}/commits", response_model=StudentRepoCommitsRead)

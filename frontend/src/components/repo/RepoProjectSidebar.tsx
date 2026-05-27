@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import type { StudentRepoSummary } from "../../api/studentDashboardApi";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
-import { pluralWord } from "../../i18n/plural";
+import { getPluralForm } from "../../i18n/plural";
 import { formatRelativeTime } from "../../utils/formatRelativeTime";
 import type { ThemeColors } from "../../theme";
 
@@ -158,17 +158,18 @@ export default function RepoProjectSidebar({
   const createdLabel = formatCreatedOn(summary?.created_at ?? summary?.updated_at, dateLocale);
   const commitLabel = (n: number, approx: boolean) => {
     const suffix = approx ? "+" : "";
-    const word = pluralWord(n, {
-      one: t("repo.sidebar.commitOne"),
-      few: t("repo.sidebar.commitFew"),
-      many: t("repo.sidebar.commitMany"),
-    });
+    const form = getPluralForm(language, n);
+    const word = form === "one" ? t("repo.sidebar.commitOne") : form === "few" ? t("repo.sidebar.commitFew") : t("repo.sidebar.commitMany");
     return `${n}${suffix} ${word}`;
   };
-  const branchWord = (n: number) =>
-    pluralWord(n, { one: t("repo.sidebar.branchOne"), few: t("repo.sidebar.branchMany"), many: t("repo.sidebar.branchMany") });
-  const tagWord = (n: number) =>
-    pluralWord(n, { one: t("repo.sidebar.tagOne"), few: t("repo.sidebar.tagMany"), many: t("repo.sidebar.tagMany") });
+  const branchWord = (n: number) => (getPluralForm(language, n) === "one" ? t("repo.sidebar.branchOne") : t("repo.sidebar.branchMany"));
+  const tagWord = (n: number) => (getPluralForm(language, n) === "one" ? t("repo.sidebar.tagOne") : t("repo.sidebar.tagMany"));
+  const issueWord = (n: number) => {
+    const form = getPluralForm(language, n);
+    if (form === "one") return t("repo.sidebar.issueOne");
+    if (form === "few") return t("repo.sidebar.issueFew");
+    return t("repo.sidebar.issueMany");
+  };
   const sizeLabel = formatSizeKb(summary?.size_kb);
   const links = summary?.gitea_links;
   const branch = activeBranch ?? summary?.default_branch ?? "main";
@@ -277,7 +278,7 @@ export default function RepoProjectSidebar({
               <StatRow
                 theme={theme}
                 icon={<span className="text-xs font-bold">●</span>}
-                label={`${summary.open_issues_count} issues`}
+                label={`${summary.open_issues_count} ${issueWord(summary.open_issues_count)}`}
                 href={links?.issues}
               />
             ) : null}

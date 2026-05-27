@@ -1,8 +1,10 @@
+import { lazy, Suspense } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
-import CoursesPage from "../pages/CoursesPage";
-import StudentCoursesPage from "../pages/StudentCoursesPage";
 import { useAuthUser } from "../context/AuthUserContext";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+
+const CoursesPage = lazy(() => import("../pages/CoursesPage"));
+const StudentCoursesPage = lazy(() => import("../pages/StudentCoursesPage"));
 
 interface CoursesRouteProps {
   isDarkTheme?: boolean;
@@ -23,15 +25,27 @@ export default function CoursesRoute({ isDarkTheme = false }: CoursesRouteProps)
   }
 
   if (user.role === "student") {
-    return <StudentCoursesPage isDarkTheme={isDarkTheme} />;
+    return (
+      <Suspense fallback={<div className="text-sm text-slate-500">{t("coursesRoute.loading")}</div>}>
+        <StudentCoursesPage isDarkTheme={isDarkTheme} />
+      </Suspense>
+    );
   }
 
   if (user.role === "teacher" || user.role === "laborant") {
     if (isCreate) {
-      return <CoursesPage isDarkTheme={isDarkTheme} />;
+      return (
+        <Suspense fallback={<div className="text-sm text-slate-500">{t("coursesRoute.loading")}</div>}>
+          <CoursesPage isDarkTheme={isDarkTheme} />
+        </Suspense>
+      );
     }
     return <Navigate to="/teacher/courses" replace />;
   }
 
-  return <CoursesPage isDarkTheme={isDarkTheme} />;
+  return (
+    <Suspense fallback={<div className="text-sm text-slate-500">{t("coursesRoute.loading")}</div>}>
+      <CoursesPage isDarkTheme={isDarkTheme} />
+    </Suspense>
+  );
 }

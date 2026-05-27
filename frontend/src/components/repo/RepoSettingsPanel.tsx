@@ -15,7 +15,7 @@ import { deleteRepository, updateRepository } from "../../api/repositoriesApi";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
-import { pluralWord } from "../../i18n/plural";
+import { getPluralForm } from "../../i18n/plural";
 import type { StudentRepoMeta } from "../../hooks/useStudentRepoWorkspace";
 import type { ThemeColors } from "../../theme";
 import { useRepoApi } from "../../context/RepoApiContext";
@@ -63,7 +63,7 @@ function PlaceholderBlock({
 }
 
 export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettingsPanelProps) {
-  const { t, tp } = useUserPreferences();
+  const { t, tp, language } = useUserPreferences();
   const api = useRepoApi();
   const navigate = useNavigate();
   const workspace = useStudentRepoWorkspaceContext();
@@ -157,11 +157,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
   };
 
   const branchCount = summary?.branches_count ?? 1;
-  const branchWord = pluralWord(branchCount, {
-    one: t("repo.sidebar.branchOne"),
-    few: t("repo.sidebar.branchMany"),
-    many: t("repo.sidebar.branchMany"),
-  });
+  const branchWord = getPluralForm(language, branchCount) === "one" ? t("repo.sidebar.branchOne") : t("repo.sidebar.branchMany");
   const defaultBranch = summary?.default_branch ?? "main";
   const ownerName = meta?.giteaPath?.split("/")[0] ?? "—";
   const visibilityValue =

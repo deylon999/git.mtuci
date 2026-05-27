@@ -55,6 +55,7 @@ export const repoRu = {
   },
   tabs: {
     code: "Код",
+    settings: "Настройки",
     sectionsAria: "Разделы репозитория",
     open: "Открытые",
     closed: "Закрытые",
@@ -75,6 +76,8 @@ export const repoRu = {
   },
   clone: {
     tokenNote: "Не удалось получить токен — для приватного репо может понадобиться логин Gitea.",
+    searchFiles: "Поиск по файлам",
+    searchfilters: "Фильтры поиска",
     copyWithToken: "Скопировать git clone (с токеном)",
     copyHttps: "Скопировать git clone (HTTPS)",
     cloneCopied: "Команда git clone скопирована",
@@ -95,6 +98,9 @@ export const repoRu = {
     branchMany: "веток",
     tagOne: "тег",
     tagMany: "тегов",
+    issueOne: "задача",
+    issueFew: "задачи",
+    issueMany: "задач",
     projectInfo: "Информация о проекте",
     loading: "Загрузка…",
     noDescription: "Нет описания",

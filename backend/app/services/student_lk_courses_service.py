@@ -9,6 +9,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.credential_crypto import decrypt_secret, encrypt_secret, is_encrypted_secret
 from app.models.course import Course
 from app.models.user import User
 from app.schemas.student_dashboard import StudentMergedCourseRead
@@ -191,14 +192,26 @@ async def get_student_merged_courses(
     lk_subjects: list[MtuciLkSubject] = []
     lk_warning: str | None = None
 
+    mtuci_password: str | None = None
     if user.mtuci_login and user.mtuci_password:
-        lk_subjects, lk_err = await fetch_lk_subjects_cached(
-            user.mtuci_login,
-            user.mtuci_password,
-            force_refresh=force_lk_refresh,
-            cache_only=use_lk_cache_only,
-        )
-        lk_warning = lk_err if not use_lk_cache_only else (lk_err if lk_subjects else None)
+        try:
+            mtuci_password = decrypt_secret(user.mtuci_password)
+        except ValueError:
+            lk_warning = "lk_auth_failed"
+
+        if mtuci_password and not is_encrypted_secret(user.mtuci_password):
+            user.mtuci_password = encrypt_secret(mtuci_password)
+            session.add(user)
+            await session.commit()
+
+        if mtuci_password:
+            lk_subjects, lk_err = await fetch_lk_subjects_cached(
+                user.mtuci_login,
+                mtuci_password,
+                force_refresh=force_lk_refresh,
+                cache_only=use_lk_cache_only,
+            )
+            lk_warning = lk_err if not use_lk_cache_only else (lk_err if lk_subjects else None)
     else:
         lk_warning = "lk_credentials_missing"
 

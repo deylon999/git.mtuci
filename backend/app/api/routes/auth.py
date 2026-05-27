@@ -6,6 +6,7 @@ import bcrypt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.credential_crypto import encrypt_secret
 from app.core.database import get_session
 from app.core.security import create_access_token, get_current_user, verify_password
 from app.models.user import User, UserRole
@@ -138,7 +139,7 @@ async def register_student_mtuci(
         group_name=group_name,
         student_id=student_id,
         mtuci_login=payload.mtuci_login if payload.mtuci_login else None,
-        mtuci_password=payload.mtuci_password if payload.mtuci_password else None,
+        mtuci_password=encrypt_secret(payload.mtuci_password) if payload.mtuci_password else None,
         is_pending=False,  # Авто-аппрув через ЛК МТУСИ
     )
     session.add(user)

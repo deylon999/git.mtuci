@@ -44,7 +44,7 @@ class User(Base):
     
     # MTUCI LK integration fields (optional, for auto-fill)
     mtuci_login: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
-    mtuci_password: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Encrypted in application layer
+    mtuci_password: Mapped[str | None] = mapped_column(String(1024), nullable=True)  # Encrypted in application layer
     
     is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_pending: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)  # Ожидает апрува админа

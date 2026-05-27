@@ -9,6 +9,20 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes("node_modules")) return;
+            if (id.includes("@monaco-editor") || id.includes("monaco-editor")) return "vendor-monaco";
+            if (id.includes("react-markdown") || id.includes("remark-gfm")) return "vendor-markdown";
+            if (id.includes("react-router-dom")) return "vendor-router";
+            if (id.includes("lucide-react")) return "vendor-icons";
+            if (id.includes("react") || id.includes("scheduler")) return "vendor-react";
+          },
+        },
+      },
+    },
     server: {
       port: 5173,
       host: "0.0.0.0",

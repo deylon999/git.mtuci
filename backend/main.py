@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
@@ -49,10 +48,16 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS для работы фронтенда в Docker
+# CORS (dev + docker)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001", "http://frontend:3001"],
+    allow_origins=[
+        "http://localhost:3001",
+        "http://frontend:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,8 +68,6 @@ app.add_middleware(LoggingMiddleware)
 
 # Add metrics middleware for HTTP request statistics
 app.add_middleware(MetricsMiddleware)
-
-# Original FastAPI init continues belowtitle="MTUCI Lab Submission API", version="0.1.0")
 
 # Mount uploads directory for serving avatar images
 uploads_dir = Path(settings.UPLOAD_DIR)
@@ -89,21 +92,6 @@ app.include_router(assistants_dashboard_router)
 app.include_router(search_router)
 app.include_router(notifications_router)
 app.include_router(system_router)
-
-# Development CORS:
-# Frontend runs on http://localhost:3001 and API on http://localhost:8000.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
