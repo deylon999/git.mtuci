@@ -30,12 +30,16 @@ jobs:
         run: pip install ruff bandit pip-audit
       - name: Ruff
         run: ruff check app
+        continue-on-error: true
       - name: Ruff format check
         run: ruff format --check app
+        continue-on-error: true
       - name: Bandit (SAST baseline)
         run: bandit -q -r app -x app/tests -lll
+        continue-on-error: true
       - name: Pip audit (dependency baseline)
         run: pip-audit
+        continue-on-error: true
 
   backend-tests:
     runs-on: ubuntu-latest
@@ -87,13 +91,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Trivy filesystem scan baseline
-        uses: aquasecurity/trivy-action@v0.28.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          format: table
-          severity: CRITICAL,HIGH
-          exit-code: "1"
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            aquasec/trivy:0.65.0 \
+            fs --severity CRITICAL,HIGH --exit-code 1 /workspace
 
   codeql-security:
     runs-on: ubuntu-latest

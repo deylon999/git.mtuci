@@ -13,6 +13,7 @@ email-validator>=2.0.0
 bcrypt>=4.0.1
 httpx>=0.27.0
 python-multipart
+aiosqlite>=0.20.0
 mtuci-private-api>=0.1.2
 pillow>=10.0.0
 psutil>=5.9.0
