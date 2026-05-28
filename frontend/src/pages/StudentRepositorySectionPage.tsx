@@ -1,22 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
+  Check,
+  ChevronDown,
   CircleDot,
+  ExternalLink,
+  FileText,
+  GitMerge,
   GitPullRequest,
   Loader2,
   MessageSquare,
+  RotateCcw,
   Tag,
+  XCircle,
 } from "lucide-react";
 import RepoSettingsPanel from "../components/repo/RepoSettingsPanel";
 import RepoStateTabs from "../components/repo/RepoStateTabs";
 import { useStudentRepoWorkspaceContext } from "../context/StudentRepoWorkspaceContext";
 import RepoMarkdown from "../components/RepoMarkdown";
 import {
-  getStudentRepoIssues,
-  getStudentRepoWikiContent,
-  getStudentRepoWikiPages,
   type StudentRepoIssue,
   type StudentRepoPull,
+  type StudentRepoPullCheckItem,
+  type StudentRepoPullDetailBundle,
+  type StudentRepoPullDiscussionComment,
+  type StudentRepoPullFile,
+  type StudentRepoPullThread,
   type StudentRepoWikiPage,
 } from "../api/studentDashboardApi";
 import { formatRelativeTime } from "../utils/formatRelativeTime";
@@ -129,14 +138,28 @@ function IssueRow({ theme, item }: { theme: ThemeColors; item: StudentRepoIssue 
   );
 }
 
-function PullRow({ theme, item }: { theme: ThemeColors; item: StudentRepoPull }) {
+function PullRow({
+  theme,
+  item,
+  isActive,
+  onOpen,
+}: {
+  theme: ThemeColors;
+  item: StudentRepoPull;
+  isActive: boolean;
+  onOpen: () => void;
+}) {
   const merged = item.merged === true || item.state === "merged";
   const open = item.state === "open" && !merged;
   const statusLabel = merged ? "merged" : item.state;
   return (
     <li
-      className="flex gap-3 px-4 py-3.5 border-t"
-      style={{ borderColor: theme.border }}
+      className="flex gap-3 px-4 py-3.5 border-t cursor-pointer transition-colors"
+      style={{
+        borderColor: theme.border,
+        backgroundColor: isActive ? `${theme.accent}12` : "transparent",
+      }}
+      onClick={onOpen}
     >
       <GitPullRequest
         className="h-4 w-4 shrink-0 mt-0.5"
@@ -173,14 +196,85 @@ function PullRow({ theme, item }: { theme: ThemeColors; item: StudentRepoPull })
           {item.updated_at ? formatRelativeTime(item.updated_at) : ""}
         </p>
       </div>
+      <ChevronDown
+        className="h-4 w-4 shrink-0 mt-1"
+        style={{
+          color: theme.text3,
+          transform: isActive ? "rotate(180deg)" : "rotate(0deg)",
+          transition: "transform .15s ease",
+        }}
+      />
     </li>
   );
+}
+
+interface ParsedDiffLine {
+  kind: "meta" | "ctx" | "add" | "del";
+  raw: string;
+  position: number | null;
+}
+
+interface ParsedDiffFile {
+  path: string;
+  lines: ParsedDiffLine[];
+}
+
+function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
+  if (!diff.trim()) return [];
+  const rows = diff.replace(/\r\n/g, "\n").split("\n");
+  const out: ParsedDiffFile[] = [];
+  let current: ParsedDiffFile | null = null;
+  let position = 0;
+
+  const pushCurrent = () => {
+    if (current && current.path) out.push(current);
+  };
+
+  for (const line of rows) {
+    if (line.startsWith("diff --git ")) {
+      pushCurrent();
+      const match = line.match(/ b\/(.+)$/);
+      current = { path: match?.[1]?.trim() || "", lines: [] };
+      position = 0;
+      continue;
+    }
+    if (!current) continue;
+    if (line.startsWith("@@")) {
+      current.lines.push({ kind: "meta", raw: line, position: null });
+      continue;
+    }
+    if (line.startsWith("--- ") || line.startsWith("+++ ") || line.startsWith("index ")) {
+      current.lines.push({ kind: "meta", raw: line, position: null });
+      continue;
+    }
+    if (line.startsWith("+")) {
+      position += 1;
+      current.lines.push({ kind: "add", raw: line, position });
+      continue;
+    }
+    if (line.startsWith("-")) {
+      position += 1;
+      current.lines.push({ kind: "del", raw: line, position });
+      continue;
+    }
+    if (line.startsWith(" ")) {
+      position += 1;
+      current.lines.push({ kind: "ctx", raw: line, position });
+      continue;
+    }
+    current.lines.push({ kind: "meta", raw: line, position: null });
+  }
+  pushCurrent();
+  return out;
 }
 
 function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
   const { t } = useUserPreferences();
   const api = useRepoApi();
   const [state, setState] = useState("open");
+  const [query, setQuery] = useState("");
+  const [createTitle, setCreateTitle] = useState("");
+  const [createBody, setCreateBody] = useState("");
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<StudentRepoIssue[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -195,7 +289,7 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
     async function load() {
       setLoading(true);
       try {
-        const res = await api.getIssues(repoId, state, page);
+        const res = await api.getIssues(repoId, state, page, query || undefined);
         if (cancelled) return;
         setItems((prev) => (page === 1 ? res.issues : [...prev, ...res.issues]));
         setHasMore(res.has_more);
@@ -209,7 +303,7 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
     return () => {
       cancelled = true;
     };
-  }, [repoId, state, page]);
+  }, [repoId, state, page, query]);
 
   return (
     <PanelCard theme={theme}>
@@ -220,8 +314,55 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
         <h2 className="text-sm font-semibold" style={{ color: theme.text }}>
           Issues
         </h2>
-        <RepoStateTabs theme={theme} value={state} onChange={setState} />
+        <div className="flex items-center gap-2">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search issues"
+            className="rounded border px-2 py-1 text-xs"
+            style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+          />
+          <RepoStateTabs theme={theme} value={state} onChange={setState} />
+        </div>
       </div>
+      {api.createIssue ? (
+        <div className="px-4 py-3 border-b space-y-2" style={{ borderColor: theme.border }}>
+          <input
+            value={createTitle}
+            onChange={(e) => setCreateTitle(e.target.value)}
+            placeholder="New issue title"
+            className="w-full rounded border px-2 py-1.5 text-xs"
+            style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+          />
+          <textarea
+            value={createBody}
+            onChange={(e) => setCreateBody(e.target.value)}
+            rows={2}
+            placeholder="Description"
+            className="w-full rounded border px-2 py-1.5 text-xs"
+            style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              void (async () => {
+                if (!createTitle.trim() || !api.createIssue) return;
+                await api.createIssue(repoId, { title: createTitle.trim(), body: createBody.trim() || undefined });
+                setCreateTitle("");
+                setCreateBody("");
+                setPage(1);
+                const res = await api.getIssues(repoId, state, 1, query || undefined);
+                setItems(res.issues);
+                setHasMore(res.has_more);
+              })();
+            }}
+            className="rounded border px-2 py-1 text-xs"
+            style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg4 }}
+          >
+            Create issue
+          </button>
+        </div>
+      ) : null}
       {loading && page === 1 ? (
         <div className="flex justify-center py-14 gap-2 text-sm" style={{ color: theme.text2 }}>
           <Loader2 className="h-5 w-5 animate-spin" />
@@ -237,7 +378,36 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
       ) : (
         <ul>
           {items.map((item) => (
-            <IssueRow key={`${item.number}-${item.updated_at}`} theme={theme} item={item} />
+            <div key={`${item.number}-${item.updated_at}`} className="border-t" style={{ borderColor: theme.border }}>
+              <IssueRow theme={theme} item={item} />
+              <div className="px-4 pb-3 flex gap-2">
+                {api.reactIssue ? (
+                  <button
+                    type="button"
+                    onClick={() => void api.reactIssue?.(repoId, item.number, "heart")}
+                    className="rounded border px-2 py-0.5 text-[10px]"
+                    style={{ borderColor: theme.border, color: theme.text3 }}
+                  >
+                    React
+                  </button>
+                ) : null}
+                {api.patchIssue && item.state !== "closed" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void (async () => {
+                        await api.patchIssue?.(repoId, item.number, { state: "closed" });
+                        setItems((prev) => prev.map((x) => (x.number === item.number ? { ...x, state: "closed" } : x)));
+                      })();
+                    }}
+                    className="rounded border px-2 py-0.5 text-[10px]"
+                    style={{ borderColor: theme.border, color: theme.text3 }}
+                  >
+                    Close
+                  </button>
+                ) : null}
+              </div>
+            </div>
           ))}
         </ul>
       )}
@@ -274,10 +444,49 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [head, setHead] = useState("");
+  const [selectedPullNumber, setSelectedPullNumber] = useState<number | null>(null);
+  const [detail, setDetail] = useState<StudentRepoPullDetailBundle | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [reviewBody, setReviewBody] = useState("");
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [discussionBody, setDiscussionBody] = useState("");
+  const [discussionLoading, setDiscussionLoading] = useState(false);
+  const [mergeMethod, setMergeMethod] = useState<"merge" | "squash" | "rebase">("merge");
+  const [mergeLoading, setMergeLoading] = useState(false);
+  const [checkLogOpenId, setCheckLogOpenId] = useState<string | null>(null);
+  const [checkLogText, setCheckLogText] = useState("");
+  const [checkLogLoading, setCheckLogLoading] = useState(false);
+  const [checkLogTruncated, setCheckLogTruncated] = useState(false);
+  const [retryCheckId, setRetryCheckId] = useState<string | null>(null);
+  const [checksHint, setChecksHint] = useState<string | null>(null);
+  const [lastChecksRefreshAt, setLastChecksRefreshAt] = useState<Date | null>(null);
+  const [inlineTarget, setInlineTarget] = useState<{
+    path: string;
+    position: number;
+    side: "new" | "old";
+  } | null>(null);
+  const [inlineBody, setInlineBody] = useState("");
+  const [inlineLoading, setInlineLoading] = useState(false);
   const base = summary?.default_branch ?? "main";
+  const parsedDiffFiles = useMemo(() => parseUnifiedDiff(detail?.diff || ""), [detail?.diff]);
+  const parsedDiffByPath = useMemo(() => {
+    const map = new Map<string, ParsedDiffFile>();
+    for (const item of parsedDiffFiles) map.set(item.path, item);
+    return map;
+  }, [parsedDiffFiles]);
+  const threadMap = useMemo(() => {
+    const map = new Map<string, StudentRepoPullThread>();
+    for (const thread of detail?.threads ?? []) {
+      if (!thread.path || thread.position == null) continue;
+      map.set(`${thread.path}::${thread.position}`, thread);
+    }
+    return map;
+  }, [detail?.threads]);
 
   useEffect(() => {
     setPage(1);
+    setSelectedPullNumber(null);
+    setDetail(null);
   }, [state, repoId]);
 
   useEffect(() => {
@@ -319,6 +528,194 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     };
   }, [repoId, state, page]);
 
+  useEffect(() => {
+    if (items.length === 0 || selectedPullNumber != null) return;
+    setSelectedPullNumber(items[0].number);
+  }, [items, selectedPullNumber]);
+
+  useEffect(() => {
+    if (!selectedPullNumber || !api.getPullDetail) return;
+    let cancelled = false;
+    setCheckLogOpenId(null);
+    setCheckLogText("");
+    async function loadDetail() {
+      setDetailLoading(true);
+      try {
+        const res = await api.getPullDetail!(repoId, selectedPullNumber);
+        if (!cancelled) setDetail(res);
+      } catch {
+        if (!cancelled) setDetail(null);
+      } finally {
+        if (!cancelled) setDetailLoading(false);
+      }
+    }
+    void loadDetail();
+    return () => {
+      cancelled = true;
+    };
+  }, [repoId, selectedPullNumber, api]);
+
+  const refreshDetail = async () => {
+    if (!selectedPullNumber || !api.getPullDetail) return;
+    const res = await api.getPullDetail(repoId, selectedPullNumber);
+    setDetail(res);
+    setLastChecksRefreshAt(new Date());
+  };
+
+  useEffect(() => {
+    if (!selectedPullNumber || !api.getPullDetail) return;
+    if (detail?.pull.state !== "open") return;
+    const hasActiveChecks = (detail?.checks.items ?? []).some((x) => x.state === "running" || x.state === "queued");
+    const intervalMs = hasActiveChecks ? 3000 : 10000;
+    const timer = window.setInterval(() => {
+      void refreshDetail();
+    }, intervalMs);
+    return () => window.clearInterval(timer);
+  }, [selectedPullNumber, api.getPullDetail, detail?.pull.state, detail?.checks.items]);
+
+  useEffect(() => {
+    if (!selectedPullNumber || !api.getPullDetail) return;
+    const onFocus = () => {
+      void refreshDetail();
+    };
+    const onVisible = () => {
+      if (!document.hidden) void refreshDetail();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [selectedPullNumber, api.getPullDetail, detail?.pull.state, detail?.checks.items]);
+
+  const checkStateTone = (state: string): { bg: string; fg: string } => {
+    if (state === "success") return { bg: `${theme.success}1e`, fg: theme.success };
+    if (state === "failure") return { bg: `${theme.danger}18`, fg: theme.danger };
+    if (state === "running") return { bg: `${theme.accent}20`, fg: theme.accent2 };
+    if (state === "queued") return { bg: `${theme.warning}22`, fg: theme.warning };
+    if (state === "cancelled") return { bg: `${theme.text3}26`, fg: theme.text3 };
+    return { bg: `${theme.bg4}`, fg: theme.text3 };
+  };
+
+  const submitReview = async (event: "comment" | "approve" | "request_changes") => {
+    if (!selectedPullNumber || !api.createPullReview) return;
+    setReviewLoading(true);
+    try {
+      await api.createPullReview(repoId, selectedPullNumber, {
+        event,
+        body: reviewBody.trim() || undefined,
+      });
+      setReviewBody("");
+      await refreshDetail();
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const submitDiscussion = async () => {
+    if (!selectedPullNumber || !api.createPullComment || !discussionBody.trim()) return;
+    setDiscussionLoading(true);
+    try {
+      await api.createPullComment(repoId, selectedPullNumber, { body: discussionBody.trim() });
+      setDiscussionBody("");
+      await refreshDetail();
+    } finally {
+      setDiscussionLoading(false);
+    }
+  };
+
+  const submitInline = async () => {
+    if (!selectedPullNumber || !api.createPullReview || !inlineTarget || !inlineBody.trim()) return;
+    setInlineLoading(true);
+    try {
+      await api.createPullReview(repoId, selectedPullNumber, {
+        event: "comment",
+        comments: [
+          {
+            path: inlineTarget.path,
+            body: inlineBody.trim(),
+            new_position: inlineTarget.side === "new" ? inlineTarget.position : undefined,
+            old_position: inlineTarget.side === "old" ? inlineTarget.position : undefined,
+          },
+        ],
+      });
+      setInlineBody("");
+      setInlineTarget(null);
+      await refreshDetail();
+    } finally {
+      setInlineLoading(false);
+    }
+  };
+
+  const submitMerge = async () => {
+    if (!selectedPullNumber || !api.mergePull) return;
+    setMergeLoading(true);
+    try {
+      await api.mergePull(repoId, selectedPullNumber, { method: mergeMethod });
+      await refreshDetail();
+      setPage(1);
+      setChecksHint(null);
+    } finally {
+      setMergeLoading(false);
+    }
+  };
+
+  const openCheckLog = async (item: StudentRepoPullCheckItem) => {
+    if (!selectedPullNumber || !api.getPullCheckLog) return;
+    setCheckLogOpenId(item.id);
+    setCheckLogLoading(true);
+    setCheckLogTruncated(false);
+    try {
+      const res = await api.getPullCheckLog(repoId, selectedPullNumber, item.id);
+      setCheckLogText(res.log || "");
+      setCheckLogTruncated(!!res.truncated);
+    } catch {
+      setCheckLogText("Failed to load logs.");
+      setCheckLogTruncated(false);
+    } finally {
+      setCheckLogLoading(false);
+    }
+  };
+
+  const retryCheck = async (item: StudentRepoPullCheckItem) => {
+    if (!selectedPullNumber || !api.retryPullCheck) return;
+    setRetryCheckId(item.id);
+    setChecksHint(null);
+    try {
+      const res = await api.retryPullCheck(repoId, selectedPullNumber, item.id);
+      setChecksHint(res.message || (res.accepted ? "Rerun queued." : "Rerun is unavailable for this check."));
+      await refreshDetail();
+      // Quick follow-up refreshes to visualize queued -> running transitions.
+      window.setTimeout(() => void refreshDetail(), 1500);
+      window.setTimeout(() => void refreshDetail(), 4500);
+    } finally {
+      setRetryCheckId(null);
+    }
+  };
+
+  const mergeGateText = useMemo(() => {
+    if (!detail) return "";
+    if (detail.checks.conflict_state === "conflicting") return "Merge conflicts detected";
+    if (detail.checks.can_merge) return "Merge checks passed";
+    if (detail.checks.blocked_reason === "already_merged") return "Pull request is already merged";
+    if (detail.checks.blocked_reason === "not_open") return "Pull request is not open";
+    if (detail.checks.blocked_reason === "conflicts") return "Merge conflicts detected";
+    if (detail.checks.blocked_reason === "required_checks_missing") return "Required checks are missing";
+    if (detail.checks.blocked_reason === "required_reviewers_missing") return "Required reviewer approvals are missing";
+    if (detail.checks.blocked_reason === "branch_policy") return "Blocked by branch policy";
+    if (detail.checks.blocked_reason === "draft") return "PR is draft";
+    if (detail.checks.blocked_reason === "mergeability_unknown") return "Mergeability is being calculated";
+    return "Merge checks pending";
+  }, [detail]);
+
+  const checksStale = useMemo(() => {
+    if (!lastChecksRefreshAt || !detail) return false;
+    const hasActiveChecks = (detail.checks.items ?? []).some((x) => x.state === "running" || x.state === "queued");
+    if (!hasActiveChecks) return false;
+    return Date.now() - lastChecksRefreshAt.getTime() > 20000;
+  }, [detail, lastChecksRefreshAt]);
+
   return (
     <PanelCard theme={theme}>
       <div
@@ -330,20 +727,22 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
         </h2>
         <div className="flex items-center gap-2">
           <RepoStateTabs theme={theme} value={state} onChange={setState} />
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            disabled={isBlocked}
-            className="rounded-lg border px-2.5 py-1.5 text-xs font-medium"
-            style={{
-              borderColor: `${theme.accent}55`,
-              backgroundColor: `${theme.accent}14`,
-              color: isBlocked ? theme.text3 : theme.accent2,
-              opacity: isBlocked ? 0.55 : 1,
-            }}
-          >
-            {t("repo.section.createPr") ?? "Create PR"}
-          </button>
+          {api.createPull ? (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              disabled={isBlocked}
+              className="rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+              style={{
+                borderColor: `${theme.accent}55`,
+                backgroundColor: `${theme.accent}14`,
+                color: isBlocked ? theme.text3 : theme.accent2,
+                opacity: isBlocked ? 0.55 : 1,
+              }}
+            >
+              {t("repo.section.createPr") ?? "Create PR"}
+            </button>
+          ) : null}
         </div>
       </div>
       {createOpen ? (
@@ -465,11 +864,484 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
           hint={t("repo.section.noPrHint")}
         />
       ) : (
-        <ul>
-          {items.map((item) => (
-            <PullRow key={`${item.number}-${item.updated_at}`} theme={theme} item={item} />
-          ))}
-        </ul>
+        <div className="grid grid-cols-1 xl:grid-cols-[380px_minmax(0,1fr)]">
+          <div className="border-r" style={{ borderColor: theme.border }}>
+            <ul>
+              {items.map((item) => (
+                <PullRow
+                  key={`${item.number}-${item.updated_at}`}
+                  theme={theme}
+                  item={item}
+                  isActive={selectedPullNumber === item.number}
+                  onOpen={() => setSelectedPullNumber(item.number)}
+                />
+              ))}
+            </ul>
+          </div>
+          <div className="min-h-[320px] p-4 space-y-4">
+            {!selectedPullNumber ? (
+              <p className="text-sm" style={{ color: theme.text3 }}>
+                Select a pull request to review.
+              </p>
+            ) : detailLoading ? (
+              <div className="flex items-center gap-2 text-sm" style={{ color: theme.text2 }}>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading review details...
+              </div>
+            ) : !detail ? (
+              <p className="text-sm" style={{ color: theme.text3 }}>
+                Pull request details unavailable.
+              </p>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <GitPullRequest className="h-4 w-4" style={{ color: theme.accent2 }} />
+                    <p className="text-sm font-semibold" style={{ color: theme.text }}>
+                      #{detail.pull.number} {detail.pull.title}
+                    </p>
+                    <span
+                      className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase"
+                      style={{
+                        backgroundColor:
+                          detail.pull.state === "open" ? `${theme.accent}22` : `${theme.bg4}`,
+                        color: detail.pull.state === "open" ? theme.accent2 : theme.text3,
+                      }}
+                    >
+                      {detail.pull.state}
+                    </span>
+                  </div>
+                  <p className="text-xs font-mono" style={{ color: theme.text2 }}>
+                    {detail.pull.head_branch ?? "?"} → {detail.pull.base_branch ?? "main"}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ color: theme.text3 }}>
+                    <span>{detail.pull.commits_count ?? 0} commits</span>
+                    <span>{detail.pull.changed_files_count ?? detail.files.length} files</span>
+                    <span>{detail.pull.review_comments_count} review comments</span>
+                  </div>
+                </div>
+
+                <div
+                  className="rounded-lg border px-3 py-2 text-xs"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg }}
+                >
+                  <div className="flex items-center gap-2" style={{ color: theme.text2 }}>
+                    {detail.checks.conflict_state === "conflicting" ? (
+                      <XCircle className="h-4 w-4" style={{ color: theme.danger }} />
+                    ) : detail.checks.can_merge ? (
+                      <Check className="h-4 w-4" style={{ color: theme.success }} />
+                    ) : (
+                      <CircleDot className="h-4 w-4" />
+                    )}
+                    <span>
+                      {mergeGateText}
+                    </span>
+                  </div>
+                  {detail.checks.required_contexts.length > 0 ? (
+                    <p className="mt-2 text-[11px]" style={{ color: theme.text3 }}>
+                      Required: {detail.checks.required_contexts.join(", ")}
+                    </p>
+                  ) : null}
+                  {detail.checks.missing_required_contexts.length > 0 ? (
+                    <p className="mt-1 text-[11px]" style={{ color: theme.danger }}>
+                      Missing: {detail.checks.missing_required_contexts.join(", ")}
+                    </p>
+                  ) : null}
+                  {detail.checks.required_approvals > 0 ? (
+                    <p className="mt-1 text-[11px]" style={{ color: theme.text3 }}>
+                      Approvals: {detail.checks.approvals}/{detail.checks.required_approvals}
+                    </p>
+                  ) : null}
+                  {detail.checks.required_reviewer_logins.length > 0 ? (
+                    <p className="mt-1 text-[11px]" style={{ color: theme.text3 }}>
+                      Required reviewers: {detail.checks.required_reviewer_logins.join(", ")}
+                    </p>
+                  ) : null}
+                  {detail.checks.missing_required_reviewer_logins.length > 0 ? (
+                    <p className="mt-1 text-[11px]" style={{ color: theme.danger }}>
+                      Missing reviewer approvals: {detail.checks.missing_required_reviewer_logins.join(", ")}
+                    </p>
+                  ) : null}
+                  {detail.checks.policy_reasons.length > 0 ? (
+                    <p className="mt-1 text-[11px]" style={{ color: theme.danger }}>
+                      {detail.checks.policy_reasons.join(" ; ")}
+                    </p>
+                  ) : null}
+                  {lastChecksRefreshAt ? (
+                    <p className="mt-1 text-[10px]" style={{ color: theme.text3 }}>
+                      Checks updated {formatRelativeTime(lastChecksRefreshAt.toISOString())}
+                    </p>
+                  ) : null}
+                  {checksStale ? (
+                    <p className="mt-1 text-[10px]" style={{ color: theme.warning }}>
+                      Checks status may be stale. Focus the tab to force refresh.
+                    </p>
+                  ) : null}
+                </div>
+
+                {detail.checks.items.length > 0 ? (
+                  <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: theme.border }}>
+                    <p className="text-xs font-semibold" style={{ color: theme.text2 }}>
+                      Checks
+                    </p>
+                    {checksHint ? (
+                      <p className="text-[11px]" style={{ color: theme.text3 }}>
+                        {checksHint}
+                      </p>
+                    ) : null}
+                    {detail.checks.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded border px-2.5 py-2 text-[11px] flex flex-wrap items-center gap-2"
+                        style={{ borderColor: theme.border, backgroundColor: theme.bg }}
+                      >
+                        <span
+                          className="inline-flex items-center rounded px-1.5 py-0.5 font-semibold uppercase"
+                          style={{
+                            backgroundColor: checkStateTone(item.state).bg,
+                            color: checkStateTone(item.state).fg,
+                          }}
+                        >
+                          {item.state}
+                        </span>
+                        <span className="font-medium" style={{ color: theme.text }}>
+                          {item.name}
+                        </span>
+                        {item.description ? (
+                          <span style={{ color: theme.text3 }}>{item.description}</span>
+                        ) : null}
+                        <div className="ml-auto flex items-center gap-1.5">
+                          {item.details_url ? (
+                            <a
+                              href={item.details_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded border px-2 py-1 inline-flex items-center gap-1"
+                              style={{ borderColor: theme.border, color: theme.text2 }}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Details
+                            </a>
+                          ) : null}
+                          {api.getPullCheckLog ? (
+                            <button
+                              type="button"
+                              onClick={() => void openCheckLog(item)}
+                              className="rounded border px-2 py-1"
+                              style={{ borderColor: theme.border, color: theme.text2 }}
+                            >
+                              <span className="inline-flex items-center gap-1">
+                                <FileText className="h-3 w-3" />
+                                Log
+                              </span>
+                            </button>
+                          ) : null}
+                          {api.retryPullCheck && item.can_retry ? (
+                            <button
+                              type="button"
+                              onClick={() => void retryCheck(item)}
+                              className="rounded border px-2 py-1"
+                              style={{ borderColor: theme.border, color: theme.text2 }}
+                              disabled={retryCheckId === item.id}
+                            >
+                              <span className="inline-flex items-center gap-1">
+                                <RotateCcw className={`h-3 w-3 ${retryCheckId === item.id ? "animate-spin" : ""}`} />
+                                Retry
+                              </span>
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                    {checkLogOpenId ? (
+                      <div className="rounded border p-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-semibold" style={{ color: theme.text2 }}>
+                            Check Log
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCheckLogOpenId(null);
+                              setCheckLogText("");
+                              setCheckLogTruncated(false);
+                            }}
+                            className="text-[10px] hover:underline"
+                            style={{ color: theme.text3 }}
+                          >
+                            Close
+                          </button>
+                        </div>
+                        {checkLogLoading ? (
+                          <div className="flex items-center gap-1 text-[11px]" style={{ color: theme.text3 }}>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Loading log...
+                          </div>
+                        ) : (
+                          <>
+                            <pre
+                              className="max-h-64 overflow-auto text-[10px] leading-4 whitespace-pre-wrap"
+                              style={{ color: theme.text2 }}
+                            >
+                              {checkLogText || "No log output"}
+                            </pre>
+                            {checkLogTruncated ? (
+                              <p className="mt-1 text-[10px]" style={{ color: theme.text3 }}>
+                                Log truncated for UI safety.
+                              </p>
+                            ) : null}
+                          </>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {api.createPullReview ? (
+                  <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: theme.border }}>
+                    <textarea
+                      value={reviewBody}
+                      onChange={(e) => setReviewBody(e.target.value)}
+                      rows={3}
+                      className="w-full rounded-lg border px-3 py-2 text-sm"
+                      style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                      placeholder="Review summary"
+                      disabled={reviewLoading}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void submitReview("comment")}
+                        className="rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+                        style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg4 }}
+                        disabled={reviewLoading}
+                      >
+                        Comment
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void submitReview("approve")}
+                        className="rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+                        style={{ borderColor: `${theme.success}55`, color: theme.success, backgroundColor: `${theme.success}16` }}
+                        disabled={reviewLoading}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void submitReview("request_changes")}
+                        className="rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+                        style={{ borderColor: `${theme.danger}55`, color: theme.danger, backgroundColor: `${theme.danger}14` }}
+                        disabled={reviewLoading}
+                      >
+                        Request changes
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {api.mergePull ? (
+                  <div className="rounded-lg border p-3" style={{ borderColor: theme.border }}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <GitMerge className="h-4 w-4" style={{ color: theme.text3 }} />
+                      <select
+                        value={mergeMethod}
+                        onChange={(e) => setMergeMethod(e.target.value as "merge" | "squash" | "rebase")}
+                        className="rounded-lg border px-2 py-1 text-xs"
+                        style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                        disabled={mergeLoading}
+                      >
+                        <option value="merge">merge commit</option>
+                        <option value="squash">squash</option>
+                        <option value="rebase">rebase</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => void submitMerge()}
+                        className="rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+                        style={{
+                          borderColor: `${theme.success}55`,
+                          color: theme.success,
+                          backgroundColor: `${theme.success}14`,
+                          opacity: detail.checks.can_merge ? 1 : 0.5,
+                        }}
+                        disabled={mergeLoading || !detail.checks.can_merge}
+                      >
+                        Merge PR
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {detail.discussion.length > 0 ? (
+                  <div className="space-y-2">
+                    {detail.discussion.map((msg: StudentRepoPullDiscussionComment) => (
+                      <div
+                        key={msg.id}
+                        className="rounded-lg border px-3 py-2 text-xs"
+                        style={{ borderColor: theme.border, backgroundColor: theme.bg }}
+                      >
+                        <p style={{ color: theme.text }}>{msg.body}</p>
+                        <p className="mt-1" style={{ color: theme.text3 }}>
+                          {msg.user_login ?? msg.user_name ?? "user"} ·{" "}
+                          {msg.updated_at ? formatRelativeTime(msg.updated_at) : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {api.createPullComment ? (
+                  <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: theme.border }}>
+                    <textarea
+                      value={discussionBody}
+                      onChange={(e) => setDiscussionBody(e.target.value)}
+                      rows={2}
+                      className="w-full rounded-lg border px-3 py-2 text-sm"
+                      style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                      placeholder="Add discussion comment"
+                      disabled={discussionLoading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void submitDiscussion()}
+                      className="rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+                      style={{ borderColor: theme.border, backgroundColor: theme.bg4, color: theme.text2 }}
+                      disabled={discussionLoading || !discussionBody.trim()}
+                    >
+                      Send comment
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="space-y-3">
+                  {detail.files.map((file: StudentRepoPullFile) => {
+                    const parsed =
+                      parsedDiffByPath.get(file.filename) ||
+                      (file.previous_filename ? parsedDiffByPath.get(file.previous_filename) : undefined);
+                    return (
+                      <div
+                        key={file.filename}
+                        className="rounded-lg border overflow-hidden"
+                        style={{ borderColor: theme.border }}
+                      >
+                        <div
+                          className="px-3 py-2 text-xs flex items-center justify-between"
+                          style={{ backgroundColor: theme.bg, color: theme.text2 }}
+                        >
+                          <span className="font-mono">{file.filename}</span>
+                          <span>
+                            +{file.additions} / -{file.deletions}
+                          </span>
+                        </div>
+                        {parsed ? (
+                          <div className="max-h-[360px] overflow-auto">
+                            {parsed.lines.map((line, idx) => {
+                              const key = `${parsed.path}::${line.position ?? "none"}::${idx}`;
+                              const thread = line.position != null ? threadMap.get(`${parsed.path}::${line.position}`) : null;
+                              const isTarget =
+                                inlineTarget?.path === parsed.path && inlineTarget?.position === line.position;
+                              return (
+                                <div key={key} className="border-t" style={{ borderColor: theme.border }}>
+                                  <div
+                                    className="grid grid-cols-[56px_minmax(0,1fr)_auto] gap-2 px-2 py-1.5 text-[11px] font-mono"
+                                    style={{
+                                      backgroundColor:
+                                        line.kind === "add"
+                                          ? `${theme.success}14`
+                                          : line.kind === "del"
+                                            ? `${theme.danger}12`
+                                            : "transparent",
+                                      color: line.kind === "meta" ? theme.text3 : theme.text2,
+                                    }}
+                                  >
+                                    <span>{line.position ?? ""}</span>
+                                    <span className="whitespace-pre-wrap break-all">{line.raw}</span>
+                                    {line.position != null && api.createPullReview ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setInlineTarget({
+                                            path: parsed.path,
+                                            position: line.position!,
+                                            side: line.kind === "del" ? "old" : "new",
+                                          });
+                                          setInlineBody("");
+                                        }}
+                                        className="rounded border px-1.5 py-0.5 text-[10px]"
+                                        style={{ borderColor: theme.border, color: theme.text3 }}
+                                      >
+                                        {thread ? `Reply (${thread.comments.length})` : "Comment"}
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                  {thread ? (
+                                    <div className="px-2 pb-2 space-y-1">
+                                      {thread.comments.map((comment) => (
+                                        <div
+                                          key={comment.id}
+                                          className="rounded border px-2 py-1 text-xs"
+                                          style={{ borderColor: theme.border, backgroundColor: theme.bg }}
+                                        >
+                                          <p style={{ color: theme.text }}>{comment.body}</p>
+                                          <p style={{ color: theme.text3 }}>
+                                            {comment.user_login ?? comment.user_name ?? "user"} ·{" "}
+                                            {comment.updated_at ? formatRelativeTime(comment.updated_at) : ""}
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                  {isTarget && api.createPullReview ? (
+                                    <div className="px-2 pb-2 space-y-2">
+                                      <textarea
+                                        value={inlineBody}
+                                        onChange={(e) => setInlineBody(e.target.value)}
+                                        rows={2}
+                                        className="w-full rounded border px-2 py-1 text-xs"
+                                        style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                                        placeholder="Inline comment"
+                                        disabled={inlineLoading}
+                                      />
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => void submitInline()}
+                                          className="rounded border px-2 py-1 text-[11px]"
+                                          style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg4 }}
+                                          disabled={inlineLoading || !inlineBody.trim()}
+                                        >
+                                          Send
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setInlineTarget(null)}
+                                          className="rounded border px-2 py-1 text-[11px]"
+                                          style={{ borderColor: theme.border, color: theme.text3 }}
+                                          disabled={inlineLoading}
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="px-3 py-2 text-xs" style={{ color: theme.text3 }}>
+                            Diff preview is unavailable for this file.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
       {hasMore && !loading ? (
         <div className="p-4 border-t text-center" style={{ borderColor: theme.border }}>

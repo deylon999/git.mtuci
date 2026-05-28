@@ -12,9 +12,20 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from mtuci_private_api import Mtuci
-from mtuci_private_api.errors import AuthError
+if TYPE_CHECKING:
+    from mtuci_private_api import Mtuci  # pragma: no cover
+    from mtuci_private_api.errors import AuthError  # pragma: no cover
+
+try:
+    from mtuci_private_api import Mtuci
+    from mtuci_private_api.errors import AuthError
+    _MTUCI_PRIVATE_AVAILABLE = True
+except ImportError:  # pragma: no cover - depends on deployment env
+    Mtuci = None  # type: ignore[assignment]
+    AuthError = Exception  # type: ignore[assignment]
+    _MTUCI_PRIVATE_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +42,18 @@ class MTUCIServiceError(Exception):
 
 class MTUCIAuthError(MTUCIServiceError):
     """Authentication failed with MTUCI LK"""
+
+
+class MTUCIIntegrationUnavailableError(MTUCIServiceError):
+    """MTUCI LK integration dependency is unavailable."""
+
+
+def _ensure_mtuci_private_available() -> None:
+    if _MTUCI_PRIVATE_AVAILABLE:
+        return
+    raise MTUCIIntegrationUnavailableError(
+        "MTUCI integration is unavailable: dependency 'mtuci-private-api' is not installed."
+    )
 
 
 @dataclass
@@ -132,6 +155,7 @@ async def fetch_lk_subjects_cached(
 
 async def fetch_student_info(mtuci_login: str, mtuci_password: str) -> dict:
     """Fetch student info from MTUCI LK (registration / profile)."""
+    _ensure_mtuci_private_available()
     try:
         async with Mtuci(login=mtuci_login, password=mtuci_password) as client:
             user_info = await client.get_user_info()
@@ -202,6 +226,7 @@ async def fetch_lk_subjects(
     """
     One LK session: single attendance request (discipline list only, no per-subject skips).
     """
+    _ensure_mtuci_private_available()
     try:
         async with Mtuci(login=mtuci_login, password=mtuci_password) as client:
             rows = await _fetch_attendance_disciplines_fast(client)

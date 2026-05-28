@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, LogOut, Moon, Search, Sun, User } from "lucide-react";
 import { clearToken } from "../../api/client";
-import { globalSearch } from "../../api/searchApi";
 import { useAuthUser } from "../../context/AuthUserContext";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
 import { getTheme } from "../../theme";
@@ -56,17 +55,7 @@ export default function TeacherHeader({ isDarkTheme = true, onToggleTheme }: Pro
     e.preventDefault();
     const q = searchQuery.trim();
     if (!q) return;
-    try {
-      const result = await globalSearch(q, 8);
-      const first = result.hits[0];
-      if (first?.href) {
-        navigate(first.href);
-        return;
-      }
-    } catch {
-      /* fallback */
-    }
-    navigate(`/teacher/students`);
+    navigate(`/search/code?q=${encodeURIComponent(q)}`);
   }
 
   function onLogout() {

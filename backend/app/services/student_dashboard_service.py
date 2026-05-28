@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import re
 from dataclasses import dataclass
@@ -8,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -335,6 +337,20 @@ def _normalize_repo_path(path: str) -> str:
     return path.strip().strip("/")
 
 
+_GIT_REF_RE = re.compile(r"^[A-Za-z0-9._/\-]+$")
+
+
+def _validate_git_ref(ref: str) -> str:
+    cleaned = (ref or "").strip()
+    if not cleaned:
+        raise ValueError("Git ref is required")
+    if ".." in cleaned or cleaned.startswith("-") or cleaned.endswith("/") or cleaned.startswith("/"):
+        raise ValueError("Invalid git ref")
+    if not _GIT_REF_RE.fullmatch(cleaned):
+        raise ValueError("Invalid git ref")
+    return cleaned
+
+
 async def ensure_student_gitea_clone_token(session: AsyncSession, user: User) -> str:
     """Personal access token for git clone without interactive login (stored in preferences)."""
     prefs: dict = dict(user.preferences) if isinstance(user.preferences, dict) else {}
@@ -544,6 +560,30 @@ async def resolve_student_repo_gitea_target(
             source="personal",
         )
 
+    from app.services.repo_access_service import get_user_repo_access_role
+
+    shared = await session.execute(select(Repository).where(Repository.id == item_uuid))
+    shared_repo = shared.scalar_one_or_none()
+    if shared_repo and shared_repo.owner_id and shared_repo.owner_id != student_id:
+        access_role = await get_user_repo_access_role(
+            session, user=student_user, repo=shared_repo
+        )
+        if access_role is not None:
+            owner_user = await session.get(User, shared_repo.owner_id)
+            if not owner_user:
+                raise ValueError("Repository owner not found")
+            repo_name = (shared_repo.gitea_repo_name or shared_repo.name or "").strip()
+            if not repo_name:
+                raise ValueError("У репозитория нет имени.")
+            shared_owner = resolve_gitea_username(owner_user)
+            gitea_owner = await resolve_repo_owner(primary_owner=shared_owner, repo_name=repo_name)
+            return StudentRepoGiteaTarget(
+                owner=gitea_owner,
+                repo_name=repo_name,
+                display_name=shared_repo.name,
+                source="personal",
+            )
+
     ar_result = await session.execute(
         select(StudentRepository).where(
             StudentRepository.id == item_uuid,
@@ -708,6 +748,64 @@ def _parse_gitea_commit(item: dict) -> dict:
         "author_name": str(author.get("name") or "").strip() or None,
         "committed_at": author.get("date"),
     }
+
+
+def _parse_gitea_file_history_commit(item: dict) -> dict:
+    commit = item.get("commit") if isinstance(item.get("commit"), dict) else item
+    if not isinstance(commit, dict):
+        commit = item
+    msg = str(commit.get("message") or "").strip()
+    if "\n" in msg:
+        msg = msg.split("\n", 1)[0].strip()
+    author = commit.get("author") if isinstance(commit.get("author"), dict) else {}
+    user = item.get("author") if isinstance(item.get("author"), dict) else {}
+    sha = str(item.get("sha") or commit.get("sha") or "").strip()
+    return {
+        "sha": sha,
+        "message": msg or None,
+        "author_name": str(author.get("name") or "").strip() or None,
+        "author_login": str(user.get("login") or "").strip() or None,
+        "authored_at": author.get("date"),
+        "web_url": str(item.get("html_url") or "").strip() or None,
+    }
+
+
+def _parse_gitea_blame_chunk(item: dict, fallback_start_line: int) -> tuple[dict, int]:
+    commit = item.get("commit") if isinstance(item.get("commit"), dict) else {}
+    author = commit.get("author") if isinstance(commit.get("author"), dict) else {}
+    user = item.get("author") if isinstance(item.get("author"), dict) else {}
+    msg = str(commit.get("message") or "").strip()
+    if "\n" in msg:
+        msg = msg.split("\n", 1)[0].strip()
+
+    lines = item.get("lines")
+    line_count = len(lines) if isinstance(lines, list) else 0
+    if line_count <= 0:
+        line_count = int(item.get("line_count") or 0)
+    if line_count <= 0:
+        line_count = 1
+
+    raw_start = item.get("line_no")
+    if not isinstance(raw_start, int) or raw_start < 1:
+        raw_start = item.get("line_number")
+    if not isinstance(raw_start, int) or raw_start < 1:
+        raw_start = item.get("start_line")
+    start_line = raw_start if isinstance(raw_start, int) and raw_start > 0 else fallback_start_line
+    end_line = start_line + line_count - 1
+    sha = str(item.get("sha") or commit.get("id") or commit.get("sha") or "").strip()
+
+    parsed = {
+        "sha": sha,
+        "message": msg or None,
+        "author_name": str(author.get("name") or user.get("full_name") or "").strip() or None,
+        "author_login": str(user.get("login") or author.get("username") or "").strip() or None,
+        "authored_at": author.get("date"),
+        "web_url": str(item.get("html_url") or "").strip() or None,
+        "start_line": start_line,
+        "end_line": end_line,
+        "line_count": line_count,
+    }
+    return parsed, end_line + 1
 
 
 async def get_student_repository_summary(
@@ -988,12 +1086,21 @@ def _parse_gitea_issue(item: dict) -> dict:
         for lb in (item.get("labels") or [])
         if isinstance(lb, dict) and lb.get("name")
     ]
+    assignees = [
+        str(a.get("login") or "").strip()
+        for a in (item.get("assignees") or [])
+        if isinstance(a, dict) and (a.get("login") or "")
+    ]
+    milestone = item.get("milestone") if isinstance(item.get("milestone"), dict) else {}
     return {
         "number": int(item.get("number") or 0),
         "title": str(item.get("title") or "Без названия").strip(),
+        "body": str(item.get("body") or "").strip() or None,
         "state": str(item.get("state") or "open"),
         "author_name": str(user.get("login") or user.get("full_name") or "").strip() or None,
         "labels": labels,
+        "assignees": assignees,
+        "milestone": str(milestone.get("title") or "").strip() or None,
         "comments_count": int(item.get("comments") or 0),
         "created_at": item.get("created_at"),
         "updated_at": item.get("updated_at"),
@@ -1019,6 +1126,504 @@ def _parse_gitea_pull(item: dict) -> dict:
     }
 
 
+def _parse_gitea_pull_file(item: dict) -> dict:
+    return {
+        "filename": str(item.get("filename") or "").strip(),
+        "status": str(item.get("status") or "").strip() or None,
+        "additions": int(item.get("additions") or 0),
+        "deletions": int(item.get("deletions") or 0),
+        "changes": int(item.get("changes") or 0),
+        "previous_filename": str(item.get("previous_filename") or "").strip() or None,
+    }
+
+
+def _parse_gitea_pull_review(item: dict) -> dict:
+    user = item.get("user") if isinstance(item.get("user"), dict) else {}
+    return {
+        "id": int(item.get("id") or 0),
+        "state": str(item.get("state") or "").strip() or None,
+        "body": str(item.get("body") or "").strip() or None,
+        "dismissed": bool(item.get("dismissed") or False),
+        "comments_count": int(item.get("comments_count") or 0),
+        "user_login": str(user.get("login") or "").strip() or None,
+        "user_name": str(user.get("full_name") or "").strip() or None,
+        "submitted_at": item.get("submitted_at"),
+        "updated_at": item.get("updated_at"),
+    }
+
+
+def _parse_gitea_pull_review_comment(item: dict) -> dict:
+    user = item.get("user") if isinstance(item.get("user"), dict) else {}
+    review_id = item.get("pull_request_review_id")
+    return {
+        "id": int(item.get("id") or 0),
+        "review_id": int(review_id) if review_id is not None else None,
+        "body": str(item.get("body") or "").strip(),
+        "path": str(item.get("path") or "").strip() or None,
+        "position": int(item.get("position")) if item.get("position") is not None else None,
+        "original_position": int(item.get("original_position"))
+        if item.get("original_position") is not None
+        else None,
+        "user_login": str(user.get("login") or "").strip() or None,
+        "user_name": str(user.get("full_name") or "").strip() or None,
+        "created_at": item.get("created_at"),
+        "updated_at": item.get("updated_at"),
+    }
+
+
+def _build_gitea_pull_threads(
+    comments: list[dict],
+) -> list[dict]:
+    groups: dict[tuple[str, int | None, int | None], list[dict]] = {}
+    for comment in comments:
+        path = str(comment.get("path") or "").strip()
+        if not path:
+            continue
+        pos = comment.get("position")
+        orig = comment.get("original_position")
+        key = (path, int(pos) if isinstance(pos, int) else None, int(orig) if isinstance(orig, int) else None)
+        groups.setdefault(key, []).append(comment)
+
+    threads: list[dict] = []
+    for (path, pos, orig), rows in groups.items():
+        ordered = sorted(rows, key=lambda row: str(row.get("created_at") or ""))
+        threads.append(
+            {
+                "path": path,
+                "position": pos,
+                "original_position": orig,
+                "comments": ordered,
+            }
+        )
+    threads.sort(
+        key=lambda row: (
+            str(row.get("path") or ""),
+            row.get("position") if isinstance(row.get("position"), int) else -1,
+            row.get("original_position") if isinstance(row.get("original_position"), int) else -1,
+        )
+    )
+    return threads
+
+
+def _parse_gitea_pull_discussion_comment(item: dict) -> dict:
+    user = item.get("user") if isinstance(item.get("user"), dict) else {}
+    return {
+        "id": int(item.get("id") or 0),
+        "body": str(item.get("body") or "").strip(),
+        "user_login": str(user.get("login") or "").strip() or None,
+        "user_name": str(user.get("full_name") or "").strip() or None,
+        "created_at": item.get("created_at"),
+        "updated_at": item.get("updated_at"),
+    }
+
+
+def _parse_gitea_pull_detail(item: dict) -> dict:
+    user = item.get("user") if isinstance(item.get("user"), dict) else {}
+    head = item.get("head") if isinstance(item.get("head"), dict) else {}
+    base = item.get("base") if isinstance(item.get("base"), dict) else {}
+    return {
+        "number": int(item.get("number") or 0),
+        "title": str(item.get("title") or "Без названия").strip(),
+        "state": str(item.get("state") or "open"),
+        "body": str(item.get("body") or "").strip() or None,
+        "author_name": str(user.get("full_name") or user.get("login") or "").strip() or None,
+        "author_login": str(user.get("login") or "").strip() or None,
+        "head_branch": str(head.get("ref") or "").strip() or None,
+        "base_branch": str(base.get("ref") or "").strip() or None,
+        "head_sha": str(head.get("sha") or "").strip() or None,
+        "base_sha": str(base.get("sha") or "").strip() or None,
+        "created_at": item.get("created_at"),
+        "updated_at": item.get("updated_at"),
+        "merged": item.get("merged") if item.get("merged") is not None else None,
+        "mergeable": item.get("mergeable") if item.get("mergeable") is not None else None,
+        "draft": item.get("draft") if item.get("draft") is not None else None,
+        "comments_count": int(item.get("comments") or 0),
+        "review_comments_count": int(item.get("review_comments") or 0),
+        "commits_count": int(item.get("commits")) if item.get("commits") is not None else None,
+        "changed_files_count": int(item.get("changed_files")) if item.get("changed_files") is not None else None,
+        "web_url": str(item.get("html_url") or "").strip() or None,
+        "diff_url": str(item.get("diff_url") or "").strip() or None,
+        "patch_url": str(item.get("patch_url") or "").strip() or None,
+    }
+
+
+def _check_id_for_status_context(context: str) -> str:
+    raw = context.strip()
+    token = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
+    return f"status:{token}"
+
+
+def _decode_check_status_context(check_id: str) -> str | None:
+    if not check_id.startswith("status:"):
+        return None
+    token = check_id.split(":", 1)[1]
+    if not token:
+        return None
+    padded = token + "=" * (-len(token) % 4)
+    try:
+        return base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+    except Exception:
+        return None
+
+
+def _check_id_for_action_run(run_id: int, job_id: int | None) -> str:
+    return f"run:{run_id}:{job_id or 0}"
+
+
+def _parse_action_run_check_id(check_id: str) -> tuple[int | None, int | None]:
+    if not check_id.startswith("run:"):
+        return None, None
+    parts = check_id.split(":")
+    if len(parts) != 3:
+        return None, None
+    try:
+        run_id = int(parts[1])
+    except ValueError:
+        return None, None
+    try:
+        job_id = int(parts[2])
+    except ValueError:
+        job_id = 0
+    return run_id if run_id > 0 else None, job_id if job_id > 0 else None
+
+
+def _check_state_from_status(state: str) -> str:
+    val = state.strip().lower()
+    if val == "completed":
+        return "success"
+    if val in {"success", "skipped", "neutral"}:
+        return "success"
+    if val in {"queued", "waiting", "requested"}:
+        return "queued"
+    if val in {"pending", "in_progress", "running"}:
+        return "running"
+    if val in {"cancelled", "canceled"}:
+        return "cancelled"
+    if val in {"failure", "error", "timed_out", "action_required"}:
+        return "failure"
+    return "unknown"
+
+
+def _build_pull_check_items(
+    *,
+    commit_statuses_raw: list[dict],
+    action_runs_raw: list[dict],
+) -> tuple[list[dict], list[str]]:
+    latest_by_context: dict[str, tuple[str, dict]] = {}
+    for row in commit_statuses_raw:
+        if not isinstance(row, dict):
+            continue
+        context = str(row.get("context") or row.get("name") or "").strip()
+        if not context:
+            continue
+        marker = str(row.get("updated_at") or row.get("created_at") or "")
+        prev = latest_by_context.get(context)
+        if prev is None or marker >= prev[0]:
+            latest_by_context[context] = (marker, row)
+
+    items: list[dict] = []
+    successful_contexts: list[str] = []
+    for context in sorted(latest_by_context.keys(), key=lambda v: v.lower()):
+        row = latest_by_context[context][1]
+        state = _check_state_from_status(str(row.get("state") or ""))
+        if state == "success":
+            successful_contexts.append(context)
+        items.append(
+            {
+                "id": _check_id_for_status_context(context),
+                "name": context,
+                "source": "commit_status",
+                "state": state,
+                "description": str(row.get("description") or "").strip() or None,
+                "details_url": str(row.get("target_url") or row.get("url") or "").strip() or None,
+                "run_id": None,
+                "job_id": None,
+                "can_retry": False,
+                "has_logs": False,
+            }
+        )
+
+    for run in action_runs_raw:
+        if not isinstance(run, dict):
+            continue
+        run_id_raw = run.get("id")
+        run_id = int(run_id_raw) if isinstance(run_id_raw, int) and run_id_raw > 0 else None
+        name = str(run.get("display_title") or run.get("name") or "").strip() or f"Run {run_id or '?'}"
+        run_status = str(run.get("status") or "").strip().lower()
+        run_conclusion = str(run.get("conclusion") or "").strip().lower()
+        raw_state = run_conclusion or run_status
+        state = _check_state_from_status(raw_state)
+        items.append(
+            {
+                "id": _check_id_for_action_run(run_id or 0, None),
+                "name": name,
+                "source": "action_run",
+                "state": state,
+                "description": (
+                    str(run.get("event") or "").strip()
+                    or str(run.get("head_branch") or "").strip()
+                    or None
+                ),
+                "details_url": str(run.get("html_url") or run.get("url") or "").strip() or None,
+                "run_id": run_id,
+                "job_id": None,
+                "can_retry": bool(run_id),
+                "has_logs": False,
+            }
+        )
+    return items, sorted(dict.fromkeys(successful_contexts), key=lambda v: v.lower())
+
+
+def _pull_checks_from_detail(
+    detail: dict,
+    *,
+    required_contexts: list[str] | None = None,
+    successful_contexts: list[str] | None = None,
+    check_items: list[dict] | None = None,
+    policy_reasons: list[str] | None = None,
+    required_approvals: int = 0,
+    approvals: int = 0,
+    required_reviewer_logins: list[str] | None = None,
+    approved_reviewer_logins: list[str] | None = None,
+) -> dict:
+    merged = bool(detail.get("merged"))
+    state = str(detail.get("state") or "open")
+    draft = bool(detail.get("draft"))
+    mergeable_raw = detail.get("mergeable")
+    mergeable = mergeable_raw if isinstance(mergeable_raw, bool) else None
+    conflict_state = "unknown"
+    if mergeable is True:
+        conflict_state = "clean"
+    elif mergeable is False:
+        conflict_state = "conflicting"
+
+    can_merge = state == "open" and not merged and not draft and mergeable is True
+    blocked_reason: str | None = None
+    if merged:
+        blocked_reason = "already_merged"
+    elif state != "open":
+        blocked_reason = "not_open"
+    elif draft:
+        blocked_reason = "draft"
+    elif mergeable is False:
+        blocked_reason = "conflicts"
+    elif mergeable is None:
+        blocked_reason = "mergeability_unknown"
+
+    required = [c for c in (required_contexts or []) if str(c).strip()]
+    ok = {c.strip() for c in (successful_contexts or []) if c and c.strip()}
+    missing = [c for c in required if c.strip() and c.strip() not in ok]
+    reasons = [str(r).strip() for r in (policy_reasons or []) if str(r).strip()]
+    if missing and blocked_reason is None:
+        blocked_reason = "required_checks_missing"
+    if missing or reasons:
+        can_merge = False
+
+    required_reviewers_norm = sorted(
+        {str(x).strip().lower() for x in (required_reviewer_logins or []) if str(x).strip()}
+    )
+    approved_reviewers_norm = sorted(
+        {str(x).strip().lower() for x in (approved_reviewer_logins or []) if str(x).strip()}
+    )
+    missing_required_reviewers = sorted(
+        set(required_reviewers_norm) - set(approved_reviewers_norm)
+    )
+    if missing_required_reviewers and blocked_reason is None:
+        blocked_reason = "required_reviewers_missing"
+    if reasons and blocked_reason is None:
+        blocked_reason = "branch_policy"
+
+    return {
+        "can_merge": can_merge,
+        "mergeable": mergeable,
+        "conflict_state": conflict_state,
+        "blocked_reason": blocked_reason,
+        "policy_reasons": reasons,
+        "required_approvals": int(required_approvals),
+        "approvals": int(approvals),
+        "required_contexts": required,
+        "successful_contexts": sorted(ok, key=lambda v: v.lower()),
+        "missing_required_contexts": missing,
+        "required_reviewer_logins": required_reviewers_norm,
+        "approved_reviewer_logins": approved_reviewers_norm,
+        "missing_required_reviewer_logins": missing_required_reviewers,
+        "items": check_items or [],
+    }
+
+
+async def _ensure_repo_not_blocked_for_write(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+) -> None:
+    try:
+        item_uuid = UUID(repo_item_id)
+    except ValueError:
+        return
+    repo_row = await session.execute(
+        select(Repository).where(
+            Repository.id == item_uuid,
+            Repository.owner_id == student_id,
+        )
+    )
+    personal_repo = repo_row.scalar_one_or_none()
+    if personal_repo:
+        raise_if_repository_blocked(personal_repo)
+
+
+def _summarize_review_states_for_policy(reviews: list[dict]) -> tuple[int, bool, set[str]]:
+    """
+    Return (approvals_count, has_rejected_review) using latest state per reviewer.
+    """
+    latest_by_reviewer: dict[str, tuple[str, str]] = {}
+    state_alias = {
+        "APPROVED": "APPROVED",
+        "LGTM": "APPROVED",
+        "CHANGES_REQUESTED": "CHANGES_REQUESTED",
+        "REQUEST_CHANGES": "CHANGES_REQUESTED",
+        "COMMENTED": "COMMENTED",
+        "PENDING": "PENDING",
+    }
+    for review in reviews:
+        if not isinstance(review, dict):
+            continue
+        reviewer = str(review.get("user_login") or review.get("user_name") or "").strip().lower()
+        if not reviewer:
+            continue
+        if bool(review.get("dismissed")):
+            continue
+        raw_state = str(review.get("state") or "").strip().upper()
+        state = state_alias.get(raw_state, raw_state)
+        if not state:
+            continue
+        marker = str(review.get("submitted_at") or review.get("updated_at") or review.get("created_at") or "")
+        prev = latest_by_reviewer.get(reviewer)
+        if prev is None or marker >= prev[1]:
+            latest_by_reviewer[reviewer] = (state, marker)
+
+    approvals = 0
+    rejected = False
+    for state, _marker in latest_by_reviewer.values():
+        if state == "APPROVED":
+            approvals += 1
+        elif state in {"CHANGES_REQUESTED", "REQUEST_CHANGES"}:
+            rejected = True
+    # rebuild approved reviewer logins from latest map to avoid leaking marker value
+    approved_logins = {
+        reviewer
+        for reviewer, (state, _ts) in latest_by_reviewer.items()
+        if state == "APPROVED"
+    }
+    return approvals, rejected, approved_logins
+
+
+async def _required_status_contexts_for_pull(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    base_branch: str,
+) -> list[str]:
+    from app.services.repo_settings_service import list_branch_protections, match_branch_protection_rule
+
+    try:
+        repo_uuid = UUID(repo_item_id)
+    except ValueError:
+        return []
+    repo_row = await session.execute(
+        select(Repository).where(
+            Repository.id == repo_uuid,
+            Repository.owner_id == student_id,
+        )
+    )
+    personal_repo = repo_row.scalar_one_or_none()
+    if not personal_repo:
+        return []
+    rules = await list_branch_protections(session, repo=personal_repo)
+    rule = match_branch_protection_rule(rules, branch=base_branch)
+    if rule is None or not rule.require_status_checks:
+        return []
+    return [c for c in (rule.status_check_contexts or []) if str(c).strip()]
+
+
+async def _enforce_branch_policy_for_pull_merge(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    pull_number: int,
+) -> None:
+    """
+    Enforce branch protection policy for personal repositories before merge.
+    """
+    from app.services.repo_settings_service import (
+        evaluate_merge_policy,
+        list_branch_protections,
+        match_branch_protection_rule,
+    )
+
+    try:
+        repo_uuid = UUID(repo_item_id)
+    except ValueError:
+        return
+
+    repo_row = await session.execute(
+        select(Repository).where(
+            Repository.id == repo_uuid,
+            Repository.owner_id == student_id,
+        )
+    )
+    personal_repo = repo_row.scalar_one_or_none()
+    if not personal_repo:
+        # Assignment repositories currently don't have branch-protection config in local DB.
+        return
+
+    rules = await list_branch_protections(session, repo=personal_repo)
+    if not rules:
+        return
+
+    bundle = await get_student_repository_pull_detail_bundle(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+        pull_number=pull_number,
+    )
+    pull = bundle.get("pull") if isinstance(bundle, dict) else {}
+    base_branch = str((pull or {}).get("base_branch") or "").strip()
+    if not base_branch:
+        return
+    rule = match_branch_protection_rule(rules, branch=base_branch)
+    if rule is None:
+        return
+
+    approvals, has_rejected_review, approved_reviewers = _summarize_review_states_for_policy(
+        bundle.get("reviews", []) if isinstance(bundle, dict) else []
+    )
+    checks = bundle.get("checks", {}) if isinstance(bundle, dict) else {}
+    successful_checks = [
+        str(c).strip()
+        for c in (checks.get("successful_contexts") or [])
+        if str(c).strip()
+    ]
+    decision = evaluate_merge_policy(
+        required_approvals=rule.required_approvals,
+        require_status_checks=rule.require_status_checks,
+        required_status_contexts=rule.status_check_contexts,
+        required_reviewer_logins=rule.required_reviewer_logins,
+        block_on_rejected_reviews=rule.block_on_rejected_reviews,
+        approvals=approvals,
+        successful_checks=successful_checks,
+        approved_reviewer_logins=sorted(approved_reviewers),
+        has_rejected_review=has_rejected_review,
+    )
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Merge blocked by branch policy: {'; '.join(decision.reasons)}",
+        )
+
+
 async def get_student_repository_issues(
     session: AsyncSession,
     *,
@@ -1027,6 +1632,7 @@ async def get_student_repository_issues(
     page: int = 1,
     limit: int = 20,
     state: str = "open",
+    q: str | None = None,
 ) -> dict:
     from app.services.gitea_service import list_repo_issues_page
 
@@ -1043,7 +1649,119 @@ async def get_student_repository_issues(
         state=state,
     )
     issues = [_parse_gitea_issue(i) for i in raw if isinstance(i, dict)]
+    query = (q or "").strip().lower()
+    if query:
+        issues = [
+            i
+            for i in issues
+            if query in (i.get("title") or "").lower()
+            or query in (i.get("body") or "").lower()
+            or any(query in lb.lower() for lb in (i.get("labels") or []))
+            or any(query in a.lower() for a in (i.get("assignees") or []))
+        ]
     return {"issues": issues, "page": page, "has_more": has_more}
+
+
+async def create_student_repository_issue(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    title: str,
+    body: str | None = None,
+    labels: list[str] | None = None,
+    assignees: list[str] | None = None,
+    milestone: str | None = None,
+) -> dict:
+    from app.services.gitea_service import create_repo_issue
+
+    await _ensure_repo_not_blocked_for_write(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    created = await create_repo_issue(
+        owner=target.owner,
+        repo=target.repo_name,
+        title=title,
+        body=body,
+        labels=labels,
+        assignees=assignees,
+        milestone=milestone,
+    )
+    return _parse_gitea_issue(created)
+
+
+async def update_student_repository_issue(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    issue_number: int,
+    title: str | None = None,
+    body: str | None = None,
+    state: str | None = None,
+    labels: list[str] | None = None,
+    assignees: list[str] | None = None,
+    milestone: str | None = None,
+) -> dict:
+    from app.services.gitea_service import update_repo_issue
+
+    await _ensure_repo_not_blocked_for_write(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    updated = await update_repo_issue(
+        owner=target.owner,
+        repo=target.repo_name,
+        index=issue_number,
+        title=title,
+        body=body,
+        state=state,
+        labels=labels,
+        assignees=assignees,
+        milestone=milestone,
+    )
+    return _parse_gitea_issue(updated)
+
+
+async def react_student_repository_issue(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    issue_number: int,
+    content: str,
+) -> dict:
+    from app.services.gitea_service import add_issue_reaction
+
+    await _ensure_repo_not_blocked_for_write(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    return await add_issue_reaction(
+        owner=target.owner,
+        repo=target.repo_name,
+        index=issue_number,
+        content=content,
+    )
 
 
 async def get_student_repository_pulls(
@@ -1118,6 +1836,398 @@ async def create_student_repository_pull_request(
     return _parse_gitea_pull(pr)
 
 
+async def get_student_repository_pull_detail_bundle(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    pull_number: int,
+) -> dict:
+    from app.services.gitea_service import (
+        list_commit_statuses,
+        list_repo_action_runs,
+        get_pull_request,
+        get_pull_request_diff_text,
+        list_issue_comments,
+        list_pull_request_files,
+        list_pull_review_comments,
+        list_pull_reviews,
+    )
+
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    pull_raw = await get_pull_request(
+        owner=target.owner,
+        repo=target.repo_name,
+        index=pull_number,
+    )
+    if not pull_raw:
+        raise ValueError("Pull request not found")
+
+    head_sha = str((pull_raw.get("head") or {}).get("sha") or "").strip()
+    files_raw, reviews_raw, discussion_raw, diff_text, commit_statuses_raw, action_runs_raw = await asyncio.gather(
+        list_pull_request_files(owner=target.owner, repo=target.repo_name, index=pull_number),
+        list_pull_reviews(owner=target.owner, repo=target.repo_name, index=pull_number),
+        list_issue_comments(owner=target.owner, repo=target.repo_name, index=pull_number),
+        get_pull_request_diff_text(owner=target.owner, repo=target.repo_name, index=pull_number),
+        list_commit_statuses(owner=target.owner, repo=target.repo_name, sha=head_sha) if head_sha else asyncio.sleep(0, result=[]),
+        list_repo_action_runs(owner=target.owner, repo=target.repo_name, head_sha=head_sha) if head_sha else asyncio.sleep(0, result=[]),
+    )
+    reviews = [_parse_gitea_pull_review(item) for item in reviews_raw if isinstance(item, dict)]
+    discussion = [
+        _parse_gitea_pull_discussion_comment(item)
+        for item in discussion_raw
+        if isinstance(item, dict)
+    ]
+    files = [_parse_gitea_pull_file(item) for item in files_raw if isinstance(item, dict)]
+
+    async def _comments_for_review(review: dict) -> list[dict]:
+        review_id = review.get("id")
+        if not isinstance(review_id, int) or review_id <= 0:
+            return []
+        rows = await list_pull_review_comments(
+            owner=target.owner,
+            repo=target.repo_name,
+            index=pull_number,
+            review_id=review_id,
+        )
+        return [_parse_gitea_pull_review_comment(item) for item in rows if isinstance(item, dict)]
+
+    comments_nested = await asyncio.gather(*[_comments_for_review(r) for r in reviews], return_exceptions=False)
+    all_comments: list[dict] = []
+    for chunk in comments_nested:
+        all_comments.extend(chunk)
+
+    detail = _parse_gitea_pull_detail(pull_raw)
+    required_contexts = await _required_status_contexts_for_pull(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+        base_branch=str(detail.get("base_branch") or "").strip(),
+    )
+    required_approvals = 0
+    required_reviewer_logins: list[str] = []
+    approvals = 0
+    approved_reviewers: list[str] = []
+    policy_reasons: list[str] = []
+    check_items, successful_contexts = _build_pull_check_items(
+        commit_statuses_raw=[row for row in commit_statuses_raw if isinstance(row, dict)],
+        action_runs_raw=[row for row in action_runs_raw if isinstance(row, dict)],
+    )
+    try:
+        from app.services.repo_settings_service import (
+            evaluate_merge_policy,
+            list_branch_protections,
+            match_branch_protection_rule,
+        )
+
+        try:
+            repo_uuid = UUID(repo_item_id)
+        except ValueError:
+            repo_uuid = None
+        personal_repo = None
+        if repo_uuid:
+            repo_row = await session.execute(
+                select(Repository).where(
+                    Repository.id == repo_uuid,
+                    Repository.owner_id == student_id,
+                )
+            )
+            personal_repo = repo_row.scalar_one_or_none()
+        if personal_repo:
+            rules = await list_branch_protections(session, repo=personal_repo)
+            base_branch = str(detail.get("base_branch") or "").strip()
+            rule = match_branch_protection_rule(rules, branch=base_branch)
+            if rule:
+                required_approvals = int(rule.required_approvals or 0)
+                required_reviewer_logins = [
+                    str(x).strip().lower()
+                    for x in (rule.required_reviewer_logins or [])
+                    if str(x).strip()
+                ]
+                approvals_int, has_rejected_review, approved_reviewers_set = _summarize_review_states_for_policy(
+                    reviews
+                )
+                approvals = approvals_int
+                approved_reviewers = sorted(approved_reviewers_set)
+                decision = evaluate_merge_policy(
+                    required_approvals=required_approvals,
+                    require_status_checks=rule.require_status_checks,
+                    required_status_contexts=rule.status_check_contexts,
+                    required_reviewer_logins=required_reviewer_logins,
+                    block_on_rejected_reviews=rule.block_on_rejected_reviews,
+                    approvals=approvals,
+                    successful_checks=successful_contexts,
+                    approved_reviewer_logins=approved_reviewers,
+                    has_rejected_review=has_rejected_review,
+                )
+                policy_reasons = [str(x).strip() for x in (decision.reasons or []) if str(x).strip()]
+    except Exception:
+        policy_reasons = []
+    checks = _pull_checks_from_detail(
+        detail,
+        required_contexts=required_contexts,
+        successful_contexts=successful_contexts,
+        check_items=check_items,
+        policy_reasons=policy_reasons,
+        required_approvals=required_approvals,
+        approvals=approvals,
+        required_reviewer_logins=required_reviewer_logins,
+        approved_reviewer_logins=approved_reviewers,
+    )
+    threads = _build_gitea_pull_threads(all_comments)
+    return {
+        "pull": detail,
+        "diff": diff_text,
+        "files": files,
+        "reviews": reviews,
+        "threads": threads,
+        "discussion": discussion,
+        "checks": checks,
+    }
+
+
+def _map_review_event_to_gitea(event: str) -> str:
+    normalized = (event or "").strip().lower()
+    if normalized == "approve":
+        return "APPROVE"
+    if normalized == "request_changes":
+        return "CHANGES_REQUESTED"
+    return "COMMENT"
+
+
+async def create_student_repository_pull_review(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    pull_number: int,
+    event: str,
+    body: str | None = None,
+    comments: list[dict] | None = None,
+) -> dict:
+    from app.services.gitea_service import create_pull_review
+
+    await _ensure_repo_not_blocked_for_write(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    comment_rows: list[dict] = []
+    for row in comments or []:
+        if not isinstance(row, dict):
+            continue
+        path = str(row.get("path") or "").strip()
+        text = str(row.get("body") or "").strip()
+        if not path or not text:
+            continue
+        payload_row: dict = {"path": path, "body": text}
+        new_pos = row.get("new_position")
+        old_pos = row.get("old_position")
+        if isinstance(new_pos, int) and new_pos > 0:
+            payload_row["new_position"] = new_pos
+        if isinstance(old_pos, int) and old_pos > 0:
+            payload_row["old_position"] = old_pos
+        comment_rows.append(payload_row)
+
+    review_raw = await create_pull_review(
+        owner=target.owner,
+        repo=target.repo_name,
+        index=pull_number,
+        event=_map_review_event_to_gitea(event),
+        body=(body or "").strip() or None,
+        comments=comment_rows or None,
+    )
+    return _parse_gitea_pull_review(review_raw)
+
+
+async def create_student_repository_pull_discussion_comment(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    pull_number: int,
+    body: str,
+) -> dict:
+    from app.services.gitea_service import create_issue_comment
+
+    await _ensure_repo_not_blocked_for_write(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    created = await create_issue_comment(
+        owner=target.owner,
+        repo=target.repo_name,
+        index=pull_number,
+        body=body.strip(),
+    )
+    return _parse_gitea_pull_discussion_comment(created)
+
+
+async def merge_student_repository_pull(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    pull_number: int,
+    method: str = "merge",
+    commit_title: str | None = None,
+    commit_message: str | None = None,
+    delete_branch_after_merge: bool = True,
+    force_merge: bool = False,
+    head_commit_id: str | None = None,
+) -> dict:
+    from app.services.gitea_service import merge_pull_request
+
+    await _ensure_repo_not_blocked_for_write(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    await _enforce_branch_policy_for_pull_merge(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+        pull_number=pull_number,
+    )
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    return await merge_pull_request(
+        owner=target.owner,
+        repo=target.repo_name,
+        index=pull_number,
+        method=method,
+        commit_title=(commit_title or "").strip() or None,
+        commit_message=(commit_message or "").strip() or None,
+        delete_branch_after_merge=delete_branch_after_merge,
+        force_merge=force_merge,
+        head_commit_id=(head_commit_id or "").strip() or None,
+    )
+
+
+async def get_student_repository_pull_check_log(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    pull_number: int,
+    check_id: str,
+) -> dict:
+    from app.services.gitea_service import get_repo_action_job_logs
+
+    bundle = await get_student_repository_pull_detail_bundle(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+        pull_number=pull_number,
+    )
+    checks = bundle.get("checks", {}) if isinstance(bundle, dict) else {}
+    items = checks.get("items", []) if isinstance(checks, dict) else []
+    item = next((row for row in items if isinstance(row, dict) and row.get("id") == check_id), None)
+    if not item:
+        raise ValueError("Check not found")
+
+    source = str(item.get("source") or "")
+    if source == "commit_status":
+        lines = [
+            f"Check: {item.get('name') or 'status'}",
+            f"State: {item.get('state') or 'unknown'}",
+        ]
+        if item.get("description"):
+            lines.append(f"Description: {item.get('description')}")
+        if item.get("details_url"):
+            lines.append(f"Details URL: {item.get('details_url')}")
+        return {"id": check_id, "log": "\n".join(lines), "truncated": False}
+
+    run_id, job_id = _parse_action_run_check_id(check_id)
+    if not run_id:
+        raise ValueError("Unsupported check id")
+    if not job_id:
+        details = str(item.get("details_url") or "").strip()
+        msg = (
+            "Logs are unavailable for this run via API. "
+            f"Open details: {details}"
+            if details
+            else "Logs are unavailable for this run via API."
+        )
+        return {"id": check_id, "log": msg, "truncated": False}
+
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    raw_log = await get_repo_action_job_logs(owner=target.owner, repo=target.repo_name, job_id=job_id)
+    if raw_log is None:
+        return {"id": check_id, "log": "Logs are not available for this check.", "truncated": False}
+    max_chars = 100_000
+    truncated = len(raw_log) > max_chars
+    return {"id": check_id, "log": raw_log[:max_chars], "truncated": truncated}
+
+
+async def retry_student_repository_pull_check(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    pull_number: int,
+    check_id: str,
+) -> dict:
+    from app.services.gitea_service import retry_repo_action_run
+
+    await _ensure_repo_not_blocked_for_write(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    bundle = await get_student_repository_pull_detail_bundle(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+        pull_number=pull_number,
+    )
+    checks = bundle.get("checks", {}) if isinstance(bundle, dict) else {}
+    items = checks.get("items", []) if isinstance(checks, dict) else []
+    item = next((row for row in items if isinstance(row, dict) and row.get("id") == check_id), None)
+    if not item:
+        raise ValueError("Check not found")
+    if str(item.get("source") or "") != "action_run":
+        return {"id": check_id, "accepted": False, "message": "Only action runs can be retried"}
+
+    run_id, _job_id = _parse_action_run_check_id(check_id)
+    if not run_id:
+        return {"id": check_id, "accepted": False, "message": "Invalid run id"}
+
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    accepted = await retry_repo_action_run(owner=target.owner, repo=target.repo_name, run_id=run_id)
+    return {
+        "id": check_id,
+        "accepted": bool(accepted),
+        "message": "Rerun triggered" if accepted else "Rerun endpoint unavailable",
+    }
+
+
 async def get_student_repository_commit_diff(
     session: AsyncSession,
     *,
@@ -1134,6 +2244,157 @@ async def get_student_repository_commit_diff(
     )
     diff = await get_commit_diff_text(owner=target.owner, repo=target.repo_name, sha=sha)
     return {"sha": sha[:12], "diff": diff}
+
+
+async def get_student_repository_file_history(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    filepath: str,
+    branch: str | None = None,
+    page: int = 1,
+    limit: int = 20,
+) -> dict:
+    from app.services.gitea_service import get_repo_metadata, list_repo_commits_page
+
+    cleaned = filepath.strip().strip("/")
+    if not cleaned or ".." in cleaned.split("/"):
+        raise ValueError("Invalid filepath")
+    ref = _validate_git_ref(branch) if branch and branch.strip() else None
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    resolved_ref = ref
+    if not resolved_ref:
+        meta = await get_repo_metadata(owner=target.owner, repo=target.repo_name)
+        resolved_ref = str((meta or {}).get("default_branch") or "main").strip() or "main"
+    resolved_ref = _validate_git_ref(resolved_ref)
+    commits_raw, has_more = await list_repo_commits_page(
+        owner=target.owner,
+        repo=target.repo_name,
+        limit=min(max(limit, 1), 50),
+        page=max(page, 1),
+        ref=resolved_ref,
+        path=cleaned,
+    )
+    commits = [
+        _parse_gitea_file_history_commit(row)
+        for row in commits_raw
+        if isinstance(row, dict)
+    ]
+    return {
+        "path": cleaned,
+        "branch": resolved_ref,
+        "page": max(page, 1),
+        "has_more": has_more,
+        "commits": commits,
+    }
+
+
+async def get_student_repository_file_blame(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    filepath: str,
+    branch: str | None = None,
+) -> dict:
+    from app.services.gitea_service import get_repo_file_blame, get_repo_metadata
+
+    cleaned = filepath.strip().strip("/")
+    if not cleaned or ".." in cleaned.split("/"):
+        raise ValueError("Invalid filepath")
+    ref = _validate_git_ref(branch) if branch and branch.strip() else None
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    resolved_ref = ref
+    if not resolved_ref:
+        meta = await get_repo_metadata(owner=target.owner, repo=target.repo_name)
+        resolved_ref = str((meta or {}).get("default_branch") or "main").strip() or "main"
+    resolved_ref = _validate_git_ref(resolved_ref)
+    raw = await get_repo_file_blame(
+        owner=target.owner,
+        repo=target.repo_name,
+        filepath=cleaned,
+        ref=resolved_ref,
+    )
+    if raw is None:
+        raise ValueError("Unable to load blame for file")
+
+    chunks: list[dict] = []
+    next_line = 1
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        parsed, next_line = _parse_gitea_blame_chunk(row, next_line)
+        if parsed["sha"] and not parsed["web_url"]:
+            parsed["web_url"] = f"{build_repo_web_url(target.owner, target.repo_name).rstrip('/')}/commit/{parsed['sha']}"
+        chunks.append(parsed)
+
+    return {
+        "path": cleaned,
+        "branch": resolved_ref,
+        "chunks": chunks,
+    }
+
+
+async def get_student_repository_compare_refs(
+    session: AsyncSession,
+    *,
+    student_id: UUID,
+    repo_item_id: str,
+    base_ref: str,
+    head_ref: str,
+) -> dict:
+    from app.services.gitea_service import compare_branches
+
+    base = _validate_git_ref(base_ref)
+    head = _validate_git_ref(head_ref)
+    target = await resolve_student_repo_gitea_target(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+    )
+    cmp = await compare_branches(owner=target.owner, repo=target.repo_name, base=base, head=head)
+    if not cmp:
+        raise ValueError("Unable to compare refs")
+    files_raw = cmp.get("files")
+    files: list[dict] = []
+    if isinstance(files_raw, list):
+        for row in files_raw:
+            if not isinstance(row, dict):
+                continue
+            filename = str(row.get("filename") or "").strip()
+            if not filename:
+                continue
+            files.append(
+                {
+                    "filename": filename,
+                    "previous_filename": str(row.get("previous_filename") or "").strip() or None,
+                    "status": str(row.get("status") or "").strip() or None,
+                    "additions": max(0, int(row.get("additions") or 0)),
+                    "deletions": max(0, int(row.get("deletions") or 0)),
+                    "changes": max(0, int(row.get("changes") or 0)),
+                    "is_binary": bool(row.get("is_binary") or False),
+                    "too_large": bool(row.get("too_large") or False),
+                    "truncated": bool(row.get("truncated") or False),
+                }
+            )
+    return {
+        "base": base,
+        "head": head,
+        "status": str(cmp.get("status") or "").strip() or None,
+        "ahead_by": int(cmp.get("ahead_by") or 0),
+        "behind_by": int(cmp.get("behind_by") or 0),
+        "total_commits": int(cmp.get("total_commits") or 0),
+        "files": files,
+    }
 
 
 async def list_student_repository_unmerged_branches(
@@ -1861,6 +3122,63 @@ async def get_student_repositories(
                 updated_at=repo.updated_at,
             )
         )
+
+    if student_user:
+        from app.models.repo_access import RepositoryCollaborator, RepositoryTeamAccess
+
+        owned_ids = {r.id for r in personal_repos}
+        shared_ids: set[UUID] = set()
+        collab_ids = await session.execute(
+            select(RepositoryCollaborator.repository_id).where(
+                RepositoryCollaborator.user_id == student_id
+            )
+        )
+        shared_ids.update(row[0] for row in collab_ids.all())
+        if student_user.group_name:
+            team_ids = await session.execute(
+                select(RepositoryTeamAccess.repository_id).where(
+                    RepositoryTeamAccess.team_name == student_user.group_name
+                )
+            )
+            shared_ids.update(row[0] for row in team_ids.all())
+        extra_ids = shared_ids - owned_ids
+        if extra_ids:
+            shared_result = await session.execute(
+                select(Repository, User)
+                .join(User, User.id == Repository.owner_id)
+                .where(
+                    Repository.id.in_(extra_ids),
+                    repository_not_blocked_clause(),
+                )
+            )
+            for repo, owner_user in shared_result.all():
+                visibility = (
+                    repo.repo_type.value if hasattr(repo.repo_type, "value") else str(repo.repo_type)
+                )
+                if visibility == "public":
+                    public_count += 1
+                else:
+                    private_count += 1
+                repo_name = repo.gitea_repo_name or repo.name
+                shared_owner = resolve_gitea_username(owner_user)
+                repo_specs.append((shared_owner, repo_name))
+                items.append(
+                    StudentRepositoryItemRead(
+                        id=str(repo.id),
+                        name=repo.name,
+                        description=repo.description,
+                        gitea_path=f"{shared_owner}/{repo_name}",
+                        gitea_web_url=build_repo_web_url(shared_owner, repo_name),
+                        clone_url=build_clone_url(shared_owner, repo_name),
+                        language=repo.language,
+                        commits_count=None,
+                        visibility=visibility,
+                        source="personal",
+                        repository_id=repo.id,
+                        can_delete=False,
+                        updated_at=repo.updated_at,
+                    )
+                )
 
     for student_repo, assignment, course in ar_result.all():
         course_count += 1

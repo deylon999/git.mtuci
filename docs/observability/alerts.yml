@@ -1,0 +1,24 @@
+groups:
+  - name: app-slo-alerts
+    rules:
+      - alert: HighErrorRate
+        expr: app_http_errors_hour / clamp_min(app_http_requests_hour, 1) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate"
+      - alert: HighP95Latency
+        expr: app_http_p95_ms > 1200
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency"
+      - alert: LowTrafficOrOutage
+        expr: app_http_rps < 0.01
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No traffic detected"

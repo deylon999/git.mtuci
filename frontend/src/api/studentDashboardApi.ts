@@ -604,9 +604,12 @@ export function getStudentRepoFileContent(
 export interface StudentRepoIssue {
   number: number;
   title: string;
+  body?: string | null;
   state: string;
   author_name: string | null;
   labels: string[];
+  assignees?: string[];
+  milestone?: string | null;
   comments_count: number;
   created_at: string | null;
   updated_at: string | null;
@@ -622,9 +625,56 @@ export function getStudentRepoIssues(
   repoId: string,
   state = "open",
   page = 1,
+  q?: string,
 ): Promise<StudentRepoIssuesResponse> {
   return apiRequest<StudentRepoIssuesResponse>(
-    `/students/me/repositories/${repoId}/issues${repoQuery({ state, page: String(page) })}`,
+    `/students/me/repositories/${repoId}/issues${repoQuery({ state, page: String(page), q })}`,
+  );
+}
+
+export interface StudentRepoIssueUpsertBody {
+  title: string;
+  body?: string | null;
+  labels?: string[];
+  assignees?: string[];
+  milestone?: string | null;
+}
+
+export interface StudentRepoIssuePatchBody {
+  title?: string;
+  body?: string | null;
+  state?: "open" | "closed";
+  labels?: string[];
+  assignees?: string[];
+  milestone?: string | null;
+}
+
+export function createStudentRepoIssue(repoId: string, body: StudentRepoIssueUpsertBody): Promise<StudentRepoIssue> {
+  return apiRequest<StudentRepoIssue>(`/students/me/repositories/${repoId}/issues`, {
+    method: "POST",
+    body,
+  });
+}
+
+export function patchStudentRepoIssue(
+  repoId: string,
+  issueNumber: number,
+  body: StudentRepoIssuePatchBody,
+): Promise<StudentRepoIssue> {
+  return apiRequest<StudentRepoIssue>(
+    `/students/me/repositories/${repoId}/issues/${encodeURIComponent(String(issueNumber))}`,
+    { method: "PATCH", body },
+  );
+}
+
+export function reactStudentRepoIssue(
+  repoId: string,
+  issueNumber: number,
+  content: "+1" | "-1" | "laugh" | "confused" | "heart" | "hooray" | "rocket" | "eyes",
+): Promise<any> {
+  return apiRequest<any>(
+    `/students/me/repositories/${repoId}/issues/${encodeURIComponent(String(issueNumber))}/reactions`,
+    { method: "POST", body: { content } },
   );
 }
 
@@ -639,6 +689,133 @@ export interface StudentRepoPull {
   updated_at: string | null;
   merged?: boolean | null;
   commits_count?: number | null;
+}
+
+export interface StudentRepoPullFile {
+  filename: string;
+  status: string | null;
+  additions: number;
+  deletions: number;
+  changes: number;
+  previous_filename: string | null;
+}
+
+export interface StudentRepoPullReviewComment {
+  id: number;
+  review_id: number | null;
+  body: string;
+  path: string | null;
+  position: number | null;
+  original_position: number | null;
+  user_login: string | null;
+  user_name: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface StudentRepoPullThread {
+  path: string;
+  position: number | null;
+  original_position: number | null;
+  comments: StudentRepoPullReviewComment[];
+}
+
+export interface StudentRepoPullReview {
+  id: number;
+  state: string | null;
+  body: string | null;
+  dismissed: boolean;
+  comments_count: number;
+  user_login: string | null;
+  user_name: string | null;
+  submitted_at: string | null;
+  updated_at: string | null;
+}
+
+export interface StudentRepoPullDiscussionComment {
+  id: number;
+  body: string;
+  user_login: string | null;
+  user_name: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface StudentRepoPullChecks {
+  can_merge: boolean;
+  mergeable: boolean | null;
+  conflict_state: "clean" | "conflicting" | "unknown";
+  blocked_reason: string | null;
+  policy_reasons: string[];
+  required_approvals: number;
+  approvals: number;
+  required_contexts: string[];
+  successful_contexts: string[];
+  missing_required_contexts: string[];
+  required_reviewer_logins: string[];
+  approved_reviewer_logins: string[];
+  missing_required_reviewer_logins: string[];
+  items: StudentRepoPullCheckItem[];
+}
+
+export interface StudentRepoPullCheckItem {
+  id: string;
+  name: string;
+  source: "commit_status" | "action_run" | string;
+  state: "success" | "failure" | "pending" | "unknown" | string;
+  description: string | null;
+  details_url: string | null;
+  run_id: number | null;
+  job_id: number | null;
+  can_retry: boolean;
+  has_logs: boolean;
+}
+
+export interface StudentRepoPullDetail {
+  number: number;
+  title: string;
+  state: string;
+  body: string | null;
+  author_name: string | null;
+  author_login: string | null;
+  head_branch: string | null;
+  base_branch: string | null;
+  head_sha: string | null;
+  base_sha: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  merged: boolean | null;
+  mergeable: boolean | null;
+  draft: boolean | null;
+  comments_count: number;
+  review_comments_count: number;
+  commits_count: number | null;
+  changed_files_count: number | null;
+  web_url: string | null;
+  diff_url: string | null;
+  patch_url: string | null;
+}
+
+export interface StudentRepoPullDetailBundle {
+  pull: StudentRepoPullDetail;
+  diff: string;
+  files: StudentRepoPullFile[];
+  reviews: StudentRepoPullReview[];
+  threads: StudentRepoPullThread[];
+  discussion: StudentRepoPullDiscussionComment[];
+  checks: StudentRepoPullChecks;
+}
+
+export interface StudentRepoPullCheckLog {
+  id: string;
+  log: string;
+  truncated: boolean;
+}
+
+export interface StudentRepoPullCheckRetryResult {
+  id: string;
+  accepted: boolean;
+  message: string | null;
 }
 
 export interface StudentRepoPullsResponse {
@@ -671,6 +848,105 @@ export function createStudentRepoPull(repoId: string, body: StudentRepoCreatePul
   });
 }
 
+export function getStudentRepoPullDetail(
+  repoId: string,
+  pullNumber: number,
+): Promise<StudentRepoPullDetailBundle> {
+  return apiRequest<StudentRepoPullDetailBundle>(
+    `/students/me/repositories/${repoId}/pulls/${encodeURIComponent(String(pullNumber))}`,
+  );
+}
+
+export function getStudentRepoPullCheckLog(
+  repoId: string,
+  pullNumber: number,
+  checkId: string,
+): Promise<StudentRepoPullCheckLog> {
+  return apiRequest<StudentRepoPullCheckLog>(
+    `/students/me/repositories/${repoId}/pulls/${encodeURIComponent(String(pullNumber))}/checks/${encodeURIComponent(checkId)}/log`,
+  );
+}
+
+export function retryStudentRepoPullCheck(
+  repoId: string,
+  pullNumber: number,
+  checkId: string,
+): Promise<StudentRepoPullCheckRetryResult> {
+  return apiRequest<StudentRepoPullCheckRetryResult>(
+    `/students/me/repositories/${repoId}/pulls/${encodeURIComponent(String(pullNumber))}/checks/${encodeURIComponent(checkId)}/retry`,
+    { method: "POST" },
+  );
+}
+
+export interface StudentRepoCreatePullReviewCommentBody {
+  path: string;
+  body: string;
+  new_position?: number;
+  old_position?: number;
+}
+
+export interface StudentRepoCreatePullReviewBody {
+  event: "comment" | "approve" | "request_changes";
+  body?: string | null;
+  comments?: StudentRepoCreatePullReviewCommentBody[];
+}
+
+export function createStudentRepoPullReview(
+  repoId: string,
+  pullNumber: number,
+  body: StudentRepoCreatePullReviewBody,
+): Promise<StudentRepoPullReview> {
+  return apiRequest<StudentRepoPullReview>(
+    `/students/me/repositories/${repoId}/pulls/${encodeURIComponent(String(pullNumber))}/reviews`,
+    {
+      method: "POST",
+      body,
+    },
+  );
+}
+
+export function createStudentRepoPullComment(
+  repoId: string,
+  pullNumber: number,
+  body: { body: string },
+): Promise<StudentRepoPullDiscussionComment> {
+  return apiRequest<StudentRepoPullDiscussionComment>(
+    `/students/me/repositories/${repoId}/pulls/${encodeURIComponent(String(pullNumber))}/comments`,
+    {
+      method: "POST",
+      body,
+    },
+  );
+}
+
+export interface StudentRepoMergePullBody {
+  method: "merge" | "squash" | "rebase";
+  commit_title?: string | null;
+  commit_message?: string | null;
+  delete_branch_after_merge?: boolean;
+  force_merge?: boolean;
+  head_commit_id?: string | null;
+}
+
+export interface StudentRepoMergePullResult {
+  merged: boolean;
+  message: string | null;
+}
+
+export function mergeStudentRepoPull(
+  repoId: string,
+  pullNumber: number,
+  body: StudentRepoMergePullBody,
+): Promise<StudentRepoMergePullResult> {
+  return apiRequest<StudentRepoMergePullResult>(
+    `/students/me/repositories/${repoId}/pulls/${encodeURIComponent(String(pullNumber))}/merge`,
+    {
+      method: "POST",
+      body,
+    },
+  );
+}
+
 export interface StudentRepoCommitDiff {
   sha: string;
   diff: string;
@@ -678,6 +954,103 @@ export interface StudentRepoCommitDiff {
 
 export function getStudentRepoCommitDiff(repoId: string, sha: string): Promise<StudentRepoCommitDiff> {
   return apiRequest<StudentRepoCommitDiff>(`/students/me/repositories/${repoId}/commits/${encodeURIComponent(sha)}/diff`);
+}
+
+export interface StudentRepoFileHistoryCommit {
+  sha: string;
+  message: string | null;
+  author_name: string | null;
+  author_login: string | null;
+  authored_at: string | null;
+  web_url: string | null;
+}
+
+export interface StudentRepoFileHistoryResponse {
+  path: string;
+  branch: string;
+  page: number;
+  has_more: boolean;
+  commits: StudentRepoFileHistoryCommit[];
+}
+
+export function getStudentRepoFileHistory(
+  repoId: string,
+  path: string,
+  branch?: string,
+  page = 1,
+  limit = 20,
+): Promise<StudentRepoFileHistoryResponse> {
+  return apiRequest<StudentRepoFileHistoryResponse>(
+    `/students/me/repositories/${repoId}/history/file${repoQuery({
+      path,
+      branch,
+      page: String(page),
+      limit: String(limit),
+    })}`,
+  );
+}
+
+export interface StudentRepoBlameChunk {
+  sha: string;
+  message: string | null;
+  author_name: string | null;
+  author_login: string | null;
+  authored_at: string | null;
+  web_url: string | null;
+  start_line: number;
+  end_line: number;
+  line_count: number;
+}
+
+export interface StudentRepoBlameResponse {
+  path: string;
+  branch: string;
+  chunks: StudentRepoBlameChunk[];
+}
+
+export function getStudentRepoFileBlame(
+  repoId: string,
+  path: string,
+  branch?: string,
+): Promise<StudentRepoBlameResponse> {
+  return apiRequest<StudentRepoBlameResponse>(
+    `/students/me/repositories/${repoId}/blame/file${repoQuery({
+      path,
+      branch,
+    })}`,
+  );
+}
+
+export interface StudentRepoCompareFile {
+  filename: string;
+  previous_filename?: string | null;
+  status: string | null;
+  additions: number;
+  deletions: number;
+  changes: number;
+  is_binary?: boolean;
+  too_large?: boolean;
+  truncated?: boolean;
+}
+
+export interface StudentRepoCompareResponse {
+  base: string;
+  head: string;
+  status: string | null;
+  ahead_by: number;
+  behind_by: number;
+  total_commits: number;
+  files: StudentRepoCompareFile[];
+}
+
+export function compareStudentRepoRefs(
+  repoId: string,
+  base: string,
+  head: string,
+): Promise<StudentRepoCompareResponse> {
+  return apiRequest<StudentRepoCompareResponse>(
+    `/students/me/repositories/${repoId}/compare${repoQuery({ base, head })}`,
+  );
 }
 
 export interface StudentRepoWikiPage {

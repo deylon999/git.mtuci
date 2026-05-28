@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -12,6 +13,7 @@ from app.api.routes.admin import router as admin_router
 from app.api.routes.users import router as users_router
 from app.api.routes.courses import router as courses_router
 from app.api.routes.repositories import router as repositories_router
+from app.api.routes.repository_access import router as repository_access_router
 from app.api.routes.groups import router as groups_router
 from app.api.routes.stats import router as stats_router
 from app.api.routes.roles import router as roles_router
@@ -25,12 +27,20 @@ from app.api.routes.assistants_dashboard import router as assistants_dashboard_r
 from app.api.routes.search import router as search_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.system import router as system_router
+from app.api.routes.git_auth import router as git_auth_router
+from app.api.routes.repository_settings import router as repository_settings_router
+from app.api.routes.issues import router as issues_router
+from app.api.routes.reviews import router as reviews_router
+from app.api.routes.releases import router as releases_router
+from app.api.routes.observability import router as observability_router
 from app.core.config import settings
 from app.services.gitea_service import check_gitea_api_access
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.core.logging_middleware import LoggingMiddleware
 from app.core.metrics_middleware import MetricsMiddleware
+from app.core.rate_limit_middleware import RateLimitMiddleware
+from app.core.tracing_middleware import TracingMiddleware
 from app.models.user import User, UserRole
 from app.models.assignment_file import AssignmentFile  # Import BEFORE Assignment
 from app.models.assignment import Assignment
@@ -39,13 +49,27 @@ from app.models.course_enrollment import CourseEnrollment
 from app.models.repository import Repository
 from app.models.student_repository import StudentRepository
 from app.models.submission import Submission
+from app.models.git_auth import UserGitToken, UserSshKey
+from app.models.repo_settings import RepositoryBranchProtection, RepositoryWebhook, RepositoryDeployKey, RepositorySecret
+from app.models.issue import Issue, IssueLabel, IssueMilestone, IssueComment, IssueReaction
+from app.models.review import PullRequestReview, ReviewThread, ReviewComment
+from app.models.search import SavedSearch
+from app.models.release import RepositoryRelease, ReleaseAsset, RepositoryRegistryIntegration
 from sqlalchemy import select
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await create_super_admin_if_missing()
+    await verify_gitea_on_startup()
+    yield
 
 
 app = FastAPI(
     title="MTUCI API",
     description="MTUCI Git Management API",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS (dev + docker)
@@ -68,6 +92,8 @@ app.add_middleware(LoggingMiddleware)
 
 # Add metrics middleware for HTTP request statistics
 app.add_middleware(MetricsMiddleware)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.RATE_LIMIT_RPM)
+app.add_middleware(TracingMiddleware)
 
 # Mount uploads directory for serving avatar images
 uploads_dir = Path(settings.UPLOAD_DIR)
@@ -80,6 +106,7 @@ app.include_router(users_router)
 app.include_router(courses_router)
 app.include_router(groups_router)
 app.include_router(repositories_router, prefix="/repositories")
+app.include_router(repository_access_router, prefix="/repositories")
 app.include_router(stats_router)
 app.include_router(roles_router)
 app.include_router(webhooks_router)
@@ -92,6 +119,12 @@ app.include_router(assistants_dashboard_router)
 app.include_router(search_router)
 app.include_router(notifications_router)
 app.include_router(system_router)
+app.include_router(git_auth_router)
+app.include_router(repository_settings_router)
+app.include_router(issues_router)
+app.include_router(reviews_router)
+app.include_router(releases_router)
+app.include_router(observability_router)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
@@ -109,7 +142,6 @@ async def health_check():
     return {"status": "ok"}
 
 
-@app.on_event("startup")
 async def create_super_admin_if_missing() -> None:
     admin_email = (os.getenv("ADMIN_EMAIL") or "").strip()
     admin_password = os.getenv("ADMIN_PASSWORD") or ""
@@ -145,7 +177,6 @@ async def create_super_admin_if_missing() -> None:
         print(f"[startup] Failed to create super admin: {e}")
 
 
-@app.on_event("startup")
 async def verify_gitea_on_startup() -> None:
     ok, message = await check_gitea_api_access()
     if ok:

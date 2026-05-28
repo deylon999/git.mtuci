@@ -44,6 +44,13 @@ def get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def _can_switch_student_mode(user: User) -> bool:
+    if user.role != UserRole.laborant:
+        return False
+    prefs = user.preferences if isinstance(user.preferences, dict) else {}
+    return bool(prefs.get("can_switch_student_mode") is True)
+
+
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def register(
     payload: AuthRegisterRequest,
@@ -273,7 +280,8 @@ async def login(
 
 @router.get("/me", response_model=UserRead)
 async def me(current_user=Depends(get_current_user)):
-    return UserRead.model_validate(current_user)
+    payload = UserRead.model_validate(current_user)
+    return payload.model_copy(update={"can_switch_student_mode": _can_switch_student_mode(current_user)})
 
 
 class UpdateAssistantGradingRequest(BaseModel):

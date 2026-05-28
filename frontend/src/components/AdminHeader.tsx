@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { Search, ChevronDown, LogOut, User, Shield, Activity, Moon, Sun } from "lucide-react";
 import { clearToken } from "../api/client";
 import { useAuthUser } from "../context/AuthUserContext";
-import { globalSearch } from "../api/searchApi";
 import { getServiceStatus } from "../api/adminApi";
 import { getTheme } from "../theme";
 import NotificationBell from "./NotificationBell";
@@ -123,17 +122,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
     e.preventDefault();
     const q = searchQuery.trim();
     if (!q) return;
-    try {
-      const result = await globalSearch(q, 10);
-      const first = result.hits[0];
-      if (first?.href) {
-        navigate(first.href);
-        return;
-      }
-    } catch {
-      // ignore
-    }
-    navigate(`/users`);
+    navigate(`/search/code?q=${encodeURIComponent(q)}`);
   }
 
   const theme = getTheme(isDarkTheme);

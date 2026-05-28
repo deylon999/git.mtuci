@@ -9,6 +9,9 @@ import {
   Shield,
   Users,
   Webhook,
+  Package,
+  Upload,
+  Sparkles,
 } from "lucide-react";
 import type { StudentRepoSummary } from "../../api/studentDashboardApi";
 import { deleteRepository, updateRepository } from "../../api/repositoriesApi";
@@ -22,6 +25,40 @@ import { useRepoApi } from "../../context/RepoApiContext";
 import { useStudentRepoWorkspaceContext } from "../../context/StudentRepoWorkspaceContext";
 import { setCachedRepoWorkspace } from "../../utils/repoWorkspaceCache";
 import { getStudentRepositories } from "../../api/studentDashboardApi";
+import { RepoAccessPanel } from "./RepoAccessPanel";
+import {
+  createDeployKey,
+  createWebhook,
+  deleteDeployKey,
+  deleteRepoSecret,
+  deleteWebhook,
+  listBranchProtection,
+  listDeployKeys,
+  listRepoSecrets,
+  listWebhooks,
+  redeliverWebhook,
+  testWebhook,
+  upsertBranchProtection,
+  upsertRepoSecret,
+  type BranchProtectionRule,
+  type RepoDeployKey,
+  type RepoSecret,
+  type RepoWebhook,
+} from "../../api/repoSettingsApi";
+import {
+  createRepositoryRegistry,
+  createRepositoryRelease,
+  listReleasePublishJobs,
+  listRepositoryRegistries,
+  listRepositoryReleases,
+  publishRepositoryRelease,
+  retryReleasePublishJob,
+  uploadReleaseAsset,
+  type ReleasePublishJob,
+  type PublishReleaseResult,
+  type RegistryIntegration,
+  type RepositoryRelease,
+} from "../../api/releasesApi";
 
 const SETTINGS_SECTIONS = [
   { id: "general", labelKey: "repo.settings.sectionGeneral", icon: Settings },
@@ -30,6 +67,7 @@ const SETTINGS_SECTIONS = [
   { id: "webhooks", labelKey: "repo.settings.sectionWebhooks", icon: Webhook },
   { id: "keys", labelKey: "repo.settings.sectionDeployKeys", icon: Key },
   { id: "security", labelKey: "repo.settings.sectionSecurity", icon: Shield },
+  { id: "releases", labelKey: "repo.settings.sectionReleases", icon: Package },
 ] as const;
 
 type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]["id"];
@@ -85,6 +123,41 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
   const [deleting, setDeleting] = useState(false);
   const [dangerText, setDangerText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [branchRule, setBranchRule] = useState<BranchProtectionRule | null>(null);
+  const [statusContexts, setStatusContexts] = useState("");
+  const [requiredReviewers, setRequiredReviewers] = useState("");
+  const [webhooks, setWebhooks] = useState<RepoWebhook[]>([]);
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [deployKeys, setDeployKeys] = useState<RepoDeployKey[]>([]);
+  const [deployTitle, setDeployTitle] = useState("");
+  const [deployKey, setDeployKey] = useState("");
+  const [secrets, setSecrets] = useState<RepoSecret[]>([]);
+  const [secretName, setSecretName] = useState("");
+  const [secretValue, setSecretValue] = useState("");
+  const [releases, setReleases] = useState<RepositoryRelease[]>([]);
+  const [registries, setRegistries] = useState<RegistryIntegration[]>([]);
+  const [releaseTag, setReleaseTag] = useState("");
+  const [releaseName, setReleaseName] = useState("");
+  const [releaseBody, setReleaseBody] = useState("");
+  const [releaseBranch, setReleaseBranch] = useState("main");
+  const [autoChangelog, setAutoChangelog] = useState(true);
+  const [releaseBusy, setReleaseBusy] = useState(false);
+  const [assetBusyId, setAssetBusyId] = useState<string | null>(null);
+  const [assetFileByRelease, setAssetFileByRelease] = useState<Record<string, File | null>>({});
+  const [assetProgressByRelease, setAssetProgressByRelease] = useState<Record<string, number>>({});
+  const [assetFailedByRelease, setAssetFailedByRelease] = useState<Record<string, File | null>>({});
+  const [registryType, setRegistryType] = useState<"npm" | "pypi" | "docker">("npm");
+  const [registryEndpoint, setRegistryEndpoint] = useState("");
+  const [registryNamespace, setRegistryNamespace] = useState("");
+  const [registryToken, setRegistryToken] = useState("");
+  const [registryBusy, setRegistryBusy] = useState(false);
+  const [publishBusyByRelease, setPublishBusyByRelease] = useState<Record<string, boolean>>({});
+  const [publishRegistryByRelease, setPublishRegistryByRelease] = useState<Record<string, string>>({});
+  const [publishPkgByRelease, setPublishPkgByRelease] = useState<Record<string, string>>({});
+  const [publishVersionByRelease, setPublishVersionByRelease] = useState<Record<string, string>>({});
+  const [publishDryRunByRelease, setPublishDryRunByRelease] = useState<Record<string, boolean>>({});
+  const [publishResultByRelease, setPublishResultByRelease] = useState<Record<string, PublishReleaseResult | null>>({});
+  const [publishJobsByRelease, setPublishJobsByRelease] = useState<Record<string, ReleasePublishJob[]>>({});
   const initial = useMemo(
     () => ({
       name: meta?.name ?? "",
@@ -144,6 +217,68 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
       // ignore
     }
   };
+
+  useEffect(() => {
+    if (!repoId || readOnly) return;
+    void (async () => {
+      try {
+        const [bp, wh, dk, sec] = await Promise.all([
+          listBranchProtection(repoId),
+          listWebhooks(repoId),
+          listDeployKeys(repoId),
+          listRepoSecrets(repoId),
+        ]);
+        setBranchRule(bp[0] ?? null);
+        setStatusContexts((bp[0]?.status_check_contexts ?? []).join(","));
+        setRequiredReviewers((bp[0]?.required_reviewer_logins ?? []).join(","));
+        setWebhooks(wh);
+        setDeployKeys(dk);
+        setSecrets(sec);
+      } catch {
+        // ignore
+      }
+    })();
+  }, [repoId, readOnly]);
+
+  useEffect(() => {
+    if (!repoId) return;
+    void (async () => {
+      try {
+        const [rels, regs] = await Promise.all([
+          listRepositoryReleases(repoId),
+          listRepositoryRegistries(repoId),
+        ]);
+        setReleases(rels);
+        setRegistries(regs);
+      } catch {
+        // ignore
+      }
+    })();
+  }, [repoId]);
+
+  useEffect(() => {
+    if (!repoId || section !== "releases" || releases.length === 0) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const pairs = await Promise.all(
+          releases.map(async (r) => [r.id, await listReleasePublishJobs(repoId, r.id)] as const),
+        );
+        if (cancelled) return;
+        const next: Record<string, ReleasePublishJob[]> = {};
+        for (const [rid, jobs] of pairs) next[rid] = jobs;
+        setPublishJobsByRelease(next);
+      } catch {
+        // ignore
+      }
+    };
+    void tick();
+    const timer = window.setInterval(() => void tick(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [repoId, section, releases]);
 
   const copyClone = async () => {
     if (!cloneUrl) return;
@@ -395,6 +530,16 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                 {tp("repo.settings.ownerLabel", { name: ownerName })}
               </p>
             </PlaceholderBlock>
+
+            {repoId && meta?.source !== "assignment" ? (
+              <RepoAccessPanel theme={theme} repoId={repoId} readOnly={readOnly} />
+            ) : (
+              <PlaceholderBlock theme={theme} title={t("repo.access.collaboratorsTitle")}>
+                <p className="text-sm" style={{ color: theme.text2 }}>
+                  {t("repo.settings.collaboratorsHint")}
+                </p>
+              </PlaceholderBlock>
+            )}
           </>
         )}
 
@@ -409,9 +554,74 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
               </p>
             </PlaceholderBlock>
             <PlaceholderBlock theme={theme} title="Branch rules">
-              <p className="text-sm" style={{ color: theme.text2 }}>
-                {tp("repo.settings.branchProtection", { count: branchCount, word: branchWord })}
-              </p>
+              <div className="space-y-2">
+                <input
+                  value={branchRule?.branch_pattern ?? "main"}
+                  onChange={(e) => setBranchRule((p) => ({ ...(p ?? { id: "", created_at: "", updated_at: "", branch_pattern: "main", required_approvals: 1, require_status_checks: false, status_check_contexts: [], required_reviewer_logins: [], dismiss_stale_approvals: true, block_on_rejected_reviews: true }), branch_pattern: e.target.value }))}
+                  className="w-full rounded border px-2 py-1 text-xs"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                />
+                <input
+                  type="number"
+                  min={0}
+                  max={10}
+                  value={branchRule?.required_approvals ?? 1}
+                  onChange={(e) => setBranchRule((p) => ({ ...(p ?? { id: "", created_at: "", updated_at: "", branch_pattern: "main", required_approvals: 1, require_status_checks: false, status_check_contexts: [], required_reviewer_logins: [], dismiss_stale_approvals: true, block_on_rejected_reviews: true }), required_approvals: Number(e.target.value || 0) }))}
+                  className="w-full rounded border px-2 py-1 text-xs"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                />
+                <label className="text-xs" style={{ color: theme.text2 }}>
+                  <input
+                    type="checkbox"
+                    checked={!!branchRule?.require_status_checks}
+                    onChange={(e) => setBranchRule((p) => ({ ...(p ?? { id: "", created_at: "", updated_at: "", branch_pattern: "main", required_approvals: 1, require_status_checks: false, status_check_contexts: [], required_reviewer_logins: [], dismiss_stale_approvals: true, block_on_rejected_reviews: true }), require_status_checks: e.target.checked }))}
+                  />{" "}
+                  Required checks
+                </label>
+                <input
+                  value={statusContexts}
+                  onChange={(e) => setStatusContexts(e.target.value)}
+                  placeholder="build,test,lint"
+                  className="w-full rounded border px-2 py-1 text-xs"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                />
+                <input
+                  value={requiredReviewers}
+                  onChange={(e) => setRequiredReviewers(e.target.value)}
+                  placeholder="required reviewers (comma-separated logins)"
+                  className="w-full rounded border px-2 py-1 text-xs"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                />
+                <button
+                  type="button"
+                  disabled={readOnly || !repoId || !branchRule}
+                  onClick={() => {
+                    void (async () => {
+                      if (!repoId || !branchRule) return;
+                      try {
+                        const next = await upsertBranchProtection(repoId, {
+                          branch_pattern: branchRule.branch_pattern,
+                          required_approvals: branchRule.required_approvals,
+                          require_status_checks: branchRule.require_status_checks,
+                          status_check_contexts: statusContexts.split(",").map((s) => s.trim()).filter(Boolean),
+                          required_reviewer_logins: requiredReviewers.split(",").map((s) => s.trim()).filter(Boolean),
+                          dismiss_stale_approvals: branchRule.dismiss_stale_approvals,
+                          block_on_rejected_reviews: branchRule.block_on_rejected_reviews,
+                        });
+                        setBranchRule(next);
+                        setRequiredReviewers((next.required_reviewer_logins ?? []).join(","));
+                        toast.success("Branch protection saved");
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Failed");
+                      }
+                    })();
+                  }}
+                  className="rounded border px-2 py-1 text-xs"
+                  style={{ borderColor: theme.border, color: theme.text2 }}
+                >
+                  Save rule
+                </button>
+              </div>
             </PlaceholderBlock>
           </>
         )}
@@ -422,12 +632,43 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
               Webhooks
             </h2>
             <PlaceholderBlock theme={theme} title="Active hooks">
-              <p className="text-sm" style={{ color: theme.text2 }}>
-                {t("repo.settings.webhookNote")}
-              </p>
-              <p className="text-xs mt-2 font-mono" style={{ color: theme.text3 }}>
-                POST → /webhooks/gitea
-              </p>
+              <div className="space-y-2">
+                <input
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  placeholder="https://example/hooks"
+                  className="w-full rounded border px-2 py-1 text-xs"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                />
+                <button
+                  type="button"
+                  disabled={readOnly || !repoId || !webhookUrl.trim()}
+                  onClick={() => {
+                    void (async () => {
+                      if (!repoId) return;
+                      try {
+                        const created = await createWebhook(repoId, { url: webhookUrl.trim(), events: ["push", "pull_request"] });
+                        setWebhooks((p) => [created, ...p]);
+                        setWebhookUrl("");
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Failed");
+                      }
+                    })();
+                  }}
+                >
+                  Add webhook
+                </button>
+                {webhooks.map((w) => (
+                  <div key={w.id} className="text-xs flex items-center justify-between" style={{ color: theme.text2 }}>
+                    <span>{w.url}</span>
+                    <span className="space-x-2">
+                      <button type="button" onClick={() => void testWebhook(repoId!, w.id).then((x) => setWebhooks((arr) => arr.map((i) => (i.id === x.id ? x : i))))}>Test</button>
+                      <button type="button" onClick={() => void redeliverWebhook(repoId!, w.id).then((x) => setWebhooks((arr) => arr.map((i) => (i.id === x.id ? x : i))))}>Redeliver</button>
+                      <button type="button" onClick={() => void deleteWebhook(repoId!, w.id).then(() => setWebhooks((arr) => arr.filter((i) => i.id !== w.id)))}>Delete</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
             </PlaceholderBlock>
           </>
         )}
@@ -438,9 +679,35 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
               Deploy keys
             </h2>
             <PlaceholderBlock theme={theme} title="SSH keys">
-              <p className="text-sm" style={{ color: theme.text2 }}>
-                {t("repo.settings.deployKeysNote")}
-              </p>
+              <div className="space-y-2">
+                <input value={deployTitle} onChange={(e) => setDeployTitle(e.target.value)} placeholder="CI key" className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <textarea value={deployKey} onChange={(e) => setDeployKey(e.target.value)} placeholder="ssh-ed25519 AAAA..." rows={3} className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <button
+                  type="button"
+                  disabled={readOnly || !repoId || !deployTitle.trim() || !deployKey.trim()}
+                  onClick={() => {
+                    void (async () => {
+                      if (!repoId) return;
+                      try {
+                        const created = await createDeployKey(repoId, { title: deployTitle.trim(), public_key: deployKey.trim(), read_only: true });
+                        setDeployKeys((p) => [created, ...p]);
+                        setDeployTitle("");
+                        setDeployKey("");
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Failed");
+                      }
+                    })();
+                  }}
+                >
+                  Add deploy key
+                </button>
+                {deployKeys.map((k) => (
+                  <div key={k.id} className="text-xs flex items-center justify-between" style={{ color: theme.text2 }}>
+                    <span>{k.title}</span>
+                    <button type="button" onClick={() => void deleteDeployKey(repoId!, k.id).then(() => setDeployKeys((arr) => arr.filter((i) => i.id !== k.id)))}>Delete</button>
+                  </div>
+                ))}
+              </div>
             </PlaceholderBlock>
           </>
         )}
@@ -461,6 +728,36 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                   {t("repo.settings.vulnScanSoon")}
                 </li>
               </ul>
+            </PlaceholderBlock>
+            <PlaceholderBlock theme={theme} title="Repository secrets">
+              <div className="space-y-2">
+                <input value={secretName} onChange={(e) => setSecretName(e.target.value)} placeholder="NPM_TOKEN" className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={secretValue} onChange={(e) => setSecretValue(e.target.value)} placeholder="secret value" className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <button
+                  type="button"
+                  disabled={readOnly || !repoId || !secretName.trim() || !secretValue.trim()}
+                  onClick={() => {
+                    void (async () => {
+                      if (!repoId) return;
+                      try {
+                        const up = await upsertRepoSecret(repoId, { name: secretName.trim(), value: secretValue });
+                        setSecrets((arr) => [up, ...arr.filter((x) => x.id !== up.id)]);
+                        setSecretValue("");
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Failed");
+                      }
+                    })();
+                  }}
+                >
+                  Save secret
+                </button>
+                {secrets.map((s) => (
+                  <div key={s.id} className="text-xs flex items-center justify-between" style={{ color: theme.text2 }}>
+                    <span>{s.name}</span>
+                    <button type="button" onClick={() => void deleteRepoSecret(repoId!, s.id).then(() => setSecrets((arr) => arr.filter((i) => i.id !== s.id)))}>Delete</button>
+                  </div>
+                ))}
+              </div>
             </PlaceholderBlock>
 
             <PlaceholderBlock theme={theme} title="Danger zone">
@@ -520,6 +817,334 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                 >
                   {deleting ? "Deleting…" : "Delete repository"}
                 </button>
+              </div>
+            </PlaceholderBlock>
+          </>
+        )}
+
+        {section === "releases" && (
+          <>
+            <h2 className="text-base font-semibold flex items-center gap-2" style={{ color: theme.text }}>
+              <Package className="h-4 w-4" />
+              Releases / Tags / Packages
+            </h2>
+
+            <PlaceholderBlock theme={theme} title="Create release">
+              <div className="grid gap-2 md:grid-cols-2">
+                <input value={releaseTag} onChange={(e) => setReleaseTag(e.target.value)} placeholder="v1.0.0" className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={releaseName} onChange={(e) => setReleaseName(e.target.value)} placeholder="First stable release" className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={releaseBranch} onChange={(e) => setReleaseBranch(e.target.value)} placeholder="main" className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <label className="inline-flex items-center gap-2 text-xs" style={{ color: theme.text2 }}>
+                  <input type="checkbox" checked={autoChangelog} onChange={(e) => setAutoChangelog(e.target.checked)} />
+                  <Sparkles className="h-3 w-3" /> Auto changelog
+                </label>
+              </div>
+              <textarea value={releaseBody} onChange={(e) => setReleaseBody(e.target.value)} rows={4} placeholder="Release notes" className="mt-2 w-full rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  disabled={readOnly || releaseBusy || !repoId || !releaseTag.trim() || !releaseName.trim()}
+                  onClick={() => {
+                    void (async () => {
+                      if (!repoId) return;
+                      setReleaseBusy(true);
+                      try {
+                        const created = await createRepositoryRelease(repoId, {
+                          tag_name: releaseTag.trim(),
+                          name: releaseName.trim(),
+                          body: releaseBody.trim(),
+                          target_commitish: releaseBranch.trim() || "main",
+                          auto_generate_changelog: autoChangelog,
+                        });
+                        setReleases((prev) => [created, ...prev]);
+                        setReleaseTag("");
+                        setReleaseName("");
+                        setReleaseBody("");
+                        toast.success("Release created");
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Failed to create release");
+                      } finally {
+                        setReleaseBusy(false);
+                      }
+                    })();
+                  }}
+                  className="rounded border px-3 py-1.5 text-xs"
+                  style={{ borderColor: theme.border, color: theme.text2 }}
+                >
+                  {releaseBusy ? "Creating..." : "Create release"}
+                </button>
+              </div>
+            </PlaceholderBlock>
+
+            <PlaceholderBlock theme={theme} title="Releases">
+              <div className="space-y-3">
+                {releases.map((r) => (
+                  <div key={r.id} className="rounded border p-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: theme.text }}>{r.name}</p>
+                        <p className="text-[11px] font-mono" style={{ color: theme.text3 }}>{r.tag_name} · {r.target_commitish}</p>
+                      </div>
+                      <span className="text-[10px]" style={{ color: theme.text3 }}>{new Date(r.created_at).toLocaleString()}</span>
+                    </div>
+                    <pre className="mt-2 whitespace-pre-wrap text-xs" style={{ color: theme.text2 }}>{r.body || "No notes"}</pre>
+                    <div className="mt-2 space-y-1">
+                      {r.assets.map((a) => (
+                        <div key={a.id} className="text-[11px]" style={{ color: theme.text3 }}>
+                          {a.filename} ({a.size_bytes} bytes)
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <input
+                        type="file"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0] ?? null;
+                          setAssetFileByRelease((prev) => ({ ...prev, [r.id]: f }));
+                        }}
+                        className="text-xs"
+                      />
+                      <button
+                        type="button"
+                        disabled={readOnly || assetBusyId === r.id || !assetFileByRelease[r.id]}
+                        onClick={() => {
+                          void (async () => {
+                            const file = assetFileByRelease[r.id];
+                            if (!file || !repoId) return;
+                            if (file.size > 50 * 1024 * 1024) {
+                              toast.error("File too large (max 50MB)");
+                              return;
+                            }
+                            setAssetBusyId(r.id);
+                            try {
+                              await uploadReleaseAsset(repoId, r.id, file, {
+                                onProgress: (pct) => setAssetProgressByRelease((prev) => ({ ...prev, [r.id]: pct })),
+                              });
+                              const rels = await listRepositoryReleases(repoId);
+                              setReleases(rels);
+                              setAssetFileByRelease((prev) => ({ ...prev, [r.id]: null }));
+                              setAssetFailedByRelease((prev) => ({ ...prev, [r.id]: null }));
+                              setAssetProgressByRelease((prev) => ({ ...prev, [r.id]: 100 }));
+                              toast.success("Asset uploaded");
+                            } catch (e) {
+                              setAssetFailedByRelease((prev) => ({ ...prev, [r.id]: file }));
+                              toast.error(e instanceof Error ? e.message : "Upload failed");
+                            } finally {
+                              setAssetBusyId(null);
+                            }
+                          })();
+                        }}
+                        className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs"
+                        style={{ borderColor: theme.border, color: theme.text2 }}
+                      >
+                        <Upload className="h-3 w-3" />
+                        {assetBusyId === r.id ? "Uploading..." : "Upload asset"}
+                      </button>
+                      {assetProgressByRelease[r.id] ? (
+                        <span className="text-[11px]" style={{ color: theme.text3 }}>
+                          {assetProgressByRelease[r.id]}%
+                        </span>
+                      ) : null}
+                      {assetFailedByRelease[r.id] ? (
+                        <button
+                          type="button"
+                          className="rounded border px-2 py-1 text-xs"
+                          style={{ borderColor: theme.border, color: theme.text2 }}
+                          onClick={() => {
+                            const failed = assetFailedByRelease[r.id];
+                            if (!failed) return;
+                            setAssetFileByRelease((prev) => ({ ...prev, [r.id]: failed }));
+                            setAssetProgressByRelease((prev) => ({ ...prev, [r.id]: 0 }));
+                            toast("Retry file restored");
+                          }}
+                        >
+                          Retry last file
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 rounded border p-2" style={{ borderColor: theme.border }}>
+                      <p className="text-xs font-semibold" style={{ color: theme.text2 }}>Publish</p>
+                      <div className="mt-2 grid gap-2 md:grid-cols-2">
+                        <select
+                          value={publishRegistryByRelease[r.id] ?? ""}
+                          onChange={(e) => setPublishRegistryByRelease((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                          className="rounded border px-2 py-1 text-xs"
+                          style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                        >
+                          <option value="">Select registry</option>
+                          {registries.map((x) => (
+                            <option key={x.id} value={x.id}>{x.registry_type} · {x.namespace}</option>
+                          ))}
+                        </select>
+                        <input
+                          value={publishPkgByRelease[r.id] ?? ""}
+                          onChange={(e) => setPublishPkgByRelease((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                          placeholder="package/image name"
+                          className="rounded border px-2 py-1 text-xs"
+                          style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                        />
+                        <input
+                          value={publishVersionByRelease[r.id] ?? r.tag_name.replace(/^v/, "")}
+                          onChange={(e) => setPublishVersionByRelease((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                          placeholder="1.0.0"
+                          className="rounded border px-2 py-1 text-xs"
+                          style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
+                        />
+                        <label className="inline-flex items-center gap-2 text-xs" style={{ color: theme.text2 }}>
+                          <input
+                            type="checkbox"
+                            checked={publishDryRunByRelease[r.id] ?? true}
+                            onChange={(e) => setPublishDryRunByRelease((prev) => ({ ...prev, [r.id]: e.target.checked }))}
+                          />
+                          Dry run
+                        </label>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={readOnly || publishBusyByRelease[r.id] || !publishRegistryByRelease[r.id] || !(publishPkgByRelease[r.id] ?? "").trim()}
+                          className="rounded border px-2 py-1 text-xs"
+                          style={{ borderColor: theme.border, color: theme.text2 }}
+                          onClick={() => {
+                            void (async () => {
+                              if (!repoId) return;
+                              setPublishBusyByRelease((prev) => ({ ...prev, [r.id]: true }));
+                              try {
+                                const result = await publishRepositoryRelease(repoId, r.id, {
+                                  registry_integration_id: publishRegistryByRelease[r.id],
+                                  package_name: (publishPkgByRelease[r.id] ?? "").trim(),
+                                  version: (publishVersionByRelease[r.id] ?? "").trim() || r.tag_name.replace(/^v/, ""),
+                                  dry_run: publishDryRunByRelease[r.id] ?? true,
+                                });
+                                setPublishResultByRelease((prev) => ({ ...prev, [r.id]: result }));
+                                if (result.ok) toast.success(result.dry_run ? "Dry-run passed" : "Publish job queued");
+                                else toast.error("Publish validation failed");
+                              } catch (e) {
+                                toast.error(e instanceof Error ? e.message : "Publish failed");
+                              } finally {
+                                setPublishBusyByRelease((prev) => ({ ...prev, [r.id]: false }));
+                              }
+                            })();
+                          }}
+                        >
+                          {publishBusyByRelease[r.id] ? "Publishing..." : "Run publish"}
+                        </button>
+                      </div>
+                      {publishResultByRelease[r.id] ? (
+                        <div className="mt-2 text-[11px]" style={{ color: theme.text3 }}>
+                          <div>Command: <code>{publishResultByRelease[r.id]?.command_preview}</code></div>
+                          {publishResultByRelease[r.id]?.job_id ? (
+                            <div className="mt-1">
+                              Job: <code>{publishResultByRelease[r.id]?.job_id}</code>
+                            </div>
+                          ) : null}
+                          {publishResultByRelease[r.id]?.errors?.length ? (
+                            <div className="mt-1" style={{ color: theme.danger }}>
+                              {publishResultByRelease[r.id]?.errors.join("; ")}
+                            </div>
+                          ) : (
+                            <div className="mt-1" style={{ color: theme.success }}>Validation OK</div>
+                          )}
+                        </div>
+                      ) : null}
+                      {(publishJobsByRelease[r.id] ?? []).length > 0 ? (
+                        <div className="mt-3 space-y-2">
+                          {(publishJobsByRelease[r.id] ?? []).slice(0, 5).map((job) => (
+                            <div key={job.id} className="rounded border p-2 text-[11px]" style={{ borderColor: theme.border }}>
+                              <div className="flex items-center justify-between gap-2">
+                                <span style={{ color: theme.text2 }}>
+                                  {job.state.toUpperCase()} · attempt {job.attempt} · {job.version}
+                                </span>
+                                {job.state === "failed" || job.state === "success" ? (
+                                  <button
+                                    type="button"
+                                    className="rounded border px-2 py-0.5"
+                                    style={{ borderColor: theme.border, color: theme.text2 }}
+                                    onClick={() => {
+                                      void (async () => {
+                                        if (!repoId) return;
+                                        try {
+                                          await retryReleasePublishJob(repoId, job.id);
+                                          toast.success("Retry queued");
+                                        } catch (e) {
+                                          toast.error(e instanceof Error ? e.message : "Retry failed");
+                                        }
+                                      })();
+                                    }}
+                                  >
+                                    Retry
+                                  </button>
+                                ) : null}
+                              </div>
+                              <div className="mt-1"><code>{job.command_line}</code></div>
+                              {job.error_text ? (
+                                <div className="mt-1" style={{ color: theme.danger }}>{job.error_text}</div>
+                              ) : null}
+                              {job.log_text ? (
+                                <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap" style={{ color: theme.text3 }}>
+                                  {job.log_text}
+                                </pre>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+                {releases.length === 0 ? <p className="text-xs" style={{ color: theme.text3 }}>No releases yet</p> : null}
+              </div>
+            </PlaceholderBlock>
+
+            <PlaceholderBlock theme={theme} title="Package registries (npm / pypi / docker)">
+              <div className="grid gap-2 md:grid-cols-2">
+                <select value={registryType} onChange={(e) => setRegistryType(e.target.value as "npm" | "pypi" | "docker")} className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}>
+                  <option value="npm">npm</option>
+                  <option value="pypi">pypi</option>
+                  <option value="docker">docker</option>
+                </select>
+                <input value={registryEndpoint} onChange={(e) => setRegistryEndpoint(e.target.value)} placeholder="https://registry.npmjs.org" className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={registryNamespace} onChange={(e) => setRegistryNamespace(e.target.value)} placeholder="@org / project / image" className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={registryToken} onChange={(e) => setRegistryToken(e.target.value)} placeholder="token" className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+              </div>
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  disabled={readOnly || registryBusy || !repoId || !registryEndpoint.trim() || !registryNamespace.trim() || !registryToken.trim()}
+                  onClick={() => {
+                    void (async () => {
+                      if (!repoId) return;
+                      setRegistryBusy(true);
+                      try {
+                        const created = await createRepositoryRegistry(repoId, {
+                          registry_type: registryType,
+                          endpoint: registryEndpoint.trim(),
+                          namespace: registryNamespace.trim(),
+                          token: registryToken,
+                        });
+                        setRegistries((prev) => [created, ...prev]);
+                        setRegistryToken("");
+                        toast.success("Registry integration created");
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Failed");
+                      } finally {
+                        setRegistryBusy(false);
+                      }
+                    })();
+                  }}
+                  className="rounded border px-3 py-1.5 text-xs"
+                  style={{ borderColor: theme.border, color: theme.text2 }}
+                >
+                  {registryBusy ? "Saving..." : "Save registry"}
+                </button>
+              </div>
+              <div className="mt-3 space-y-1">
+                {registries.map((x) => (
+                  <div key={x.id} className="rounded border px-2 py-1 text-xs" style={{ borderColor: theme.border, color: theme.text2 }}>
+                    {x.registry_type} · {x.endpoint} · {x.namespace} · {x.token_masked}
+                  </div>
+                ))}
+                {registries.length === 0 ? <p className="text-xs" style={{ color: theme.text3 }}>No registries connected</p> : null}
               </div>
             </PlaceholderBlock>
           </>

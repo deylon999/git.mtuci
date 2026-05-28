@@ -1,0 +1,39 @@
+services:
+  postgres:
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set in .env}
+
+  gitea:
+    environment:
+      GITEA__database__DB_TYPE: postgres
+      GITEA__database__HOST: postgres:5432
+      GITEA__database__NAME: ${POSTGRES_DB:?set in .env}
+      GITEA__database__USER: ${POSTGRES_USER:?set in .env}
+      GITEA__database__PASSWD: ${POSTGRES_PASSWORD:?set in .env}
+      GITEA__admin__DEFAULT_ADMIN_USERNAME: ${GITEA_ADMIN_USERNAME:?set in .env}
+      GITEA__admin__DEFAULT_ADMIN_PASSWORD: ${GITEA_ADMIN_PASSWORD:?set in .env}
+      GITEA__admin__DEFAULT_ADMIN_EMAIL: ${GITEA_ADMIN_EMAIL:?set in .env}
+      GITEA__server__ROOT_URL: ${GITEA_PUBLIC_URL:?set in .env}
+      # Do not use wildcard in production.
+      GITEA__webhook__ALLOWED_HOST_LIST: ${GITEA_WEBHOOK_ALLOWED_HOST_LIST:?set in .env}
+
+  gitea-bootstrap:
+    environment:
+      GITEA_ADMIN_USERNAME: ${GITEA_ADMIN_USERNAME:?set in .env}
+      GITEA_ADMIN_PASSWORD: ${GITEA_ADMIN_PASSWORD:?set in .env}
+      GITEA_ADMIN_EMAIL: ${GITEA_ADMIN_EMAIL:?set in .env}
+
+  api:
+    env_file:
+      - ./backend/.env
+    environment:
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in backend/.env}
+      MTUCI_CREDENTIALS_SECRET: ${MTUCI_CREDENTIALS_SECRET:?set in backend/.env}
+
+  backup-cron:
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set in .env}

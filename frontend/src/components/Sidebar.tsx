@@ -29,6 +29,7 @@ import { useStudentNavCountsOptional } from "../context/StudentNavCountsContext"
 import { getTheme } from "../theme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import type { UserRole } from "../api/types";
+import { useRoleMode } from "../context/RoleModeContext";
 
 interface MenuItem {
   path: string;
@@ -138,6 +139,53 @@ function buildTeacherMenu(): MenuSection[] {
   ];
 }
 
+function buildLaborantMenu(includePersonal: boolean): MenuSection[] {
+  const sections: MenuSection[] = [
+    { titleKey: "sidebar.main", items: [{ path: "/dashboard", labelKey: "sidebar.dashboard", icon: LayoutGrid }] },
+    {
+      titleKey: "sidebar.myCourses",
+      items: [
+        { path: "/teacher/courses", labelKey: "sidebar.allCourses", icon: BookOpen, permission: "assignment_view" },
+        {
+          path: "/teacher/code-review",
+          labelKey: "sidebar.codeReview",
+          icon: ClipboardCheck,
+          anyPermission: ["grade_edit", "repo_view_students", "lab_accept"],
+        },
+      ],
+    },
+    {
+      titleKey: "sidebar.students",
+      items: [{ path: "/teacher/students", labelKey: "sidebar.allStudents", icon: GraduationCap, permission: "user_view" }],
+    },
+    {
+      titleKey: "sidebar.repositories",
+      items: [
+        { path: "/teacher/code-review", labelKey: "sidebar.studentRepos", icon: FolderGit2, permission: "repo_view_students" },
+        { path: "/teacher/activity", labelKey: "sidebar.studentActivity", icon: Activity, permission: "repo_view_students" },
+      ],
+    },
+  ];
+  if (includePersonal) {
+    sections.push({
+      titleKey: "sidebar.personal",
+      items: [
+        { path: "/repositories", labelKey: "sidebar.myReposPersonal", icon: FileText, permission: "repo_view" },
+        { path: "/assignments", labelKey: "sidebar.myAssignmentsPersonal", icon: ClipboardList, permission: "assignment_view" },
+        { path: "/deadlines", labelKey: "sidebar.deadlines", icon: Clock, permission: "assignment_view" },
+      ],
+    });
+  }
+  sections.push({
+    titleKey: "sidebar.account",
+    items: [
+      { path: "/profile", labelKey: "sidebar.profile", icon: Users },
+      { path: "/settings", labelKey: "sidebar.settings", icon: Settings },
+    ],
+  });
+  return sections;
+}
+
 function buildStudentMenu(): MenuSection[] {
   return [
     { titleKey: "sidebar.main", items: [{ path: "/dashboard", labelKey: "sidebar.dashboard", icon: LayoutGrid }] },
@@ -182,6 +230,7 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   const [teacherPending, setTeacherPending] = useState(0);
   const [teacherCoursesCount, setTeacherCoursesCount] = useState(0);
   const { t } = useUserPreferences();
+  const { mode, canSwitchLaborantMode } = useRoleMode();
   const theme = getTheme(isDarkTheme);
 
   useEffect(() => {
@@ -296,7 +345,7 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   const menuSections = useMemo(() => {
     let sections: MenuSection[];
     if (userRole === "admin") sections = buildAdminMenu();
-    else if (userRole === "teacher" || userRole === "laborant") {
+    else if (userRole === "teacher") {
       sections = buildTeacherMenu().map((section) => ({
         ...section,
         items: section.items.map((item) => {
@@ -309,6 +358,36 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
           return item;
         }),
       }));
+    } else if (userRole === "laborant") {
+      if (canSwitchLaborantMode && mode === "student") {
+        const sidebar = studentNav?.sidebar;
+        sections = buildStudentMenu().map((section) => ({
+          ...section,
+          items: section.items.map((item) => {
+            let badge = item.badge;
+            if (item.path === "/courses" && sidebar && sidebar.courses_count > 0) {
+              badge = { text: String(sidebar.courses_count), variant: "orange" };
+            }
+            if (item.path === "/assignments" && sidebar && sidebar.assignments_pending > 0) {
+              badge = { text: String(sidebar.assignments_pending), variant: "red" };
+            }
+            return { ...item, badge };
+          }),
+        }));
+      } else {
+        sections = buildLaborantMenu(canSwitchLaborantMode).map((section) => ({
+          ...section,
+          items: section.items.map((item) => {
+            if (item.path === "/teacher/code-review" && teacherPending > 0) {
+              return { ...item, badge: { text: String(teacherPending), variant: "red" as const } };
+            }
+            if (item.path === "/teacher/courses" && teacherCoursesCount > 0) {
+              return { ...item, badge: { text: String(teacherCoursesCount), variant: "orange" as const } };
+            }
+            return item;
+          }),
+        }));
+      }
     } else if (userRole === "student") {
     const sidebar = studentNav?.sidebar;
     sections = buildStudentMenu().map((section) => ({
@@ -328,7 +407,7 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
       sections = [];
     }
     return filterMenuSections(sections, hasPermission, hasAnyPermission);
-  }, [userRole, studentNav?.sidebar, teacherPending, teacherCoursesCount, hasPermission, hasAnyPermission]);
+  }, [userRole, mode, canSwitchLaborantMode, studentNav?.sidebar, teacherPending, teacherCoursesCount, hasPermission, hasAnyPermission]);
 
   const isTeacherLike = userRole === "teacher" || userRole === "laborant";
 

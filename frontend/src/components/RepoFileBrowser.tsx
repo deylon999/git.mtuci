@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   ChevronRight,
+  Clock3,
+  GitCompare,
   File,
   FileCode2,
   FileImage,
@@ -13,7 +15,6 @@ import {
   Loader2,
 } from "lucide-react";
 import {
-  createStudentRepoFile,
   type StudentRepoSummary,
 } from "../api/studentDashboardApi";
 import RepoMarkdown from "./RepoMarkdown";
@@ -76,6 +77,16 @@ function isBinaryLikePath(filepath: string): boolean {
   return ["png", "jpg", "jpeg", "gif", "svg", "ico", "webp", "pdf", "zip", "exe", "dll"].includes(
     ext,
   );
+}
+
+function looksBinaryContent(content: string | null): boolean {
+  if (!content) return false;
+  return content.includes("\u0000");
+}
+
+function isLargeTextContent(content: string | null): boolean {
+  if (!content) return false;
+  return content.length > 1_000_000;
 }
 
 function findReadme(entries: RepoBrowserFile[]): RepoBrowserFile | undefined {
@@ -179,6 +190,37 @@ export default function RepoFileBrowser({
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [fileHistoryOpen, setFileHistoryOpen] = useState(false);
+  const [fileHistoryLoading, setFileHistoryLoading] = useState(false);
+  const [fileHistoryError, setFileHistoryError] = useState<string | null>(null);
+  const [fileHistoryPage, setFileHistoryPage] = useState(1);
+  const [fileHistoryHasMore, setFileHistoryHasMore] = useState(false);
+  const [fileHistoryCommits, setFileHistoryCommits] = useState<
+    {
+      sha: string;
+      message: string | null;
+      author_name: string | null;
+      author_login: string | null;
+      authored_at: string | null;
+      web_url: string | null;
+    }[]
+  >([]);
+  const [fileBlameOpen, setFileBlameOpen] = useState(false);
+  const [fileBlameLoading, setFileBlameLoading] = useState(false);
+  const [fileBlameError, setFileBlameError] = useState<string | null>(null);
+  const [fileBlameChunks, setFileBlameChunks] = useState<
+    {
+      sha: string;
+      message: string | null;
+      author_name: string | null;
+      author_login: string | null;
+      authored_at: string | null;
+      web_url: string | null;
+      start_line: number;
+      end_line: number;
+      line_count: number;
+    }[]
+  >([]);
 
   const [readmePath, setReadmePath] = useState<string | null>(null);
   const [readmeContent, setReadmeContent] = useState<string | null>(null);
@@ -190,6 +232,28 @@ export default function RepoFileBrowser({
   const [repoSearchLoading, setRepoSearchLoading] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareBase, setCompareBase] = useState("main");
+  const [compareHead, setCompareHead] = useState("");
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
+  const [compareResult, setCompareResult] = useState<{
+    status: string | null;
+    ahead_by: number;
+    behind_by: number;
+    total_commits: number;
+    files: {
+      filename: string;
+      previous_filename?: string | null;
+      status: string | null;
+      additions: number;
+      deletions: number;
+      changes: number;
+      is_binary?: boolean;
+      too_large?: boolean;
+      truncated?: boolean;
+    }[];
+  } | null>(null);
 
   const [summary, setSummary] = useState<StudentRepoSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
@@ -224,11 +288,16 @@ export default function RepoFileBrowser({
         const data = await api.getBranches(repoId);
         if (cancelled) return;
         setBranches(data.branches);
-        setBranch(data.default_branch || "main");
+        const defaultBranch = data.default_branch || "main";
+        setBranch(defaultBranch);
+        setCompareBase(defaultBranch);
+        setCompareHead(defaultBranch);
       } catch {
         if (!cancelled) {
           setBranches([{ name: "main", is_default: true }]);
           setBranch("main");
+          setCompareBase("main");
+          setCompareHead("main");
         }
       } finally {
         if (!cancelled) setBranchLoading(false);
@@ -312,9 +381,18 @@ export default function RepoFileBrowser({
 
   const onBranchChange = (next: string) => {
     setBranch(next);
+    setCompareHead(next);
     setCurrentPath("");
     setSelectedFile(null);
     setFileContent(null);
+    setFileHistoryOpen(false);
+    setFileHistoryError(null);
+    setFileHistoryCommits([]);
+    setFileHistoryPage(1);
+    setFileHistoryHasMore(false);
+    setFileBlameOpen(false);
+    setFileBlameError(null);
+    setFileBlameChunks([]);
     setReadmePath(null);
     setReadmeContent(null);
     setLocalFilter("");
@@ -325,12 +403,28 @@ export default function RepoFileBrowser({
     setSelectedFile(null);
     setFileContent(null);
     setFileError(null);
+    setFileHistoryOpen(false);
+    setFileHistoryError(null);
+    setFileHistoryCommits([]);
+    setFileHistoryPage(1);
+    setFileHistoryHasMore(false);
+    setFileBlameOpen(false);
+    setFileBlameError(null);
+    setFileBlameChunks([]);
     setCurrentPath(path);
     setLocalFilter("");
   };
 
   const openFile = async (filepath: string) => {
     setSelectedFile(filepath);
+    setFileHistoryOpen(false);
+    setFileHistoryError(null);
+    setFileHistoryCommits([]);
+    setFileHistoryPage(1);
+    setFileHistoryHasMore(false);
+    setFileBlameOpen(false);
+    setFileBlameError(null);
+    setFileBlameChunks([]);
     setFileLoading(true);
     setFileError(null);
     setFileContent(null);
@@ -370,7 +464,7 @@ export default function RepoFileBrowser({
     async function loadReadme() {
       setReadmeLoading(true);
       try {
-        const res = await getStudentRepoFileContent(repoId, readme.path, branch);
+        const res = await api.getFileContent(repoId, readme.path, branch);
         if (!cancelled) {
           setReadmePath(readme.path);
           setReadmeContent(res.content);
@@ -388,7 +482,7 @@ export default function RepoFileBrowser({
     return () => {
       cancelled = true;
     };
-  }, [isRepoHome, dirLoading, dirError, entries, repoId, branch, readmePath, readmeContent]);
+  }, [isRepoHome, dirLoading, dirError, entries, repoId, branch, readmePath, readmeContent, api]);
 
   const handleCreateFile = async (payload: {
     path: string;
@@ -405,6 +499,61 @@ export default function RepoFileBrowser({
     await refreshDirectory();
     await loadSummary();
   };
+
+  const runCompare = async () => {
+    if (!api.compareRefs) return;
+    const baseRef = compareBase.trim();
+    const headRef = compareHead.trim();
+    if (!baseRef || !headRef) return;
+    setCompareLoading(true);
+    setCompareError(null);
+    try {
+      const res = await api.compareRefs(repoId, baseRef, headRef);
+      setCompareResult(res);
+    } catch (e) {
+      setCompareResult(null);
+      setCompareError(e instanceof Error ? e.message : "Failed to compare refs");
+    } finally {
+      setCompareLoading(false);
+    }
+  };
+
+  const loadFileHistory = useCallback(
+    async (filepath: string, nextPage = 1, append = false) => {
+      if (!api.getFileHistory) return;
+      setFileHistoryLoading(true);
+      if (!append) setFileHistoryError(null);
+      try {
+        const res = await api.getFileHistory(repoId, filepath, branch, nextPage, 20);
+        setFileHistoryCommits((prev) => (append ? [...prev, ...(res.commits ?? [])] : (res.commits ?? [])));
+        setFileHistoryPage(res.page ?? nextPage);
+        setFileHistoryHasMore(!!res.has_more);
+      } catch (e) {
+        setFileHistoryError(e instanceof Error ? e.message : "Failed to load file history");
+      } finally {
+        setFileHistoryLoading(false);
+      }
+    },
+    [api, repoId, branch],
+  );
+
+  const loadFileBlame = useCallback(
+    async (filepath: string) => {
+      if (!api.getFileBlame) return;
+      setFileBlameLoading(true);
+      setFileBlameError(null);
+      try {
+        const res = await api.getFileBlame(repoId, filepath, branch);
+        setFileBlameChunks(res.chunks ?? []);
+      } catch (e) {
+        setFileBlameChunks([]);
+        setFileBlameError(e instanceof Error ? e.message : "Failed to load blame");
+      } finally {
+        setFileBlameLoading(false);
+      }
+    },
+    [api, repoId, branch],
+  );
 
   const scrollToReadme = () => {
     document.getElementById("repo-readme")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -456,6 +605,87 @@ export default function RepoFileBrowser({
     >
       {navTabs}
       {toolbar}
+      {api.compareRefs ? (
+        <div className="border-b px-3 py-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCompareOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded border px-2 py-1 text-xs"
+              style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg3 }}
+            >
+              <GitCompare className="h-3.5 w-3.5" />
+              Compare refs
+            </button>
+            {compareResult ? (
+              <span className="text-[11px]" style={{ color: theme.text3 }}>
+                {compareBase}...{compareHead} • ahead {compareResult.ahead_by} • behind {compareResult.behind_by}
+              </span>
+            ) : null}
+          </div>
+          {compareOpen ? (
+            <div className="mt-2 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={compareBase}
+                  onChange={(e) => setCompareBase(e.target.value)}
+                  className="rounded border px-2 py-1 text-xs"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg3, color: theme.text }}
+                >
+                  {(branches.length ? branches : [{ name: branch, is_default: true }]).map((b) => (
+                    <option key={`base-${b.name}`} value={b.name}>{b.name}</option>
+                  ))}
+                </select>
+                <span className="text-xs" style={{ color: theme.text3 }}>...</span>
+                <select
+                  value={compareHead}
+                  onChange={(e) => setCompareHead(e.target.value)}
+                  className="rounded border px-2 py-1 text-xs"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg3, color: theme.text }}
+                >
+                  {(branches.length ? branches : [{ name: branch, is_default: true }]).map((b) => (
+                    <option key={`head-${b.name}`} value={b.name}>{b.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void runCompare()}
+                  className="rounded border px-2 py-1 text-xs"
+                  style={{ borderColor: theme.border, color: theme.text2 }}
+                  disabled={compareLoading || !compareBase || !compareHead}
+                >
+                  {compareLoading ? "Comparing..." : "Run"}
+                </button>
+              </div>
+              {compareError ? (
+                <p className="text-xs" style={{ color: theme.danger }}>{compareError}</p>
+              ) : null}
+              {compareResult ? (
+                <div className="rounded border p-2 text-[11px]" style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}>
+                  <p style={{ color: theme.text2 }}>
+                    status: {compareResult.status ?? "unknown"} • commits: {compareResult.total_commits}
+                  </p>
+                  <div className="mt-1 space-y-1 max-h-36 overflow-auto">
+                    {compareResult.files.slice(0, 30).map((f) => (
+                      <div key={`${f.filename}-${f.status ?? ''}`} className="font-mono" style={{ color: theme.text3 }}>
+                        {f.status ?? "modified"}{" "}
+                        {f.previous_filename ? `${f.previous_filename} -> ${f.filename}` : f.filename}{" "}
+                        (+{f.additions}/-{f.deletions})
+                        {f.is_binary ? " [binary]" : ""}
+                        {f.too_large ? " [large]" : ""}
+                        {f.truncated ? " [truncated]" : ""}
+                      </div>
+                    ))}
+                    {compareResult.files.length === 0 ? (
+                      <p style={{ color: theme.text3 }}>No file changes</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <div className="overflow-hidden rounded-b-xl">
       {(isDirectoryView || isRepoHome) && pathParts.length > 0 && (
         <Breadcrumb
@@ -597,6 +827,8 @@ export default function RepoFileBrowser({
     ) : null;
 
   const isMarkdownFile = !!selectedFile && /\.(md|markdown)$/i.test(selectedFile);
+  const binaryByContent = looksBinaryContent(fileContent);
+  const veryLargeContent = isLargeTextContent(fileContent);
 
   const fileViewer = isFileView ? (
     <div
@@ -628,8 +860,132 @@ export default function RepoFileBrowser({
         <span className="font-mono truncate" style={{ color: theme.text }}>
           {selectedFile}
         </span>
-        <span style={{ color: theme.text3 }}>{displayLanguageLabel(selectedFile!)}</span>
+        <div className="flex items-center gap-2">
+          {api.getFileHistory ? (
+            <button
+              type="button"
+              onClick={() => {
+                const next = !fileHistoryOpen;
+                setFileHistoryOpen(next);
+                if (next && selectedFile && fileHistoryCommits.length === 0 && !fileHistoryLoading) {
+                  void loadFileHistory(selectedFile, 1, false);
+                }
+              }}
+              className="inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px]"
+              style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg3 }}
+            >
+              <Clock3 className="h-3 w-3" />
+              History
+            </button>
+          ) : null}
+          {api.getFileBlame ? (
+            <button
+              type="button"
+              onClick={() => {
+                const next = !fileBlameOpen;
+                setFileBlameOpen(next);
+                if (next && selectedFile && fileBlameChunks.length === 0 && !fileBlameLoading) {
+                  void loadFileBlame(selectedFile);
+                }
+              }}
+              className="inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px]"
+              style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg3 }}
+            >
+              <FileText className="h-3 w-3" />
+              Blame
+            </button>
+          ) : null}
+          <span style={{ color: theme.text3 }}>{displayLanguageLabel(selectedFile!)}</span>
+        </div>
       </div>
+      {fileHistoryOpen ? (
+        <div className="border-b px-4 py-2.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+          {fileHistoryLoading && fileHistoryCommits.length === 0 ? (
+            <div className="flex items-center gap-2" style={{ color: theme.text3 }}>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading file history...
+            </div>
+          ) : fileHistoryError ? (
+            <p style={{ color: theme.danger }}>{fileHistoryError}</p>
+          ) : fileHistoryCommits.length === 0 ? (
+            <p style={{ color: theme.text3 }}>No history for this file.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {fileHistoryCommits.map((row) => (
+                <div
+                  key={`${row.sha}-${row.authored_at ?? ""}`}
+                  className="rounded border px-2 py-1.5"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}
+                >
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-mono" style={{ color: theme.accent2 }}>
+                      {row.sha.slice(0, 12)}
+                    </span>
+                    <span style={{ color: theme.text }}>{row.message ?? "Commit"}</span>
+                  </div>
+                  <p className="mt-0.5" style={{ color: theme.text3 }}>
+                    {row.author_name ?? row.author_login ?? "user"}
+                    {row.authored_at ? ` · ${formatRelativeTime(row.authored_at)}` : ""}
+                  </p>
+                </div>
+              ))}
+              {fileHistoryHasMore ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedFile || fileHistoryLoading) return;
+                    void loadFileHistory(selectedFile, fileHistoryPage + 1, true);
+                  }}
+                  className="rounded border px-2 py-1 text-[11px]"
+                  style={{ borderColor: theme.border, color: theme.text2 }}
+                  disabled={fileHistoryLoading}
+                >
+                  {fileHistoryLoading ? "Loading..." : "Load more"}
+                </button>
+              ) : null}
+            </div>
+          )}
+        </div>
+      ) : null}
+      {fileBlameOpen ? (
+        <div className="border-b px-4 py-2.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+          {fileBlameLoading && fileBlameChunks.length === 0 ? (
+            <div className="flex items-center gap-2" style={{ color: theme.text3 }}>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading blame...
+            </div>
+          ) : fileBlameError ? (
+            <p style={{ color: theme.danger }}>{fileBlameError}</p>
+          ) : fileBlameChunks.length === 0 ? (
+            <p style={{ color: theme.text3 }}>No blame data for this file.</p>
+          ) : (
+            <div className="space-y-1.5 max-h-40 overflow-auto">
+              {fileBlameChunks.slice(0, 120).map((row) => (
+                <div
+                  key={`${row.sha}-${row.start_line}-${row.end_line}`}
+                  className="rounded border px-2 py-1.5"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}
+                >
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-mono" style={{ color: theme.text3 }}>
+                      L{row.start_line}
+                      {row.end_line > row.start_line ? `-L${row.end_line}` : ""}
+                    </span>
+                    <span className="font-mono" style={{ color: theme.accent2 }}>
+                      {row.sha ? row.sha.slice(0, 12) : "unknown"}
+                    </span>
+                    <span style={{ color: theme.text }}>{row.message ?? "Commit"}</span>
+                  </div>
+                  <p className="mt-0.5" style={{ color: theme.text3 }}>
+                    {row.author_name ?? row.author_login ?? "user"}
+                    {row.authored_at ? ` · ${formatRelativeTime(row.authored_at)}` : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
       <div className="overflow-auto max-h-[min(70vh,640px)]">
         {fileLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-sm" style={{ color: theme.text2 }}>
@@ -644,9 +1000,13 @@ export default function RepoFileBrowser({
           <div className="px-5 py-5">
             <RepoMarkdown content={fileContent ?? ""} theme={theme} />
           </div>
-        ) : isBinaryLikePath(selectedFile!) ? (
+        ) : isBinaryLikePath(selectedFile!) || binaryByContent ? (
           <p className="px-4 py-8 text-sm" style={{ color: theme.text2 }}>
             {t("repo.browser.binaryPreviewUnavailable")}
+          </p>
+        ) : veryLargeContent ? (
+          <p className="px-4 py-8 text-sm" style={{ color: theme.text2 }}>
+            File is too large for stable preview in browser. Download or open in local editor.
           </p>
         ) : (
           <RepoMonacoViewer

@@ -137,12 +137,6 @@ services:
         condition: service_healthy
     ports:
       - "3001:3001"
-    environment:
-      # Прокси Vite → контейнер api (браузер ходит на /api, не на localhost:8000 с хоста)
-      - VITE_PROXY_API=http://api:8000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
 
   backup-cron:
     image: postgres:16

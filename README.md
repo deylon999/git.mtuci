@@ -72,6 +72,12 @@ docker compose up --build
 
 Первый запуск занимает 2–3 минуты (инициализация Gitea и миграции БД).
 
+Для production-контура используйте override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
 | Сервис | URL |
 |--------|-----|
 | Frontend | http://localhost:3001 |
@@ -248,6 +254,9 @@ docker compose up postgres gitea api
 
 Либо локально: Python 3.11+, зависимости из `backend/requirements.txt`, переменные из `backend/.env`, `alembic upgrade heads`, затем `uvicorn main:app --reload` из каталога `backend`.
 
+> Примечание по LK МТУСИ интеграции: пакет `mtuci-private-api` обязателен только для функций синхронизации ЛК.
+> Если он временно недоступен, базовые функции платформы продолжают работать. Детали: [docs/MTUCI_PRIVATE_API.md](docs/MTUCI_PRIVATE_API.md).
+
 ### Сборка фронтенда
 
 ```bash
@@ -355,8 +364,11 @@ docker compose restart api
 - Ограничьте `GITEA__webhook__ALLOWED_HOST_LIST` в `docker-compose.yml`  
 - Не коммитьте `backend/.env` в репозиторий  
 
+В репозитории есть шаблон production-override: [docker-compose.prod.yml](docker-compose.prod.yml).
+Он убирает дефолтные пароли и требует секреты/учётки через переменные окружения.
+
 ---
 
 ## Лицензия
 
-Учебный проект МТУСИ. Уточните условия использования и распространения у автора репозитория.
+Проект распространяется по лицензии MIT. См. файл [LICENSE](LICENSE).

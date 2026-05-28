@@ -30,6 +30,10 @@ from app.schemas.student_dashboard import (
     StudentRepoLintRead,
     StudentRepoCommitsRead,
     StudentRepoIssuesRead,
+    StudentRepoIssueRead,
+    StudentRepoIssueUpsertBody,
+    StudentRepoIssuePatchBody,
+    StudentRepoReactionBody,
     StudentRepoPullsRead,
     StudentRepoPullRead,
     StudentRepoSummaryRead,
@@ -40,8 +44,21 @@ from app.schemas.student_dashboard import (
     StudentRepoFileRead,
     StudentRepoFileSearchItemRead,
     StudentRepoCreatePullBody,
+    StudentRepoCreatePullDiscussionCommentBody,
+    StudentRepoCreatePullReviewBody,
     StudentRepoCommitDiffRead,
+    StudentRepoFileHistoryRead,
+    StudentRepoBlameRead,
+    StudentRepoCompareRead,
+    StudentRepoMergePullBody,
+    StudentRepoMergeResultRead,
+    StudentRepoPullDetailBundleRead,
+    StudentRepoPullReviewRead,
+    StudentRepoPullDiscussionCommentRead,
+    StudentRepoPullCheckLogRead,
+    StudentRepoPullCheckRetryRead,
 )
+from app.schemas.repo_access import RepoAccessInviteRead, RepoInviteRespondBody
 from app.services.code_lint_service import lint_file_content
 from app.services.repository_access_service import RepositoryBlockedError
 from app.services.gitea_service import GiteaAuthError
@@ -55,10 +72,22 @@ from app.services.student_dashboard_service import (
     get_student_repository_clone_info,
     get_student_repository_commits,
     get_student_repository_issues,
+    create_student_repository_issue,
+    update_student_repository_issue,
+    react_student_repository_issue,
     get_student_repository_pulls,
     create_student_repository_pull_request,
+    create_student_repository_pull_discussion_comment,
+    create_student_repository_pull_review,
     get_student_repository_summary,
+    get_student_repository_pull_detail_bundle,
     get_student_repository_commit_diff,
+    get_student_repository_file_history,
+    get_student_repository_file_blame,
+    get_student_repository_compare_refs,
+    get_student_repository_pull_check_log,
+    retry_student_repository_pull_check,
+    merge_student_repository_pull,
     get_student_repository_wiki_content,
     get_student_repository_wiki_pages,
     get_student_repository_file_content,
@@ -361,6 +390,7 @@ async def student_repository_issues(
     page: int = Query(default=1, ge=1, le=100),
     limit: int = Query(default=20, ge=1, le=50),
     state: str = Query(default="open", pattern="^(open|closed|all)$"),
+    q: str | None = Query(default=None, max_length=200),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> StudentRepoIssuesRead:
@@ -373,6 +403,7 @@ async def student_repository_issues(
             page=page,
             limit=limit,
             state=state,
+            q=q,
         )
     except GiteaAuthError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
@@ -381,6 +412,90 @@ async def student_repository_issues(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return StudentRepoIssuesRead.model_validate(data)
+
+
+@router.post("/repositories/{repo_item_id}/issues", response_model=StudentRepoIssueRead)
+async def student_repository_issue_create(
+    repo_item_id: str,
+    body: StudentRepoIssueUpsertBody,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoIssueRead:
+    await _ensure_student_perm(current_user, session, "repo_create")
+    try:
+        data = await create_student_repository_issue(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            title=body.title,
+            body=body.body,
+            labels=body.labels,
+            assignees=body.assignees,
+            milestone=body.milestone,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StudentRepoIssueRead.model_validate(data)
+
+
+@router.patch("/repositories/{repo_item_id}/issues/{issue_number}", response_model=StudentRepoIssueRead)
+async def student_repository_issue_patch(
+    repo_item_id: str,
+    issue_number: int = Path(..., ge=1),
+    body: StudentRepoIssuePatchBody = ...,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoIssueRead:
+    await _ensure_student_perm(current_user, session, "repo_create")
+    try:
+        data = await update_student_repository_issue(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            issue_number=issue_number,
+            title=body.title,
+            body=body.body,
+            state=body.state,
+            labels=body.labels,
+            assignees=body.assignees,
+            milestone=body.milestone,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StudentRepoIssueRead.model_validate(data)
+
+
+@router.post("/repositories/{repo_item_id}/issues/{issue_number}/reactions")
+async def student_repository_issue_react(
+    repo_item_id: str,
+    issue_number: int = Path(..., ge=1),
+    body: StudentRepoReactionBody = ...,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    await _ensure_student_perm(current_user, session, "repo_comment")
+    try:
+        return await react_student_repository_issue(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            issue_number=issue_number,
+            content=body.content,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
 @router.get("/repositories/{repo_item_id}/pulls", response_model=StudentRepoPullsRead)
@@ -439,6 +554,184 @@ async def student_repository_create_pull(
     return StudentRepoPullRead.model_validate(data)
 
 
+@router.get("/repositories/{repo_item_id}/pulls/{pull_number}", response_model=StudentRepoPullDetailBundleRead)
+async def student_repository_pull_detail(
+    repo_item_id: str,
+    pull_number: int = Path(..., ge=1),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoPullDetailBundleRead:
+    await _ensure_student_perm(current_user, session, "repo_view")
+    await _ensure_student_perm(current_user, session, "repo_comment")
+    try:
+        data = await get_student_repository_pull_detail_bundle(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            pull_number=pull_number,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return StudentRepoPullDetailBundleRead.model_validate(data)
+
+
+@router.get(
+    "/repositories/{repo_item_id}/pulls/{pull_number}/checks/{check_id}/log",
+    response_model=StudentRepoPullCheckLogRead,
+)
+async def student_repository_pull_check_log(
+    repo_item_id: str,
+    pull_number: int = Path(..., ge=1),
+    check_id: str = Path(..., min_length=3, max_length=300),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoPullCheckLogRead:
+    await _ensure_student_perm(current_user, session, "repo_view")
+    await _ensure_student_perm(current_user, session, "repo_comment")
+    try:
+        data = await get_student_repository_pull_check_log(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            pull_number=pull_number,
+            check_id=check_id,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return StudentRepoPullCheckLogRead.model_validate(data)
+
+
+@router.post(
+    "/repositories/{repo_item_id}/pulls/{pull_number}/checks/{check_id}/retry",
+    response_model=StudentRepoPullCheckRetryRead,
+)
+async def student_repository_pull_check_retry(
+    repo_item_id: str,
+    pull_number: int = Path(..., ge=1),
+    check_id: str = Path(..., min_length=3, max_length=300),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoPullCheckRetryRead:
+    await _ensure_student_perm(current_user, session, "repo_create")
+    try:
+        data = await retry_student_repository_pull_check(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            pull_number=pull_number,
+            check_id=check_id,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StudentRepoPullCheckRetryRead.model_validate(data)
+
+
+@router.post(
+    "/repositories/{repo_item_id}/pulls/{pull_number}/reviews",
+    response_model=StudentRepoPullReviewRead,
+)
+async def student_repository_pull_review_create(
+    repo_item_id: str,
+    pull_number: int = Path(..., ge=1),
+    body: StudentRepoCreatePullReviewBody = ...,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoPullReviewRead:
+    await _ensure_student_perm(current_user, session, "repo_comment")
+    try:
+        data = await create_student_repository_pull_review(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            pull_number=pull_number,
+            event=body.event,
+            body=body.body,
+            comments=[row.model_dump() for row in body.comments],
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StudentRepoPullReviewRead.model_validate(data)
+
+
+@router.post(
+    "/repositories/{repo_item_id}/pulls/{pull_number}/comments",
+    response_model=StudentRepoPullDiscussionCommentRead,
+)
+async def student_repository_pull_comment_create(
+    repo_item_id: str,
+    pull_number: int = Path(..., ge=1),
+    body: StudentRepoCreatePullDiscussionCommentBody = ...,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoPullDiscussionCommentRead:
+    await _ensure_student_perm(current_user, session, "repo_comment")
+    try:
+        data = await create_student_repository_pull_discussion_comment(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            pull_number=pull_number,
+            body=body.body,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StudentRepoPullDiscussionCommentRead.model_validate(data)
+
+
+@router.post(
+    "/repositories/{repo_item_id}/pulls/{pull_number}/merge",
+    response_model=StudentRepoMergeResultRead,
+)
+async def student_repository_pull_merge(
+    repo_item_id: str,
+    pull_number: int = Path(..., ge=1),
+    body: StudentRepoMergePullBody = ...,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoMergeResultRead:
+    await _ensure_student_perm(current_user, session, "repo_create")
+    try:
+        data = await merge_student_repository_pull(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            pull_number=pull_number,
+            method=body.method,
+            commit_title=body.commit_title,
+            commit_message=body.commit_message,
+            delete_branch_after_merge=body.delete_branch_after_merge,
+            force_merge=body.force_merge,
+            head_commit_id=body.head_commit_id,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StudentRepoMergeResultRead.model_validate(data)
+
+
 @router.get("/repositories/{repo_item_id}/unmerged-branches", response_model=list[str])
 async def student_repository_unmerged_branches(
     repo_item_id: str,
@@ -486,6 +779,88 @@ async def student_repository_commit_diff(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return StudentRepoCommitDiffRead.model_validate(data)
+
+
+@router.get("/repositories/{repo_item_id}/history/file", response_model=StudentRepoFileHistoryRead)
+async def student_repository_file_history(
+    repo_item_id: str,
+    path: str = Query(min_length=1, max_length=500),
+    branch: str | None = Query(default=None, max_length=200),
+    page: int = Query(default=1, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=50),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoFileHistoryRead:
+    await _ensure_student_perm(current_user, session, "repo_view")
+    try:
+        data = await get_student_repository_file_history(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            filepath=path,
+            branch=branch,
+            page=page,
+            limit=limit,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StudentRepoFileHistoryRead.model_validate(data)
+
+
+@router.get("/repositories/{repo_item_id}/blame/file", response_model=StudentRepoBlameRead)
+async def student_repository_file_blame(
+    repo_item_id: str,
+    path: str = Query(min_length=1, max_length=500),
+    branch: str | None = Query(default=None, max_length=200),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoBlameRead:
+    await _ensure_student_perm(current_user, session, "repo_view")
+    try:
+        data = await get_student_repository_file_blame(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            filepath=path,
+            branch=branch,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StudentRepoBlameRead.model_validate(data)
+
+
+@router.get("/repositories/{repo_item_id}/compare", response_model=StudentRepoCompareRead)
+async def student_repository_compare_refs(
+    repo_item_id: str,
+    base: str = Query(min_length=1, max_length=200),
+    head: str = Query(min_length=1, max_length=200),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepoCompareRead:
+    await _ensure_student_perm(current_user, session, "repo_view")
+    try:
+        data = await get_student_repository_compare_refs(
+            session,
+            student_id=current_user.id,
+            repo_item_id=repo_item_id,
+            base_ref=base,
+            head_ref=head,
+        )
+    except GiteaAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except RepositoryBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StudentRepoCompareRead.model_validate(data)
 
 
 @router.get("/repositories/{repo_item_id}/wiki/pages", response_model=StudentRepoWikiPagesRead)
@@ -805,3 +1180,31 @@ async def student_git_clone_token_regenerate(
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     return StudentGitCloneTokenRegenerateRead.model_validate(data)
+
+
+@router.get("/repository-invites/pending", response_model=list[RepoAccessInviteRead])
+async def student_pending_repository_invites(
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[RepoAccessInviteRead]:
+    await _ensure_student_perm(current_user, session, "repo_view")
+    from app.services.repo_access_service import list_pending_invites_for_user
+
+    return await list_pending_invites_for_user(session, user_id=current_user.id)
+
+
+@router.post("/repository-invites/{invite_id}/respond", response_model=RepoAccessInviteRead)
+async def student_respond_repository_invite(
+    invite_id: UUID,
+    body: RepoInviteRespondBody,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> RepoAccessInviteRead:
+    await _ensure_student_perm(current_user, session, "repo_view")
+    from app.services.repo_access_service import respond_invite
+
+    result = await respond_invite(
+        session, invite_id=invite_id, user=current_user, accept=body.accept
+    )
+    await session.commit()
+    return result

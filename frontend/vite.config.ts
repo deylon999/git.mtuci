@@ -16,9 +16,10 @@ export default defineConfig(({ mode }) => {
             if (!id.includes("node_modules")) return;
             if (id.includes("@monaco-editor") || id.includes("monaco-editor")) return "vendor-monaco";
             if (id.includes("react-markdown") || id.includes("remark-gfm")) return "vendor-markdown";
+            // Keep syntax-highlighter/refractor split by Rollup automatically.
+            // Forcing a single chunk here creates a huge vendor bundle.
             if (id.includes("react-router-dom")) return "vendor-router";
             if (id.includes("lucide-react")) return "vendor-icons";
-            if (id.includes("react") || id.includes("scheduler")) return "vendor-react";
           },
         },
       },

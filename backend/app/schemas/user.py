@@ -21,6 +21,7 @@ class UserRead(BaseModel):
     student_id: str | None = None
     avatar_url: str | None = None
     allow_assistant_grading: bool = False
+    can_switch_student_mode: bool = False
     avatar_display_mode: str = "cover"
     created_at: datetime
     last_login: datetime | None = None

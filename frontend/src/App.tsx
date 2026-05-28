@@ -16,6 +16,7 @@ import { AuthUserProvider, useAuthUser } from "./context/AuthUserContext";
 import { PermissionsProvider } from "./context/PermissionsContext";
 import RequirePermission from "./components/RequirePermission";
 import { UserPreferencesProvider, useUserPreferences } from "./context/UserPreferencesContext";
+import { RoleModeProvider, useRoleMode } from "./context/RoleModeContext";
 import StudentShellBootstrapRunner from "./components/StudentShellBootstrapRunner";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 import PageLoadingFallback from "./components/PageLoadingFallback";
@@ -56,6 +57,10 @@ const StudentRepositoryCommitsPage = lazy(() => import("./pages/StudentRepositor
 const StudentRepositoryBranchesPage = lazy(() => import("./pages/StudentRepositoryBranchesPage"));
 const StudentRepositorySectionPage = lazy(() => import("./pages/StudentRepositorySectionPage"));
 const StudentRepositoryCommitDiffPage = lazy(() => import("./pages/StudentRepositoryCommitDiffPage"));
+const IssuesPage = lazy(() => import("./pages/IssuesPage"));
+const IssueDetailPage = lazy(() => import("./components/issues/IssueDetail"));
+const ReviewsPage = lazy(() => import("./pages/ReviewsPage"));
+const CodeSearchPage = lazy(() => import("./pages/CodeSearchPage"));
 
 const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 
@@ -76,8 +81,10 @@ export default function App() {
     <UserPreferencesProvider isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme}>
       <AuthUserProvider>
         <PermissionsProvider>
-          <StudentShellBootstrapRunner />
-          <AppShell isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme} />
+          <RoleModeProvider>
+            <StudentShellBootstrapRunner />
+            <AppShell isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme} />
+          </RoleModeProvider>
         </PermissionsProvider>
       </AuthUserProvider>
     </UserPreferencesProvider>
@@ -95,7 +102,10 @@ function AppShell({
   const isAuthPage = AUTH_PATHS.includes(location.pathname);
   const { persistTheme, t } = useUserPreferences();
   const { user } = useAuthUser();
-  const isTeacherLike = user?.role === "teacher" || user?.role === "laborant";
+  const { mode, canSwitchLaborantMode } = useRoleMode();
+  const effectiveRole =
+    user?.role === "laborant" && canSwitchLaborantMode && mode === "student" ? "student" : user?.role;
+  const isTeacherLike = effectiveRole === "teacher" || effectiveRole === "laborant";
   const mainPaddingY = !isAuthPage && isTeacherLike ? "py-4" : "py-6";
 
   if (!isAuthPage && !getToken()) {
@@ -155,6 +165,7 @@ function AppShell({
                   </Route>
                   <Route path="/dashboard" element={<DashboardRoute isDarkTheme={isDarkTheme} />} />
                   <Route path="/projects" element={<ProjectsRoute isDarkTheme={isDarkTheme} />} />
+                  <Route path="/search/code" element={<CodeSearchPage isDarkTheme={isDarkTheme} />} />
                   <Route element={<RequirePermission permission="repo_view" />}>
                     <Route path="/repositories" element={<RepositoriesRoute isDarkTheme={isDarkTheme} />} />
                     <Route path="/repositories/forks" element={<StudentForksPage isDarkTheme={isDarkTheme} />} />
@@ -168,14 +179,14 @@ function AppShell({
                       path="branches"
                       element={<StudentRepositoryBranchesPage isDarkTheme={isDarkTheme} />}
                     />
-                    <Route
-                      path="issues"
-                      element={<StudentRepositorySectionPage isDarkTheme={isDarkTheme} section="issues" />}
-                    />
-                    <Route
-                      path="pulls"
-                      element={<StudentRepositorySectionPage isDarkTheme={isDarkTheme} section="pulls" />}
-                    />
+                    <Route path="issues">
+                      <Route index element={<IssuesPage isDarkTheme={isDarkTheme} />} />
+                      <Route path=":number" element={<IssueDetailPage />} />
+                    </Route>
+                    <Route path="pulls">
+                      <Route index element={<StudentRepositorySectionPage isDarkTheme={isDarkTheme} section="pulls" />} />
+                      <Route path=":prNumber/reviews" element={<ReviewsPage isDarkTheme={isDarkTheme} />} />
+                    </Route>
                     <Route
                       path="wiki"
                       element={<StudentRepositorySectionPage isDarkTheme={isDarkTheme} section="wiki" />}

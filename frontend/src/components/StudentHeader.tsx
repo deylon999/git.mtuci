@@ -3,13 +3,13 @@ import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, LogOut, User, Moon, Sun, Search, Plus } from "lucide-react";
 import { clearToken } from "../api/client";
 import { useAuthUser } from "../context/AuthUserContext";
-import { globalSearch } from "../api/searchApi";
 import { getTheme } from "../theme";
 import { pageGutterClass } from "../layout/pageLayout";
 import { getDefaultRouteForRole } from "../utils/defaultRoute";
 import NotificationBell from "./NotificationBell";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import type { UserRole } from "../api/types";
+import { useRoleMode } from "../context/RoleModeContext";
 
 function roleLabel(role: UserRole | null, t: (key: string) => string): string {
   switch (role) {
@@ -35,6 +35,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
   const navigate = useNavigate();
   const { t } = useUserPreferences();
   const { user, clearUser, refreshUser } = useAuthUser();
+  const { mode, canSwitchLaborantMode, toggleMode } = useRoleMode();
 
   const [userName, setUserName] = useState(() => t("roles.user"));
   const [userRole, setUserRole] = useState<UserRole | null>(null);
@@ -44,14 +45,19 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
+  const effectiveRole: UserRole | null =
+    user?.role === "laborant" && canSwitchLaborantMode && mode === "student"
+      ? "student"
+      : user?.role ?? null;
+
   useEffect(() => {
     if (user) {
       setUserName(user.full_name || user.email || t("roles.user"));
-      setUserRole(user.role);
-      setHomeHref(getDefaultRouteForRole(user.role));
+      setUserRole(effectiveRole);
+      setHomeHref(getDefaultRouteForRole(effectiveRole ?? user.role));
       setAvatarUrl(user.avatar_url ? `${user.avatar_url}?t=${Date.now()}` : null);
     }
-  }, [user, t]);
+  }, [user, effectiveRole, t]);
 
   useEffect(() => {
     const handleAvatarUpdate = (e: CustomEvent) => {
@@ -83,17 +89,7 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
     e.preventDefault();
     const q = searchQuery.trim();
     if (!q) return;
-    try {
-      const result = await globalSearch(q, 8);
-      const first = result.hits[0];
-      if (first?.href) {
-        navigate(first.href);
-        return;
-      }
-    } catch {
-      // fallback
-    }
-    navigate(`/assignments?q=${encodeURIComponent(q)}`);
+    navigate(`/search/code?q=${encodeURIComponent(q)}`);
   }
 
   const theme = getTheme(isDarkTheme);
@@ -171,6 +167,17 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
             </button>
 
             <NotificationBell isDarkTheme={isDarkTheme} />
+
+            {user?.role === "laborant" && canSwitchLaborantMode ? (
+              <button
+                type="button"
+                onClick={toggleMode}
+                className="hidden md:inline-flex items-center rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+                style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.hoverBg }}
+              >
+                {mode === "laborant" ? t("header.modeLaborant") : t("header.modeStudent")}
+              </button>
+            ) : null}
 
             <div className="relative ml-1" data-profile-menu>
               <button

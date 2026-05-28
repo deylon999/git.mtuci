@@ -24,6 +24,8 @@ from app.models import assignment as _assignment_model  # noqa: F401
 from app.models import submission as _submission_model  # noqa: F401
 from app.models import student_repository as _student_repository_model  # noqa: F401
 from app.models import password_reset_token as _password_reset_token_model  # noqa: F401
+from app.models import git_auth as _git_auth_model  # noqa: F401
+from app.models import repo_settings as _repo_settings_model  # noqa: F401
 
 
 config = context.config

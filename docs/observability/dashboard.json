@@ -1,0 +1,28 @@
+{
+  "title": "MTUCI Reliability Dashboard",
+  "timezone": "browser",
+  "panels": [
+    {
+      "title": "Requests per second",
+      "type": "stat",
+      "targets": [{"expr": "app_http_rps"}]
+    },
+    {
+      "title": "P95 latency (ms)",
+      "type": "stat",
+      "targets": [{"expr": "app_http_p95_ms"}]
+    },
+    {
+      "title": "Errors/hour",
+      "type": "stat",
+      "targets": [{"expr": "app_http_errors_hour"}]
+    },
+    {
+      "title": "Requests/hour",
+      "type": "stat",
+      "targets": [{"expr": "app_http_requests_hour"}]
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

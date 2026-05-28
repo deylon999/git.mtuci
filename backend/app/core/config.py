@@ -103,6 +103,7 @@ class Settings(BaseModel):
 
     # Uploads
     UPLOAD_DIR: str = Field(default_factory=lambda: os.getenv("UPLOAD_DIR", str(BASE_DIR / "uploads")))
+    RATE_LIMIT_RPM: int = Field(default_factory=lambda: int(os.getenv("RATE_LIMIT_RPM", "180")))
 
 settings = Settings()
 

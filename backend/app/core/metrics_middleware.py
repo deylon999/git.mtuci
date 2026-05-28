@@ -96,3 +96,22 @@ def get_http_metrics() -> Dict:
         "error_rate": None,
         "rps": None,
     }
+
+
+def get_prometheus_metrics_text() -> str:
+    m = get_http_metrics()
+    lines = [
+        "# HELP app_http_requests_hour Number of HTTP requests in the last hour",
+        "# TYPE app_http_requests_hour gauge",
+        f"app_http_requests_hour {m['requests_total_hour'] or 0}",
+        "# HELP app_http_errors_hour Number of HTTP errors in the last hour",
+        "# TYPE app_http_errors_hour gauge",
+        f"app_http_errors_hour {m['requests_errors_hour'] or 0}",
+        "# HELP app_http_p95_ms HTTP p95 latency in milliseconds",
+        "# TYPE app_http_p95_ms gauge",
+        f"app_http_p95_ms {m['p95_response_ms'] or 0}",
+        "# HELP app_http_rps Requests per second over the last minute",
+        "# TYPE app_http_rps gauge",
+        f"app_http_rps {m['rps'] or 0}",
+    ]
+    return "\n".join(lines) + "\n"

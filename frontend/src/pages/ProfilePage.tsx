@@ -18,6 +18,7 @@ import { getTeacherDashboardFull, getTeacherStudents } from "../api/teacherDashb
 import { getTheme } from "../theme";
 import type { UserRead, LogEntry } from "../api/types";
 import AvatarUploadModal from "../components/AvatarUploadModal";
+import GitAuthPanel from "../components/GitAuthPanel";
 import { Mail } from "lucide-react";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { pluralWord } from "../i18n/plural";
@@ -721,12 +722,12 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
               </div>
             ) : null}
             {/* Блок Смена пароля */}
-            <div style={{
-              backgroundColor: theme.bg3,
-              border: `1px solid ${theme.border}`,
-              borderRadius: "12px",
-              padding: "20px"
-            }}>
+          <div style={{
+            backgroundColor: theme.bg3,
+            border: `1px solid ${theme.border}`,
+            borderRadius: "12px",
+            padding: "20px"
+          }}>
               <h3 style={{ color: theme.text, fontSize: "16px", fontWeight: "600", marginBottom: "16px" }}>
                 {t("admin.profile.changePasswordTitle")}
               </h3>
@@ -870,6 +871,8 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
               </div>
             </form>
           </div>
+
+          <GitAuthPanel isDarkTheme={isDarkTheme} />
 
           {/* Блок Последние действия */}
           <div style={{

@@ -89,6 +89,7 @@ async def update_user_role_and_block(
     if not user:
         raise ValueError("User not found")
 
+    previous_role = user.role
     user.role = role
     user.is_blocked = is_blocked
     user.is_pending = is_pending
@@ -110,6 +111,15 @@ async def update_user_role_and_block(
     
     if group_name is not None:
         user.group_name = group_name
+
+    # Preserve dual-role signal when a student is promoted to laborant.
+    prefs = dict(user.preferences) if isinstance(user.preferences, dict) else {}
+    if role_value == "laborant":
+        prev_role_value = previous_role.value if hasattr(previous_role, "value") else str(previous_role)
+        if prev_role_value == "student" or prefs.get("can_switch_student_mode") is True:
+            prefs["can_switch_student_mode"] = True
+    user.preferences = prefs if prefs else None
+
     session.add(user)
     await session.commit()
     await session.refresh(user)

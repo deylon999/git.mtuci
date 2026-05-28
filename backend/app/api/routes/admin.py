@@ -1146,7 +1146,7 @@ async def get_logs(
     search: Optional[str] = Query(None),
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
-    sort: str = Query("desc", regex="^(desc|asc)$"),
+    sort: str = Query("desc", pattern="^(desc|asc)$"),
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -1287,7 +1287,7 @@ async def export_logs(
     search: Optional[str] = Query(None),
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
-    sort: str = Query("desc", regex="^(desc|asc)$"),
+    sort: str = Query("desc", pattern="^(desc|asc)$"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):

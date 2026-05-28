@@ -302,6 +302,165 @@ async def create_gitea_user_access_token(
     return str(raw)
 
 
+async def delete_gitea_user_access_token(username: str, token_id: int) -> None:
+    base_url = settings.GITEA_URL.rstrip("/")
+    owner = gitea_owner_path(username)
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "DELETE",
+            f"{base_url}/api/v1/users/{owner}/tokens/{token_id}",
+        )
+    if resp.status_code not in (200, 204, 404):
+        raise RuntimeError(f"Gitea delete token failed: {resp.status_code} {resp.text[:300]}")
+
+
+async def add_gitea_user_ssh_key(
+    *,
+    username: str,
+    title: str,
+    public_key: str,
+    read_only: bool = False,
+) -> dict[str, Any]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    owner = gitea_owner_path(username)
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            f"{base_url}/api/v1/admin/users/{owner}/keys",
+            headers={"Content-Type": "application/json"},
+            json={"title": title, "key": public_key, "read_only": read_only},
+        )
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Gitea add ssh key failed: {resp.status_code} {resp.text[:300]}")
+    data = resp.json()
+    return data if isinstance(data, dict) else {}
+
+
+async def delete_gitea_user_ssh_key(*, username: str, key_id: int) -> None:
+    base_url = settings.GITEA_URL.rstrip("/")
+    owner = gitea_owner_path(username)
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "DELETE",
+            f"{base_url}/api/v1/admin/users/{owner}/keys/{key_id}",
+        )
+    if resp.status_code not in (200, 204, 404):
+        raise RuntimeError(f"Gitea delete ssh key failed: {resp.status_code} {resp.text[:300]}")
+
+
+async def upsert_gitea_branch_protection(
+    *,
+    owner: str,
+    repo: str,
+    branch_pattern: str,
+    required_approvals: int,
+    require_status_checks: bool,
+    status_check_contexts: list[str],
+    dismiss_stale_approvals: bool,
+    block_on_rejected_reviews: bool,
+) -> dict[str, Any]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    payload = {
+        "branch_name": branch_pattern,
+        "required_approvals": required_approvals,
+        "enable_status_check": require_status_checks,
+        "status_check_contexts": status_check_contexts,
+        "dismiss_stale_approvals": dismiss_stale_approvals,
+        "block_on_rejected_reviews": block_on_rejected_reviews,
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/branch_protections",
+            headers={"Content-Type": "application/json"},
+            json=payload,
+        )
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Gitea branch protection upsert failed: {resp.status_code} {resp.text[:300]}")
+    data = resp.json()
+    return data if isinstance(data, dict) else {}
+
+
+async def create_gitea_repo_webhook(
+    *,
+    owner: str,
+    repo: str,
+    url: str,
+    events: list[str],
+    secret: str | None,
+    is_active: bool,
+) -> dict[str, Any]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/hooks",
+            headers={"Content-Type": "application/json"},
+            json={
+                "type": "gitea",
+                "config": {"url": url, "content_type": "json", "secret": secret or ""},
+                "events": events,
+                "active": is_active,
+            },
+        )
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Gitea webhook create failed: {resp.status_code} {resp.text[:300]}")
+    data = resp.json()
+    return data if isinstance(data, dict) else {}
+
+
+async def delete_gitea_repo_webhook(*, owner: str, repo: str, hook_id: int) -> None:
+    base_url = settings.GITEA_URL.rstrip("/")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "DELETE",
+            f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/hooks/{hook_id}",
+        )
+    if resp.status_code not in (200, 204, 404):
+        raise RuntimeError(f"Gitea webhook delete failed: {resp.status_code} {resp.text[:300]}")
+
+
+async def create_gitea_deploy_key(
+    *,
+    owner: str,
+    repo: str,
+    title: str,
+    key: str,
+    read_only: bool,
+) -> dict[str, Any]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/keys",
+            headers={"Content-Type": "application/json"},
+            json={"title": title, "key": key, "read_only": read_only},
+        )
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Gitea deploy key create failed: {resp.status_code} {resp.text[:300]}")
+    data = resp.json()
+    return data if isinstance(data, dict) else {}
+
+
+async def delete_gitea_deploy_key(*, owner: str, repo: str, key_id: int) -> None:
+    base_url = settings.GITEA_URL.rstrip("/")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "DELETE",
+            f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/keys/{key_id}",
+        )
+    if resp.status_code not in (200, 204, 404):
+        raise RuntimeError(f"Gitea deploy key delete failed: {resp.status_code} {resp.text[:300]}")
+
+
 def build_repo_web_url(owner: str, repo_name: str) -> str:
     return f"{gitea_public_base_url()}/{owner}/{repo_name}"
 
@@ -938,6 +1097,615 @@ async def list_repo_pulls_page(
     return items, has_more
 
 
+def _extract_paged_has_more(resp: httpx.Response, data: Any, *, limit: int) -> bool:
+    raw = resp.headers.get("X-HasMore")
+    if raw is None:
+        return isinstance(data, list) and len(data) == limit
+    return str(raw).lower() == "true"
+
+
+async def get_pull_request(
+    *,
+    owner: str,
+    repo: str,
+    index: int,
+) -> dict[str, Any] | None:
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/pulls/{index}"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", api_url)
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"Gitea get pull failed: {resp.status_code} {(resp.text or '')[:200]}"
+        )
+    data = resp.json()
+    return data if isinstance(data, dict) else None
+
+
+async def list_commit_statuses(
+    *,
+    owner: str,
+    repo: str,
+    sha: str,
+    page_size: int = 50,
+    max_pages: int = 10,
+) -> list[dict[str, Any]]:
+    """
+    List commit statuses for a SHA.
+    Returns empty list when statuses endpoint is unavailable for the repo/version.
+    """
+    cleaned = sha.strip()
+    if not cleaned:
+        return []
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}"
+        f"/commits/{quote(cleaned, safe='')}/statuses"
+    )
+    out: list[dict[str, Any]] = []
+    page = 1
+    while page <= max_pages:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await _gitea_request(
+                client,
+                "GET",
+                api_url,
+                params={"page": page, "limit": page_size},
+            )
+        if resp.status_code == 404:
+            return out
+        if resp.status_code != 200:
+            raise RuntimeError(
+                f"Gitea list commit statuses failed: {resp.status_code} {(resp.text or '')[:200]}"
+            )
+        data = resp.json()
+        chunk = [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
+        out.extend(chunk)
+        has_more = _extract_paged_has_more(resp, data, limit=page_size)
+        if not has_more or not chunk:
+            break
+        page += 1
+    return out
+
+
+async def list_repo_action_runs(
+    *,
+    owner: str,
+    repo: str,
+    head_sha: str | None = None,
+    page_size: int = 20,
+    max_pages: int = 5,
+) -> list[dict[str, Any]]:
+    """
+    List repository workflow runs (Gitea Actions).
+    Gracefully returns [] when Actions API is unavailable.
+    """
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/actions/runs"
+    params: dict[str, Any] = {}
+    if (head_sha or "").strip():
+        params["head_sha"] = (head_sha or "").strip()
+    out: list[dict[str, Any]] = []
+    page = 1
+    while page <= max_pages:
+        req_params = dict(params)
+        req_params.update({"page": page, "limit": page_size})
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await _gitea_request(client, "GET", api_url, params=req_params)
+        if resp.status_code == 404:
+            return out
+        if resp.status_code != 200:
+            logger.warning(
+                "Gitea list action runs %s/%s: HTTP %s",
+                owner,
+                repo,
+                resp.status_code,
+            )
+            return out
+        data = resp.json()
+        runs = data.get("workflow_runs") if isinstance(data, dict) else None
+        chunk = [row for row in runs if isinstance(row, dict)] if isinstance(runs, list) else []
+        out.extend(chunk)
+        has_more = _extract_paged_has_more(resp, runs, limit=page_size)
+        if not has_more or not chunk:
+            break
+        page += 1
+    return out
+
+
+async def get_repo_action_job_logs(
+    *,
+    owner: str,
+    repo: str,
+    job_id: int,
+) -> str | None:
+    """
+    Fetch action job logs text. Returns None when endpoint is unavailable.
+    """
+    if job_id <= 0:
+        return None
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}"
+        f"/actions/jobs/{job_id}/logs"
+    )
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await _gitea_request(client, "GET", api_url)
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        logger.warning(
+            "Gitea action job logs %s/%s job=%s: HTTP %s",
+            owner,
+            repo,
+            job_id,
+            resp.status_code,
+        )
+        return None
+    if not resp.content:
+        return ""
+    try:
+        return resp.text
+    except Exception:
+        return None
+
+
+async def retry_repo_action_run(
+    *,
+    owner: str,
+    repo: str,
+    run_id: int,
+) -> bool:
+    """
+    Trigger rerun for a workflow run.
+    Returns False when run/rerun endpoint isn't available.
+    """
+    if run_id <= 0:
+        return False
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}"
+        f"/actions/runs/{run_id}/rerun"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "POST", api_url)
+    if resp.status_code == 404:
+        return False
+    if resp.status_code in (200, 201, 202, 204):
+        return True
+    raise RuntimeError(
+        f"Gitea action rerun failed: {resp.status_code} {(resp.text or '')[:200]}"
+    )
+
+
+async def list_pull_request_files_page(
+    *,
+    owner: str,
+    repo: str,
+    index: int,
+    page: int = 1,
+    limit: int = 50,
+) -> tuple[list[dict[str, Any]], bool]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/pulls/{index}/files"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "GET",
+            api_url,
+            params={"page": page, "limit": limit},
+        )
+    if resp.status_code == 404:
+        return [], False
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"Gitea list pull files failed: {resp.status_code} {(resp.text or '')[:200]}"
+        )
+    data = resp.json()
+    items = data if isinstance(data, list) else []
+    return items, _extract_paged_has_more(resp, data, limit=limit)
+
+
+async def list_pull_request_files(
+    *,
+    owner: str,
+    repo: str,
+    index: int,
+    page_size: int = 50,
+    max_pages: int = 10,
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    page = 1
+    while page <= max_pages:
+        chunk, has_more = await list_pull_request_files_page(
+            owner=owner,
+            repo=repo,
+            index=index,
+            page=page,
+            limit=page_size,
+        )
+        out.extend([row for row in chunk if isinstance(row, dict)])
+        if not has_more or not chunk:
+            break
+        page += 1
+    return out
+
+
+async def list_pull_reviews_page(
+    *,
+    owner: str,
+    repo: str,
+    index: int,
+    page: int = 1,
+    limit: int = 50,
+) -> tuple[list[dict[str, Any]], bool]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/pulls/{index}/reviews"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "GET",
+            api_url,
+            params={"page": page, "limit": limit},
+        )
+    if resp.status_code == 404:
+        return [], False
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"Gitea list pull reviews failed: {resp.status_code} {(resp.text or '')[:200]}"
+        )
+    data = resp.json()
+    items = data if isinstance(data, list) else []
+    return items, _extract_paged_has_more(resp, data, limit=limit)
+
+
+async def list_pull_reviews(
+    *,
+    owner: str,
+    repo: str,
+    index: int,
+    page_size: int = 50,
+    max_pages: int = 10,
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    page = 1
+    while page <= max_pages:
+        chunk, has_more = await list_pull_reviews_page(
+            owner=owner,
+            repo=repo,
+            index=index,
+            page=page,
+            limit=page_size,
+        )
+        out.extend([row for row in chunk if isinstance(row, dict)])
+        if not has_more or not chunk:
+            break
+        page += 1
+    return out
+
+
+async def list_pull_review_comments(
+    *,
+    owner: str,
+    repo: str,
+    index: int,
+    review_id: int,
+) -> list[dict[str, Any]]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}"
+        f"/pulls/{index}/reviews/{review_id}/comments"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", api_url)
+    if resp.status_code == 404:
+        return []
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"Gitea list review comments failed: {resp.status_code} {(resp.text or '')[:200]}"
+        )
+    data = resp.json()
+    return [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
+
+
+async def list_issue_comments(
+    *,
+    owner: str,
+    repo: str,
+    index: int,
+    page_size: int = 50,
+    max_pages: int = 10,
+) -> list[dict[str, Any]]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/issues/{index}/comments"
+    )
+    out: list[dict[str, Any]] = []
+    page = 1
+    while page <= max_pages:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await _gitea_request(
+                client,
+                "GET",
+                api_url,
+                params={"page": page, "limit": page_size},
+            )
+        if resp.status_code == 404:
+            return out
+        if resp.status_code != 200:
+            raise RuntimeError(
+                f"Gitea list issue comments failed: {resp.status_code} {(resp.text or '')[:200]}"
+            )
+        data = resp.json()
+        chunk = [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
+        out.extend(chunk)
+        has_more = _extract_paged_has_more(resp, data, limit=page_size)
+        if not has_more or not chunk:
+            break
+        page += 1
+    return out
+
+
+async def create_pull_review(
+    *,
+    owner: str,
+    repo: str,
+    index: int,
+    event: str,
+    body: str | None = None,
+    commit_id: str | None = None,
+    comments: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/pulls/{index}/reviews"
+    )
+    payload: dict[str, Any] = {"event": event}
+    if body is not None:
+        payload["body"] = body
+    if commit_id:
+        payload["commit_id"] = commit_id
+    if comments:
+        payload["comments"] = comments
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            api_url,
+            headers={"Content-Type": "application/json"},
+            json=payload,
+        )
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(
+            f"Gitea create pull review failed: {resp.status_code} {(resp.text or '')[:300]}"
+        )
+    data = resp.json()
+    return data if isinstance(data, dict) else {}
+
+
+async def create_issue_comment(
+    *,
+    owner: str,
+    repo: str,
+    index: int,
+    body: str,
+) -> dict[str, Any]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/issues/{index}/comments"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            api_url,
+            headers={"Content-Type": "application/json"},
+            json={"body": body},
+        )
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(
+            f"Gitea create issue comment failed: {resp.status_code} {(resp.text or '')[:300]}"
+        )
+    data = resp.json()
+    return data if isinstance(data, dict) else {}
+
+
+async def create_repo_issue(
+    *,
+    owner: str,
+    repo: str,
+    title: str,
+    body: str | None = None,
+    labels: list[str] | None = None,
+    assignees: list[str] | None = None,
+    milestone: str | None = None,
+) -> dict[str, Any]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/issues"
+    payload: dict[str, Any] = {"title": title.strip()}
+    if body is not None:
+        payload["body"] = body
+    if labels is not None:
+        payload["labels"] = labels
+    if assignees is not None:
+        payload["assignees"] = assignees
+    if milestone:
+        payload["milestone"] = milestone
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            api_url,
+            headers={"Content-Type": "application/json"},
+            json=payload,
+        )
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Gitea create issue failed: {resp.status_code} {(resp.text or '')[:300]}")
+    data = resp.json()
+    return data if isinstance(data, dict) else {}
+
+
+async def update_repo_issue(
+    *,
+    owner: str,
+    repo: str,
+    index: int,
+    title: str | None = None,
+    body: str | None = None,
+    state: str | None = None,
+    labels: list[str] | None = None,
+    assignees: list[str] | None = None,
+    milestone: str | None = None,
+) -> dict[str, Any]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/issues/{index}"
+    payload: dict[str, Any] = {}
+    if title is not None:
+        payload["title"] = title
+    if body is not None:
+        payload["body"] = body
+    if state is not None:
+        payload["state"] = state
+    if labels is not None:
+        payload["labels"] = labels
+    if assignees is not None:
+        payload["assignees"] = assignees
+    if milestone is not None:
+        payload["milestone"] = milestone
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "PATCH",
+            api_url,
+            headers={"Content-Type": "application/json"},
+            json=payload,
+        )
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Gitea update issue failed: {resp.status_code} {(resp.text or '')[:300]}")
+    data = resp.json()
+    return data if isinstance(data, dict) else {}
+
+
+async def add_issue_reaction(
+    *,
+    owner: str,
+    repo: str,
+    index: int,
+    content: str,
+) -> dict[str, Any]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}"
+        f"/issues/{index}/reactions"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            api_url,
+            headers={"Content-Type": "application/json"},
+            json={"content": content},
+        )
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Gitea add issue reaction failed: {resp.status_code} {(resp.text or '')[:300]}")
+    data = resp.json()
+    return data if isinstance(data, dict) else {}
+
+
+async def merge_pull_request(
+    *,
+    owner: str,
+    repo: str,
+    index: int,
+    method: str = "merge",
+    commit_title: str | None = None,
+    commit_message: str | None = None,
+    delete_branch_after_merge: bool = True,
+    force_merge: bool = False,
+    head_commit_id: str | None = None,
+) -> dict[str, Any]:
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/pulls/{index}/merge"
+    )
+    payload: dict[str, Any] = {
+        "Do": method,
+        "delete_branch_after_merge": delete_branch_after_merge,
+        "force_merge": force_merge,
+    }
+    if commit_title:
+        payload["MergeTitleField"] = commit_title
+    if commit_message:
+        payload["MergeMessageField"] = commit_message
+    if head_commit_id:
+        payload["head_commit_id"] = head_commit_id
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            api_url,
+            headers={"Content-Type": "application/json"},
+            json=payload,
+        )
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code == 200:
+        body = (resp.text or "").strip() or "Pull request merged"
+        return {"merged": True, "message": body}
+    if resp.status_code in (405, 409, 423):
+        body = (resp.text or "").strip()
+        return {"merged": False, "message": body or "Pull request cannot be merged right now"}
+    raise RuntimeError(
+        f"Gitea merge pull failed: {resp.status_code} {(resp.text or '')[:300]}"
+    )
+
+
+async def get_pull_request_diff_text(
+    *,
+    owner: str,
+    repo: str,
+    index: int,
+) -> str:
+    # Non-API endpoint on the same Gitea host.
+    base_url = settings.GITEA_URL.rstrip("/")
+    diff_url = f"{base_url}/{gitea_owner_path(owner)}/{quote(repo, safe='')}/pulls/{index}.diff"
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", diff_url)
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code == 404:
+        return ""
+    if resp.status_code != 200:
+        logger.warning(
+            "Gitea pull diff %s/%s#%s: HTTP %s",
+            owner,
+            repo,
+            index,
+            resp.status_code,
+        )
+        return ""
+    return resp.text or ""
+
+
 async def compare_branches(
     *,
     owner: str,
@@ -1053,6 +1821,32 @@ async def get_commit_diff_text(
         return ""
     logger.warning("Gitea commit diff %s/%s %s: HTTP %s", owner, repo, cleaned, resp.status_code)
     return ""
+
+
+async def commit_exists(
+    *,
+    owner: str,
+    repo: str,
+    sha: str,
+) -> bool:
+    cleaned = (sha or "").strip()
+    if not cleaned:
+        return False
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}"
+        f"/git/commits/{quote(cleaned, safe='')}"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", api_url)
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code == 404:
+        return False
+    if resp.status_code != 200:
+        logger.warning("Gitea commit exists %s/%s %s: HTTP %s", owner, repo, cleaned, resp.status_code)
+        return False
+    return True
 
 
 async def create_pull_request(
@@ -1194,4 +1988,178 @@ async def get_repo_file_content(
 
     raw = base64.b64decode(content_b64)
     return raw.decode("utf-8", errors="replace")
+
+
+async def get_repo_file_blame(
+    *,
+    owner: str,
+    repo: str,
+    filepath: str,
+    ref: str | None = None,
+) -> list[dict[str, Any]] | None:
+    """
+    Возвращает blame-чанки для файла:
+    GET /api/v1/repos/{owner}/{repo}/blame/{filepath}
+    """
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    cleaned = filepath.strip().strip("/")
+    if not cleaned or ".." in cleaned.split("/"):
+        raise ValueError("Invalid filepath")
+
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}"
+        f"/blame/{quote(cleaned, safe='/')}"
+    )
+    params: dict[str, str] = {}
+    if ref:
+        params["ref"] = ref
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", api_url, params=params or None)
+
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code == 404:
+        return None
+    if resp.status_code in (409, 422):
+        return []
+    if resp.status_code != 200:
+        logger.warning("Gitea blame %s/%s %s: %s", owner, repo, cleaned, resp.status_code)
+        return None
+
+    data = resp.json()
+    if not isinstance(data, list):
+        return []
+    return [row for row in data if isinstance(row, dict)]
+
+
+_GITEA_ROLE_MAP: dict[str, str] = {
+    "read": "read",
+    "write": "write",
+    "admin": "admin",
+}
+
+
+def _normalize_gitea_collaborator_permission(role: str) -> str:
+    cleaned = (role or "read").strip().lower()
+    return _GITEA_ROLE_MAP.get(cleaned, "read")
+
+
+def _gitea_permission_to_role(permission: str | None) -> str:
+    if not permission:
+        return "read"
+    cleaned = permission.strip().lower()
+    if cleaned in {"owner", "admin"}:
+        return "admin"
+    if cleaned == "write":
+        return "write"
+    return "read"
+
+
+async def list_repo_collaborators(
+    *,
+    owner: str,
+    repo: str,
+) -> list[dict[str, Any]]:
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/collaborators"
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", api_url)
+    if resp.status_code == 404:
+        return []
+    if resp.status_code != 200:
+        raise RuntimeError(f"Gitea list collaborators failed: {resp.status_code} {resp.text[:200]}")
+    data = resp.json()
+    return data if isinstance(data, list) else []
+
+
+async def get_repo_collaborator_permission(
+    *,
+    owner: str,
+    repo: str,
+    username: str,
+) -> str | None:
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    cleaned = username.strip()
+    if not cleaned:
+        return None
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}"
+        f"/collaborators/{gitea_owner_path(cleaned)}"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "GET", api_url)
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        logger.warning("Gitea get collaborator %s: %s", cleaned, resp.status_code)
+        return None
+    data = resp.json()
+    if isinstance(data, dict):
+        perm = data.get("permissions") or {}
+        if perm.get("admin"):
+            return "admin"
+        if perm.get("push"):
+            return "write"
+        if perm.get("pull"):
+            return "read"
+        return _gitea_permission_to_role(data.get("role"))
+    return None
+
+
+async def set_repo_collaborator(
+    *,
+    owner: str,
+    repo: str,
+    username: str,
+    permission: str,
+) -> None:
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    cleaned = username.strip()
+    if not cleaned:
+        raise ValueError("Invalid username")
+    perm = _normalize_gitea_collaborator_permission(permission)
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}"
+        f"/collaborators/{gitea_owner_path(cleaned)}"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "PUT",
+            api_url,
+            headers={"Content-Type": "application/json"},
+            json={"permission": perm},
+        )
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code not in (200, 201, 204):
+        raise RuntimeError(f"Gitea set collaborator failed: {resp.status_code} {resp.text[:300]}")
+
+
+async def remove_repo_collaborator(
+    *,
+    owner: str,
+    repo: str,
+    username: str,
+) -> None:
+    owner, repo = normalize_gitea_owner_repo(owner, repo)
+    cleaned = username.strip()
+    if not cleaned:
+        raise ValueError("Invalid username")
+    base_url = settings.GITEA_URL.rstrip("/")
+    api_url = (
+        f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}"
+        f"/collaborators/{gitea_owner_path(cleaned)}"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(client, "DELETE", api_url)
+    if _gitea_response_unauthorized(resp):
+        raise GiteaAuthError(gitea_auth_error_message())
+    if resp.status_code not in (200, 204, 404):
+        raise RuntimeError(f"Gitea remove collaborator failed: {resp.status_code} {resp.text[:300]}")
 

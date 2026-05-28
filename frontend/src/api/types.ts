@@ -31,6 +31,7 @@ export interface UserRead {
   avatar_url: string | null;
   avatar_display_mode: "cover" | "contain" | "fill" | "scale-down";
   allow_assistant_grading: boolean;
+  can_switch_student_mode?: boolean;
   created_at: string;
   last_login: string | null;
 }

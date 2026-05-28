@@ -302,9 +302,12 @@ class StudentRepoCommitsRead(BaseModel):
 class StudentRepoIssueRead(BaseModel):
     number: int
     title: str
+    body: str | None = None
     state: str
     author_name: str | None = None
     labels: list[str] = Field(default_factory=list)
+    assignees: list[str] = Field(default_factory=list)
+    milestone: str | None = None
     comments_count: int = 0
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -314,6 +317,30 @@ class StudentRepoIssuesRead(BaseModel):
     issues: list[StudentRepoIssueRead] = Field(default_factory=list)
     page: int = 1
     has_more: bool = False
+
+
+class StudentRepoIssueUpsertBody(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    body: str | None = Field(default=None, max_length=10000)
+    labels: list[str] = Field(default_factory=list)
+    assignees: list[str] = Field(default_factory=list)
+    milestone: str | None = Field(default=None, max_length=255)
+
+
+class StudentRepoIssuePatchBody(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    body: str | None = Field(default=None, max_length=10000)
+    state: str | None = Field(default=None, pattern="^(open|closed)$")
+    labels: list[str] | None = None
+    assignees: list[str] | None = None
+    milestone: str | None = Field(default=None, max_length=255)
+
+
+class StudentRepoReactionBody(BaseModel):
+    content: str = Field(
+        pattern="^(\\+1|-1|laugh|confused|heart|hooray|rocket|eyes)$",
+        description="+1|-1|laugh|confused|heart|hooray|rocket|eyes",
+    )
 
 
 class StudentRepoPullRead(BaseModel):
@@ -329,6 +356,121 @@ class StudentRepoPullRead(BaseModel):
     commits_count: int | None = None
 
 
+class StudentRepoPullFileRead(BaseModel):
+    filename: str
+    status: str | None = None
+    additions: int = 0
+    deletions: int = 0
+    changes: int = 0
+    previous_filename: str | None = None
+
+
+class StudentRepoPullReviewCommentRead(BaseModel):
+    id: int
+    review_id: int | None = None
+    body: str
+    path: str | None = None
+    position: int | None = None
+    original_position: int | None = None
+    user_login: str | None = None
+    user_name: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class StudentRepoPullThreadRead(BaseModel):
+    path: str
+    position: int | None = None
+    original_position: int | None = None
+    comments: list[StudentRepoPullReviewCommentRead] = Field(default_factory=list)
+
+
+class StudentRepoPullReviewRead(BaseModel):
+    id: int
+    state: str | None = None
+    body: str | None = None
+    dismissed: bool = False
+    comments_count: int = 0
+    user_login: str | None = None
+    user_name: str | None = None
+    submitted_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class StudentRepoPullDiscussionCommentRead(BaseModel):
+    id: int
+    body: str
+    user_login: str | None = None
+    user_name: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class StudentRepoPullCheckItemRead(BaseModel):
+    id: str
+    name: str
+    source: str = Field(description="commit_status | action_run")
+    state: str = Field(description="queued | running | success | failure | cancelled | unknown")
+    description: str | None = None
+    details_url: str | None = None
+    run_id: int | None = None
+    job_id: int | None = None
+    can_retry: bool = False
+    has_logs: bool = False
+
+
+class StudentRepoPullChecksRead(BaseModel):
+    can_merge: bool = False
+    mergeable: bool | None = None
+    conflict_state: str = Field(description="clean | conflicting | unknown")
+    blocked_reason: str | None = None
+    policy_reasons: list[str] = Field(default_factory=list)
+    required_approvals: int = 0
+    approvals: int = 0
+    required_contexts: list[str] = Field(default_factory=list)
+    successful_contexts: list[str] = Field(default_factory=list)
+    missing_required_contexts: list[str] = Field(default_factory=list)
+    required_reviewer_logins: list[str] = Field(default_factory=list)
+    approved_reviewer_logins: list[str] = Field(default_factory=list)
+    missing_required_reviewer_logins: list[str] = Field(default_factory=list)
+    items: list[StudentRepoPullCheckItemRead] = Field(default_factory=list)
+
+
+class StudentRepoPullDetailRead(BaseModel):
+    number: int
+    title: str
+    state: str
+    body: str | None = None
+    author_name: str | None = None
+    author_login: str | None = None
+    head_branch: str | None = None
+    base_branch: str | None = None
+    head_sha: str | None = None
+    base_sha: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    merged: bool | None = None
+    mergeable: bool | None = None
+    draft: bool | None = None
+    comments_count: int = 0
+    review_comments_count: int = 0
+    commits_count: int | None = None
+    changed_files_count: int | None = None
+    web_url: str | None = None
+    diff_url: str | None = None
+    patch_url: str | None = None
+
+
+class StudentRepoPullDetailBundleRead(BaseModel):
+    pull: StudentRepoPullDetailRead
+    diff: str = ""
+    files: list[StudentRepoPullFileRead] = Field(default_factory=list)
+    reviews: list[StudentRepoPullReviewRead] = Field(default_factory=list)
+    threads: list[StudentRepoPullThreadRead] = Field(default_factory=list)
+    discussion: list[StudentRepoPullDiscussionCommentRead] = Field(default_factory=list)
+    checks: StudentRepoPullChecksRead
+
+
 class StudentRepoCreatePullBody(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     head: str = Field(min_length=1, max_length=200)
@@ -336,9 +478,113 @@ class StudentRepoCreatePullBody(BaseModel):
     body: str | None = Field(default=None, max_length=5000)
 
 
+class StudentRepoCreatePullReviewCommentBody(BaseModel):
+    path: str = Field(min_length=1, max_length=500)
+    body: str = Field(min_length=1, max_length=5000)
+    new_position: int | None = Field(default=None, ge=1)
+    old_position: int | None = Field(default=None, ge=1)
+
+
+class StudentRepoCreatePullReviewBody(BaseModel):
+    event: str = Field(
+        default="comment",
+        pattern="^(comment|approve|request_changes)$",
+        description="comment | approve | request_changes",
+    )
+    body: str | None = Field(default=None, max_length=5000)
+    comments: list[StudentRepoCreatePullReviewCommentBody] = Field(default_factory=list)
+
+
+class StudentRepoCreatePullDiscussionCommentBody(BaseModel):
+    body: str = Field(min_length=1, max_length=5000)
+
+
+class StudentRepoMergePullBody(BaseModel):
+    method: str = Field(default="merge", pattern="^(merge|squash|rebase)$")
+    commit_title: str | None = Field(default=None, max_length=200)
+    commit_message: str | None = Field(default=None, max_length=5000)
+    delete_branch_after_merge: bool = True
+    force_merge: bool = False
+    head_commit_id: str | None = Field(default=None, min_length=4, max_length=80)
+
+
+class StudentRepoMergeResultRead(BaseModel):
+    merged: bool
+    message: str | None = None
+
+
+class StudentRepoPullCheckLogRead(BaseModel):
+    id: str
+    log: str
+    truncated: bool = False
+
+
+class StudentRepoPullCheckRetryRead(BaseModel):
+    id: str
+    accepted: bool
+    message: str | None = None
+
+
 class StudentRepoCommitDiffRead(BaseModel):
     sha: str
     diff: str
+
+
+class StudentRepoFileHistoryCommitRead(BaseModel):
+    sha: str
+    message: str | None = None
+    author_name: str | None = None
+    author_login: str | None = None
+    authored_at: datetime | None = None
+    web_url: str | None = None
+
+
+class StudentRepoFileHistoryRead(BaseModel):
+    path: str
+    branch: str
+    page: int = 1
+    has_more: bool = False
+    commits: list[StudentRepoFileHistoryCommitRead] = Field(default_factory=list)
+
+
+class StudentRepoCompareFileRead(BaseModel):
+    filename: str
+    previous_filename: str | None = None
+    status: str | None = None
+    additions: int = 0
+    deletions: int = 0
+    changes: int = 0
+    is_binary: bool = False
+    too_large: bool = False
+    truncated: bool = False
+
+
+class StudentRepoCompareRead(BaseModel):
+    base: str
+    head: str
+    status: str | None = None
+    ahead_by: int = 0
+    behind_by: int = 0
+    total_commits: int = 0
+    files: list[StudentRepoCompareFileRead] = Field(default_factory=list)
+
+
+class StudentRepoBlameChunkRead(BaseModel):
+    sha: str
+    message: str | None = None
+    author_name: str | None = None
+    author_login: str | None = None
+    authored_at: datetime | None = None
+    web_url: str | None = None
+    start_line: int
+    end_line: int
+    line_count: int = 1
+
+
+class StudentRepoBlameRead(BaseModel):
+    path: str
+    branch: str
+    chunks: list[StudentRepoBlameChunkRead] = Field(default_factory=list)
 
 
 class StudentRepoPullsRead(BaseModel):

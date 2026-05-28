@@ -143,6 +143,7 @@ volumes/
 docker-compose.override.yml
 docker-compose.*.yml
 !docker-compose.yml
+!docker-compose.prod.yml
 
 # ============================================
 # Database
