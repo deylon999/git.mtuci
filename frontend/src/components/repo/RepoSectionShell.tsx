@@ -185,7 +185,7 @@ export default function RepoSectionShell({
             color: theme.text,
           }}
         >
-          Репозиторий заблокирован администратором. Доступно только чтение.
+          {t("repo.settings.blockedReadOnly")}
         </div>
       ) : null}
 

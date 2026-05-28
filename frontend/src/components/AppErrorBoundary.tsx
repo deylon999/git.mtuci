@@ -2,6 +2,8 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
 import { getTheme } from "../theme";
+import { translate } from "../i18n";
+import { getI18nLocale } from "../i18n/runtime";
 
 interface Props {
   children: ReactNode;
@@ -35,7 +37,9 @@ export default class AppErrorBoundary extends Component<Props, State> {
 
     const isDark = this.props.isDarkTheme ?? false;
     const theme = getTheme(isDark);
-    const message = this.state.error.message || "Unknown error";
+    const locale = getI18nLocale();
+    const t = (key: string) => translate(locale, key);
+    const message = this.state.error.message || t("appError.unknown");
 
     return (
       <div
@@ -43,9 +47,9 @@ export default class AppErrorBoundary extends Component<Props, State> {
         style={{ backgroundColor: theme.bg2, color: theme.text }}
       >
         <AlertTriangle className="h-10 w-10" style={{ color: theme.danger }} />
-        <h1 className="text-lg font-semibold">Что-то пошло не так</h1>
+        <h1 className="text-lg font-semibold">{t("appError.title")}</h1>
         <p className="text-sm max-w-md" style={{ color: theme.text2 }}>
-          Страница не смогла отобразиться. Попробуйте обновить или вернитесь на главную.
+          {t("appError.hint")}
         </p>
         <p
           className="text-xs font-mono max-w-lg break-all rounded-lg border px-3 py-2"
@@ -60,14 +64,14 @@ export default class AppErrorBoundary extends Component<Props, State> {
             className="rounded-lg px-4 py-2 text-sm font-medium text-white"
             style={{ backgroundColor: theme.accent }}
           >
-            Обновить страницу
+            {t("appError.reload")}
           </button>
           <Link
             to="/"
             className="rounded-lg border px-4 py-2 text-sm font-medium"
             style={{ borderColor: theme.border, color: theme.text2 }}
           >
-            На главную
+            {t("appError.home")}
           </Link>
         </div>
       </div>

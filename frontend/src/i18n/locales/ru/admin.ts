@@ -233,9 +233,9 @@ export const adminRu = {
     userFew: "Пользователя",
     userMany: "Пользователей",
     pendingReview: "На проверке",
-    commitOne: "Коммит",
-    commitFew: "Коммита",
-    commitMany: "Коммитов",
+    commitOne: "Commit",
+    commitFew: "Commitа",
+    commitMany: "Commits",
     statusBlocked: "Заблокирован",
     statusActive: "Активен",
     oldPasswordLabel: "Старый пароль",
@@ -248,7 +248,7 @@ export const adminRu = {
     logWebhooks: "Webhooks",
     repo: { one: "Репозиторий", few: "Репозитория", many: "Репозиториев" },
     user: { one: "Пользователь", few: "Пользователя", many: "Пользователей" },
-    commit: { one: "Коммит", few: "Коммита", many: "Коммитов" },
+    commit: { one: "Commit", few: "Commitа", many: "Commits" },
   },
   footer: {
     reportBug: "Сообщить об ошибке",
@@ -272,3 +272,4 @@ export const adminRu = {
     empty: "Нет уведомлений",
   },
 };
+

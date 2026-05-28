@@ -354,7 +354,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                 style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
               />
               <p className="text-[11px] mt-1" style={{ color: theme.text3 }}>
-                {readOnly ? "Read-only" : "Renames repository (also in Gitea when available)."}
+                {readOnly ? t("repo.settings.readOnly") : t("repo.settings.renameHint")}
               </p>
             </PlaceholderBlock>
 
@@ -380,7 +380,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                     setError(null);
                     try {
                       await updateRepository(repoId, { name: name.trim(), description });
-                      toast.success("Saved");
+                      toast.success(t("repo.settings.saved"));
                       // First update local meta quickly for UI responsiveness.
                       if (workspace.meta) {
                         const nextMeta: StudentRepoMeta = {
@@ -395,8 +395,8 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                       await refreshSummary();
                       await syncMetaFromList();
                     } catch (e) {
-                      setError(e instanceof Error ? e.message : "Failed to save settings");
-                      toast.error("Save failed");
+                      setError(e instanceof Error ? e.message : t("repo.settings.saveFailed"));
+                      toast.error(t("repo.settings.saveFailedToast"));
                     } finally {
                       setSavingGeneral(false);
                     }
@@ -409,9 +409,9 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                   color: theme.success,
                   opacity: readOnly || savingGeneral || savingVisibility || deleting || !dirtyGeneral ? 0.55 : 1,
                 }}
-                title={!dirtyGeneral ? "No changes" : undefined}
+                title={!dirtyGeneral ? t("repo.settings.noChanges") : undefined}
               >
-                {savingGeneral ? "Saving…" : "Save changes"}
+                {savingGeneral ? t("repo.settings.saving") : t("repo.settings.saveChanges")}
               </button>
             </div>
 
@@ -444,10 +444,10 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
           <>
             <h2 className="text-base font-semibold flex items-center gap-2" style={{ color: theme.text }}>
               <Users className="h-4 w-4" />
-              Access
+              {t("repo.settings.sectionAccess")}
             </h2>
 
-            <PlaceholderBlock theme={theme} title="Visibility">
+            <PlaceholderBlock theme={theme} title={t("repo.settings.labelVisibility")}>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -491,7 +491,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                       setError(null);
                       try {
                         await updateRepository(repoId, { repo_type: visibility });
-                        toast.success("Visibility updated");
+                        toast.success(t("repo.settings.visibilityUpdated"));
                         if (workspace.meta) {
                           const nextMeta: StudentRepoMeta = {
                             ...workspace.meta,
@@ -503,8 +503,8 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                         await refreshSummary();
                         await syncMetaFromList();
                       } catch (e) {
-                        setError(e instanceof Error ? e.message : "Failed to update visibility");
-                        toast.error("Update failed");
+                        setError(e instanceof Error ? e.message : t("repo.settings.visibilityUpdateFailed"));
+                        toast.error(t("repo.settings.updateFailed"));
                       } finally {
                         setSavingVisibility(false);
                       }
@@ -517,14 +517,14 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                     color: theme.success,
                     opacity: readOnly || savingGeneral || savingVisibility || deleting || !dirtyVisibility ? 0.55 : 1,
                   }}
-                  title={!dirtyVisibility ? "No changes" : undefined}
+                  title={!dirtyVisibility ? t("repo.settings.noChanges") : undefined}
                 >
-                  {savingVisibility ? "Updating…" : "Update visibility"}
+                  {savingVisibility ? t("repo.settings.updating") : t("repo.settings.updateVisibility")}
                 </button>
               </div>
             </PlaceholderBlock>
 
-            <PlaceholderBlock theme={theme} title="Owner">
+            <PlaceholderBlock theme={theme} title={t("repo.settings.owner")}>
               <p className="text-xs flex items-center gap-1.5" style={{ color: theme.text3 }}>
                 <Lock className="h-3.5 w-3.5" />
                 {tp("repo.settings.ownerLabel", { name: ownerName })}
@@ -548,12 +548,12 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
             <h2 className="text-base font-semibold" style={{ color: theme.text }}>
               Branches
             </h2>
-            <PlaceholderBlock theme={theme} title="Default branch">
+            <PlaceholderBlock theme={theme} title={t("repo.settings.labelDefaultBranch")}>
               <p className="text-sm font-mono" style={{ color: theme.accent2 }}>
                 {defaultBranch}
               </p>
             </PlaceholderBlock>
-            <PlaceholderBlock theme={theme} title="Branch rules">
+            <PlaceholderBlock theme={theme} title={t("repo.settings.branchRules")}>
               <div className="space-y-2">
                 <input
                   value={branchRule?.branch_pattern ?? "main"}
@@ -581,14 +581,14 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                 <input
                   value={statusContexts}
                   onChange={(e) => setStatusContexts(e.target.value)}
-                  placeholder="build,test,lint"
+                  placeholder={t("repo.settings.statusChecksPlaceholder")}
                   className="w-full rounded border px-2 py-1 text-xs"
                   style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
                 />
                 <input
                   value={requiredReviewers}
                   onChange={(e) => setRequiredReviewers(e.target.value)}
-                  placeholder="required reviewers (comma-separated logins)"
+                  placeholder={t("repo.settings.requiredReviewersPlaceholder")}
                   className="w-full rounded border px-2 py-1 text-xs"
                   style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
                 />
@@ -610,9 +610,9 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                         });
                         setBranchRule(next);
                         setRequiredReviewers((next.required_reviewer_logins ?? []).join(","));
-                        toast.success("Branch protection saved");
+                        toast.success(t("repo.settings.branchProtectionSaved"));
                       } catch (e) {
-                        setError(e instanceof Error ? e.message : "Failed");
+                        setError(e instanceof Error ? e.message : t("repo.settings.actionFailed"));
                       }
                     })();
                   }}
@@ -631,12 +631,12 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
             <h2 className="text-base font-semibold" style={{ color: theme.text }}>
               Webhooks
             </h2>
-            <PlaceholderBlock theme={theme} title="Active hooks">
+            <PlaceholderBlock theme={theme} title={t("repo.settings.activeHooks")}>
               <div className="space-y-2">
                 <input
                   value={webhookUrl}
                   onChange={(e) => setWebhookUrl(e.target.value)}
-                  placeholder="https://example/hooks"
+                  placeholder={t("repo.settings.webhookUrlPlaceholder")}
                   className="w-full rounded border px-2 py-1 text-xs"
                   style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
                 />
@@ -651,7 +651,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                         setWebhooks((p) => [created, ...p]);
                         setWebhookUrl("");
                       } catch (e) {
-                        setError(e instanceof Error ? e.message : "Failed");
+                        setError(e instanceof Error ? e.message : t("repo.settings.actionFailed"));
                       }
                     })();
                   }}
@@ -662,9 +662,9 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                   <div key={w.id} className="text-xs flex items-center justify-between" style={{ color: theme.text2 }}>
                     <span>{w.url}</span>
                     <span className="space-x-2">
-                      <button type="button" onClick={() => void testWebhook(repoId!, w.id).then((x) => setWebhooks((arr) => arr.map((i) => (i.id === x.id ? x : i))))}>Test</button>
-                      <button type="button" onClick={() => void redeliverWebhook(repoId!, w.id).then((x) => setWebhooks((arr) => arr.map((i) => (i.id === x.id ? x : i))))}>Redeliver</button>
-                      <button type="button" onClick={() => void deleteWebhook(repoId!, w.id).then(() => setWebhooks((arr) => arr.filter((i) => i.id !== w.id)))}>Delete</button>
+                      <button type="button" onClick={() => void testWebhook(repoId!, w.id).then((x) => setWebhooks((arr) => arr.map((i) => (i.id === x.id ? x : i))))}>{t("repo.settings.test")}</button>
+                      <button type="button" onClick={() => void redeliverWebhook(repoId!, w.id).then((x) => setWebhooks((arr) => arr.map((i) => (i.id === x.id ? x : i))))}>{t("repo.settings.redeliver")}</button>
+                      <button type="button" onClick={() => void deleteWebhook(repoId!, w.id).then(() => setWebhooks((arr) => arr.filter((i) => i.id !== w.id)))}>{t("repo.settings.delete")}</button>
                     </span>
                   </div>
                 ))}
@@ -678,10 +678,10 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
             <h2 className="text-base font-semibold" style={{ color: theme.text }}>
               Deploy keys
             </h2>
-            <PlaceholderBlock theme={theme} title="SSH keys">
+            <PlaceholderBlock theme={theme} title={t("repo.settings.sshKeys")}>
               <div className="space-y-2">
-                <input value={deployTitle} onChange={(e) => setDeployTitle(e.target.value)} placeholder="CI key" className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
-                <textarea value={deployKey} onChange={(e) => setDeployKey(e.target.value)} placeholder="ssh-ed25519 AAAA..." rows={3} className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={deployTitle} onChange={(e) => setDeployTitle(e.target.value)} placeholder={t("repo.settings.deployKeyTitlePlaceholder")} className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <textarea value={deployKey} onChange={(e) => setDeployKey(e.target.value)} placeholder={t("repo.settings.deployKeyValuePlaceholder")} rows={3} className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
                 <button
                   type="button"
                   disabled={readOnly || !repoId || !deployTitle.trim() || !deployKey.trim()}
@@ -694,7 +694,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                         setDeployTitle("");
                         setDeployKey("");
                       } catch (e) {
-                        setError(e instanceof Error ? e.message : "Failed");
+                        setError(e instanceof Error ? e.message : t("repo.settings.actionFailed"));
                       }
                     })();
                   }}
@@ -704,7 +704,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                 {deployKeys.map((k) => (
                   <div key={k.id} className="text-xs flex items-center justify-between" style={{ color: theme.text2 }}>
                     <span>{k.title}</span>
-                    <button type="button" onClick={() => void deleteDeployKey(repoId!, k.id).then(() => setDeployKeys((arr) => arr.filter((i) => i.id !== k.id)))}>Delete</button>
+                    <button type="button" onClick={() => void deleteDeployKey(repoId!, k.id).then(() => setDeployKeys((arr) => arr.filter((i) => i.id !== k.id)))}>{t("repo.settings.delete")}</button>
                   </div>
                 ))}
               </div>
@@ -717,7 +717,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
             <h2 className="text-base font-semibold" style={{ color: theme.text }}>
               Security
             </h2>
-            <PlaceholderBlock theme={theme} title="Policies">
+            <PlaceholderBlock theme={theme} title={t("repo.settings.policies")}>
               <ul className="text-sm space-y-2" style={{ color: theme.text2 }}>
                 <li className="flex items-center gap-2">
                   <Globe className="h-3.5 w-3.5 shrink-0" />
@@ -729,10 +729,10 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                 </li>
               </ul>
             </PlaceholderBlock>
-            <PlaceholderBlock theme={theme} title="Repository secrets">
+            <PlaceholderBlock theme={theme} title={t("repo.settings.repoSecrets")}>
               <div className="space-y-2">
-                <input value={secretName} onChange={(e) => setSecretName(e.target.value)} placeholder="NPM_TOKEN" className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
-                <input value={secretValue} onChange={(e) => setSecretValue(e.target.value)} placeholder="secret value" className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={secretName} onChange={(e) => setSecretName(e.target.value)} placeholder={t("repo.settings.secretNamePlaceholder")} className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={secretValue} onChange={(e) => setSecretValue(e.target.value)} placeholder={t("repo.settings.secretValuePlaceholder")} className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
                 <button
                   type="button"
                   disabled={readOnly || !repoId || !secretName.trim() || !secretValue.trim()}
@@ -744,7 +744,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                         setSecrets((arr) => [up, ...arr.filter((x) => x.id !== up.id)]);
                         setSecretValue("");
                       } catch (e) {
-                        setError(e instanceof Error ? e.message : "Failed");
+                        setError(e instanceof Error ? e.message : t("repo.settings.actionFailed"));
                       }
                     })();
                   }}
@@ -754,15 +754,15 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                 {secrets.map((s) => (
                   <div key={s.id} className="text-xs flex items-center justify-between" style={{ color: theme.text2 }}>
                     <span>{s.name}</span>
-                    <button type="button" onClick={() => void deleteRepoSecret(repoId!, s.id).then(() => setSecrets((arr) => arr.filter((i) => i.id !== s.id)))}>Delete</button>
+                    <button type="button" onClick={() => void deleteRepoSecret(repoId!, s.id).then(() => setSecrets((arr) => arr.filter((i) => i.id !== s.id)))}>{t("repo.settings.delete")}</button>
                   </div>
                 ))}
               </div>
             </PlaceholderBlock>
 
-            <PlaceholderBlock theme={theme} title="Danger zone">
+            <PlaceholderBlock theme={theme} title={t("repo.settings.dangerZone")}>
               <p className="text-sm" style={{ color: theme.text2 }}>
-                Delete repository permanently. Type <span className="font-mono">{meta?.name ?? "repo"}</span> to confirm.
+                {tp("repo.settings.deleteRepoHint", { name: meta?.name ?? "repo" })}
               </p>
               <div className="flex flex-col sm:flex-row gap-2 mt-3">
                 <input
@@ -771,7 +771,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                   disabled={readOnly || savingGeneral || savingVisibility || deleting}
                   className="flex-1 rounded-lg border px-3 py-2 text-sm"
                   style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
-                  placeholder="Type repo name…"
+                  placeholder={t("repo.settings.typeRepoName")}
                 />
                 <button
                   type="button"
@@ -790,11 +790,11 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                       setError(null);
                       try {
                         await deleteRepository(repoId);
-                        toast.success("Repository deleted");
+                        toast.success(t("repo.settings.repoDeleted"));
                         navigate("/repositories", { replace: true });
                       } catch (e) {
-                        setError(e instanceof Error ? e.message : "Failed to delete repository");
-                        toast.error("Delete failed");
+                        setError(e instanceof Error ? e.message : t("repo.settings.deleteRepoFailed"));
+                        toast.error(t("repo.settings.deleteFailed"));
                       } finally {
                         setDeleting(false);
                       }
@@ -815,7 +815,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                         : 1,
                   }}
                 >
-                  {deleting ? "Deleting…" : "Delete repository"}
+                  {deleting ? t("repo.settings.deleting") : t("repo.settings.deleteRepository")}
                 </button>
               </div>
             </PlaceholderBlock>
@@ -829,17 +829,17 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
               Releases / Tags / Packages
             </h2>
 
-            <PlaceholderBlock theme={theme} title="Create release">
+            <PlaceholderBlock theme={theme} title={t("repo.settings.createRelease")}>
               <div className="grid gap-2 md:grid-cols-2">
-                <input value={releaseTag} onChange={(e) => setReleaseTag(e.target.value)} placeholder="v1.0.0" className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
-                <input value={releaseName} onChange={(e) => setReleaseName(e.target.value)} placeholder="First stable release" className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
-                <input value={releaseBranch} onChange={(e) => setReleaseBranch(e.target.value)} placeholder="main" className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={releaseTag} onChange={(e) => setReleaseTag(e.target.value)} placeholder={t("repo.settings.releaseTagPlaceholder")} className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={releaseName} onChange={(e) => setReleaseName(e.target.value)} placeholder={t("repo.settings.releaseNamePlaceholder")} className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={releaseBranch} onChange={(e) => setReleaseBranch(e.target.value)} placeholder={t("repo.settings.defaultBranchPlaceholder")} className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
                 <label className="inline-flex items-center gap-2 text-xs" style={{ color: theme.text2 }}>
                   <input type="checkbox" checked={autoChangelog} onChange={(e) => setAutoChangelog(e.target.checked)} />
-                  <Sparkles className="h-3 w-3" /> Auto changelog
+                  <Sparkles className="h-3 w-3" /> {t("repo.settings.autoChangelog")}
                 </label>
               </div>
-              <textarea value={releaseBody} onChange={(e) => setReleaseBody(e.target.value)} rows={4} placeholder="Release notes" className="mt-2 w-full rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+              <textarea value={releaseBody} onChange={(e) => setReleaseBody(e.target.value)} rows={4} placeholder={t("repo.settings.releaseNotesPlaceholder")} className="mt-2 w-full rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
               <div className="mt-2 flex justify-end">
                 <button
                   type="button"
@@ -860,9 +860,9 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                         setReleaseTag("");
                         setReleaseName("");
                         setReleaseBody("");
-                        toast.success("Release created");
+                        toast.success(t("repo.settings.releaseCreated"));
                       } catch (e) {
-                        toast.error(e instanceof Error ? e.message : "Failed to create release");
+                        toast.error(e instanceof Error ? e.message : t("repo.settings.releaseCreateFailed"));
                       } finally {
                         setReleaseBusy(false);
                       }
@@ -871,12 +871,12 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                   className="rounded border px-3 py-1.5 text-xs"
                   style={{ borderColor: theme.border, color: theme.text2 }}
                 >
-                  {releaseBusy ? "Creating..." : "Create release"}
+                  {releaseBusy ? t("repo.settings.creating") : t("repo.settings.createRelease")}
                 </button>
               </div>
             </PlaceholderBlock>
 
-            <PlaceholderBlock theme={theme} title="Releases">
+            <PlaceholderBlock theme={theme} title={t("repo.settings.sectionReleases")}>
               <div className="space-y-3">
                 {releases.map((r) => (
                   <div key={r.id} className="rounded border p-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
@@ -887,7 +887,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                       </div>
                       <span className="text-[10px]" style={{ color: theme.text3 }}>{new Date(r.created_at).toLocaleString()}</span>
                     </div>
-                    <pre className="mt-2 whitespace-pre-wrap text-xs" style={{ color: theme.text2 }}>{r.body || "No notes"}</pre>
+                    <pre className="mt-2 whitespace-pre-wrap text-xs" style={{ color: theme.text2 }}>{r.body || t("repo.settings.noNotes")}</pre>
                     <div className="mt-2 space-y-1">
                       {r.assets.map((a) => (
                         <div key={a.id} className="text-[11px]" style={{ color: theme.text3 }}>
@@ -912,7 +912,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                             const file = assetFileByRelease[r.id];
                             if (!file || !repoId) return;
                             if (file.size > 50 * 1024 * 1024) {
-                              toast.error("File too large (max 50MB)");
+                              toast.error(t("repo.settings.fileTooLarge"));
                               return;
                             }
                             setAssetBusyId(r.id);
@@ -925,10 +925,10 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                               setAssetFileByRelease((prev) => ({ ...prev, [r.id]: null }));
                               setAssetFailedByRelease((prev) => ({ ...prev, [r.id]: null }));
                               setAssetProgressByRelease((prev) => ({ ...prev, [r.id]: 100 }));
-                              toast.success("Asset uploaded");
+                              toast.success(t("repo.settings.assetUploaded"));
                             } catch (e) {
                               setAssetFailedByRelease((prev) => ({ ...prev, [r.id]: file }));
-                              toast.error(e instanceof Error ? e.message : "Upload failed");
+                              toast.error(e instanceof Error ? e.message : t("repo.settings.uploadFailed"));
                             } finally {
                               setAssetBusyId(null);
                             }
@@ -938,7 +938,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                         style={{ borderColor: theme.border, color: theme.text2 }}
                       >
                         <Upload className="h-3 w-3" />
-                        {assetBusyId === r.id ? "Uploading..." : "Upload asset"}
+                        {assetBusyId === r.id ? t("repo.settings.uploading") : t("repo.settings.uploadAsset")}
                       </button>
                       {assetProgressByRelease[r.id] ? (
                         <span className="text-[11px]" style={{ color: theme.text3 }}>
@@ -955,15 +955,15 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                             if (!failed) return;
                             setAssetFileByRelease((prev) => ({ ...prev, [r.id]: failed }));
                             setAssetProgressByRelease((prev) => ({ ...prev, [r.id]: 0 }));
-                            toast("Retry file restored");
+                            toast(t("repo.settings.retryFileRestored"));
                           }}
                         >
-                          Retry last file
+                          {t("repo.settings.retryLastFile")}
                         </button>
                       ) : null}
                     </div>
                     <div className="mt-3 rounded border p-2" style={{ borderColor: theme.border }}>
-                      <p className="text-xs font-semibold" style={{ color: theme.text2 }}>Publish</p>
+                      <p className="text-xs font-semibold" style={{ color: theme.text2 }}>{t("repo.settings.publish")}</p>
                       <div className="mt-2 grid gap-2 md:grid-cols-2">
                         <select
                           value={publishRegistryByRelease[r.id] ?? ""}
@@ -971,7 +971,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                           className="rounded border px-2 py-1 text-xs"
                           style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
                         >
-                          <option value="">Select registry</option>
+                          <option value="">{t("repo.settings.selectRegistry")}</option>
                           {registries.map((x) => (
                             <option key={x.id} value={x.id}>{x.registry_type} · {x.namespace}</option>
                           ))}
@@ -979,14 +979,14 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                         <input
                           value={publishPkgByRelease[r.id] ?? ""}
                           onChange={(e) => setPublishPkgByRelease((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                          placeholder="package/image name"
+                          placeholder={t("repo.settings.packageNamePlaceholder")}
                           className="rounded border px-2 py-1 text-xs"
                           style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
                         />
                         <input
                           value={publishVersionByRelease[r.id] ?? r.tag_name.replace(/^v/, "")}
                           onChange={(e) => setPublishVersionByRelease((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                          placeholder="1.0.0"
+                          placeholder={t("repo.settings.versionPlaceholder")}
                           className="rounded border px-2 py-1 text-xs"
                           style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
                         />
@@ -996,7 +996,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                             checked={publishDryRunByRelease[r.id] ?? true}
                             onChange={(e) => setPublishDryRunByRelease((prev) => ({ ...prev, [r.id]: e.target.checked }))}
                           />
-                          Dry run
+                          {t("repo.settings.dryRun")}
                         </label>
                       </div>
                       <div className="mt-2 flex items-center gap-2">
@@ -1017,25 +1017,25 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                                   dry_run: publishDryRunByRelease[r.id] ?? true,
                                 });
                                 setPublishResultByRelease((prev) => ({ ...prev, [r.id]: result }));
-                                if (result.ok) toast.success(result.dry_run ? "Dry-run passed" : "Publish job queued");
-                                else toast.error("Publish validation failed");
+                                if (result.ok) toast.success(result.dry_run ? t("repo.settings.dryRunPassed") : t("repo.settings.publishQueued"));
+                                else toast.error(t("repo.settings.publishValidationFailed"));
                               } catch (e) {
-                                toast.error(e instanceof Error ? e.message : "Publish failed");
+                                toast.error(e instanceof Error ? e.message : t("repo.settings.publishFailed"));
                               } finally {
                                 setPublishBusyByRelease((prev) => ({ ...prev, [r.id]: false }));
                               }
                             })();
                           }}
                         >
-                          {publishBusyByRelease[r.id] ? "Publishing..." : "Run publish"}
+                          {publishBusyByRelease[r.id] ? t("repo.settings.publishing") : t("repo.settings.runPublish")}
                         </button>
                       </div>
                       {publishResultByRelease[r.id] ? (
                         <div className="mt-2 text-[11px]" style={{ color: theme.text3 }}>
-                          <div>Command: <code>{publishResultByRelease[r.id]?.command_preview}</code></div>
+                          <div>{t("repo.settings.command")}: <code>{publishResultByRelease[r.id]?.command_preview}</code></div>
                           {publishResultByRelease[r.id]?.job_id ? (
                             <div className="mt-1">
-                              Job: <code>{publishResultByRelease[r.id]?.job_id}</code>
+                              {t("repo.settings.job")}: <code>{publishResultByRelease[r.id]?.job_id}</code>
                             </div>
                           ) : null}
                           {publishResultByRelease[r.id]?.errors?.length ? (
@@ -1043,7 +1043,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                               {publishResultByRelease[r.id]?.errors.join("; ")}
                             </div>
                           ) : (
-                            <div className="mt-1" style={{ color: theme.success }}>Validation OK</div>
+                            <div className="mt-1" style={{ color: theme.success }}>{t("repo.settings.validationOk")}</div>
                           )}
                         </div>
                       ) : null}
@@ -1065,14 +1065,14 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                                         if (!repoId) return;
                                         try {
                                           await retryReleasePublishJob(repoId, job.id);
-                                          toast.success("Retry queued");
+                                          toast.success(t("repo.settings.retryQueued"));
                                         } catch (e) {
-                                          toast.error(e instanceof Error ? e.message : "Retry failed");
+                                          toast.error(e instanceof Error ? e.message : t("repo.settings.retryFailed"));
                                         }
                                       })();
                                     }}
                                   >
-                                    Retry
+                                    {t("repo.settings.retry")}
                                   </button>
                                 ) : null}
                               </div>
@@ -1092,20 +1092,20 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                     </div>
                   </div>
                 ))}
-                {releases.length === 0 ? <p className="text-xs" style={{ color: theme.text3 }}>No releases yet</p> : null}
+                {releases.length === 0 ? <p className="text-xs" style={{ color: theme.text3 }}>{t("repo.settings.noReleases")}</p> : null}
               </div>
             </PlaceholderBlock>
 
-            <PlaceholderBlock theme={theme} title="Package registries (npm / pypi / docker)">
+            <PlaceholderBlock theme={theme} title={t("repo.settings.packageRegistries")}>
               <div className="grid gap-2 md:grid-cols-2">
                 <select value={registryType} onChange={(e) => setRegistryType(e.target.value as "npm" | "pypi" | "docker")} className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}>
-                  <option value="npm">npm</option>
-                  <option value="pypi">pypi</option>
-                  <option value="docker">docker</option>
+                  <option value="npm">{t("repo.settings.registryNpm")}</option>
+                  <option value="pypi">{t("repo.settings.registryPypi")}</option>
+                  <option value="docker">{t("repo.settings.registryDocker")}</option>
                 </select>
-                <input value={registryEndpoint} onChange={(e) => setRegistryEndpoint(e.target.value)} placeholder="https://registry.npmjs.org" className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
-                <input value={registryNamespace} onChange={(e) => setRegistryNamespace(e.target.value)} placeholder="@org / project / image" className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
-                <input value={registryToken} onChange={(e) => setRegistryToken(e.target.value)} placeholder="token" className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={registryEndpoint} onChange={(e) => setRegistryEndpoint(e.target.value)} placeholder={t("repo.settings.registryEndpointPlaceholder")} className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={registryNamespace} onChange={(e) => setRegistryNamespace(e.target.value)} placeholder={t("repo.settings.registryNamespacePlaceholder")} className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
+                <input value={registryToken} onChange={(e) => setRegistryToken(e.target.value)} placeholder={t("repo.settings.registryTokenPlaceholder")} className="rounded border px-2 py-1.5 text-xs" style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }} />
               </div>
               <div className="mt-2 flex justify-end">
                 <button
@@ -1124,9 +1124,9 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                         });
                         setRegistries((prev) => [created, ...prev]);
                         setRegistryToken("");
-                        toast.success("Registry integration created");
+                        toast.success(t("repo.settings.registryCreated"));
                       } catch (e) {
-                        toast.error(e instanceof Error ? e.message : "Failed");
+                        toast.error(e instanceof Error ? e.message : t("repo.settings.actionFailed"));
                       } finally {
                         setRegistryBusy(false);
                       }
@@ -1135,7 +1135,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                   className="rounded border px-3 py-1.5 text-xs"
                   style={{ borderColor: theme.border, color: theme.text2 }}
                 >
-                  {registryBusy ? "Saving..." : "Save registry"}
+                  {registryBusy ? t("repo.settings.saving") : t("repo.settings.saveRegistry")}
                 </button>
               </div>
               <div className="mt-3 space-y-1">
@@ -1144,7 +1144,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                     {x.registry_type} · {x.endpoint} · {x.namespace} · {x.token_masked}
                   </div>
                 ))}
-                {registries.length === 0 ? <p className="text-xs" style={{ color: theme.text3 }}>No registries connected</p> : null}
+                {registries.length === 0 ? <p className="text-xs" style={{ color: theme.text3 }}>{t("repo.settings.noRegistries")}</p> : null}
               </div>
             </PlaceholderBlock>
           </>

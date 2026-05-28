@@ -20,10 +20,10 @@ export default function RepoCreateFileModal({
   onClose,
   onSubmit,
 }: RepoCreateFileModalProps) {
-  const { t } = useUserPreferences();
+  const { t, tp } = useUserPreferences();
   const [path, setPath] = useState(defaultPath);
   const [content, setContent] = useState("");
-  const [message, setMessage] = useState("Add file via MTUCI");
+  const [message, setMessage] = useState(t("repo.createFile.defaultMessage"));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +31,7 @@ export default function RepoCreateFileModal({
     if (open) {
       setPath(defaultPath);
       setContent("");
-      setMessage("Add file via MTUCI");
+      setMessage(t("repo.createFile.defaultMessage"));
       setError(null);
     }
   }, [open, defaultPath]);
@@ -48,7 +48,7 @@ export default function RepoCreateFileModal({
     setSaving(true);
     setError(null);
     try {
-      await onSubmit({ path: cleaned, content, message: message.trim() || `Add ${cleaned}` });
+      await onSubmit({ path: cleaned, content, message: message.trim() || tp("repo.createFile.fallbackMessage", { path: cleaned }) });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("repo.errors.createFileFailed"));
@@ -89,7 +89,7 @@ export default function RepoCreateFileModal({
             <input
               value={path}
               onChange={(e) => setPath(e.target.value)}
-              placeholder="src/main.py"
+              placeholder={t("repo.createFile.pathPlaceholder")}
               className="rounded-lg border px-3 py-2 text-sm font-mono outline-none focus:ring-1"
               style={{
                 borderColor: theme.border,

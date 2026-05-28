@@ -11,12 +11,14 @@ import {
   type CodeSearchHit,
   type SavedSearch,
 } from "../api/searchApi";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface Props {
   isDarkTheme?: boolean;
 }
 
 export default function CodeSearchPage({ isDarkTheme = false }: Props) {
+  const { t } = useUserPreferences();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const [query, setQuery] = useState(params.get("q") ?? "");
@@ -64,7 +66,7 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
       setHits(res.hits);
       setFacets(res.facets ?? {});
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Search failed");
+      toast.error(e instanceof Error ? e.message : t("codeSearch.searchFailed"));
     } finally {
       setLoading(false);
     }
@@ -117,10 +119,10 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
           branch: params.get("branch") || "main",
         },
       });
-      toast.success("Saved");
+      toast.success(t("codeSearch.saved"));
       void loadSaved();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to save");
+      toast.error(e instanceof Error ? e.message : t("codeSearch.saveFailed"));
     }
   }
 
@@ -159,27 +161,27 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[260px] flex-1">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} className="w-full rounded-lg border px-8 py-2 text-sm" placeholder="Search code..." />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} className="w-full rounded-lg border px-8 py-2 text-sm" placeholder={t("codeSearch.searchPlaceholder")} />
           </div>
-          <input value={extension} onChange={(e) => setExtension(e.target.value)} className="w-28 rounded-lg border px-2 py-2 text-sm" placeholder="ext" />
-          <input value={pathPrefix} onChange={(e) => setPathPrefix(e.target.value)} className="w-40 rounded-lg border px-2 py-2 text-sm" placeholder="path_prefix" />
-          <input value={pathContains} onChange={(e) => setPathContains(e.target.value)} className="w-40 rounded-lg border px-2 py-2 text-sm" placeholder="path_contains" />
-          <input value={symbol} onChange={(e) => setSymbol(e.target.value)} className="w-36 rounded-lg border px-2 py-2 text-sm" placeholder="symbol" />
-          <input value={repoId} onChange={(e) => setRepoId(e.target.value)} className="w-36 rounded-lg border px-2 py-2 text-sm" placeholder="repo_id" />
-          <input value={minScore} onChange={(e) => setMinScore(e.target.value)} className="w-24 rounded-lg border px-2 py-2 text-sm" placeholder="min_score" />
+          <input value={extension} onChange={(e) => setExtension(e.target.value)} className="w-28 rounded-lg border px-2 py-2 text-sm" placeholder={t("codeSearch.extPlaceholder")} />
+          <input value={pathPrefix} onChange={(e) => setPathPrefix(e.target.value)} className="w-40 rounded-lg border px-2 py-2 text-sm" placeholder={t("codeSearch.pathPrefixPlaceholder")} />
+          <input value={pathContains} onChange={(e) => setPathContains(e.target.value)} className="w-40 rounded-lg border px-2 py-2 text-sm" placeholder={t("codeSearch.pathContainsPlaceholder")} />
+          <input value={symbol} onChange={(e) => setSymbol(e.target.value)} className="w-36 rounded-lg border px-2 py-2 text-sm" placeholder={t("codeSearch.symbolPlaceholder")} />
+          <input value={repoId} onChange={(e) => setRepoId(e.target.value)} className="w-36 rounded-lg border px-2 py-2 text-sm" placeholder={t("codeSearch.repoIdPlaceholder")} />
+          <input value={minScore} onChange={(e) => setMinScore(e.target.value)} className="w-24 rounded-lg border px-2 py-2 text-sm" placeholder={t("codeSearch.minScorePlaceholder")} />
           <select value={sort} onChange={(e) => setSort(e.target.value as "relevance" | "path")} className="w-32 rounded-lg border px-2 py-2 text-sm">
             <option value="relevance">relevance</option>
             <option value="path">path</option>
           </select>
-          <input value={branch} onChange={(e) => setBranch(e.target.value)} className="w-28 rounded-lg border px-2 py-2 text-sm" placeholder="branch" />
-          <button onClick={applySearch} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white">Find</button>
-          <button onClick={() => void saveCurrent()} className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm"><BookmarkPlus className="h-4 w-4" /> Save</button>
+          <input value={branch} onChange={(e) => setBranch(e.target.value)} className="w-28 rounded-lg border px-2 py-2 text-sm" placeholder={t("codeSearch.branchPlaceholder")} />
+          <button onClick={applySearch} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white">{t("codeSearch.find")}</button>
+          <button onClick={() => void saveCurrent()} className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm"><BookmarkPlus className="h-4 w-4" /> {t("codeSearch.save")}</button>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-4">
         <div className={`rounded-xl border p-3 ${isDarkTheme ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
-          <h3 className="mb-2 text-sm font-semibold">Saved Searches</h3>
+          <h3 className="mb-2 text-sm font-semibold">{t("codeSearch.savedSearches")}</h3>
           <div className="space-y-2">
             {groupedSaved.map(([groupName, groupItems]) => (
               <div key={groupName} className="space-y-1">
@@ -219,7 +221,7 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
                   <div className="inline-flex items-center gap-1">
                     <button
                       className="rounded border px-1.5 py-1 text-xs"
-                      title="Run"
+                      title={t("codeSearch.run")}
                       onClick={() => {
                         const next = new URLSearchParams();
                         next.set("q", s.query);
@@ -239,7 +241,7 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
                     </button>
                     <button
                       className="rounded border px-1.5 py-1 text-xs"
-                      title="Update from current filters"
+                      title={t("codeSearch.updateFromCurrent")}
                       onClick={async () => {
                         try {
                           await updateSavedSearch(s.id, {
@@ -257,10 +259,10 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
                               __meta: { ...savedMeta(s) },
                             },
                           });
-                          toast.success("Saved search updated");
+                          toast.success(t("codeSearch.savedUpdated"));
                           void loadSaved();
                         } catch (e) {
-                          toast.error(e instanceof Error ? e.message : "Update failed");
+                          toast.error(e instanceof Error ? e.message : t("codeSearch.updateFailed"));
                         }
                       }}
                     >
@@ -268,7 +270,7 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
                     </button>
                     <button
                       className={`rounded border px-1.5 py-1 text-xs ${savedMeta(s).pinned ? "text-amber-600" : ""}`}
-                      title="Pin/Unpin"
+                      title={t("codeSearch.pinUnpin")}
                       onClick={async () => {
                         const f = savedFilters(s);
                         const meta = savedMeta(s);
@@ -281,7 +283,7 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
                           });
                           void loadSaved();
                         } catch (e) {
-                          toast.error(e instanceof Error ? e.message : "Pin update failed");
+                          toast.error(e instanceof Error ? e.message : t("codeSearch.pinUpdateFailed"));
                         }
                       }}
                     >
@@ -293,10 +295,10 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
                       onClick={async () => {
                         try {
                           await deleteSavedSearch(s.id);
-                          toast.success("Deleted");
+                          toast.success(t("codeSearch.deleted"));
                           void loadSaved();
                         } catch (e) {
-                          toast.error(e instanceof Error ? e.message : "Delete failed");
+                          toast.error(e instanceof Error ? e.message : t("codeSearch.deleteFailed"));
                         }
                       }}
                     >
@@ -315,14 +317,14 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
                         await updateSavedSearch(s.id, { name: nextName });
                         void loadSaved();
                       } catch (err) {
-                        toast.error(err instanceof Error ? err.message : "Rename failed");
+                        toast.error(err instanceof Error ? err.message : t("codeSearch.renameFailed"));
                       }
                     }}
                   />
                   <input
                     defaultValue={savedMeta(s).group}
                     className="w-24 rounded border px-1.5 py-1 text-xs"
-                    title="Group"
+                    title={t("codeSearch.group")}
                     onBlur={async (e) => {
                       const group = e.target.value.trim() || "Default";
                       const f = savedFilters(s);
@@ -336,7 +338,7 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
                         });
                         void loadSaved();
                       } catch (err) {
-                        toast.error(err instanceof Error ? err.message : "Group update failed");
+                        toast.error(err instanceof Error ? err.message : t("codeSearch.groupUpdateFailed"));
                       }
                     }}
                   />
@@ -344,17 +346,17 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
               </div>
             ))}</div>
             ))}
-            {saved.length === 0 ? <div className="text-xs text-slate-500">No saved queries</div> : null}
+            {saved.length === 0 ? <div className="text-xs text-slate-500">{t("codeSearch.noSavedQueries")}</div> : null}
           </div>
         </div>
 
         <div className="lg:col-span-3 space-y-3">
           {(facets.extensions?.length || facets.repositories?.length) ? (
             <div className={`rounded-xl border p-3 text-xs ${isDarkTheme ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
-              <div className="mb-2 font-semibold">Facets</div>
+              <div className="mb-2 font-semibold">{t("codeSearch.facets")}</div>
               {facets.extensions?.length ? (
                 <div className="mb-2">
-                  <div className="mb-1 text-slate-500">Extensions</div>
+                  <div className="mb-1 text-slate-500">{t("codeSearch.extensions")}</div>
                   <div className="flex flex-wrap gap-1">
                     {facets.extensions.map((e) => (
                       <button key={e.value} className="rounded border px-2 py-0.5" onClick={() => { setExtension(e.value); }}>
@@ -366,8 +368,8 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
               ) : null}
             </div>
           ) : null}
-          {loading ? <div className="text-sm text-slate-500">Searching...</div> : null}
-          {!loading && grouped.length === 0 ? <div className="text-sm text-slate-500">No results</div> : null}
+          {loading ? <div className="text-sm text-slate-500">{t("codeSearch.searching")}</div> : null}
+          {!loading && grouped.length === 0 ? <div className="text-sm text-slate-500">{t("codeSearch.noResults")}</div> : null}
           {grouped.map(([repo, rows]) => (
             <div key={repo} className={`rounded-xl border p-3 ${isDarkTheme ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
               <h3 className="mb-2 text-sm font-semibold">{repo}</h3>

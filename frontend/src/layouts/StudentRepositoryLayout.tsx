@@ -8,6 +8,7 @@ import { getTheme } from "../theme";
 import { useAuthUser } from "../context/AuthUserContext";
 
 function tabFromPath(pathname: string): RepoNavTabId {
+  if (pathname.includes("/branches")) return "branches";
   if (pathname.includes("/issues")) return "issues";
   if (pathname.includes("/pulls")) return "pulls";
   if (pathname.includes("/wiki")) return "wiki";

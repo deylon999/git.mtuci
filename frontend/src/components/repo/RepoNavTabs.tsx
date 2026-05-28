@@ -22,18 +22,17 @@ interface RepoNavTabsProps {
 
 const TABS: {
   id: RepoNavTabId;
-  labelKey?: string;
-  label?: string;
+  labelKey: string;
   icon: typeof Code2;
   segment: string;
   countKey?: "issues" | "pulls";
 }[] = [
   { id: "code", labelKey: "repo.tabs.code", icon: Code2, segment: "code" },
-  { id: "branches", label: "Branches", icon: GitBranch, segment: "branches" },
-  { id: "issues", label: "Issues", icon: CircleDot, segment: "issues", countKey: "issues" },
-  { id: "pulls", label: "Pull requests", icon: GitPullRequest, segment: "pulls", countKey: "pulls" },
-  { id: "wiki", label: "Wiki", icon: BookOpen, segment: "wiki" },
-  { id: "settings", label: "Settings", icon: Settings, segment: "settings" },
+  { id: "branches", labelKey: "repo.tabs.branches", icon: GitBranch, segment: "branches" },
+  { id: "issues", labelKey: "repo.tabs.issues", icon: CircleDot, segment: "issues", countKey: "issues" },
+  { id: "pulls", labelKey: "repo.tabs.pulls", icon: GitPullRequest, segment: "pulls", countKey: "pulls" },
+  { id: "wiki", labelKey: "repo.tabs.wiki", icon: BookOpen, segment: "wiki" },
+  { id: "settings", labelKey: "repo.tabs.settings", icon: Settings, segment: "settings" },
 ];
 
 export default function RepoNavTabs({
@@ -84,7 +83,7 @@ export default function RepoNavTabs({
             }}
           >
             <Icon className="h-4 w-4 shrink-0" />
-            {tab.labelKey ? t(tab.labelKey) : tab.label}
+            {t(tab.labelKey)}
             {badge}
           </Link>
         );

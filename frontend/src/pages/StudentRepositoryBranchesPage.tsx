@@ -6,6 +6,7 @@ import {
   getStudentRepoBranches,
 } from "../api/studentDashboardApi";
 import { useStudentRepoWorkspaceContext } from "../context/StudentRepoWorkspaceContext";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getTheme } from "../theme";
 
 interface StudentRepositoryBranchesPageProps {
@@ -14,6 +15,7 @@ interface StudentRepositoryBranchesPageProps {
 
 export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: StudentRepositoryBranchesPageProps) {
   const theme = getTheme(isDarkTheme);
+  const { t, tp } = useUserPreferences();
   const { repoId, summary } = useStudentRepoWorkspaceContext();
   const isBlocked = !!summary?.is_blocked;
 
@@ -37,7 +39,7 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
       setDefaultBranch(data.default_branch || "main");
       if (!fromRef) setFromRef(data.default_branch || "main");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load branches");
+      setError(e instanceof Error ? e.message : t("repo.branchesPage.loadFailed"));
       setBranches([]);
       setDefaultBranch("main");
     } finally {
@@ -55,14 +57,26 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
   const onCreate = async () => {
     const name = newBranch.trim();
     const from = (fromRef || defaultBranch).trim();
-    if (!name) return;
+    if (!name) {
+      setError(t("repo.branchesPage.nameRequired"));
+      return;
+    }
+    if (!from) {
+      setError(t("repo.branchesPage.sourceRequired"));
+      return;
+    }
+    if (branchNames.includes(name)) {
+      setError(tp("repo.branchesPage.alreadyExists", { name }));
+      return;
+    }
     setSaving(true);
+    setError(null);
     try {
       await createStudentRepoBranch(repoId, { name, from_ref: from });
       setNewBranch("");
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create branch");
+      setError(e instanceof Error ? e.message : t("repo.branchesPage.createFailed"));
     } finally {
       setSaving(false);
     }
@@ -70,14 +84,14 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
 
   const onDelete = async (name: string) => {
     if (!name || name === defaultBranch) return;
-    const ok = window.confirm(`Delete branch "${name}"?`);
+    const ok = window.confirm(tp("repo.branchesPage.confirmDelete", { name }));
     if (!ok) return;
     setSaving(true);
     try {
       await deleteStudentRepoBranch(repoId, name);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete branch");
+      setError(e instanceof Error ? e.message : t("repo.branchesPage.deleteFailed"));
     } finally {
       setSaving(false);
     }
@@ -88,7 +102,7 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
       <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-3" style={{ borderColor: theme.border }}>
         <h2 className="text-sm font-semibold flex items-center gap-2" style={{ color: theme.text }}>
           <GitBranch className="h-4 w-4" />
-          Branches
+          {t("repo.tabs.branches")}
         </h2>
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -97,19 +111,19 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
             className="rounded-lg border px-2.5 py-1.5 text-xs"
             style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
             disabled={saving || !canMutate}
-            title="Create from"
+            title={t("repo.branchesPage.createFromTitle")}
           >
             {[defaultBranch, ...branchNames.filter((b) => b !== defaultBranch)].map((b) => (
               <option key={b} value={b}>
                 {b}
-                {b === defaultBranch ? " (default)" : ""}
+                {b === defaultBranch ? t("repo.branchesPage.defaultSuffix") : ""}
               </option>
             ))}
           </select>
           <input
             value={newBranch}
             onChange={(e) => setNewBranch(e.target.value)}
-            placeholder="new-branch-name"
+            placeholder={t("repo.branchesPage.newBranchPlaceholder")}
             className="rounded-lg border px-2.5 py-1.5 text-xs"
             style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
             disabled={saving || !canMutate}
@@ -127,7 +141,7 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
             }}
           >
             <Plus className="h-3.5 w-3.5" />
-            Create
+            {saving ? t("repo.branchesPage.creating") : t("repo.branchesPage.create")}
           </button>
         </div>
       </div>
@@ -135,7 +149,7 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-14 text-sm" style={{ color: theme.text2 }}>
           <Loader2 className="h-5 w-5 animate-spin" />
-          Loading…
+          {t("repo.branchesPage.loading")}
         </div>
       ) : error ? (
         <div className="px-4 py-3 text-sm" style={{ color: theme.danger }}>
@@ -154,7 +168,7 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
                   {b.name}
                 </p>
                 <p className="text-[11px]" style={{ color: theme.text3 }}>
-                  {b.is_default ? "Default branch" : ""}
+                  {b.is_default ? t("repo.branchesPage.defaultBranch") : ""}
                 </p>
               </div>
               <button
@@ -168,10 +182,10 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
                   color: saving || !canMutate || b.is_default ? theme.text3 : theme.danger,
                   opacity: saving || !canMutate || b.is_default ? 0.55 : 1,
                 }}
-                title={b.is_default ? "Cannot delete default branch" : "Delete branch"}
+                title={b.is_default ? t("repo.branchesPage.cannotDeleteDefault") : t("repo.branchesPage.deleteBranchTitle")}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                Delete
+                {t("repo.branchesPage.delete")}
               </button>
             </li>
           ))}

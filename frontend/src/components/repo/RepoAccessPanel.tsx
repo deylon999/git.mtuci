@@ -235,7 +235,7 @@ export function RepoAccessPanel({ theme, repoId, readOnly = false }: RepoAccessP
                 type="email"
                 value={collabEmail}
                 onChange={(e) => setCollabEmail(e.target.value)}
-                placeholder="user@example.com"
+                placeholder={t("repo.access.emailPlaceholder")}
                 disabled={busy}
                 className="w-full rounded-lg border px-3 py-2 text-sm"
                 style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
@@ -355,7 +355,7 @@ export function RepoAccessPanel({ theme, repoId, readOnly = false }: RepoAccessP
               <input
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
-                placeholder="БВТ-2403"
+                placeholder={t("repo.access.teamPlaceholder")}
                 disabled={busy}
                 className="w-full rounded-lg border px-3 py-2 text-sm"
                 style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
@@ -434,7 +434,7 @@ export function RepoAccessPanel({ theme, repoId, readOnly = false }: RepoAccessP
                 type="email"
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="user@example.com"
+                placeholder={t("repo.access.emailPlaceholder")}
                 disabled={busy}
                 className="w-full rounded-lg border px-3 py-2 text-sm"
                 style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}

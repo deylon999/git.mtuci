@@ -386,50 +386,41 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
     }
   };
 
-  const mapActivityTag = (tag: string) => {
-    const keys: Record<string, string> = {
-      Коммит: "admin.activity.typeCommit",
-      Commit: "admin.activity.typeCommit",
-      "Pull Request": "admin.activity.typePr",
-      PR: "admin.activity.typePr",
-      Push: "admin.activity.typePush",
-      Создание: "admin.activity.typeCreate",
-      Created: "admin.activity.typeCreate",
-      Форк: "admin.activity.typeFork",
-      Fork: "admin.activity.typeFork",
-      Merge: "admin.activity.typeMerge",
-      Удаление: "admin.activity.typeDelete",
-      Deleted: "admin.activity.typeDelete",
-      Вход: "admin.activity.typeLogin",
-      Login: "admin.activity.typeLogin",
-      "Sign in": "admin.activity.typeLogin",
-      Выход: "admin.activity.typeLogout",
-      Logout: "admin.activity.typeLogout",
-      "Sign out": "admin.activity.typeLogout",
+  const mapActivityTag = (type: string, fallbackTag: string) => {
+    const keysByType: Record<string, string> = {
+      commit: "admin.activity.typeCommit",
+      pr: "admin.activity.typePr",
+      pull_request: "admin.activity.typePr",
+      push: "admin.activity.typePush",
+      create: "admin.activity.typeCreate",
+      repo_created: "admin.activity.typeCreate",
+      fork: "admin.activity.typeFork",
+      merge: "admin.activity.typeMerge",
+      pr_merge: "admin.activity.typeMerge",
+      delete: "admin.activity.typeDelete",
+      repo_deleted: "admin.activity.typeDelete",
+      login: "admin.activity.typeLogin",
+      logout: "admin.activity.typeLogout",
     };
-    const key = keys[tag];
-    return key ? t(key) : tag;
+    const key = keysByType[type];
+    return key ? t(key) : fallbackTag;
   };
 
   const getTagStyle = (type: string) => {
     switch (type) {
-      case "Коммит":
-      case "Commit": return { background: `${colors.accent2}10`, color: colors.accent2 };
-      case "Pull Request": return { background: `${colors.teal}10`, color: colors.teal };
-      case "Push": return { background: `${colors.success}10`, color: colors.success };
-      case "Создание":
-      case "Created": return { background: `${colors.purple}10`, color: colors.purple };
-      case "Форк":
-      case "Fork": return { background: `${colors.warning}10`, color: colors.warning };
-      case "Merge": return { background: `${colors.violet}10`, color: colors.violet };
-      case "Удаление":
-      case "Deleted": return { background: `${colors.danger}10`, color: colors.danger };
-      case "Вход":
-      case "Login":
-      case "Sign in": return { background: `${colors.accent2}10`, color: colors.accent2 };
-      case "Выход":
-      case "Logout":
-      case "Sign out": return { background: `${colors.textMuted}20`, color: colors.textMuted };
+      case "commit": return { background: `${colors.accent2}10`, color: colors.accent2 };
+      case "pr":
+      case "pull_request": return { background: `${colors.teal}10`, color: colors.teal };
+      case "push": return { background: `${colors.success}10`, color: colors.success };
+      case "create":
+      case "repo_created": return { background: `${colors.purple}10`, color: colors.purple };
+      case "fork": return { background: `${colors.warning}10`, color: colors.warning };
+      case "merge":
+      case "pr_merge": return { background: `${colors.violet}10`, color: colors.violet };
+      case "delete":
+      case "repo_deleted": return { background: `${colors.danger}10`, color: colors.danger };
+      case "login": return { background: `${colors.accent2}10`, color: colors.accent2 };
+      case "logout": return { background: `${colors.textMuted}20`, color: colors.textMuted };
       default: return { background: `${colors.accent2}10`, color: colors.accent2 };
     }
   };
@@ -551,7 +542,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
 
             {activities.map((activity: ActivityItem) => {
               const iconBg = getEventIconBg(activity.type);
-              const tagStyle = getTagStyle(activity.tag);
+              const tagStyle = getTagStyle(activity.type);
               return (
                 <div key={activity.id} style={{
                   display: "flex", alignItems: "flex-start", gap: "12px", padding: "12px 16px",
@@ -597,7 +588,9 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                       )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "3px" }}>
-                      <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "5px", fontWeight: 500, ...tagStyle }}>{mapActivityTag(activity.tag)}</span>
+                      <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "5px", fontWeight: 500, ...tagStyle }}>
+                        {mapActivityTag(activity.type, activity.tag)}
+                      </span>
                       <span style={{ fontSize: "10px", color: colors.textMuted }}>{activity.time}</span>
                     </div>
                   </div>

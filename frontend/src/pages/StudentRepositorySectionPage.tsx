@@ -149,6 +149,7 @@ function PullRow({
   isActive: boolean;
   onOpen: () => void;
 }) {
+  const { t } = useUserPreferences();
   const merged = item.merged === true || item.state === "merged";
   const open = item.state === "open" && !merged;
   const statusLabel = merged ? "merged" : item.state;
@@ -181,7 +182,7 @@ function PullRow({
           </span>
           {item.commits_count != null ? (
             <span className="text-[10px] font-mono tabular-nums" style={{ color: theme.text3 }}>
-              {item.commits_count} commits
+              {item.commits_count} {t("repo.sidebar.commitMany")}
             </span>
           ) : null}
         </div>
@@ -189,7 +190,7 @@ function PullRow({
           {item.title}
         </p>
         <p className="text-xs mt-1.5 font-mono" style={{ color: theme.text2 }}>
-          {item.head_branch ?? "?"} → {item.base_branch ?? "main"}
+          {item.head_branch ?? "?"} → {item.base_branch ?? t("repo.settings.defaultBranchPlaceholder")}
         </p>
         <p className="text-xs mt-1" style={{ color: theme.text3 }}>
           {item.author_name ? `${item.author_name} · ` : ""}
@@ -312,13 +313,13 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
         style={{ borderColor: theme.border }}
       >
         <h2 className="text-sm font-semibold" style={{ color: theme.text }}>
-          Issues
+          {t("repo.section.issuesTitle")}
         </h2>
         <div className="flex items-center gap-2">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search issues"
+            placeholder={t("repo.section.issuesSearchPlaceholder")}
             className="rounded border px-2 py-1 text-xs"
             style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
           />
@@ -330,7 +331,7 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
           <input
             value={createTitle}
             onChange={(e) => setCreateTitle(e.target.value)}
-            placeholder="New issue title"
+            placeholder={t("repo.section.issuesCreateTitlePlaceholder")}
             className="w-full rounded border px-2 py-1.5 text-xs"
             style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
           />
@@ -338,7 +339,7 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
             value={createBody}
             onChange={(e) => setCreateBody(e.target.value)}
             rows={2}
-            placeholder="Description"
+            placeholder={t("repo.section.issuesCreateDescriptionPlaceholder")}
             className="w-full rounded border px-2 py-1.5 text-xs"
             style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
           />
@@ -359,7 +360,7 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
             className="rounded border px-2 py-1 text-xs"
             style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg4 }}
           >
-            Create issue
+            {t("repo.section.createIssue")}
           </button>
         </div>
       ) : null}
@@ -388,7 +389,7 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
                     className="rounded border px-2 py-0.5 text-[10px]"
                     style={{ borderColor: theme.border, color: theme.text3 }}
                   >
-                    React
+                    {t("repo.section.react")}
                   </button>
                 ) : null}
                 {api.patchIssue && item.state !== "closed" ? (
@@ -403,7 +404,7 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
                     className="rounded border px-2 py-0.5 text-[10px]"
                     style={{ borderColor: theme.border, color: theme.text3 }}
                   >
-                    Close
+                    {t("repo.section.closeIssue")}
                   </button>
                 ) : null}
               </div>
@@ -816,7 +817,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
               style={{ borderColor: theme.border, backgroundColor: theme.bg4, color: theme.text2 }}
               disabled={createLoading}
             >
-              Cancel
+              {t("repo.section.cancel")}
             </button>
             <button
               type="button"
@@ -847,7 +848,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
               }}
               disabled={createLoading || isBlocked || !head || !title.trim()}
             >
-              Create
+              {t("repo.section.create")}
             </button>
           </div>
         </div>
@@ -912,10 +913,10 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                     </span>
                   </div>
                   <p className="text-xs font-mono" style={{ color: theme.text2 }}>
-                    {detail.pull.head_branch ?? "?"} → {detail.pull.base_branch ?? "main"}
+                    {detail.pull.head_branch ?? "?"} → {detail.pull.base_branch ?? t("repo.settings.defaultBranchPlaceholder")}
                   </p>
                   <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ color: theme.text3 }}>
-                    <span>{detail.pull.commits_count ?? 0} commits</span>
+                    <span>{detail.pull.commits_count ?? 0} {t("repo.sidebar.commitMany")}</span>
                     <span>{detail.pull.changed_files_count ?? detail.files.length} files</span>
                     <span>{detail.pull.review_comments_count} review comments</span>
                   </div>
@@ -1075,7 +1076,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                         {checkLogLoading ? (
                           <div className="flex items-center gap-1 text-[11px]" style={{ color: theme.text3 }}>
                             <Loader2 className="h-3 w-3 animate-spin" />
-                            Loading log...
+                            {t("repo.section.loadingLog")}
                           </div>
                         ) : (
                           <>
@@ -1083,11 +1084,11 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                               className="max-h-64 overflow-auto text-[10px] leading-4 whitespace-pre-wrap"
                               style={{ color: theme.text2 }}
                             >
-                              {checkLogText || "No log output"}
+                              {checkLogText || t("repo.section.noLogOutput")}
                             </pre>
                             {checkLogTruncated ? (
                               <p className="mt-1 text-[10px]" style={{ color: theme.text3 }}>
-                                Log truncated for UI safety.
+                                {t("repo.section.logTruncated")}
                               </p>
                             ) : null}
                           </>
@@ -1105,7 +1106,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                       rows={3}
                       className="w-full rounded-lg border px-3 py-2 text-sm"
                       style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
-                      placeholder="Review summary"
+                      placeholder={t("repo.section.prReviewSummaryPlaceholder")}
                       disabled={reviewLoading}
                     />
                     <div className="flex flex-wrap gap-2">
@@ -1116,7 +1117,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                         style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg4 }}
                         disabled={reviewLoading}
                       >
-                        Comment
+                        {t("repo.section.comment")}
                       </button>
                       <button
                         type="button"
@@ -1125,7 +1126,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                         style={{ borderColor: `${theme.success}55`, color: theme.success, backgroundColor: `${theme.success}16` }}
                         disabled={reviewLoading}
                       >
-                        Approve
+                        {t("repo.section.approve")}
                       </button>
                       <button
                         type="button"
@@ -1134,7 +1135,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                         style={{ borderColor: `${theme.danger}55`, color: theme.danger, backgroundColor: `${theme.danger}14` }}
                         disabled={reviewLoading}
                       >
-                        Request changes
+                        {t("repo.section.requestChanges")}
                       </button>
                     </div>
                   </div>
@@ -1151,9 +1152,9 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                         style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
                         disabled={mergeLoading}
                       >
-                        <option value="merge">merge commit</option>
-                        <option value="squash">squash</option>
-                        <option value="rebase">rebase</option>
+                        <option value="merge">{t("repo.section.mergeCommit")}</option>
+                        <option value="squash">{t("repo.section.squash")}</option>
+                        <option value="rebase">{t("repo.section.rebase")}</option>
                       </select>
                       <button
                         type="button"
@@ -1167,7 +1168,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                         }}
                         disabled={mergeLoading || !detail.checks.can_merge}
                       >
-                        Merge PR
+                        {t("repo.section.mergePr")}
                       </button>
                     </div>
                   </div>
@@ -1199,7 +1200,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                       rows={2}
                       className="w-full rounded-lg border px-3 py-2 text-sm"
                       style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
-                      placeholder="Add discussion comment"
+                      placeholder={t("repo.section.discussionPlaceholder")}
                       disabled={discussionLoading}
                     />
                     <button
@@ -1209,7 +1210,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                       style={{ borderColor: theme.border, backgroundColor: theme.bg4, color: theme.text2 }}
                       disabled={discussionLoading || !discussionBody.trim()}
                     >
-                      Send comment
+                      {t("repo.section.sendComment")}
                     </button>
                   </div>
                 ) : null}
@@ -1271,7 +1272,12 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                                         className="rounded border px-1.5 py-0.5 text-[10px]"
                                         style={{ borderColor: theme.border, color: theme.text3 }}
                                       >
-                                        {thread ? `Reply (${thread.comments.length})` : "Comment"}
+                                        {thread
+                                          ? t("repo.section.replyCount").replace(
+                                              "{count}",
+                                              String(thread.comments.length),
+                                            )
+                                          : t("repo.section.comment")}
                                       </button>
                                     ) : null}
                                   </div>
@@ -1300,7 +1306,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                                         rows={2}
                                         className="w-full rounded border px-2 py-1 text-xs"
                                         style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
-                                        placeholder="Inline comment"
+                                        placeholder={t("repo.section.inlineCommentPlaceholder")}
                                         disabled={inlineLoading}
                                       />
                                       <div className="flex gap-2">
@@ -1311,7 +1317,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                                           style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg4 }}
                                           disabled={inlineLoading || !inlineBody.trim()}
                                         >
-                                          Send
+                                          {t("repo.section.send")}
                                         </button>
                                         <button
                                           type="button"
@@ -1320,7 +1326,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                                           style={{ borderColor: theme.border, color: theme.text3 }}
                                           disabled={inlineLoading}
                                         >
-                                          Cancel
+                                          {t("repo.section.cancel")}
                                         </button>
                                       </div>
                                     </div>
@@ -1331,7 +1337,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                           </div>
                         ) : (
                           <div className="px-3 py-2 text-xs" style={{ color: theme.text3 }}>
-                            Diff preview is unavailable for this file.
+                            {t("repo.section.diffUnavailable")}
                           </div>
                         )}
                       </div>

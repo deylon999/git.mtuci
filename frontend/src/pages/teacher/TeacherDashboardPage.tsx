@@ -46,7 +46,11 @@ function deadlineUrgencyColor(deadlineIso: string, theme: ReturnType<typeof useT
   return theme.text2;
 }
 
-function formatDeadlineLabel(deadlineIso: string, language: string): string {
+function formatDeadlineLabel(
+  deadlineIso: string,
+  language: string,
+  t: (key: string) => string,
+): string {
   const d = new Date(deadlineIso);
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -56,7 +60,7 @@ function formatDeadlineLabel(deadlineIso: string, language: string): string {
     minute: "2-digit",
   });
   if (day.getTime() === today.getTime()) {
-    return language === "en" ? `Today ${time}` : `Сегодня ${time}`;
+    return `${t("common.today")} ${time}`;
   }
   return d.toLocaleDateString(language === "en" ? "en-US" : "ru-RU", {
     day: "numeric",
@@ -68,15 +72,11 @@ function formatWaitingBadge(
   item: { is_stale: boolean; waiting_hours: number; submitted_at: string },
   tp: (key: string, params: Record<string, string | number>) => string,
 ): string {
-  if (item.is_stale) {
-    return tp("teacher.codeReview.waitingHours", { hours: Math.round(item.waiting_hours) });
+  const roundedHours = Math.max(1, Math.round(item.waiting_hours));
+  if (item.is_stale || roundedHours >= 1) {
+    return tp("teacher.codeReview.waitingHours", { hours: roundedHours });
   }
-  const rel = formatRelativeTime(new Date(item.submitted_at));
-  const hoursMatch = rel.match(/(\d+)\s*ч/);
-  if (hoursMatch) {
-    return tp("teacher.codeReview.waitingHours", { hours: Number(hoursMatch[1]) });
-  }
-  return rel;
+  return formatRelativeTime(new Date(item.submitted_at));
 }
 
 export default function TeacherDashboardPage({ isDarkTheme = false }: Props) {
@@ -329,7 +329,7 @@ export default function TeacherDashboardPage({ isDarkTheme = false }: Props) {
                         theme={theme}
                         assignmentTitle={d.assignment_title}
                         courseTitle={d.course_title}
-                        deadlineLabel={formatDeadlineLabel(d.deadline, language)}
+                        deadlineLabel={formatDeadlineLabel(d.deadline, language, t)}
                         submittedLabel={tp("teacher.dashboard.submittedRatio", {
                           submitted: d.submitted_count,
                           total: d.total_students,
