@@ -210,3 +210,7 @@ backend/backups/
 test-repo
 
 teacher-app.html
+
+# Accidental markdown artifacts
+GITHUB_PARITY_ROADMAP.md
+docs/**/*.md
