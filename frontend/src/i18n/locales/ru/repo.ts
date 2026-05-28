@@ -429,7 +429,7 @@ export const repoRu = {
     deleteFailed: "Не удалось удалить branch",
     createFromTitle: "Создать из",
     defaultSuffix: " (по умолчанию)",
-    newBranchPlaceholder: "new-branch-name",
+    newBranchPlaceholder: "имя-новой-ветки",
     create: "Создать",
     creating: "Создание...",
     loading: "Загрузка…",

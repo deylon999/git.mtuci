@@ -413,6 +413,7 @@ async def get_student_repository_clone_info(
     repo_item_id: str,
 ) -> dict:
     # Block clone for blocked personal repositories (view-only allowed).
+    personal_repo: Repository | None = None
     try:
         item_uuid = UUID(repo_item_id)
         repo_row = await session.execute(
@@ -439,7 +440,14 @@ async def get_student_repository_clone_info(
     gitea_username = resolve_gitea_username(student_user)
     clone_url = build_clone_url(target.owner, target.repo_name)
     meta = await get_repo_metadata(owner=target.owner, repo=target.repo_name)
-    is_private = bool(meta.get("private")) if meta else True
+    if isinstance(meta, dict) and "private" in meta:
+        is_private = bool(meta.get("private"))
+    elif personal_repo is not None:
+        is_private = personal_repo.repo_type == RepositoryType.private
+    else:
+        # If Gitea metadata is temporarily unavailable, prefer public clone UX
+        # instead of forcing private-token flow.
+        is_private = False
 
     if not is_private:
         cmd = f"git clone {clone_url}"
