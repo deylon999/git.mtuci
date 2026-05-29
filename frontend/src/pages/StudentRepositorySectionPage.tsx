@@ -82,6 +82,11 @@ function EmptyState({
 function IssueRow({ theme, item }: { theme: ThemeColors; item: StudentRepoIssue }) {
   const { t } = useUserPreferences();
   const open = item.state === "open";
+  const stateLabel = open
+    ? t("repo.section.stateOpen")
+    : item.state === "closed"
+      ? t("repo.section.stateClosed")
+      : item.state;
   return (
     <li
       className="flex gap-3 px-4 py-3.5 border-t transition-colors"
@@ -103,7 +108,7 @@ function IssueRow({ theme, item }: { theme: ThemeColors; item: StudentRepoIssue 
               color: open ? theme.success : theme.text3,
             }}
           >
-            {open ? t("repo.section.stateOpen") : item.state}
+            {stateLabel}
           </span>
         </div>
         <p className="text-sm font-medium mt-0.5" style={{ color: theme.text }}>
@@ -152,7 +157,13 @@ function PullRow({
   const { t } = useUserPreferences();
   const merged = item.merged === true || item.state === "merged";
   const open = item.state === "open" && !merged;
-  const statusLabel = merged ? "merged" : item.state;
+  const statusLabel = merged
+    ? t("repo.section.stateMerged")
+    : item.state === "open"
+      ? t("repo.section.stateOpen")
+      : item.state === "closed"
+        ? t("repo.section.stateClosed")
+        : item.state;
   return (
     <li
       className="flex gap-3 px-4 py-3.5 border-t cursor-pointer transition-colors"
@@ -672,7 +683,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
       setCheckLogText(res.log || "");
       setCheckLogTruncated(!!res.truncated);
     } catch {
-      setCheckLogText("Failed to load logs.");
+      setCheckLogText(t("repo.section.loadLogFailed"));
       setCheckLogTruncated(false);
     } finally {
       setCheckLogLoading(false);
@@ -685,7 +696,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     setChecksHint(null);
     try {
       const res = await api.retryPullCheck(repoId, selectedPullNumber, item.id);
-      setChecksHint(res.message || (res.accepted ? "Rerun queued." : "Rerun is unavailable for this check."));
+      setChecksHint(res.message || (res.accepted ? t("repo.section.rerunQueued") : t("repo.section.rerunUnavailable")));
       await refreshDetail();
       // Quick follow-up refreshes to visualize queued -> running transitions.
       window.setTimeout(() => void refreshDetail(), 1500);
@@ -697,18 +708,18 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
 
   const mergeGateText = useMemo(() => {
     if (!detail) return "";
-    if (detail.checks.conflict_state === "conflicting") return "Merge conflicts detected";
-    if (detail.checks.can_merge) return "Merge checks passed";
-    if (detail.checks.blocked_reason === "already_merged") return "Pull request is already merged";
-    if (detail.checks.blocked_reason === "not_open") return "Pull request is not open";
-    if (detail.checks.blocked_reason === "conflicts") return "Merge conflicts detected";
-    if (detail.checks.blocked_reason === "required_checks_missing") return "Required checks are missing";
-    if (detail.checks.blocked_reason === "required_reviewers_missing") return "Required reviewer approvals are missing";
-    if (detail.checks.blocked_reason === "branch_policy") return "Blocked by branch policy";
-    if (detail.checks.blocked_reason === "draft") return "PR is draft";
-    if (detail.checks.blocked_reason === "mergeability_unknown") return "Mergeability is being calculated";
-    return "Merge checks pending";
-  }, [detail]);
+    if (detail.checks.conflict_state === "conflicting") return t("repo.section.mergeConflictsDetected");
+    if (detail.checks.can_merge) return t("repo.section.mergeChecksPassed");
+    if (detail.checks.blocked_reason === "already_merged") return t("repo.section.mergeAlreadyMerged");
+    if (detail.checks.blocked_reason === "not_open") return t("repo.section.mergePrNotOpen");
+    if (detail.checks.blocked_reason === "conflicts") return t("repo.section.mergeConflictsDetected");
+    if (detail.checks.blocked_reason === "required_checks_missing") return t("repo.section.mergeRequiredChecksMissing");
+    if (detail.checks.blocked_reason === "required_reviewers_missing") return t("repo.section.mergeRequiredReviewersMissing");
+    if (detail.checks.blocked_reason === "branch_policy") return t("repo.section.mergeBlockedByPolicy");
+    if (detail.checks.blocked_reason === "draft") return t("repo.section.mergeDraft");
+    if (detail.checks.blocked_reason === "mergeability_unknown") return t("repo.section.mergeabilityUnknown");
+    return t("repo.section.mergePending");
+  }, [detail, t]);
 
   const checksStale = useMemo(() => {
     if (!lastChecksRefreshAt || !detail) return false;
@@ -724,7 +735,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
         style={{ borderColor: theme.border }}
       >
         <h2 className="text-sm font-semibold" style={{ color: theme.text }}>
-          Pull requests
+          {t("repo.section.pullsTitle")}
         </h2>
         <div className="flex items-center gap-2">
           <RepoStateTabs theme={theme} value={state} onChange={setState} />
@@ -741,7 +752,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                 opacity: isBlocked ? 0.55 : 1,
               }}
             >
-              {t("repo.section.createPr") ?? "Create PR"}
+              {t("repo.section.createPr")}
             </button>
           ) : null}
         </div>
@@ -750,21 +761,21 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
         <div className="px-4 py-4 border-b space-y-3" style={{ borderColor: theme.border }}>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-semibold uppercase" style={{ color: theme.text3 }}>
-              Title
+              {t("repo.section.prTitleLabel")}
             </label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="rounded-lg border px-3 py-2 text-sm"
               style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
-              placeholder="PR title"
+              placeholder={t("repo.section.prTitlePlaceholder")}
               disabled={createLoading || isBlocked}
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold uppercase" style={{ color: theme.text3 }}>
-                Head (from)
+                {t("repo.section.prHeadLabel")}
               </label>
               <select
                 value={head}
@@ -781,12 +792,12 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                 ))}
               </select>
               <p className="text-[11px]" style={{ color: theme.text3 }}>
-                Only branches ahead of <span className="font-mono">{base}</span> are shown.
+                {t("repo.section.prHeadHint").replace("{base}", base)}
               </p>
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold uppercase" style={{ color: theme.text3 }}>
-                Base (to)
+                {t("repo.section.prBaseLabel")}
               </label>
               <input
                 value={base}
@@ -798,7 +809,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-semibold uppercase" style={{ color: theme.text3 }}>
-              Description
+              {t("repo.section.prDescriptionLabel")}
             </label>
             <textarea
               value={body}
@@ -826,7 +837,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                   if (!head || !title.trim()) return;
                   setCreateLoading(true);
                   try {
-                    if (!api.createPull) throw new Error("Read-only repository");
+                    if (!api.createPull) throw new Error(t("repo.errors.readOnlyRepository"));
                     const pr = await api.createPull(repoId, { title: title.trim(), head, base, body });
                     setItems((prev) => [pr, ...prev]);
                     setCreateOpen(false);
@@ -882,16 +893,16 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
           <div className="min-h-[320px] p-4 space-y-4">
             {!selectedPullNumber ? (
               <p className="text-sm" style={{ color: theme.text3 }}>
-                Select a pull request to review.
+                {t("repo.section.selectPrPrompt")}
               </p>
             ) : detailLoading ? (
               <div className="flex items-center gap-2 text-sm" style={{ color: theme.text2 }}>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Loading review details...
+                {t("repo.section.loadingPrDetails")}
               </div>
             ) : !detail ? (
               <p className="text-sm" style={{ color: theme.text3 }}>
-                Pull request details unavailable.
+                {t("repo.section.prDetailsUnavailable")}
               </p>
             ) : (
               <>
@@ -909,7 +920,13 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                         color: detail.pull.state === "open" ? theme.accent2 : theme.text3,
                       }}
                     >
-                      {detail.pull.state}
+                      {detail.pull.state === "open"
+                        ? t("repo.section.stateOpen")
+                        : detail.pull.state === "closed"
+                          ? t("repo.section.stateClosed")
+                          : detail.pull.state === "merged"
+                            ? t("repo.section.stateMerged")
+                            : detail.pull.state}
                     </span>
                   </div>
                   <p className="text-xs font-mono" style={{ color: theme.text2 }}>
@@ -917,8 +934,15 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                   </p>
                   <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ color: theme.text3 }}>
                     <span>{detail.pull.commits_count ?? 0} {t("repo.sidebar.commitMany")}</span>
-                    <span>{detail.pull.changed_files_count ?? detail.files.length} files</span>
-                    <span>{detail.pull.review_comments_count} review comments</span>
+                    <span>
+                      {t("repo.section.filesCount").replace(
+                        "{count}",
+                        String(detail.pull.changed_files_count ?? detail.files.length),
+                      )}
+                    </span>
+                    <span>
+                      {t("repo.section.reviewCommentsCount").replace("{count}", String(detail.pull.review_comments_count))}
+                    </span>
                   </div>
                 </div>
 
@@ -940,27 +964,32 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                   </div>
                   {detail.checks.required_contexts.length > 0 ? (
                     <p className="mt-2 text-[11px]" style={{ color: theme.text3 }}>
-                      Required: {detail.checks.required_contexts.join(", ")}
+                      {t("repo.section.requiredChecks").replace("{list}", detail.checks.required_contexts.join(", "))}
                     </p>
                   ) : null}
                   {detail.checks.missing_required_contexts.length > 0 ? (
                     <p className="mt-1 text-[11px]" style={{ color: theme.danger }}>
-                      Missing: {detail.checks.missing_required_contexts.join(", ")}
+                      {t("repo.section.missingChecks").replace("{list}", detail.checks.missing_required_contexts.join(", "))}
                     </p>
                   ) : null}
                   {detail.checks.required_approvals > 0 ? (
                     <p className="mt-1 text-[11px]" style={{ color: theme.text3 }}>
-                      Approvals: {detail.checks.approvals}/{detail.checks.required_approvals}
+                      {t("repo.section.approvals")
+                        .replace("{current}", String(detail.checks.approvals))
+                        .replace("{required}", String(detail.checks.required_approvals))}
                     </p>
                   ) : null}
                   {detail.checks.required_reviewer_logins.length > 0 ? (
                     <p className="mt-1 text-[11px]" style={{ color: theme.text3 }}>
-                      Required reviewers: {detail.checks.required_reviewer_logins.join(", ")}
+                      {t("repo.section.requiredReviewers").replace("{list}", detail.checks.required_reviewer_logins.join(", "))}
                     </p>
                   ) : null}
                   {detail.checks.missing_required_reviewer_logins.length > 0 ? (
                     <p className="mt-1 text-[11px]" style={{ color: theme.danger }}>
-                      Missing reviewer approvals: {detail.checks.missing_required_reviewer_logins.join(", ")}
+                      {t("repo.section.missingReviewerApprovals").replace(
+                        "{list}",
+                        detail.checks.missing_required_reviewer_logins.join(", "),
+                      )}
                     </p>
                   ) : null}
                   {detail.checks.policy_reasons.length > 0 ? (
@@ -970,12 +999,12 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                   ) : null}
                   {lastChecksRefreshAt ? (
                     <p className="mt-1 text-[10px]" style={{ color: theme.text3 }}>
-                      Checks updated {formatRelativeTime(lastChecksRefreshAt.toISOString())}
+                      {t("repo.section.checksUpdated").replace("{time}", formatRelativeTime(lastChecksRefreshAt.toISOString()))}
                     </p>
                   ) : null}
                   {checksStale ? (
                     <p className="mt-1 text-[10px]" style={{ color: theme.warning }}>
-                      Checks status may be stale. Focus the tab to force refresh.
+                      {t("repo.section.checksStale")}
                     </p>
                   ) : null}
                 </div>
@@ -983,7 +1012,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                 {detail.checks.items.length > 0 ? (
                   <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: theme.border }}>
                     <p className="text-xs font-semibold" style={{ color: theme.text2 }}>
-                      Checks
+                      {t("repo.section.checksTitle")}
                     </p>
                     {checksHint ? (
                       <p className="text-[11px]" style={{ color: theme.text3 }}>
@@ -1021,7 +1050,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                               style={{ borderColor: theme.border, color: theme.text2 }}
                             >
                               <ExternalLink className="h-3 w-3" />
-                              Details
+                              {t("repo.section.details")}
                             </a>
                           ) : null}
                           {api.getPullCheckLog ? (
@@ -1033,7 +1062,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                             >
                               <span className="inline-flex items-center gap-1">
                                 <FileText className="h-3 w-3" />
-                                Log
+                                {t("repo.section.log")}
                               </span>
                             </button>
                           ) : null}
@@ -1047,7 +1076,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                             >
                               <span className="inline-flex items-center gap-1">
                                 <RotateCcw className={`h-3 w-3 ${retryCheckId === item.id ? "animate-spin" : ""}`} />
-                                Retry
+                                {t("repo.section.retry")}
                               </span>
                             </button>
                           ) : null}
@@ -1058,7 +1087,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                       <div className="rounded border p-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[11px] font-semibold" style={{ color: theme.text2 }}>
-                            Check Log
+                            {t("repo.section.checkLogTitle")}
                           </span>
                           <button
                             type="button"
@@ -1070,7 +1099,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                             className="text-[10px] hover:underline"
                             style={{ color: theme.text3 }}
                           >
-                            Close
+                            {t("repo.section.close")}
                           </button>
                         </div>
                         {checkLogLoading ? (
@@ -1184,7 +1213,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                       >
                         <p style={{ color: theme.text }}>{msg.body}</p>
                         <p className="mt-1" style={{ color: theme.text3 }}>
-                          {msg.user_login ?? msg.user_name ?? "user"} ·{" "}
+                          {msg.user_login ?? msg.user_name ?? t("repo.section.unknownUser")} ·{" "}
                           {msg.updated_at ? formatRelativeTime(msg.updated_at) : ""}
                         </p>
                       </div>
@@ -1291,7 +1320,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                                         >
                                           <p style={{ color: theme.text }}>{comment.body}</p>
                                           <p style={{ color: theme.text3 }}>
-                                            {comment.user_login ?? comment.user_name ?? "user"} ·{" "}
+                                            {comment.user_login ?? comment.user_name ?? t("repo.section.unknownUser")} ·{" "}
                                             {comment.updated_at ? formatRelativeTime(comment.updated_at) : ""}
                                           </p>
                                         </div>

@@ -1,8 +1,10 @@
 import os
 import asyncio
 import base64
+import re
 from datetime import datetime, timezone
 from urllib.parse import quote
+from urllib.parse import urlparse
 from typing import List, Optional
 from uuid import UUID
 
@@ -29,6 +31,7 @@ from app.schemas.repository import (
     RepositoryCreateRequest,
     RepositoryCreateTemplatesRead,
     RepositoryCreateTemplateOption,
+    RepositoryGithubImportRequest,
     RepositoryRead,
     RepositoryUpdateRequest,
 )
@@ -38,6 +41,7 @@ from app.services.gitea_service import (
     build_clone_url,
     ensure_repo_webhook,
     get_repo_metadata,
+    migrate_repository_for_owner,
     resolve_repo_owner,
 )
 from app.services.repository_access_service import (
@@ -54,6 +58,32 @@ GITEA_URL = os.getenv("GITEA_URL", "http://gitea:3000")
 GITEA_TOKEN = os.getenv("GITEA_TOKEN", "")
 GITEA_ADMIN = os.getenv("GITEA_ADMIN_USERNAME", "gitea_admin")
 GITEA_ADMIN_PASSWORD = os.getenv("GITEA_ADMIN_PASSWORD", "admin12345")
+
+
+def _parse_github_repo_url(raw_url: str) -> tuple[str, str]:
+    parsed = urlparse(raw_url.strip())
+    host = (parsed.hostname or "").lower()
+    if host not in {"github.com", "www.github.com"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only github.com repository URLs are supported",
+        )
+    parts = [p for p in (parsed.path or "").split("/") if p]
+    if len(parts) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid GitHub repository URL",
+        )
+    owner = parts[0].strip()
+    repo = parts[1].strip()
+    if repo.endswith(".git"):
+        repo = repo[:-4]
+    if not owner or not repo:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid GitHub repository URL",
+        )
+    return owner, repo
 
 
 def get_gitea_auth_headers() -> dict[str, str]:
@@ -379,6 +409,97 @@ async def create_repository(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create repository: {str(e)}",
         )
+
+
+@router.post("/import/github", response_model=RepositoryRead, status_code=status.HTTP_201_CREATED)
+@require_permission("repo_create")
+async def import_github_repository(
+    payload: RepositoryGithubImportRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    ip_address = get_client_ip(request)
+    source_url = (payload.github_url or "").strip()
+    _, source_repo = _parse_github_repo_url(source_url)
+
+    target_name = (payload.name or "").strip() or source_repo
+    if not target_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Repository name is required",
+        )
+    if not re.match(r"^[a-zA-Z0-9._-]+$", target_name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid repository name. Use letters, numbers, dot, underscore, hyphen",
+        )
+
+    duplicate = await session.execute(
+        select(Repository).where(
+            Repository.owner_id == current_user.id,
+            Repository.name == target_name,
+        )
+    )
+    if duplicate.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Repository with this name already exists",
+        )
+
+    owner_username = resolve_gitea_username(current_user)
+    private = payload.visibility == "private"
+    try:
+        imported = await migrate_repository_for_owner(
+            owner_username=owner_username,
+            source_url=source_url,
+            repo_name=target_name,
+            private=private,
+            description=payload.description,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to import repository from GitHub: {str(exc)}",
+        ) from exc
+
+    gitea_repo_name = str(imported.get("name") or target_name)
+    actual_owner = await resolve_repo_owner(
+        primary_owner=owner_username,
+        repo_name=gitea_repo_name,
+    )
+    clone_url = build_clone_url(actual_owner, gitea_repo_name)
+    await ensure_repo_webhook(owner=actual_owner, repo_name=gitea_repo_name)
+
+    repository = Repository(
+        name=target_name,
+        description=payload.description,
+        gitea_repo_name=gitea_repo_name,
+        clone_url=clone_url,
+        owner_id=current_user.id,
+        repo_type=RepositoryType.private if private else RepositoryType.public,
+    )
+    session.add(repository)
+    await session.commit()
+    await session.refresh(repository)
+
+    asyncio.create_task(log_event_background(
+        level=LogLevel.INFO,
+        source=LogSource.repositories,
+        message=f"Imported GitHub repository: {source_url} -> {target_name}",
+        ip_address=ip_address,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        user_full_name=current_user.full_name,
+        http_status=201,
+    ))
+    await log_repo_created(
+        session=session,
+        user_id=current_user.id,
+        repo_name=repository.name,
+        ip_address=None,
+    )
+    return await build_repository_read(repository, current_user)
 
 
 # NOTE: Keep static routes ABOVE "/{repository_id}" to avoid them being swallowed

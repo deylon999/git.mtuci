@@ -521,7 +521,7 @@ class IssueService:
         if issue.author_id:
             user_res = await self.db.execute(select(User).where(User.id == issue.author_id))
             user = user_res.scalar_one_or_none()
-            author_login = user.login if user else None
+            author_login = resolve_gitea_username(user) if user else None
         events.append(
             {
                 "id": f"issue-created-{issue.id}",
@@ -543,7 +543,7 @@ class IssueService:
         if author_ids:
             users_res = await self.db.execute(select(User).where(User.id.in_(author_ids)))
             for u in users_res.scalars().all():
-                author_map[u.id] = u.login
+                author_map[u.id] = resolve_gitea_username(u)
 
         for comment in comments:
             events.append(
@@ -580,7 +580,7 @@ class IssueService:
             issue_author_ids = {r.author_id for r in issue_rows.scalars().all() if r.author_id}
             if issue_author_ids:
                 user_rows = await self.db.execute(select(User).where(User.id.in_(issue_author_ids)))
-                user_map = {u.id: u.login for u in user_rows.scalars().all()}
+                user_map = {u.id: resolve_gitea_username(u) for u in user_rows.scalars().all()}
                 for aid in issue_author_ids:
                     outbound_author_map[aid] = (aid, user_map.get(aid))
         if outbound_comment_ids:
@@ -588,7 +588,7 @@ class IssueService:
             comment_author_ids = {r.author_id for r in comment_rows.scalars().all() if r.author_id}
             if comment_author_ids:
                 user_rows = await self.db.execute(select(User).where(User.id.in_(comment_author_ids)))
-                user_map = {u.id: u.login for u in user_rows.scalars().all()}
+                user_map = {u.id: resolve_gitea_username(u) for u in user_rows.scalars().all()}
                 for aid in comment_author_ids:
                     outbound_author_map[aid] = (aid, user_map.get(aid))
 

@@ -22,6 +22,13 @@ class RepositoryCreateRequest(BaseModel):
     language: Optional[str] = None
 
 
+class RepositoryGithubImportRequest(BaseModel):
+    github_url: str = Field(..., max_length=2048)
+    name: Optional[str] = Field(default=None, max_length=255)
+    description: Optional[str] = None
+    visibility: Literal["public", "private"] = "public"
+
+
 class RepositoryCreateTemplateOption(BaseModel):
     id: str
     label: str

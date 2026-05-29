@@ -27,10 +27,12 @@ from app.schemas.issue import (
     IssueResponse,
     IssueTimelineEventResponse,
     IssueUpdate,
+    IssueUserResponse,
 )
 from app.services.issue_service import IssueService
 from app.services.repo_access_service import ensure_min_repo_role
 from app.services.repository_access_service import ensure_repository_accessible
+from app.utils.gitea_user import resolve_gitea_username
 
 router = APIRouter()
 
@@ -62,6 +64,39 @@ async def _issue_for_comment_or_404(service: IssueService, comment_id: UUID):
     if not issue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
     return issue
+
+
+def _issue_user_response(user: object) -> IssueUserResponse:
+    user_id = getattr(user, "id")
+    full_name = getattr(user, "full_name", None)
+    avatar_url = getattr(user, "avatar_url", None)
+    return IssueUserResponse(
+        id=user_id,
+        login=resolve_gitea_username(user),
+        full_name=full_name,
+        avatar_url=avatar_url,
+    )
+
+
+def _issue_response(issue: object) -> IssueResponse:
+    raw_labels = issue.labels if isinstance(getattr(issue, "labels", None), list) else []
+    raw_assignees = issue.assignees if isinstance(getattr(issue, "assignees", None), list) else []
+    return IssueResponse(
+        id=issue.id,
+        repository_id=issue.repository_id,
+        number=issue.number,
+        title=issue.title,
+        body=issue.body,
+        state=issue.state,
+        author_id=issue.author_id,
+        milestone_id=issue.milestone_id,
+        locked=issue.locked,
+        created_at=issue.created_at,
+        updated_at=issue.updated_at,
+        closed_at=issue.closed_at,
+        labels=[IssueLabelResponse.model_validate(label) for label in raw_labels],
+        assignees=[_issue_user_response(assignee) for assignee in raw_assignees],
+    )
 
 
 # Labels
@@ -219,7 +254,8 @@ async def create_issue(
 ):
     await _require_repo_access(db, user=current_user, repository_id=repository_id, min_role=RepoAccessRole.write)
     service = IssueService(db)
-    return await service.create_issue(repository_id, current_user.id, data)
+    created = await service.create_issue(repository_id, current_user.id, data)
+    return _issue_response(created)
 
 
 @router.get("/repositories/{repository_id}/issues", response_model=list[IssueListResponse])
@@ -235,7 +271,7 @@ async def get_issues(
 ):
     await _require_repo_access(db, user=current_user, repository_id=repository_id, min_role=RepoAccessRole.read)
     service = IssueService(db)
-    return await service.get_issues(
+    issues = await service.get_issues(
         repository_id,
         state=state,
         author_id=author_id,
@@ -243,6 +279,25 @@ async def get_issues(
         milestone_id=milestone_id,
         q=q,
     )
+    normalized: list[IssueListResponse] = []
+    for issue in issues:
+        raw_labels = issue.labels if isinstance(getattr(issue, "labels", None), list) else []
+        raw_assignees = issue.assignees if isinstance(getattr(issue, "assignees", None), list) else []
+        normalized.append(
+            IssueListResponse(
+                id=issue.id,
+                repository_id=issue.repository_id,
+                number=issue.number,
+                title=issue.title,
+                state=issue.state,
+                author_id=issue.author_id,
+                created_at=issue.created_at,
+                updated_at=issue.updated_at,
+                labels=[IssueLabelResponse.model_validate(label) for label in raw_labels],
+                assignees=[_issue_user_response(assignee) for assignee in raw_assignees],
+            )
+        )
+    return normalized
 
 
 @router.get("/repositories/{repository_id}/issues/{number}", response_model=IssueResponse)
@@ -257,7 +312,7 @@ async def get_issue_by_number(
     issue = await service.get_issue_by_number(repository_id, number)
     if not issue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
-    return issue
+    return _issue_response(issue)
 
 
 @router.get("/repositories/{repository_id}/issues/{number}/timeline", response_model=list[IssueTimelineEventResponse])
@@ -292,7 +347,7 @@ async def update_issue(
     updated = await service.update_issue(issue_id, data)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
-    return updated
+    return _issue_response(updated)
 
 
 @router.delete("/issues/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)

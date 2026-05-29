@@ -196,19 +196,19 @@ export default function RepoProjectSidebar({
             <ActionButton
               theme={theme}
               icon={<Star className="h-3.5 w-3.5" style={{ color: theme.warning }} />}
-              label="Star"
+              label={t("repo.sidebar.star")}
               count={summary?.stars_count}
             />
             <ActionButton
               theme={theme}
               icon={<Eye className="h-3.5 w-3.5" />}
-              label="Watch"
+              label={t("repo.sidebar.watch")}
               count={summary?.watchers_count}
             />
             <ActionButton
               theme={theme}
               icon={<GitPullRequest className="h-3.5 w-3.5" />}
-              label="Fork"
+              label={t("repo.sidebar.fork")}
               count={summary?.forks_count}
             />
           </div>
@@ -286,7 +286,7 @@ export default function RepoProjectSidebar({
               <StatRow
                 theme={theme}
                 icon={<GitPullRequest className="h-4 w-4" />}
-                label={`${summary.open_pr_count} pull requests`}
+                label={`${summary.open_pr_count} ${t("repo.sidebar.pullRequests")}`}
                 href={links?.pulls}
               />
             ) : null}
@@ -384,14 +384,14 @@ export default function RepoProjectSidebar({
           {courseHref ? (
             <div className="border-t pt-3" style={{ borderColor: theme.border }}>
               <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: theme.text3 }}>
-                {t("repo.sidebar.assignment") ?? "Course & assignment"}
+                {t("repo.sidebar.assignment")}
               </p>
               <Link
                 to={courseHref}
                 className="block rounded-lg border px-3 py-2 text-sm hover:opacity-90"
                 style={{ borderColor: theme.border, backgroundColor: theme.bg4, color: theme.accent2 }}
               >
-                {assignmentLabel ?? "Open assignment"}
+                {assignmentLabel ?? t("repo.sidebar.openAssignment")}
               </Link>
             </div>
           ) : null}

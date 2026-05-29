@@ -600,6 +600,62 @@ async def create_repository_for_owner(
     return data if isinstance(data, dict) else {"name": name}
 
 
+async def migrate_repository_for_owner(
+    *,
+    owner_username: str,
+    source_url: str,
+    repo_name: str,
+    private: bool = False,
+    description: str | None = None,
+) -> dict[str, Any]:
+    """Import a repository from a remote URL into a target Gitea user namespace."""
+    await ensure_gitea_user(owner_username)
+    base_url = settings.GITEA_URL.rstrip("/")
+
+    async with httpx.AsyncClient(timeout=90) as client:
+        user_resp = await _gitea_request(
+            client,
+            "GET",
+            f"{base_url}/api/v1/users/{gitea_owner_path(owner_username)}",
+        )
+        if user_resp.status_code != 200:
+            raise RuntimeError(
+                f"Gitea get user failed: {user_resp.status_code} {user_resp.text[:300]}"
+            )
+        user_data = user_resp.json() if user_resp.content else {}
+        if not isinstance(user_data, dict) or user_data.get("id") is None:
+            raise RuntimeError("Gitea get user returned invalid payload")
+        owner_uid = int(user_data["id"])
+
+        payload: dict[str, Any] = {
+            "clone_addr": source_url,
+            "repo_name": repo_name,
+            "uid": owner_uid,
+            "private": private,
+            "mirror": False,
+            "service": "git",
+            "description": description or "",
+        }
+        resp = await _gitea_request(
+            client,
+            "POST",
+            f"{base_url}/api/v1/repos/migrate",
+            headers={"Content-Type": "application/json"},
+            json=payload,
+        )
+
+    if resp.status_code == 409:
+        meta = await get_repo_metadata(owner=owner_username, repo=repo_name)
+        if meta:
+            return meta
+        raise RuntimeError(f"Gitea repo conflict: {repo_name}")
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Gitea migrate repo failed: {resp.status_code} {resp.text[:500]}")
+
+    data = resp.json()
+    return data if isinstance(data, dict) else {"name": repo_name}
+
+
 async def create_repo(repo_name: str) -> str:
     """
     Deprecated: creates under admin token user. Use create_repository_for_owner.

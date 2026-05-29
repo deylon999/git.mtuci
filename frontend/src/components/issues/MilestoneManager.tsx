@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { getTheme } from '../../theme';
 import {
   getMilestones,
   createMilestone,
@@ -28,12 +29,22 @@ import {
   CreateMilestoneRequest,
   UpdateMilestoneRequest,
 } from '../../api/issuesApi';
+import {
+  issueDialogBackdropSx,
+  issueDialogContentSx,
+  issueDialogPaperSx,
+  issueFieldSx,
+  issueOutlinedButtonSx,
+  issuePrimaryButtonSx,
+  issueTextButtonSx,
+} from './issueMuiStyles';
 
 interface MilestoneManagerProps {
   repositoryId: string;
   open: boolean;
   onClose: () => void;
   onMilestonesChange?: () => void;
+  isDarkTheme?: boolean;
 }
 
 export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
@@ -41,8 +52,10 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
   open,
   onClose,
   onMilestonesChange,
+  isDarkTheme = false,
 }) => {
   const { t } = useTranslation();
+  const theme = getTheme(isDarkTheme);
   const [milestones, setMilestones] = useState<IssueMilestone[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +81,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
       const response = await getMilestones(repositoryId);
       setMilestones(response.data);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load milestones');
+      setError(err.response?.data?.detail || t('repo.issues.milestones.loadFailed', 'Failed to load milestones'));
     } finally {
       setLoading(false);
     }
@@ -76,7 +89,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
 
   const handleCreate = async () => {
     if (!formData.title.trim()) {
-      setError('Milestone title is required');
+      setError(t('repo.issues.milestones.titleRequired', 'Milestone title is required'));
       return;
     }
 
@@ -89,7 +102,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
       setFormData({ title: '', description: '', state: 'open', due_date: undefined });
       onMilestonesChange?.();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create milestone');
+      setError(err.response?.data?.detail || t('repo.issues.milestones.createFailed', 'Failed to create milestone'));
     } finally {
       setLoading(false);
     }
@@ -113,14 +126,14 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
       setFormData({ title: '', description: '', state: 'open', due_date: undefined });
       onMilestonesChange?.();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to update milestone');
+      setError(err.response?.data?.detail || t('repo.issues.milestones.updateFailed', 'Failed to update milestone'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (milestoneId: string) => {
-    if (!confirm('Are you sure you want to delete this milestone?')) return;
+    if (!confirm(t('repo.issues.milestones.deleteConfirm', 'Are you sure you want to delete this milestone?'))) return;
 
     setLoading(true);
     setError(null);
@@ -129,7 +142,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
       await loadMilestones();
       onMilestonesChange?.();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to delete milestone');
+      setError(err.response?.data?.detail || t('repo.issues.milestones.deleteFailed', 'Failed to delete milestone'));
     } finally {
       setLoading(false);
     }
@@ -164,11 +177,20 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      slotProps={{
+        backdrop: { sx: issueDialogBackdropSx(isDarkTheme) },
+        paper: { sx: issueDialogPaperSx(theme) },
+      }}
+    >
+      <DialogTitle sx={{ color: theme.text }}>
         {t('repo.issues.milestones.manage', 'Manage Milestones')}
       </DialogTitle>
-      <DialogContent>
+      <DialogContent sx={issueDialogContentSx(theme)}>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
             {error}
@@ -176,7 +198,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
         )}
 
         {(isCreating || editingMilestone) && (
-          <Box sx={{ mb: 3, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+          <Box sx={{ mb: 3, p: 2, border: '1px solid', borderColor: theme.border, borderRadius: 1, bgcolor: theme.bg }}>
             <Typography variant="subtitle2" sx={{ mb: 2 }}>
               {editingMilestone
                 ? t('repo.issues.milestones.edit', 'Edit Milestone')
@@ -187,7 +209,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
               label={t('repo.issues.milestones.title', 'Title')}
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              sx={{ mb: 2 }}
+              sx={issueFieldSx(theme, { mb: 2 })}
               required
             />
             <TextField
@@ -197,7 +219,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               multiline
               rows={3}
-              sx={{ mb: 2 }}
+              sx={issueFieldSx(theme, { mb: 2 })}
             />
             <TextField
               fullWidth
@@ -208,16 +230,17 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
                 setFormData({ ...formData, due_date: e.target.value ? new Date(e.target.value).toISOString() : undefined })
               }
               InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2 }}
+              sx={issueFieldSx(theme, { mb: 2 })}
             />
             <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button onClick={cancelEdit} disabled={loading}>
+              <Button onClick={cancelEdit} disabled={loading} sx={issueTextButtonSx(theme)}>
                 {t('common.cancel', 'Cancel')}
               </Button>
               <Button
                 variant="contained"
                 onClick={editingMilestone ? handleUpdate : handleCreate}
                 disabled={loading || !formData.title.trim()}
+                sx={issuePrimaryButtonSx(theme)}
               >
                 {editingMilestone ? t('common.save', 'Save') : t('common.create', 'Create')}
               </Button>
@@ -230,21 +253,23 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
             startIcon={<AddIcon />}
             onClick={startCreate}
             variant="outlined"
-            sx={{ mb: 2 }}
+            sx={{ ...issueOutlinedButtonSx(theme), mb: 2 }}
           >
             {t('repo.issues.milestones.new', 'New Milestone')}
           </Button>
         )}
 
-        <List>
+        <List sx={{ color: theme.text }}>
           {milestones.map((milestone) => (
-            <ListItem key={milestone.id} divider>
+            <ListItem key={milestone.id} divider sx={{ borderColor: theme.border }}>
               <ListItemText
                 primary={
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="subtitle1">{milestone.title}</Typography>
+                    <Typography variant="subtitle1" sx={{ color: theme.text }}>{milestone.title}</Typography>
                     <Chip
-                      label={milestone.state}
+                      label={milestone.state === 'open'
+                        ? t('repo.issues.milestones.stateOpen', 'Open')
+                        : t('repo.issues.milestones.stateClosed', 'Closed')}
                       size="small"
                       color={milestone.state === 'open' ? 'success' : 'default'}
                     />
@@ -253,37 +278,39 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
                 secondary={
                   <Box>
                     {milestone.description && (
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" sx={{ color: theme.text2 }}>
                         {milestone.description}
                       </Typography>
                     )}
                     {milestone.due_date && (
-                      <Typography variant="caption" color="text.secondary">
-                        Due: {formatDate(milestone.due_date)}
+                      <Typography variant="caption" sx={{ color: theme.text2 }}>
+                        {t('repo.issues.milestones.duePrefix', 'Due')}: {formatDate(milestone.due_date)}
                       </Typography>
                     )}
                   </Box>
                 }
               />
               <ListItemSecondaryAction>
-                <IconButton edge="end" onClick={() => startEdit(milestone)} sx={{ mr: 1 }}>
+                <IconButton edge="end" onClick={() => startEdit(milestone)} sx={{ mr: 1, color: theme.text2 }}>
                   <EditIcon />
                 </IconButton>
-                <IconButton edge="end" onClick={() => handleDelete(milestone.id)}>
+                <IconButton edge="end" onClick={() => handleDelete(milestone.id)} sx={{ color: theme.danger }}>
                   <DeleteIcon />
                 </IconButton>
               </ListItemSecondaryAction>
             </ListItem>
           ))}
           {milestones.length === 0 && !loading && (
-            <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
+            <Typography variant="body2" sx={{ p: 2, textAlign: 'center', color: theme.text2 }}>
               {t('repo.issues.milestones.empty', 'No milestones yet')}
             </Typography>
           )}
         </List>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{t('common.close', 'Close')}</Button>
+      <DialogActions sx={{ borderTop: `1px solid ${theme.border}` }}>
+        <Button onClick={onClose} sx={issueTextButtonSx(theme)}>
+          {t('common.close', 'Close')}
+        </Button>
       </DialogActions>
     </Dialog>
   );

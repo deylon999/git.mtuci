@@ -546,7 +546,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
         {section === "branches" && (
           <>
             <h2 className="text-base font-semibold" style={{ color: theme.text }}>
-              Branches
+              {t("repo.settings.branchesHeader")}
             </h2>
             <PlaceholderBlock theme={theme} title={t("repo.settings.labelDefaultBranch")}>
               <p className="text-sm font-mono" style={{ color: theme.accent2 }}>
@@ -576,7 +576,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                     checked={!!branchRule?.require_status_checks}
                     onChange={(e) => setBranchRule((p) => ({ ...(p ?? { id: "", created_at: "", updated_at: "", branch_pattern: "main", required_approvals: 1, require_status_checks: false, status_check_contexts: [], required_reviewer_logins: [], dismiss_stale_approvals: true, block_on_rejected_reviews: true }), require_status_checks: e.target.checked }))}
                   />{" "}
-                  Required checks
+                  {t("repo.settings.requiredChecks")}
                 </label>
                 <input
                   value={statusContexts}
@@ -619,7 +619,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                   className="rounded border px-2 py-1 text-xs"
                   style={{ borderColor: theme.border, color: theme.text2 }}
                 >
-                  Save rule
+                  {t("repo.settings.saveRule")}
                 </button>
               </div>
             </PlaceholderBlock>
@@ -629,7 +629,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
         {section === "webhooks" && (
           <>
             <h2 className="text-base font-semibold" style={{ color: theme.text }}>
-              Webhooks
+              {t("repo.settings.sectionWebhooks")}
             </h2>
             <PlaceholderBlock theme={theme} title={t("repo.settings.activeHooks")}>
               <div className="space-y-2">
@@ -656,7 +656,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                     })();
                   }}
                 >
-                  Add webhook
+                  {t("repo.settings.addWebhook")}
                 </button>
                 {webhooks.map((w) => (
                   <div key={w.id} className="text-xs flex items-center justify-between" style={{ color: theme.text2 }}>
@@ -676,7 +676,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
         {section === "keys" && (
           <>
             <h2 className="text-base font-semibold" style={{ color: theme.text }}>
-              Deploy keys
+              {t("repo.settings.sectionDeployKeys")}
             </h2>
             <PlaceholderBlock theme={theme} title={t("repo.settings.sshKeys")}>
               <div className="space-y-2">
@@ -699,7 +699,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                     })();
                   }}
                 >
-                  Add deploy key
+                  {t("repo.settings.addDeployKey")}
                 </button>
                 {deployKeys.map((k) => (
                   <div key={k.id} className="text-xs flex items-center justify-between" style={{ color: theme.text2 }}>
@@ -715,7 +715,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
         {section === "security" && (
           <>
             <h2 className="text-base font-semibold" style={{ color: theme.text }}>
-              Security
+              {t("repo.settings.sectionSecurity")}
             </h2>
             <PlaceholderBlock theme={theme} title={t("repo.settings.policies")}>
               <ul className="text-sm space-y-2" style={{ color: theme.text2 }}>
@@ -749,7 +749,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                     })();
                   }}
                 >
-                  Save secret
+                  {t("repo.settings.saveSecret")}
                 </button>
                 {secrets.map((s) => (
                   <div key={s.id} className="text-xs flex items-center justify-between" style={{ color: theme.text2 }}>
@@ -826,7 +826,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
           <>
             <h2 className="text-base font-semibold flex items-center gap-2" style={{ color: theme.text }}>
               <Package className="h-4 w-4" />
-              Releases / Tags / Packages
+              {t("repo.settings.releasesPackagesTitle")}
             </h2>
 
             <PlaceholderBlock theme={theme} title={t("repo.settings.createRelease")}>
@@ -891,7 +891,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                     <div className="mt-2 space-y-1">
                       {r.assets.map((a) => (
                         <div key={a.id} className="text-[11px]" style={{ color: theme.text3 }}>
-                          {a.filename} ({a.size_bytes} bytes)
+                          {a.filename} ({a.size_bytes} {t("repo.settings.bytes")})
                         </div>
                       ))}
                     </div>
@@ -1053,7 +1053,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                             <div key={job.id} className="rounded border p-2 text-[11px]" style={{ borderColor: theme.border }}>
                               <div className="flex items-center justify-between gap-2">
                                 <span style={{ color: theme.text2 }}>
-                                  {job.state.toUpperCase()} · attempt {job.attempt} · {job.version}
+                                  {job.state.toUpperCase()} · {t("repo.settings.attempt")} {job.attempt} · {job.version}
                                 </span>
                                 {job.state === "failed" || job.state === "success" ? (
                                   <button

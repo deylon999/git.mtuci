@@ -349,16 +349,14 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              disabled
-              title={t("student.dashboard.importGithubTitle")}
-              className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium opacity-50 cursor-not-allowed"
+            <Link
+              to="/repositories?import=github"
+              className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
               style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text }}
             >
               <Github className="h-3.5 w-3.5" />
               {t("student.dashboard.importGithub")}
-            </button>
+            </Link>
           </div>
         </div>
         {!loading && deadlinesToday > 0 ? (

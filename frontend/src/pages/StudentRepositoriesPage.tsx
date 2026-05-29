@@ -22,6 +22,7 @@ import {
 import CreateRepositoryModal from "../components/CreateRepositoryModal";
 import DeleteRepositoryDialog from "../components/DeleteRepositoryDialog";
 import EditRepositoryModal from "../components/EditRepositoryModal";
+import ImportGithubRepositoryModal from "../components/ImportGithubRepositoryModal";
 import {
   deleteStudentRepository,
   getStudentForks,
@@ -108,6 +109,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
   const [langFilter, setLangFilter] = useState("all");
   const [sort, setSort] = useState<SortKey>("activity");
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [copyId, setCopyId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -149,6 +151,24 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
       setCreateOpen(true);
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (location.pathname !== "/repositories") return;
+    const params = new URLSearchParams(location.search);
+    if (params.get("import") === "github") {
+      setImportOpen(true);
+    }
+  }, [location.pathname, location.search]);
+
+  const closeImportModal = useCallback(() => {
+    setImportOpen(false);
+    if (location.pathname === "/repositories" && location.search) {
+      const params = new URLSearchParams(location.search);
+      if (params.get("import") === "github") {
+        navigate("/repositories", { replace: true });
+      }
+    }
+  }, [location.pathname, location.search, navigate]);
 
   const languages = useMemo(() => {
     const set = new Set<string>();
@@ -236,9 +256,8 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled
-            title={t("featurePlaceholder.soon")}
-            className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium opacity-50 cursor-not-allowed"
+            onClick={() => setImportOpen(true)}
+            className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium"
             style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text }}
           >
             <Github className="h-3.5 w-3.5" />
@@ -486,7 +505,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
                     style={{ backgroundColor: `${theme.accent}20`, color: theme.accent2 }}
                   >
                     <GitFork className="h-2.5 w-2.5" />
-                    Fork
+                    {t("student.repos.forkBadge")}
                   </span>
                 ) : null}
                 <span
@@ -844,6 +863,12 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
           closeCreateModal();
           void load();
         }}
+      />
+      <ImportGithubRepositoryModal
+        isOpen={importOpen}
+        isDarkTheme={isDarkTheme}
+        onClose={closeImportModal}
+        onImported={() => void load()}
       />
       {editRepo?.repository_id ? (
         <EditRepositoryModal

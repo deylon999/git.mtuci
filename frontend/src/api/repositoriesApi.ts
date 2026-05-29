@@ -22,6 +22,13 @@ export interface CreateRepositoryRequest {
   license_template?: string | null;
 }
 
+export interface ImportGithubRepositoryRequest {
+  github_url: string;
+  name?: string;
+  description?: string;
+  visibility?: RepositoryVisibility;
+}
+
 export interface RepositoryTemplateOption {
   id: string;
   label: string;
@@ -48,6 +55,13 @@ export async function getMyRepositories(): Promise<Repository[]> {
 
 export async function createRepository(data: CreateRepositoryRequest): Promise<Repository> {
   return apiRequest<Repository>("/repositories/", {
+    method: "POST",
+    body: data,
+  });
+}
+
+export async function importGithubRepository(data: ImportGithubRepositoryRequest): Promise<Repository> {
+  return apiRequest<Repository>("/repositories/import/github", {
     method: "POST",
     body: data,
   });

@@ -30,6 +30,7 @@ export const coreEn = {
     all: "All",
     none: "None",
     close: "Close",
+    comment: "Comment",
     confirm: "Confirm",
     actions: "Actions",
     status: "Status",

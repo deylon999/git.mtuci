@@ -181,7 +181,7 @@ function AppShell({
                     />
                     <Route path="issues">
                       <Route index element={<IssuesPage isDarkTheme={isDarkTheme} />} />
-                      <Route path=":number" element={<IssueDetailPage />} />
+                      <Route path=":number" element={<IssueDetailPage isDarkTheme={isDarkTheme} />} />
                     </Route>
                     <Route path="pulls">
                       <Route index element={<StudentRepositorySectionPage isDarkTheme={isDarkTheme} section="pulls" />} />

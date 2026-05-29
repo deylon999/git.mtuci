@@ -6,6 +6,7 @@ import { useStudentRepoWorkspace } from "../hooks/useStudentRepoWorkspace";
 import type { RepoNavTabId } from "../components/repo/RepoNavTabs";
 import { getTheme } from "../theme";
 import { useAuthUser } from "../context/AuthUserContext";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 function tabFromPath(pathname: string): RepoNavTabId {
   if (pathname.includes("/branches")) return "branches";
@@ -22,6 +23,7 @@ interface StudentRepositoryLayoutProps {
 
 export default function StudentRepositoryLayout({ isDarkTheme = false }: StudentRepositoryLayoutProps) {
   const theme = getTheme(isDarkTheme);
+  const { t } = useUserPreferences();
   const { repoId } = useParams<{ repoId: string }>();
   const location = useLocation();
   const stateMeta = location.state as { name?: string } | null;
@@ -61,7 +63,7 @@ export default function StudentRepositoryLayout({ isDarkTheme = false }: Student
               className="rounded-xl border px-4 py-8 text-sm text-center"
               style={{ borderColor: theme.border, backgroundColor: theme.bg3, color: theme.text2 }}
             >
-              {error ?? "Repository not found"}
+              {error ?? t("repo.route.repositoryNotFound")}
             </div>
           ) : (
             <Outlet />

@@ -110,7 +110,7 @@ export default function RepoCodeToolbar({
                 }}
               >
                 {b.name}
-                {b.is_default ? " (default)" : ""}
+                {b.is_default ? t("repo.commits.defaultSuffix") : ""}
               </button>
             ))}
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useRepoApi } from "../context/RepoApiContext";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getTheme } from "../theme";
 
 interface StudentRepositoryCommitDiffPageProps {
@@ -10,6 +11,7 @@ interface StudentRepositoryCommitDiffPageProps {
 
 export default function StudentRepositoryCommitDiffPage({ isDarkTheme = false }: StudentRepositoryCommitDiffPageProps) {
   const theme = getTheme(isDarkTheme);
+  const { t } = useUserPreferences();
   const { repoId, sha } = useParams<{ repoId: string; sha: string }>();
   const api = useRepoApi();
   const [diff, setDiff] = useState<string>("");
@@ -26,7 +28,7 @@ export default function StudentRepositoryCommitDiffPage({ isDarkTheme = false }:
         if (!cancelled) setDiff(res.diff || "");
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load diff");
+        if (!cancelled) setError(e instanceof Error ? e.message : t("repo.commitDiff.loadFailed"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -34,7 +36,7 @@ export default function StudentRepositoryCommitDiffPage({ isDarkTheme = false }:
     return () => {
       cancelled = true;
     };
-  }, [repoId, sha]);
+  }, [repoId, sha, t]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -44,13 +46,13 @@ export default function StudentRepositoryCommitDiffPage({ isDarkTheme = false }:
         style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text2 }}
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Back to commits
+        {t("repo.commitDiff.backToCommits")}
       </Link>
 
       <div className="rounded-xl border overflow-hidden" style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}>
         <div className="px-4 py-3 border-b" style={{ borderColor: theme.border }}>
           <p className="text-sm font-semibold" style={{ color: theme.text }}>
-            Commit diff
+            {t("repo.commitDiff.title")}
           </p>
           <p className="text-xs font-mono mt-1" style={{ color: theme.text3 }}>
             {sha}
@@ -59,7 +61,7 @@ export default function StudentRepositoryCommitDiffPage({ isDarkTheme = false }:
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-sm" style={{ color: theme.text2 }}>
             <Loader2 className="h-5 w-5 animate-spin" />
-            Loading…
+            {t("repo.commitDiff.loading")}
           </div>
         ) : error ? (
           <div className="px-4 py-6 text-sm" style={{ color: theme.danger }}>

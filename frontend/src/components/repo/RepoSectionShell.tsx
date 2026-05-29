@@ -160,7 +160,7 @@ export default function RepoSectionShell({
                     title={unmergedBranches.slice(0, 6).join(", ")}
                   >
                     <GitPullRequest className="h-3.5 w-3.5" />
-                    {t("repo.section.createPr") ?? "Create PR"}
+                    {t("repo.section.createPr")}
                   </Link>
                 ) : null}
               </div>

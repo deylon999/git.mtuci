@@ -87,11 +87,11 @@ export default function StudentRepositoryCommitsPage({ isDarkTheme = false }: St
     >
       <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-3" style={{ borderColor: theme.border }}>
         <p className="text-sm font-semibold" style={{ color: theme.text }}>
-          {t("repo.commits.title") ?? "Commits"}
+          {t("repo.commits.title")}
         </p>
         <div className="flex items-center gap-2">
           <span className="text-xs" style={{ color: theme.text3 }}>
-            {t("repo.commits.branch") ?? "Branch"}
+            {t("repo.commits.branch")}
           </span>
           <select
             value={branch}
@@ -103,7 +103,7 @@ export default function StudentRepositoryCommitsPage({ isDarkTheme = false }: St
             {(branches.length ? branches : [{ name: branch, is_default: true }]).map((b) => (
               <option key={b.name} value={b.name}>
                 {b.name}
-                {b.is_default ? " (default)" : ""}
+                {b.is_default ? t("repo.commits.defaultSuffix") : ""}
               </option>
             ))}
           </select>

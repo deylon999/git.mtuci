@@ -489,7 +489,7 @@ export default function RepoFileBrowser({
     content: string;
     message: string;
   }) => {
-    if (!api.createFile) throw new Error("Read-only repository");
+    if (!api.createFile) throw new Error(t("repo.errors.readOnlyRepository"));
     await api.createFile(repoId, {
       ...payload,
       branch,
@@ -512,7 +512,7 @@ export default function RepoFileBrowser({
       setCompareResult(res);
     } catch (e) {
       setCompareResult(null);
-      setCompareError(e instanceof Error ? e.message : "Failed to compare refs");
+      setCompareError(e instanceof Error ? e.message : t("repo.browser.compareFailed"));
     } finally {
       setCompareLoading(false);
     }
@@ -529,12 +529,12 @@ export default function RepoFileBrowser({
         setFileHistoryPage(res.page ?? nextPage);
         setFileHistoryHasMore(!!res.has_more);
       } catch (e) {
-        setFileHistoryError(e instanceof Error ? e.message : "Failed to load file history");
+        setFileHistoryError(e instanceof Error ? e.message : t("repo.browser.loadFileHistoryFailed"));
       } finally {
         setFileHistoryLoading(false);
       }
     },
-    [api, repoId, branch],
+    [api, repoId, branch, t],
   );
 
   const loadFileBlame = useCallback(
@@ -547,12 +547,12 @@ export default function RepoFileBrowser({
         setFileBlameChunks(res.chunks ?? []);
       } catch (e) {
         setFileBlameChunks([]);
-        setFileBlameError(e instanceof Error ? e.message : "Failed to load blame");
+        setFileBlameError(e instanceof Error ? e.message : t("repo.browser.loadBlameFailed"));
       } finally {
         setFileBlameLoading(false);
       }
     },
-    [api, repoId, branch],
+    [api, repoId, branch, t],
   );
 
   const scrollToReadme = () => {
@@ -615,11 +615,16 @@ export default function RepoFileBrowser({
               style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg3 }}
             >
               <GitCompare className="h-3.5 w-3.5" />
-              Compare refs
+              {t("repo.browser.compareRefs")}
             </button>
             {compareResult ? (
               <span className="text-[11px]" style={{ color: theme.text3 }}>
-                {compareBase}...{compareHead} • ahead {compareResult.ahead_by} • behind {compareResult.behind_by}
+                {tp("repo.browser.compareAheadBehind", {
+                  base: compareBase,
+                  head: compareHead,
+                  ahead: compareResult.ahead_by,
+                  behind: compareResult.behind_by,
+                })}
               </span>
             ) : null}
           </div>
@@ -654,7 +659,7 @@ export default function RepoFileBrowser({
                   style={{ borderColor: theme.border, color: theme.text2 }}
                   disabled={compareLoading || !compareBase || !compareHead}
                 >
-                  {compareLoading ? "Comparing..." : "Run"}
+                  {compareLoading ? t("repo.browser.comparing") : t("repo.browser.compareRun")}
                 </button>
               </div>
               {compareError ? (
@@ -663,21 +668,24 @@ export default function RepoFileBrowser({
               {compareResult ? (
                 <div className="rounded border p-2 text-[11px]" style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}>
                   <p style={{ color: theme.text2 }}>
-                    status: {compareResult.status ?? "unknown"} • commits: {compareResult.total_commits}
+                    {tp("repo.browser.compareStatusCommits", {
+                      status: compareResult.status ?? t("repo.browser.compareUnknownStatus"),
+                      commits: compareResult.total_commits,
+                    })}
                   </p>
                   <div className="mt-1 space-y-1 max-h-36 overflow-auto">
                     {compareResult.files.slice(0, 30).map((f) => (
                       <div key={`${f.filename}-${f.status ?? ''}`} className="font-mono" style={{ color: theme.text3 }}>
-                        {f.status ?? "modified"}{" "}
+                        {f.status ?? t("repo.browser.compareModified")}{" "}
                         {f.previous_filename ? `${f.previous_filename} -> ${f.filename}` : f.filename}{" "}
                         (+{f.additions}/-{f.deletions})
-                        {f.is_binary ? " [binary]" : ""}
-                        {f.too_large ? " [large]" : ""}
-                        {f.truncated ? " [truncated]" : ""}
+                        {f.is_binary ? t("repo.browser.compareBinarySuffix") : ""}
+                        {f.too_large ? t("repo.browser.compareLargeSuffix") : ""}
+                        {f.truncated ? t("repo.browser.compareTruncatedSuffix") : ""}
                       </div>
                     ))}
                     {compareResult.files.length === 0 ? (
-                      <p style={{ color: theme.text3 }}>No file changes</p>
+                      <p style={{ color: theme.text3 }}>{t("repo.browser.compareNoFileChanges")}</p>
                     ) : null}
                   </div>
                 </div>
@@ -875,7 +883,7 @@ export default function RepoFileBrowser({
               style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg3 }}
             >
               <Clock3 className="h-3 w-3" />
-              History
+              {t("repo.browser.history")}
             </button>
           ) : null}
           {api.getFileBlame ? (
@@ -892,7 +900,7 @@ export default function RepoFileBrowser({
               style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg3 }}
             >
               <FileText className="h-3 w-3" />
-              Blame
+              {t("repo.browser.blame")}
             </button>
           ) : null}
           <span style={{ color: theme.text3 }}>{displayLanguageLabel(selectedFile!)}</span>
@@ -903,12 +911,12 @@ export default function RepoFileBrowser({
           {fileHistoryLoading && fileHistoryCommits.length === 0 ? (
             <div className="flex items-center gap-2" style={{ color: theme.text3 }}>
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Loading file history...
+              {t("repo.browser.loadingFileHistory")}
             </div>
           ) : fileHistoryError ? (
             <p style={{ color: theme.danger }}>{fileHistoryError}</p>
           ) : fileHistoryCommits.length === 0 ? (
-            <p style={{ color: theme.text3 }}>No history for this file.</p>
+            <p style={{ color: theme.text3 }}>{t("repo.browser.noFileHistory")}</p>
           ) : (
             <div className="space-y-1.5">
               {fileHistoryCommits.map((row) => (
@@ -921,10 +929,10 @@ export default function RepoFileBrowser({
                     <span className="font-mono" style={{ color: theme.accent2 }}>
                       {row.sha.slice(0, 12)}
                     </span>
-                    <span style={{ color: theme.text }}>{row.message ?? "Commit"}</span>
+                    <span style={{ color: theme.text }}>{row.message ?? t("repo.browser.commitFallback")}</span>
                   </div>
                   <p className="mt-0.5" style={{ color: theme.text3 }}>
-                    {row.author_name ?? row.author_login ?? "user"}
+                    {row.author_name ?? row.author_login ?? t("repo.browser.userFallback")}
                     {row.authored_at ? ` · ${formatRelativeTime(row.authored_at)}` : ""}
                   </p>
                 </div>
@@ -940,7 +948,7 @@ export default function RepoFileBrowser({
                   style={{ borderColor: theme.border, color: theme.text2 }}
                   disabled={fileHistoryLoading}
                 >
-                  {fileHistoryLoading ? "Loading..." : "Load more"}
+                  {fileHistoryLoading ? t("repo.browser.loadingMore") : t("repo.commits.loadMore")}
                 </button>
               ) : null}
             </div>
@@ -952,12 +960,12 @@ export default function RepoFileBrowser({
           {fileBlameLoading && fileBlameChunks.length === 0 ? (
             <div className="flex items-center gap-2" style={{ color: theme.text3 }}>
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Loading blame...
+              {t("repo.browser.loadingBlame")}
             </div>
           ) : fileBlameError ? (
             <p style={{ color: theme.danger }}>{fileBlameError}</p>
           ) : fileBlameChunks.length === 0 ? (
-            <p style={{ color: theme.text3 }}>No blame data for this file.</p>
+            <p style={{ color: theme.text3 }}>{t("repo.browser.noBlame")}</p>
           ) : (
             <div className="space-y-1.5 max-h-40 overflow-auto">
               {fileBlameChunks.slice(0, 120).map((row) => (
@@ -972,12 +980,12 @@ export default function RepoFileBrowser({
                       {row.end_line > row.start_line ? `-L${row.end_line}` : ""}
                     </span>
                     <span className="font-mono" style={{ color: theme.accent2 }}>
-                      {row.sha ? row.sha.slice(0, 12) : "unknown"}
+                      {row.sha ? row.sha.slice(0, 12) : t("repo.browser.unknownCommit")}
                     </span>
-                    <span style={{ color: theme.text }}>{row.message ?? "Commit"}</span>
+                    <span style={{ color: theme.text }}>{row.message ?? t("repo.browser.commitFallback")}</span>
                   </div>
                   <p className="mt-0.5" style={{ color: theme.text3 }}>
-                    {row.author_name ?? row.author_login ?? "user"}
+                    {row.author_name ?? row.author_login ?? t("repo.browser.userFallback")}
                     {row.authored_at ? ` · ${formatRelativeTime(row.authored_at)}` : ""}
                   </p>
                 </div>
@@ -1006,7 +1014,7 @@ export default function RepoFileBrowser({
           </p>
         ) : veryLargeContent ? (
           <p className="px-4 py-8 text-sm" style={{ color: theme.text2 }}>
-            File is too large for stable preview in browser. Download or open in local editor.
+            {t("repo.browser.fileTooLargePreview")}
           </p>
         ) : (
           <RepoMonacoViewer

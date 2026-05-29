@@ -64,7 +64,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
         await loadThreadComments(thread.id);
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load threads');
+      setError(err.response?.data?.detail || t('repo.review.threads.loadFailed', 'Failed to load threads'));
     } finally {
       setLoading(false);
     }
@@ -85,7 +85,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
       await loadThreads();
       onThreadsChange?.();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to update thread');
+      setError(err.response?.data?.detail || t('repo.review.threads.updateFailed', 'Failed to update thread'));
     }
   };
 
@@ -99,7 +99,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
       await loadThreadComments(threadId);
       setReplyText((prev) => ({ ...prev, [threadId]: '' }));
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to add comment');
+      setError(err.response?.data?.detail || t('repo.review.threads.commentFailed', 'Failed to add comment'));
     }
   };
 
