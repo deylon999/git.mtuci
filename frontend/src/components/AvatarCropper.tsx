@@ -132,7 +132,7 @@ export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = tr
           {/* Draggable image - visible fully with natural dimensions */}
           <img
             src={imageUrl}
-            alt="Crop preview"
+            alt={t("profile.cropPreview")}
             className="max-w-none max-h-none pointer-events-none"
             style={{
               transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,

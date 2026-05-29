@@ -23,7 +23,7 @@ export default function RequirePermission({
   }
 
   if (loading) {
-    return <div className="text-sm text-slate-500 p-4">Loading...</div>;
+    return <div className="text-sm text-slate-500 p-4">{t("common.loading")}</div>;
   }
 
   const allowed = permission

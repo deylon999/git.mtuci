@@ -49,6 +49,7 @@ export const authEn = {
       submittingAlt: "Sending...",
       backToLogin: "Back to sign in",
       email: "Email",
+      emailPlaceholder: "your@email.com",
       submit: "Send link",
       submitting: "Sending…",
       back: "Back to sign in",

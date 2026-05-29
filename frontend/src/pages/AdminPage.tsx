@@ -681,7 +681,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                         style={{ color: theme.text2 }}>{repo.author} • {tp("admin.dashboard.commitsCount", { n: repo.commits })}</p>
                       </div>
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${repo.is_public ? isDarkTheme ? "text-green-400 bg-green-500/20" : "text-green-700 bg-green-100" : isDarkTheme ? "text-gray-300 bg-gray-500/20" : "text-gray-700 bg-gray-100"}`}>
-                        {repo.is_public ? "Public" : "Private"}
+                        {repo.is_public ? t("repo.public") : t("repo.private")}
                       </span>
                     </div>
                   ))

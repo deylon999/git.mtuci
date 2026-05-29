@@ -1,4 +1,6 @@
 export const repoEn = {
+  public: "Public",
+  private: "Private",
   errors: {
     nameRequired: "Enter a repository name",
     nameInvalid: "Name: letters, digits, dot, hyphen, and underscore only",
@@ -28,6 +30,7 @@ export const repoEn = {
     title: "Create repository",
     subtitle: "Set visibility and initial content, similar to GitHub.",
     nameLabel: "Repository name",
+    namePlaceholder: "my-lab-work",
     description: "Description",
     descriptionPlaceholder: "Brief project summary",
     visibilityLegend: "Visibility",
@@ -95,7 +98,16 @@ export const repoEn = {
     giteaUnavailable: "Gitea URL unavailable",
     clone: "Clone",
   },
+  import: {
+    urlPlaceholder: "https://github.com/owner/repo",
+  },
+  roster: {
+    colFullName: "Full name",
+    colGroup: "Group",
+  },
   sidebar: {
+    readme: "README",
+    license: "LICENSE",
     commitOne: "commit",
     commitFew: "commits",
     commitMany: "commits",
@@ -358,6 +370,10 @@ export const repoEn = {
     unblockSuccess: "Repository unblocked",
     blockError: "Failed to update block status",
     colRepository: "Repository",
+    colGitea: "Gitea",
+    colLanguage: "Language",
+    colCommits: "Commits",
+    colCloneUrl: "Clone URL",
     colLanguage: "Language",
     colCommits: "Commits",
     blockedSuffix: "(blocked)",

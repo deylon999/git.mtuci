@@ -266,6 +266,7 @@ export const studentEn = {
       title: "Create repository",
       giteaPath: "Gitea path:",
       nameLabel: "Repository name *",
+      namePlaceholder: "lab-01",
       visibility: "Visibility",
       addReadme: "Add README.md",
       license: "License",

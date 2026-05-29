@@ -145,7 +145,7 @@ export default function CourseRosterPanel({ courseId, isDarkTheme = false }: Cou
               <tr style={{ color: theme.text2 }}>
                 <th className="py-2 text-left">{t("repo.roster.colFullName")}</th>
                 <th className="py-2 text-left">{t("repo.roster.colGroup")}</th>
-                <th className="py-2 text-left">Email</th>
+                <th className="py-2 text-left">{t("common.email")}</th>
                 <th className="py-2 text-right" />
               </tr>
             </thead>

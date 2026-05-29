@@ -170,8 +170,8 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
           <input value={repoId} onChange={(e) => setRepoId(e.target.value)} className="w-36 rounded-lg border px-2 py-2 text-sm" placeholder={t("codeSearch.repoIdPlaceholder")} />
           <input value={minScore} onChange={(e) => setMinScore(e.target.value)} className="w-24 rounded-lg border px-2 py-2 text-sm" placeholder={t("codeSearch.minScorePlaceholder")} />
           <select value={sort} onChange={(e) => setSort(e.target.value as "relevance" | "path")} className="w-32 rounded-lg border px-2 py-2 text-sm">
-            <option value="relevance">relevance</option>
-            <option value="path">path</option>
+            <option value="relevance">{t("codeSearch.sortRelevance")}</option>
+            <option value="path">{t("codeSearch.sortPath")}</option>
           </select>
           <input value={branch} onChange={(e) => setBranch(e.target.value)} className="w-28 rounded-lg border px-2 py-2 text-sm" placeholder={t("codeSearch.branchPlaceholder")} />
           <button onClick={applySearch} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white">{t("codeSearch.find")}</button>
@@ -291,7 +291,7 @@ export default function CodeSearchPage({ isDarkTheme = false }: Props) {
                     </button>
                     <button
                       className="rounded border px-1.5 py-1 text-xs text-red-600"
-                      title="Delete"
+                      title={t("common.delete")}
                       onClick={async () => {
                         try {
                           await deleteSavedSearch(s.id);

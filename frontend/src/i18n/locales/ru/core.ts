@@ -52,6 +52,8 @@ export const coreRu = {
     today: "Сегодня",
     yesterday: "Вчера",
     failed: "Не удалось выполнить операцию",
+    admin: "админ",
+    user: "Пользователь",
   },
   errors: {
     exportGradesFailed: "Не удалось экспортировать ведомость",
@@ -214,6 +216,8 @@ export const coreRu = {
     saving: "Сохранение...",
   },
   codeSearch: {
+    sortRelevance: "релевантность",
+    sortPath: "путь",
     searchPlaceholder: "Поиск по коду...",
     extPlaceholder: "расш.",
     pathPrefixPlaceholder: "path_prefix",

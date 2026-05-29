@@ -15,7 +15,7 @@ interface NavBarProps {
 export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarProps) {
   const navigate = useNavigate();
   const { t } = useUserPreferences();
-  const [userName, setUserName] = useState("User");
+  const [userName, setUserName] = useState(t("common.user"));
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarDisplayMode, setAvatarDisplayMode] = useState<string>("cover");
@@ -36,7 +36,7 @@ export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarPro
       try {
         const me = await getMe();
         if (!cancelled) {
-          setUserName(me.full_name || me.email || "User");
+          setUserName(me.full_name || me.email || t("common.user"));
           setUserRole(me.role);
           // Add cache-busting timestamp to force image reload
           setAvatarUrl(me.avatar_url ? `${me.avatar_url}?t=${Date.now()}` : null);
@@ -44,7 +44,7 @@ export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarPro
         }
       } catch {
         if (!cancelled) {
-          setUserName("User");
+          setUserName(t("common.user"));
           setUserRole(null);
           setAvatarUrl(null);
           setAvatarDisplayMode("cover");
@@ -57,7 +57,7 @@ export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarPro
     const handleAvatarUpdate = (e: CustomEvent) => {
       const userData = e.detail;
       if (userData) {
-        setUserName(userData.full_name || userData.email || "User");
+        setUserName(userData.full_name || userData.email || t("common.user"));
         setUserRole(userData.role);
         // Add cache-busting timestamp to force image reload
         setAvatarUrl(userData.avatar_url ? `${userData.avatar_url}?t=${Date.now()}` : null);

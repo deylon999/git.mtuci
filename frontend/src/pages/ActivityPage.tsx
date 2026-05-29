@@ -171,13 +171,13 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
   // Available users and event types for filters
   const eventTypes = [
     { value: "", label: t("admin.activity.filterAllTypes") },
-    { value: "push", label: "Push" },
-    { value: "commit", label: "Commit" },
-    { value: "pull_request", label: "Pull Request" },
-    { value: "pr_merge", label: "PR Merge" },
+    { value: "push", label: t("admin.activity.eventPush") },
+    { value: "commit", label: t("admin.activity.eventCommit") },
+    { value: "pull_request", label: t("admin.activity.eventPullRequest") },
+    { value: "pr_merge", label: t("admin.activity.eventPrMerge") },
     { value: "repo_created", label: t("admin.activity.eventRepoCreated") },
     { value: "repo_deleted", label: t("admin.activity.eventRepoDeleted") },
-    { value: "fork", label: "Fork" },
+    { value: "fork", label: t("admin.activity.eventFork") },
     { value: "login", label: t("admin.activity.eventLogin") },
   ];
 
@@ -494,7 +494,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               borderRadius: "6px", fontSize: "11px", color: wsConnected ? colors.success : colors.danger
             }}>
               <Wifi size={12} />
-              {wsConnected ? "Online" : "Offline"}
+              {wsConnected ? t("admin.monitoring.online") : t("admin.monitoring.offline")}
             </div>
             <div style={{ width: "0.5px", height: "20px", background: colors.border }} />
             <select

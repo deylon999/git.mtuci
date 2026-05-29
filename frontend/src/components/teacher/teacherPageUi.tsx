@@ -684,7 +684,7 @@ export function TeacherCourseMiniRow({
         </p>
       </div>
       <TeacherBadge tone={prTone}>
-        {pendingCount} PR
+        {pendingCount} {t("teacher.prShort")}
       </TeacherBadge>
     </Link>
   );
@@ -777,7 +777,7 @@ export function TeacherCourseCard({
         <span className="text-3xl">{emoji}</span>
         <div className="absolute top-2 right-2">
           <TeacherBadge tone={pendingTone === "danger" ? "danger" : pendingTone === "warning" ? "warning" : "neutral"}>
-            {pendingCount} PR
+            {pendingCount} {t("teacher.prShort")}
           </TeacherBadge>
         </div>
       </div>

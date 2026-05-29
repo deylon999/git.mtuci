@@ -495,13 +495,13 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
       });
       downloadRepositoriesCsv(repos, {
         name: t("repo.repositories.colRepository"),
-        giteaName: "Gitea",
+        giteaName: t("repo.repositories.colGitea"),
         type: t("admin.repositories.colType"),
         language: t("repo.repositories.colLanguage"),
         owner: t("admin.repositories.colOwner"),
         commits: t("repo.repositories.colCommits"),
         status: t("admin.repositories.colStatus"),
-        cloneUrl: "Clone URL",
+        cloneUrl: t("repo.repositories.colCloneUrl"),
         createdAt: t("admin.forks.colDate"),
         statusActive: t("admin.dashboard.statusActive"),
         statusBlocked: t("admin.dashboard.statusBlocked"),

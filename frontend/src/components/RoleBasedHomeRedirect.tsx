@@ -31,7 +31,7 @@ export default function RoleBasedHomeRedirect() {
   }, []);
 
   if (!target) {
-    return <div className="text-sm text-slate-500">Loading...</div>;
+    return <div className="text-sm text-slate-500">{t("common.loading")}</div>;
   }
   return <Navigate to={target} replace />;
 }

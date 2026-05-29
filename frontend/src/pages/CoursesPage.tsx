@@ -76,7 +76,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
         if (meResult.status === "fulfilled") {
           setMe(meResult.value);
         } else {
-          setError(meResult.reason instanceof Error ? meResult.reason.message : "Failed");
+          setError(meResult.reason instanceof Error ? meResult.reason.message : t("common.loadError"));
           setCourses([]);
           return;
         }
@@ -85,7 +85,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
           setCourses(coursesResult.value);
         } else {
           setError(
-            coursesResult.reason instanceof Error ? coursesResult.reason.message : "Failed",
+            coursesResult.reason instanceof Error ? coursesResult.reason.message : t("common.loadError"),
           );
         }
 
@@ -93,7 +93,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
           setAvailableGroups(groupsResult.value);
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed");
+        if (!cancelled) setError(err instanceof Error ? err.message : t("common.loadError"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -169,7 +169,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
       setCourses((prev) => [created, ...prev]);
       resetCreateForm();
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : "Failed to create course");
+      setCreateError(err instanceof Error ? err.message : t("courses.createError"));
     } finally {
       setCreateLoading(false);
     }
@@ -185,7 +185,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
       await deleteCourse(courseId);
       setCourses((prev) => prev.filter((c) => c.id !== courseId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete course");
+      setError(err instanceof Error ? err.message : t("courses.deleteError"));
     } finally {
       setDeletingCourseId(null);
     }

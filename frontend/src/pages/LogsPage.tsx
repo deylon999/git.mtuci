@@ -76,7 +76,7 @@ const LogRow = memo(function LogRow({
         <tr className={`border-b ${borderColor}`}>
           <td colSpan={7} className="p-0">
             <div className={`p-2 font-mono text-xs ${ui.tableCellText} whitespace-pre-wrap ${detailBg}`}>
-              {log.detail || `source: ${log.source}\nevent: ${log.message}\nuser: ${getUserName(log)}\nip: ${log.ip_address}\nstatus: ${log.http_status || "N/A"}`}
+              {log.detail || `source: ${log.source}\nevent: ${log.message}\nuser: ${getUserName(log)}\nip: ${log.ip_address}\nstatus: ${log.http_status || t("admin.logs.na")}`}
             </div>
           </td>
         </tr>
@@ -142,7 +142,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
       INFO: "bg-green-500",
       DEBUG: "bg-blue-500",
     };
-    const displayLevel = level === "WARNING" ? "WARN" : level;
+    const displayLevel = level === "WARNING" ? t("admin.logs.levelWarn") : level;
     return (
       <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium border ${styles[displayLevel as keyof typeof styles]}`}>
         <span className={`w-1.5 h-1.5 rounded-full ${dotColors[displayLevel as keyof typeof dotColors]}`}></span>
@@ -312,10 +312,10 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
             style={adminSelect.style}
           >
             <option value="" style={adminSelect.optionStyle}>{t("admin.logs.allLevels")}</option>
-            <option value="ERROR" style={adminSelect.optionStyle}>ERROR</option>
-            <option value="WARNING" style={adminSelect.optionStyle}>WARN</option>
-            <option value="INFO" style={adminSelect.optionStyle}>INFO</option>
-            <option value="DEBUG" style={adminSelect.optionStyle}>DEBUG</option>
+            <option value="ERROR" style={adminSelect.optionStyle}>{t("admin.logs.levelError")}</option>
+            <option value="WARNING" style={adminSelect.optionStyle}>{t("admin.logs.levelWarn")}</option>
+            <option value="INFO" style={adminSelect.optionStyle}>{t("admin.logs.levelInfo")}</option>
+            <option value="DEBUG" style={adminSelect.optionStyle}>{t("admin.logs.levelDebug")}</option>
           </select>
           <select
             value={source}
@@ -324,9 +324,9 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
             style={adminSelect.style}
           >
             <option value="" style={adminSelect.optionStyle}>{t("admin.logs.allSources")}</option>
-            <option value="auth" style={adminSelect.optionStyle}>auth</option>
-            <option value="repositories" style={adminSelect.optionStyle}>repositories</option>
-            <option value="webhooks" style={adminSelect.optionStyle}>webhooks</option>
+            <option value="auth" style={adminSelect.optionStyle}>{t("admin.logs.sourceAuth")}</option>
+            <option value="repositories" style={adminSelect.optionStyle}>{t("admin.logs.sourceRepositories")}</option>
+            <option value="webhooks" style={adminSelect.optionStyle}>{t("admin.logs.sourceWebhooks")}</option>
             <option value="admin" style={adminSelect.optionStyle}>admin</option>
             <option value="gitea" style={adminSelect.optionStyle}>gitea</option>
             <option value="permissions" style={adminSelect.optionStyle}>permissions</option>

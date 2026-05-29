@@ -224,7 +224,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
                 <div className="absolute right-0 mt-2 w-56 rounded-lg shadow-xl z-50 py-1 border" style={{ backgroundColor: theme.bg3, borderColor: theme.border }}>
                   <div className="px-3 py-2 border-b" style={{ borderColor: theme.border }}>
                     <p className="text-sm font-medium truncate transition-colors" style={{ color: theme.text }}>{userName}</p>
-                    <p className="text-xs truncate transition-colors" style={{ color: theme.text2 }}>{userRole || "admin"}</p>
+                    <p className="text-xs truncate transition-colors" style={{ color: theme.text2 }}>{userRole || t("common.admin")}</p>
                   </div>
 
                   <Link

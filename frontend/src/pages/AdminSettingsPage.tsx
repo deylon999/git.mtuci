@@ -463,7 +463,7 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
                 <input
                   type="text"
                   className="admin-input"
-                  placeholder="smtp.example.com"
+                  placeholder={t("admin.settings.smtpPlaceholder")}
                 />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -474,7 +474,7 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
                   <input
                     type="number"
                     className="admin-input"
-                    placeholder="587"
+                    placeholder={t("admin.settings.portPlaceholder")}
                   />
                 </div>
                 <div>
@@ -484,7 +484,7 @@ export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettings
                   <input
                     type="email"
                     className="admin-input"
-                    placeholder="noreply@example.com"
+                    placeholder={t("admin.settings.senderPlaceholder")}
                   />
                 </div>
               </div>

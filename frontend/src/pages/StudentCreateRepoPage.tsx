@@ -151,7 +151,7 @@ export default function StudentCreateRepoPage({ isDarkTheme = false }: StudentCr
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="lab-01"
+            placeholder={t("student.repos.createPage.namePlaceholder")}
             className="rounded-lg border px-3 py-2 text-sm font-mono"
             style={{ backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text }}
           />

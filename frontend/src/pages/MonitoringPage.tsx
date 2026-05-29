@@ -241,10 +241,10 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: "11px", color: theme.text2, marginBottom: "2px" }}>FastAPI</div>
               <div style={{ fontSize: "14px", fontWeight: "600", color: theme.text }}>
-                {serviceStatus?.api ? "Online" : "Offline"}
+                {serviceStatus?.api ? t("admin.monitoring.online") : t("admin.monitoring.offline")}
               </div>
               <div style={{ fontSize: "10px", color: theme.text2, marginTop: "1px" }}>
-                Uptime: {serviceStatus?.api_uptime || "—" }
+                {tp("admin.monitoring.uptime", { value: serviceStatus?.api_uptime || "—" })}
               </div>
             </div>
             <span style={{
@@ -253,7 +253,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               fontSize: "10px", fontWeight: "500", whiteSpace: "nowrap",
               ...getBadgeStyle(getStatusColor(serviceStatus?.api))
             }}>
-              {serviceStatus?.api ? "OK" : "ERR"}
+              {serviceStatus?.api ? t("admin.monitoring.statusOk") : t("admin.monitoring.statusErr")}
             </span>
           </div>
 
@@ -274,7 +274,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: "11px", color: theme.text2, marginBottom: "2px" }}>PostgreSQL</div>
               <div style={{ fontSize: "14px", fontWeight: "600", color: theme.text }}>
-                {serviceStatus?.db ? "Online" : "Offline"}
+                {serviceStatus?.db ? t("admin.monitoring.online") : t("admin.monitoring.offline")}
               </div>
               <div style={{ fontSize: "10px", color: theme.text2, marginTop: "1px" }}>
                 {serviceStatus?.db_version
@@ -291,7 +291,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               fontSize: "10px", fontWeight: "500", whiteSpace: "nowrap",
               ...getBadgeStyle(getStatusColor(serviceStatus?.db))
             }}>
-              {serviceStatus?.db ? "OK" : "ERR"}
+              {serviceStatus?.db ? t("admin.monitoring.statusOk") : t("admin.monitoring.statusErr")}
             </span>
           </div>
 
@@ -312,7 +312,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: "11px", color: theme.text2, marginBottom: "2px" }}>Gitea</div>
               <div style={{ fontSize: "14px", fontWeight: "600", color: theme.text }}>
-                {serviceStatus?.git ? "Online" : "Offline"}
+                {serviceStatus?.git ? t("admin.monitoring.online") : t("admin.monitoring.offline")}
               </div>
               <div style={{ fontSize: "10px", color: theme.text2, marginTop: "1px" }}>
                 {serviceStatus?.git_version
@@ -329,7 +329,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               fontSize: "10px", fontWeight: "500", whiteSpace: "nowrap",
               ...getBadgeStyle(getStatusColor(serviceStatus?.git))
             }}>
-              {serviceStatus?.git ? "OK" : "ERR"}
+              {serviceStatus?.git ? t("admin.monitoring.statusOk") : t("admin.monitoring.statusErr")}
             </span>
           </div>
 
@@ -387,7 +387,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
               {/* CPU */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-                <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>CPU</span>
+                <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>{t("admin.monitoring.cpu")}</span>
                 <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: "3px", transition: "width 0.3s",
@@ -402,7 +402,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
 
               {/* RAM */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-                <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>RAM</span>
+                <span style={{ width: "80px", color: theme.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0 }}>{t("admin.monitoring.ram")}</span>
                 <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: "3px", transition: "width 0.3s",
@@ -494,7 +494,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Load average</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.loadAverage")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.load_avg?.length ? metrics.load_avg.join(" / ") : EMPTY}
                 </span>
@@ -627,19 +627,19 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             </div>
             <div style={{ padding: "14px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Avg response</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.avgResponse")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.avg_response_ms?.toFixed(0) || 0} {t("admin.monitoring.ms")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>P95 response</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.p95Response")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.p95_response_ms?.toFixed(0) || 0} {t("admin.monitoring.ms")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Error rate</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.errorRate")}</span>
                 <span style={{ fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px", color: (metrics?.error_rate || 0) > 5 ? theme.danger : (metrics?.error_rate || 0) > 1 ? theme.warning : theme.text }}>
                   {(metrics?.error_rate || 0).toFixed(1)}%
                 </span>
@@ -661,7 +661,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               display: "flex", alignItems: "center", justifyContent: "space-between",
               backgroundColor: ac.input
             }}>
-              PostgreSQL
+              {t("admin.monitoring.postgresql")}
               <span style={{ fontSize: "10px", color: theme.text2, fontWeight: "400" }}>v{serviceStatus?.db_version || "16"}</span>
             </div>
             <div style={{ padding: "14px" }}>
@@ -690,19 +690,19 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Avg query time</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.avgQueryTime")}</span>
                 <span style={{ color: theme.text, fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
                   {metrics?.database?.avg_query_ms || 0} {t("admin.monitoring.ms")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Cache hit rate</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.cacheHitRate")}</span>
                 <span style={{ fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px", color: (metrics?.database?.cache_hit_rate || 0) > 95 ? theme.success : theme.text }}>
                   {metrics?.database?.cache_hit_rate?.toFixed(1) || 0}%
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
-                <span style={{ color: theme.text2 }}>Deadlocks</span>
+                <span style={{ color: theme.text2 }}>{t("admin.monitoring.deadlocks")}</span>
                 <span style={{ fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px", color: (metrics?.database?.deadlocks || 0) > 0 ? theme.danger : theme.text }}>
                   {metrics?.database?.deadlocks || 0}
                 </span>

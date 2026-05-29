@@ -1,4 +1,5 @@
 export const teacherEn = {
+  prShort: "PR",
   errors: {
     loadFailed: "Failed to load data",
     dashboardLoadFailed: "Failed to load dashboard",

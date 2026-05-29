@@ -111,6 +111,8 @@ export const adminPagesEn = {
     gradeMaxError: "Maximum grade must be an integer from 0 to 50.",
     deleteConfirm: "Delete this course? All assignments and enrollments will be removed.",
     emptyList: "No courses yet — create your first one.",
+    createError: "Failed to create course",
+    deleteError: "Failed to delete course",
   },
   monitoring: {
     live: "Live",

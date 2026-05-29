@@ -308,7 +308,7 @@ export default function RepoProjectSidebar({
                   style={{ color: theme.accent2 }}
                 >
                   <BookOpen className="h-4 w-4 shrink-0" />
-                  README
+                  {t("repo.sidebar.readme")}
                 </button>
               ) : null}
               {summary.license_path ? (
@@ -319,7 +319,7 @@ export default function RepoProjectSidebar({
                   style={{ color: theme.accent2 }}
                 >
                   <Scale className="h-4 w-4 shrink-0" />
-                  {summary.license_name ?? "LICENSE"}
+                  {summary.license_name ?? t("repo.sidebar.license")}
                 </button>
               ) : null}
             </div>

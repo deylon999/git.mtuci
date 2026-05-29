@@ -49,6 +49,7 @@ export const authRu = {
       submittingAlt: "Отправка...",
       backToLogin: "Назад ко входу",
       email: "Эл. почта",
+      emailPlaceholder: "ваш@email.com",
       submit: "Отправить ссылку",
       submitting: "Отправка…",
       back: "Вернуться ко входу",

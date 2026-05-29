@@ -8,6 +8,7 @@ export const coreEn = {
   },
   common: {
     loading: "Loading…",
+    loadError: "Failed",
     goTo: "Open",
     russian: "Русский",
     english: "English",
@@ -52,6 +53,8 @@ export const coreEn = {
     today: "Today",
     yesterday: "Yesterday",
     failed: "Operation failed",
+    admin: "admin",
+    user: "User",
   },
   errors: {
     exportGradesFailed: "Failed to export grade roster",
@@ -214,6 +217,8 @@ export const coreEn = {
     saving: "Saving…",
   },
   codeSearch: {
+    sortRelevance: "relevance",
+    sortPath: "path",
     searchPlaceholder: "Search code...",
     extPlaceholder: "ext",
     pathPrefixPlaceholder: "path_prefix",

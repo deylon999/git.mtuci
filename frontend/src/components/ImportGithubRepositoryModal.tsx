@@ -102,7 +102,7 @@ export default function ImportGithubRepositoryModal({
               <input
                 value={githubUrl}
                 onChange={(e) => setGithubUrl(e.target.value)}
-                placeholder="https://github.com/owner/repo"
+                placeholder={t("repo.import.urlPlaceholder")}
                 className="w-full bg-transparent text-sm outline-none"
                 style={{ color: theme.text }}
               />

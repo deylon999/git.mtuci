@@ -38,7 +38,7 @@ export default function AdminRequired() {
   }, [token]);
 
   if (!token) return <Navigate to="/login" replace />;
-  if (loading) return <div className="text-sm text-slate-500">Loading...</div>;
+  if (loading) return <div className="text-sm text-slate-500">{t("common.loading")}</div>;
   if (!isAdmin) return <Navigate to="/courses" replace />;
 
   return <Outlet />;

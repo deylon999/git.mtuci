@@ -1,4 +1,6 @@
 export const repoRu = {
+  public: "Публичный",
+  private: "Приватный",
   errors: {
     nameRequired: "Укажите имя репозитория",
     nameInvalid: "Имя: только латиница, цифры, точка, дефис и подчёркивание",
@@ -28,6 +30,7 @@ export const repoRu = {
     title: "Создать репозиторий",
     subtitle: "Настройте видимость и начальное содержимое, как при создании на GitHub.",
     nameLabel: "Имя репозитория",
+    namePlaceholder: "my-lab-work",
     description: "Описание",
     descriptionPlaceholder: "Кратко, о чём проект",
     visibilityLegend: "Видимость",
@@ -95,7 +98,16 @@ export const repoRu = {
     giteaUnavailable: "URL Gitea недоступен",
     clone: "Клонировать",
   },
+  import: {
+    urlPlaceholder: "https://github.com/owner/repo",
+  },
+  roster: {
+    colFullName: "ФИО",
+    colGroup: "Группа",
+  },
   sidebar: {
+    readme: "README",
+    license: "ЛИЦЕНЗИЯ",
     commitOne: "коммит",
     commitFew: "коммита",
     commitMany: "коммитов",
@@ -358,8 +370,10 @@ export const repoRu = {
     unblockSuccess: "Репозиторий разблокирован",
     blockError: "Не удалось изменить статус блокировки",
     colRepository: "Репозиторий",
+    colGitea: "Gitea",
     colLanguage: "Язык",
     colCommits: "Коммиты",
+    colCloneUrl: "URL клонирования",
     blockedSuffix: "(заблокирован)",
     statusBlocked: "Заблокирован",
     statusActive: "Активен",
