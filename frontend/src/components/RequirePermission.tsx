@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { usePermissions } from "../context/PermissionsContext";
 import { useAuthUser } from "../context/AuthUserContext";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 type RequirePermissionProps = {
   permission?: string;
@@ -15,6 +16,7 @@ export default function RequirePermission({
   redirectTo = "/home",
   children,
 }: RequirePermissionProps) {
+  const { t } = useUserPreferences();
   const { user } = useAuthUser();
   const { hasPermission, hasAnyPermission, loading } = usePermissions();
 

@@ -3,8 +3,10 @@ import { Navigate } from "react-router-dom";
 import { clearToken, getToken } from "../api/client";
 import { getMe } from "../api/authApi";
 import { getDefaultRouteForRole } from "../utils/defaultRoute";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 export default function RoleBasedHomeRedirect() {
+  const { t } = useUserPreferences();
   const [target, setTarget] = useState<string | null>(null);
 
   useEffect(() => {

@@ -24,6 +24,7 @@ interface LogRowProps {
   getUserName: (log: LogEntry) => string;
   formatTime: (isoString: string) => string;
   formatFullDate: (isoString: string) => string;
+  naLabel: string;
 }
 
 const LogRow = memo(function LogRow({
@@ -37,6 +38,7 @@ const LogRow = memo(function LogRow({
   getUserName,
   formatTime,
   formatFullDate,
+  naLabel,
 }: LogRowProps) {
   const ui = getAdminPageTheme(isDarkTheme);
   const hoverBg = ui.tableRowHover;
@@ -76,7 +78,7 @@ const LogRow = memo(function LogRow({
         <tr className={`border-b ${borderColor}`}>
           <td colSpan={7} className="p-0">
             <div className={`p-2 font-mono text-xs ${ui.tableCellText} whitespace-pre-wrap ${detailBg}`}>
-              {log.detail || `source: ${log.source}\nevent: ${log.message}\nuser: ${getUserName(log)}\nip: ${log.ip_address}\nstatus: ${log.http_status || t("admin.logs.na")}`}
+              {log.detail || `source: ${log.source}\nevent: ${log.message}\nuser: ${getUserName(log)}\nip: ${log.ip_address}\nstatus: ${log.http_status || naLabel}`}
             </div>
           </td>
         </tr>
@@ -160,6 +162,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
   };
 
   const unknownUserLabel = t("admin.logs.unknownUser");
+  const naLabel = t("admin.logs.na");
 
   const getUserInitials = (log: LogEntry) => getLogUserInitials(log, unknownUserLabel);
 
@@ -399,6 +402,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
                       getUserName={getUserName}
                       formatTime={formatTime}
                       formatFullDate={formatFullDate}
+                      naLabel={naLabel}
                     />
                   ))}
                 </tbody>

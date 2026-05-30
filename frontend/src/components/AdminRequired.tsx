@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { getToken, clearToken } from "../api/client";
 import { getMe } from "../api/authApi";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 export default function AdminRequired() {
+  const { t } = useUserPreferences();
   const token = getToken();
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);

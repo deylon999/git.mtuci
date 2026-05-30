@@ -666,6 +666,7 @@ export function TeacherCourseMiniRow({
   emoji?: string;
   to: string;
 }) {
+  const { t } = useUserPreferences();
   const icon = emoji ?? courseEmojiForTitle(title);
   const prTone = pendingCount >= 5 ? "danger" : pendingCount > 0 ? "warning" : "neutral";
   return (
