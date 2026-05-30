@@ -9,7 +9,6 @@ import DashboardRoute from "./components/DashboardRoute";
 import HomeRoute from "./components/HomeRoute";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
-import Footer from "./components/Footer";
 import { PendingCountProvider } from "./context/PendingCountContext";
 import { StudentNavCountsProvider } from "./context/StudentNavCountsContext";
 import { AuthUserProvider, useAuthUser } from "./context/AuthUserContext";
@@ -318,7 +317,6 @@ function AppShell({
               </Routes>
             </Suspense>
           </main>
-          {!isAuthPage ? <Footer isDarkTheme={isDarkTheme} /> : null}
         </div>
       </div>
       <Toaster

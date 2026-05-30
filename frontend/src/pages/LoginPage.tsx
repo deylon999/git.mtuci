@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
-import { getToken } from "../api/client";
 import { login, getMe } from "../api/authApi";
 import { useAuthUser } from "../context/AuthUserContext";
 import { getDefaultRouteForRole } from "../utils/defaultRoute";
@@ -26,15 +25,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Already logged in — go to the right home page
-  useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-    getMe()
-      .then((me) => navigate(getDefaultRouteForRole(me.role), { replace: true }))
-      .catch(() => {});
-  }, [navigate]);
 
   // Listen for theme changes from other pages
   useEffect(() => {

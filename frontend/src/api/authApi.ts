@@ -1,4 +1,4 @@
-import { apiRequest, setToken } from "./client";
+import { apiRequest, clearToken, setToken } from "./client";
 import type { TokenResponse, UserRead } from "./types";
 
 const ME_CACHE_TTL_MS = 15_000;
@@ -20,6 +20,11 @@ export function seedMeCache(user: UserRead): void {
 }
 
 export async function login(email: string, password: string, rememberMe?: boolean) {
+  // Always drop previous session before a fresh sign-in attempt:
+  // avoids sticking to an old role/token if new credentials are wrong.
+  clearToken();
+  invalidateMeCache();
+
   const data = await apiRequest<TokenResponse>("/auth/login", {
     method: "POST",
     auth: false,
