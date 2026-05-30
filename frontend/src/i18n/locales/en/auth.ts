@@ -1,6 +1,11 @@
 export const authEn = {
   auth: {
     loginRequired: "Please sign in",
+    pendingApproval: {
+      title: "Account is pending approval",
+      subtitle: "Please wait until an admin or instructor approves your account. Access to sections will open automatically after approval.",
+      backToLogin: "Back to login",
+    },
     login: {
       title: "Sign in",
       subtitle: "Sign in to view courses and assignments.",

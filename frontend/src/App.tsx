@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { getToken } from "./api/client";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { clearToken, getToken } from "./api/client";
 import { Toaster } from "react-hot-toast";
 import AuthRequired from "./components/AuthRequired";
 import AdminRequired from "./components/AdminRequired";
@@ -66,6 +66,50 @@ const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"
 
 const ADMIN_PATHS = ["/admin", "/users", "/roles", "/admin/forks", "/admin/activity", "/admin/monitoring", "/admin/settings", "/repositories", "/logs", "/dashboard"];
 
+function PendingApprovalScreen({
+  isDarkTheme,
+  onBackToLogin,
+}: {
+  isDarkTheme: boolean;
+  onBackToLogin: () => void;
+}) {
+  const { t } = useUserPreferences();
+  const theme = getTheme(isDarkTheme);
+
+  return (
+    <div className="h-screen w-full flex items-center justify-center px-6" style={{ backgroundColor: theme.bg }}>
+      <div className="text-center max-w-xl">
+        <h1 className="text-3xl font-semibold" style={{ color: theme.text }}>
+          {t("auth.pendingApproval.title")}
+        </h1>
+        <p className="mt-3 text-base" style={{ color: theme.text2 }}>
+          {t("auth.pendingApproval.subtitle")}
+        </p>
+        <button
+          type="button"
+          onClick={onBackToLogin}
+          className="mt-8 rounded-lg border px-4 py-2.5 text-sm transition"
+          style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text }}
+        >
+          {t("auth.pendingApproval.backToLogin")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AuthLoadingScreen({ isDarkTheme }: { isDarkTheme: boolean }) {
+  const { t } = useUserPreferences();
+  const bg = isDarkTheme ? "#111827" : "#f3f4f6";
+  const text = isDarkTheme ? "#e5e7eb" : "#374151";
+
+  return (
+    <div className="h-screen w-full flex items-center justify-center px-6" style={{ backgroundColor: bg, color: text }}>
+      <p className="text-sm">{t("common.loading")}</p>
+    </div>
+  );
+}
+
 export default function App() {
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
     const saved = localStorage.getItem("theme");
@@ -98,10 +142,11 @@ function AppShell({
   isDarkTheme: boolean;
   setIsDarkTheme: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
+  const navigate = useNavigate();
   const location = useLocation();
   const isAuthPage = AUTH_PATHS.includes(location.pathname);
-  const { persistTheme, t } = useUserPreferences();
-  const { user } = useAuthUser();
+  const { persistTheme } = useUserPreferences();
+  const { user, loading, clearUser } = useAuthUser();
   const { mode, canSwitchLaborantMode } = useRoleMode();
   const effectiveRole =
     user?.role === "laborant" && canSwitchLaborantMode && mode === "student" ? "student" : user?.role;
@@ -110,6 +155,25 @@ function AppShell({
 
   if (!isAuthPage && !getToken()) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  const isPendingStudent = Boolean(user?.role === "student" && user.is_pending);
+
+  if (!isAuthPage && loading && !user) {
+    return <AuthLoadingScreen isDarkTheme={isDarkTheme} />;
+  }
+
+  if (!isAuthPage && isPendingStudent) {
+    return (
+      <PendingApprovalScreen
+        isDarkTheme={isDarkTheme}
+        onBackToLogin={() => {
+          clearToken();
+          clearUser();
+          navigate("/login", { replace: true });
+        }}
+      />
+    );
   }
 
   const toggleTheme = () => {

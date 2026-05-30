@@ -17,6 +17,7 @@ class UserRead(BaseModel):
     mtuci_login: str | None = None
     role: UserRole
     is_blocked: bool = False
+    is_pending: bool = False
     group_name: str | None = None
     student_id: str | None = None
     avatar_url: str | None = None
