@@ -326,7 +326,10 @@ async def reset_role_permissions(
         raise HTTPException(status_code=404, detail="Role not found")
     
     # Return default permissions
-    template = PERMISSION_TEMPLATES[role.value]
+    # Keep reset response shape consistent with GET /roles/permissions:
+    # return full permission matrix where missing template keys are disabled.
+    template = {perm_id: False for perm_id in PERMISSION_DEFINITIONS}
+    template.update(PERMISSION_TEMPLATES[role.value])
     categories = {}
     for perm_id, enabled in template.items():
         perm_def = PERMISSION_DEFINITIONS.get(perm_id)
