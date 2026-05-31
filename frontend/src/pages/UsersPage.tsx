@@ -23,6 +23,7 @@ import {
   patchAdminUser,
   approveUser,
   rejectUser,
+  deleteAdminUser,
   resetAdminUserPassword,
   getGroups,
   exportUsersCSV,
@@ -521,6 +522,66 @@ useEffect(() => {
     }
   };
 
+  const handleDeleteSelected = async () => {
+    if (selectedUsers.length === 0) return;
+    if (!hasPermission("user_delete")) {
+      showToast(t("admin.users.noPermission"), "error");
+      return;
+    }
+
+    const selectedSet = new Set(selectedUsers);
+    const selectedRows = users.filter((u) => selectedSet.has(u.id));
+    const deletableRows = selectedRows.filter(
+      (u) => u.role !== "admin" && (!currentUser || u.id !== currentUser.id),
+    );
+    const skipped = selectedRows.length - deletableRows.length;
+
+    if (deletableRows.length === 0) {
+      showToast(t("admin.users.deleteSelectedNothingToDelete"), "error");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      skipped > 0
+        ? tp("admin.users.deleteSelectedConfirmWithSkipped", {
+            n: deletableRows.length,
+            skipped,
+          })
+        : tp("admin.users.deleteSelectedConfirm", { n: deletableRows.length }),
+    );
+    if (!confirmed) return;
+
+    setActionLoading(true);
+    try {
+      const results = await Promise.allSettled(
+        deletableRows.map((u) => deleteAdminUser(u.id)),
+      );
+      const deleted = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.length - deleted;
+
+      const res = await getAdminUsers();
+      updateUsers(res);
+      setSelectedUsers([]);
+
+      if (failed === 0 && skipped === 0) {
+        showToast(tp("admin.users.deleteSelectedSuccess", { n: deleted }), "success");
+      } else {
+        showToast(
+          tp("admin.users.deleteSelectedPartial", {
+            deleted,
+            skipped,
+            failed,
+          }),
+          failed > 0 ? "error" : "success",
+        );
+      }
+    } catch {
+      showToast(t("admin.users.deleteSelectedError"), "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const ui = getAdminPageTheme(isDarkTheme);
   const textPrimary = ui.textPrimary;
   const cardBg = ui.cardBg;
@@ -717,8 +778,12 @@ useEffect(() => {
               </div>
             )}
           </div>
-          {selectedUsers.length > 0 && (
-            <button className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400 hover:bg-red-500/20 transition-colors ml-auto">
+          {selectedUsers.length > 0 && hasPermission("user_delete") && (
+            <button
+              onClick={() => void handleDeleteSelected()}
+              disabled={actionLoading}
+              className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400 hover:bg-red-500/20 transition-colors ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <Trash2 className="h-4 w-4" />
               {tp("admin.users.deleteSelected", { n: selectedUsers.length })}
             </button>
