@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr, Field
 class AuthRegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    confirm_password: str | None = Field(default=None, min_length=8, max_length=128)
     full_name: str
     group_name: str | None = Field(default=None, max_length=50)
 
@@ -14,6 +15,7 @@ class StudentRegisterRequest(BaseModel):
     """Student registration with optional MTUCI LK integration"""
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    confirm_password: str | None = Field(default=None, min_length=8, max_length=128)
     full_name: str = ""
     group_name: str | None = Field(default=None, max_length=50)
     mtuci_login: str | None = None

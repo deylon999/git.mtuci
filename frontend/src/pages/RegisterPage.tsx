@@ -26,7 +26,9 @@ export default function RegisterPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fullName, setFullName] = useState("");
   const [groupName, setGroupName] = useState("");
   const [useMtuci, setUseMtuci] = useState(false);
@@ -65,10 +67,14 @@ export default function RegisterPage() {
     setLoading(true);
     setError(null);
     try {
+      if (password !== confirmPassword) {
+        setError(t("auth.register.passwordMismatch"));
+        return;
+      }
       if (useMtuci && mtuciLogin && mtuciPassword) {
-        await registerStudentMtuci(email, password, fullName, undefined, mtuciLogin, mtuciPassword);
+        await registerStudentMtuci(email, password, confirmPassword, fullName, undefined, mtuciLogin, mtuciPassword);
       } else {
-        await register(email, password, fullName, groupName);
+        await register(email, password, confirmPassword, fullName, groupName);
       }
       navigate("/login", { replace: true });
     } catch (err) {
@@ -126,6 +132,31 @@ export default function RegisterPage() {
               <span className={password.length >= 8 ? strengthTextStrong : strengthTextWeak}>
                 {t("auth.register.passwordMinHint")}
               </span>
+            </div>
+          </div>
+
+          <div>
+            <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>
+              {t("auth.register.repeatPassword")}
+            </label>
+            <div className="relative">
+              <input
+                className={`w-full rounded-lg border px-3 py-2.5 pr-10 outline-none transition ${inputBg} ${inputFocus}`}
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+                minLength={8}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors ${eyeIconColor}`}
+                tabIndex={-1}
+              >
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
             </div>
           </div>
 

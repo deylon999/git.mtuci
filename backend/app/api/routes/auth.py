@@ -51,11 +51,25 @@ def _can_switch_student_mode(user: User) -> bool:
     return bool(prefs.get("can_switch_student_mode") is True)
 
 
+def _ensure_password_confirmation(password: str, confirm_password: str | None) -> None:
+    if confirm_password is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password confirmation is required",
+        )
+    if password != confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match",
+        )
+
+
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def register(
     payload: AuthRegisterRequest,
     session: AsyncSession = Depends(get_session),
 ):
+    _ensure_password_confirmation(payload.password, payload.confirm_password)
     # Проверяем уникальность email.
     existing = await session.execute(select(User).where(User.email == str(payload.email)))
     if existing.scalar_one_or_none():
@@ -99,6 +113,7 @@ async def register_student_mtuci(
     If mtuci_login and mtuci_password provided, will auto-fetch name and group.
     """
     # Check email uniqueness
+    _ensure_password_confirmation(payload.password, payload.confirm_password)
     existing = await session.execute(select(User).where(User.email == str(payload.email)))
     if existing.scalar_one_or_none():
         raise HTTPException(

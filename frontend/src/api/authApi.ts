@@ -36,17 +36,30 @@ export async function login(email: string, password: string, rememberMe?: boolea
   invalidateMeCache();
 }
 
-export async function register(email: string, password: string, fullName: string, groupName?: string) {
+export async function register(
+  email: string,
+  password: string,
+  confirmPassword: string,
+  fullName: string,
+  groupName?: string
+) {
   await apiRequest<unknown>("/auth/register", {
     method: "POST",
     auth: false,
-    body: { email, password, full_name: fullName, group_name: groupName || null },
+    body: {
+      email,
+      password,
+      confirm_password: confirmPassword,
+      full_name: fullName,
+      group_name: groupName || null,
+    },
   });
 }
 
 export async function registerStudentMtuci(
   email: string,
   password: string,
+  confirmPassword: string,
   fullName: string,
   groupName?: string,
   mtuciLogin?: string,
@@ -58,6 +71,7 @@ export async function registerStudentMtuci(
     body: {
       email,
       password,
+      confirm_password: confirmPassword,
       full_name: fullName,
       group_name: groupName || null,
       mtuci_login: mtuciLogin || null,
