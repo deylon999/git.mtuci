@@ -229,6 +229,28 @@ function formatRepoVisibility(value: string | null | undefined, language: string
   return "Public";
 }
 
+function formatCourseStatus(value: string | null | undefined, language: string): string {
+  const normalized = (value ?? "").toLowerCase();
+  if (language === "ru") {
+    return normalized === "archived" ? "Архив" : "Активный";
+  }
+  return normalized === "archived" ? "Archived" : "Active";
+}
+
+function formatStudentsCount(value: number, language: string): string {
+  if (language === "ru") {
+    return `${value} ${pluralRu(value, "студент", "студента", "студентов")}`;
+  }
+  return `${value} ${value === 1 ? "student" : "students"}`;
+}
+
+function formatAssignmentsCount(value: number, language: string): string {
+  if (language === "ru") {
+    return `${value} ${pluralRu(value, "задание", "задания", "заданий")}`;
+  }
+  return `${value} ${value === 1 ? "assignment" : "assignments"}`;
+}
+
 function getSearchHitTitle(hit: SearchHit): string {
   if (hit.type === "repository") {
     return (hit.display_name ?? "").trim() || hit.title;
@@ -735,34 +757,106 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                     <p className={`text-sm mt-2 ${ui.tableCellText}`}>{t("admin.search.emptyCourses")}</p>
                   </div>
                 ) : (
-                  courses.map((hit) => (
-                    <article
-                      key={`${hit.type}-${hit.id}`}
-                      className={`${sectionCard} rounded-xl p-4 flex items-start gap-3 hover:border-blue-500/40 transition-colors cursor-pointer`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navigate(hit.href)}
-                      onKeyDown={(event) => handleCardKeyDown(event, hit.href)}
-                    >
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isDarkTheme ? "bg-violet-500/20 text-violet-400" : "bg-violet-100 text-violet-700"}`}>
-                        {hit.type === "assignment" ? <FileText className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className={`text-sm font-medium truncate ${ui.tableNameText}`}>
-                          {highlightText(hit.title, queryFromUrl, markClassName)}
-                        </h3>
-                        <p className={`text-xs mt-1 truncate ${ui.tableHeaderText}`}>
-                          {highlightText(hit.subtitle ?? "—", queryFromUrl, markClassName)}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-xs ${ui.tableBorder} ${ui.tableNameText}`}
+                  courses.map((hit) => {
+                    if (hit.type !== "course") {
+                      return (
+                        <article
+                          key={`${hit.type}-${hit.id}`}
+                          className={`${sectionCard} rounded-xl p-4 flex items-start gap-3 hover:border-blue-500/40 transition-colors cursor-pointer`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => navigate(hit.href)}
+                          onKeyDown={(event) => handleCardKeyDown(event, hit.href)}
+                        >
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isDarkTheme ? "bg-violet-500/20 text-violet-400" : "bg-violet-100 text-violet-700"}`}>
+                            <FileText className="h-5 w-5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className={`text-sm font-medium truncate ${ui.tableNameText}`}>
+                              {highlightText(hit.title, queryFromUrl, markClassName)}
+                            </h3>
+                            <p className={`text-xs mt-1 truncate ${ui.tableHeaderText}`}>
+                              {highlightText(hit.subtitle ?? "—", queryFromUrl, markClassName)}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-xs ${ui.tableBorder} ${ui.tableNameText}`}
+                          >
+                            {t("admin.search.open")}
+                          </button>
+                        </article>
+                      );
+                    }
+
+                    const teacherName = (hit.course_teacher_name ?? "").trim();
+                    const groups = Array.isArray(hit.course_groups)
+                      ? hit.course_groups.map((group) => group.trim()).filter(Boolean)
+                      : [];
+                    const subtitleText =
+                      [teacherName, groups.length > 0 ? groups.join(", ") : null].filter(Boolean).join(" · ") ||
+                      hit.subtitle ||
+                      "—";
+                    const statusLabel = formatCourseStatus(hit.course_status, language);
+                    const statusBadgeClass =
+                      (hit.course_status ?? "").toLowerCase() === "archived"
+                        ? isDarkTheme
+                          ? "bg-[#2d2d2d] text-[#8b949e]"
+                          : "bg-slate-200 text-slate-700"
+                        : isDarkTheme
+                        ? "bg-green-500/20 text-green-400"
+                        : "bg-green-100 text-green-700";
+                    const assignmentsCount = Number(hit.course_assignments_count ?? 0);
+                    const studentsCount = Number(hit.course_students_count ?? 0);
+                    const prCount = Number(hit.course_pr_count ?? 0);
+                    const nearestDeadline = hit.course_nearest_deadline
+                      ? `${t("admin.search.nearestDeadlineShort")} ${formatDateOnly(hit.course_nearest_deadline, dateLocale)}`
+                      : t("admin.search.noDeadline");
+
+                    return (
+                      <article
+                        key={`${hit.type}-${hit.id}`}
+                        className={`${sectionCard} rounded-xl p-4 flex items-start gap-3 hover:border-blue-500/40 transition-colors cursor-pointer`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navigate(hit.href)}
+                        onKeyDown={(event) => handleCardKeyDown(event, hit.href)}
                       >
-                        {t("admin.search.open")}
-                      </button>
-                    </article>
-                  ))
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isDarkTheme ? "bg-violet-500/20 text-violet-400" : "bg-violet-100 text-violet-700"}`}>
+                          <BookOpen className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className={`text-sm font-medium truncate ${ui.tableNameText}`}>
+                            {highlightText(hit.title, queryFromUrl, markClassName)}
+                          </h3>
+                          <p className={`text-xs mt-1 truncate ${ui.tableHeaderText}`}>
+                            {highlightText(subtitleText, queryFromUrl, markClassName)}
+                          </p>
+                          <div className="mt-2 flex items-center gap-2 flex-wrap">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${statusBadgeClass}`}>
+                              {statusLabel}
+                            </span>
+                            <span className={`text-[10px] ${ui.tableHeaderText}`}>{formatAssignmentsCount(assignmentsCount, language)}</span>
+                            <span className={`text-[10px] ${ui.tableHeaderText}`}>{formatStudentsCount(studentsCount, language)}</span>
+                            <span className={`text-[10px] ${ui.tableHeaderText}`}>{nearestDeadline}</span>
+                          </div>
+                        </div>
+                        <div className="self-center shrink-0 min-w-[120px] flex flex-col items-end justify-between">
+                          <button
+                            type="button"
+                            className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-xs ${ui.tableBorder} ${ui.tableNameText}`}
+                          >
+                            {t("admin.search.open")}
+                          </button>
+                          {prCount > 0 ? (
+                            <span className={`mt-1.5 text-[10px] text-right ${ui.tableHeaderText}`}>
+                              {tp("admin.search.coursePrCount", { n: prCount })}
+                            </span>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  })
                 )}
               </section>
             ) : null}

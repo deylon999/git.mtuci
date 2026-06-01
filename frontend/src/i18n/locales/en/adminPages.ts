@@ -128,6 +128,9 @@ export const adminPagesEn = {
     tipErrorHint: "to find problematic logs",
     tipGroupHint: "as an example of group code",
     tipRepoHint: "to search by repository name",
+    nearestDeadlineShort: "Deadline:",
+    noDeadline: "No deadline",
+    coursePrCount: "{n} PR",
   },
   courses: {
     myCourses: "My courses",

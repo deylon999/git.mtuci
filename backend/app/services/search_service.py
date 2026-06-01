@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import and_, case, func, or_, select
@@ -10,6 +11,7 @@ from app.models.activity_log import ActivityLog, ActivityType
 from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
 from app.models.repository import Repository
+from app.models.student_repository import StudentRepository
 from app.services.repository_access_service import repository_not_blocked_clause
 from app.models.user import User, UserRole
 from app.schemas.search import SearchHitRead, SearchResponseRead
@@ -397,22 +399,85 @@ async def _search_admin(session: AsyncSession, *, pattern: str, limit: int, offs
 
     courses_offset = min(cursor, courses_total)
     if cursor < courses_total and remaining > 0:
+        now_utc = datetime.now(timezone.utc)
+        assignments_count_sq = (
+            select(func.count(Assignment.id))
+            .where(Assignment.course_id == Course.id)
+            .correlate(Course)
+            .scalar_subquery()
+        )
+        students_count_sq = (
+            select(func.count(CourseEnrollment.id))
+            .where(CourseEnrollment.course_id == Course.id)
+            .correlate(Course)
+            .scalar_subquery()
+        )
+        nearest_deadline_sq = (
+            select(func.min(Assignment.deadline))
+            .where(and_(Assignment.course_id == Course.id, Assignment.deadline >= now_utc))
+            .correlate(Course)
+            .scalar_subquery()
+        )
+        repo_names_sq = (
+            select(func.lower(StudentRepository.repo_name).label("repo_name"))
+            .join(Assignment, Assignment.id == StudentRepository.assignment_id)
+            .where(Assignment.course_id == Course.id)
+            .union(
+                select(func.lower(Assignment.gitea_repo_name).label("repo_name")).where(
+                    and_(Assignment.course_id == Course.id, Assignment.gitea_repo_name.is_not(None))
+                )
+            )
+            .subquery()
+        )
+        pr_count_sq = (
+            select(func.count(ActivityLog.id))
+            .where(
+                and_(
+                    ActivityLog.activity_type == ActivityType.pull_request,
+                    ActivityLog.repo_name.is_not(None),
+                    func.lower(ActivityLog.repo_name).in_(select(repo_names_sq.c.repo_name)),
+                )
+            )
+            .correlate(Course)
+            .scalar_subquery()
+        )
         courses_q = await session.execute(
-            select(Course)
+            select(
+                Course,
+                User,
+                assignments_count_sq.label("assignments_count"),
+                students_count_sq.label("students_count"),
+                nearest_deadline_sq.label("nearest_deadline"),
+                pr_count_sq.label("pr_count"),
+            )
+            .outerjoin(User, User.id == Course.teacher_id)
             .where(courses_match)
             .offset(courses_offset)
             .limit(remaining)
         )
-        course_hits = [
-            SearchHitRead(
-                type="course",
-                id=str(c.id),
-                title=c.title,
-                subtitle=c.description,
-                href=f"/courses/{c.id}",
+        course_hits: list[SearchHitRead] = []
+        for c, teacher, assignments_count, students_count, nearest_deadline, pr_count in courses_q.all():
+            groups = [g.strip() for g in (c.target_groups or []) if isinstance(g, str) and g.strip()]
+            teacher_name = teacher.full_name if teacher and teacher.full_name else None
+            groups_text = ", ".join(groups) if groups else None
+            subtitle_parts = [teacher_name, groups_text]
+            status = "active" if int(assignments_count or 0) == 0 or nearest_deadline is not None else "archived"
+            course_hits.append(
+                SearchHitRead(
+                    type="course",
+                    id=str(c.id),
+                    title=c.title,
+                    subtitle=" · ".join(part for part in subtitle_parts if part) or c.description,
+                    href=f"/courses/{c.id}",
+                    course_teacher_name=teacher_name,
+                    course_groups=groups or None,
+                    course_status=status,
+                    course_assignments_count=int(assignments_count or 0),
+                    course_students_count=int(students_count or 0),
+                    course_nearest_deadline=nearest_deadline,
+                    course_pr_count=int(pr_count or 0),
+                )
             )
-            for c in courses_q.scalars().all()
-        ]
         hits.extend(course_hits)
         remaining -= len(course_hits)
     cursor = max(0, cursor - courses_total)

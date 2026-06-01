@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<title>Поиск — GitМТУСИ</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f0f10; --bg2: #111111; --bg3: #1e1e1e; --bg4: #2a2a2a;
+  --border: #30363d; --text: #e6e6e6; --text2: #888888; --text3: #444444;
+  --accent: #2563eb; --accent2: #3b82f6; --danger: #e24b4a; --success: #4caf50; --warning: #f59e0b;
+}
+body {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg); color: var(--text);
+  height: 100vh; overflow: hidden;
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  grid-template-rows: 48px 1fr 40px;
+}
+
+/* TOPBAR */
+.topbar { grid-column:1/-1; background:var(--bg2); border-bottom:0.5px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding:0 24px; z-index:100; }
+.tl { display:flex; align-items:center; gap:14px; }
+.logo { display:flex; align-items:center; gap:9px; cursor:pointer; }
+.logo svg { width:26px; height:26px; }
+.logo-text { font-size:14px; font-weight:600; color:var(--text); }
+.logo-text span { color:var(--accent2); }
+.tdiv { width:1px; height:18px; background:var(--border); }
+.admin-badge { font-size:10px; font-weight:500; color:#60a5fa; background:rgba(37,99,235,0.1); border:0.5px solid rgba(37,99,235,0.3); border-radius:6px; padding:2px 8px; }
+
+/* SEARCH */
+.search-wrap { position:relative; flex:1; max-width:480px; }
+.search-box { display:flex; align-items:center; gap:7px; background:var(--bg3); border:0.5px solid var(--accent); border-radius:7px; padding:6px 12px; width:100%; }
+.search-box input { background:transparent; border:none; outline:none; font-size:12px; color:var(--text); width:100%; font-family:inherit; }
+.search-box input::placeholder { color:var(--text3); }
+.kbd { font-size:9px; color:var(--text3); border:0.5px solid var(--border); border-radius:3px; padding:1px 5px; }
+.search-clear { cursor:pointer; color:var(--text2); display:flex; align-items:center; }
+.search-clear:hover { color:var(--text); }
+.search-clear svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.3; }
+
+/* DROPDOWN */
+.search-dropdown { position:absolute; top:calc(100% + 6px); left:0; right:0; background:var(--bg3); border:0.5px solid var(--border); border-radius:10px; overflow:hidden; z-index:1000; box-shadow:0 8px 32px rgba(0,0,0,0.5); display:none; }
+.search-dropdown.open { display:block; }
+.sd-section { border-bottom:0.5px solid var(--border); }
+.sd-section:last-child { border-bottom:none; }
+.sd-label { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--text3); padding:8px 12px 4px; }
+.sd-item { display:flex; align-items:center; gap:10px; padding:7px 12px; cursor:pointer; }
+.sd-item:hover { background:var(--bg4); }
+.sd-icon { width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.sd-icon svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:1.2; }
+.sd-name { font-size:12px; color:var(--text); }
+.sd-sub { font-size:10px; color:var(--text2); }
+.sd-badge { margin-left:auto; font-size:10px; padding:2px 6px; border-radius:5px; font-weight:500; }
+.sd-footer { padding:8px 12px; text-align:center; font-size:11px; color:var(--accent2); cursor:pointer; border-top:0.5px solid var(--border); }
+.sd-footer:hover { background:var(--bg4); }
+.hl { color:var(--accent2); font-weight:600; }
+
+.tr { display:flex; align-items:center; gap:8px; }
+.ib { width:30px; height:30px; border-radius:7px; background:var(--bg3); border:0.5px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative; }
+.ib svg { width:15px; height:15px; stroke:var(--text2); fill:none; stroke-width:1.2; }
+.ndot { position:absolute; top:4px; right:4px; width:7px; height:7px; border-radius:50%; background:var(--danger); border:1.5px solid var(--bg2); }
+.ubtn { display:flex; align-items:center; gap:8px; background:var(--bg3); border:0.5px solid var(--border); border-radius:8px; padding:5px 10px; cursor:pointer; }
+.uav { width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:600; color:#fff; }
+.uname { font-size:12px; font-weight:500; color:var(--text); }
+.urole { font-size:10px; color:var(--text2); }
+
+/* SIDEBAR */
+.sidebar { background:var(--bg2); border-right:0.5px solid var(--border); padding:16px 0; overflow-y:auto; }
+.ns { padding:0 10px; margin-bottom:8px; }
+.nl { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text3); padding:5px 8px 4px; }
+.ni { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:6px; cursor:pointer; color:var(--text2); font-size:11px; }
+.ni:hover { background:var(--bg3); color:var(--text); }
+.ni.active { background:rgba(37,99,235,0.12); color:#60a5fa; font-weight:500; }
+.ni svg { width:13px; height:13px; flex-shrink:0; fill:none; stroke:currentColor; stroke-width:1.2; }
+.nc { margin-left:auto; background:rgba(226,75,74,0.15); color:var(--danger); border-radius:8px; padding:1px 5px; font-size:9px; font-weight:600; }
+
+/* MAIN */
+.main { overflow-y:auto; padding:20px 24px; display:flex; flex-direction:column; gap:16px; }
+
+/* SEARCH PAGE */
+.search-header { display:flex; align-items:center; gap:14px; }
+.search-title { font-size:18px; font-weight:600; color:var(--text); }
+.search-query { color:var(--accent2); }
+.search-total { font-size:12px; color:var(--text2); margin-top:3px; }
+
+.filter-row { display:flex; align-items:center; gap:8px; }
+.filter-btn { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:500; padding:5px 12px; border-radius:20px; border:0.5px solid var(--border); background:transparent; color:var(--text2); cursor:pointer; font-family:inherit; }
+.filter-btn:hover { background:var(--bg3); color:var(--text); }
+.filter-btn.active { background:rgba(37,99,235,0.12); color:#60a5fa; border-color:rgba(37,99,235,0.3); }
+.filter-btn .count { background:var(--bg4); border-radius:10px; padding:0px 5px; font-size:9px; }
+.filter-btn.active .count { background:rgba(37,99,235,0.2); }
+
+.results-layout { display:grid; grid-template-columns:1fr 240px; gap:16px; align-items:start; }
+
+.section { display:flex; flex-direction:column; gap:10px; }
+.section-title { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text2); display:flex; align-items:center; gap:8px; }
+.section-title span { background:var(--bg3); border:0.5px solid var(--border); border-radius:10px; padding:1px 7px; font-size:10px; color:var(--text2); font-weight:500; text-transform:none; letter-spacing:0; }
+
+/* RESULT CARDS */
+.result-card { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; transition:border-color 0.15s; }
+.result-card:hover { border-color:var(--accent2); }
+.rc-icon { width:38px; height:38px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.rc-icon svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.3; }
+.rc-body { flex:1; min-width:0; }
+.rc-name { font-size:13px; font-weight:500; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rc-sub { font-size:11px; color:var(--text2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rc-meta { display:flex; align-items:center; gap:8px; margin-top:5px; flex-wrap:wrap; }
+.rc-right { flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+
+.badge { display:inline-flex; align-items:center; border-radius:6px; padding:2px 7px; font-size:10px; font-weight:500; white-space:nowrap; }
+.bg { background:rgba(76,175,80,0.12); color:var(--success); }
+.br { background:rgba(226,75,74,0.12); color:var(--danger); }
+.by { background:rgba(245,158,11,0.12); color:var(--warning); }
+.bb { background:rgba(37,99,235,0.12); color:#60a5fa; }
+.bgr { background:var(--bg4); color:var(--text2); border:0.5px solid var(--border); }
+.bpu { background:rgba(167,139,250,0.12); color:#a78bfa; }
+
+/* LOG RESULT */
+.log-card { background:var(--bg3); border:1px solid var(--border); border-radius:10px; overflow:hidden; cursor:pointer; transition:border-color 0.15s; }
+.log-card:hover { border-color:var(--accent2); }
+.log-card-head { display:flex; align-items:center; gap:10px; padding:10px 14px; }
+.log-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.log-msg { font-size:12px; color:var(--text); font-family:'Courier New',monospace; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.log-time { font-size:10px; color:var(--text3); white-space:nowrap; }
+.log-detail { padding:8px 14px 10px; border-top:0.5px solid var(--border); font-size:11px; font-family:'Courier New',monospace; color:var(--text2); background:var(--bg); display:none; }
+.log-card.open .log-detail { display:block; }
+
+/* SIDEBAR PANEL */
+.side-panel { display:flex; flex-direction:column; gap:12px; position:sticky; top:0; }
+.sp-card { background:var(--bg3); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.sp-head { padding:9px 12px; border-bottom:0.5px solid var(--border); font-size:11px; font-weight:600; color:var(--text); background:var(--bg2); }
+.sp-row { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-bottom:0.5px solid var(--border); font-size:12px; }
+.sp-row:last-child { border-bottom:none; }
+.sp-key { color:var(--text2); }
+.sp-val { color:var(--text); font-weight:500; }
+.sp-tag-row { display:flex; flex-wrap:wrap; gap:5px; padding:10px 12px; }
+
+.quick-link { display:flex; align-items:center; gap:8px; padding:7px 12px; border-bottom:0.5px solid var(--border); font-size:11px; color:var(--text2); cursor:pointer; }
+.quick-link:last-child { border-bottom:none; }
+.quick-link:hover { background:var(--bg4); color:var(--text); }
+.quick-link svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:1.2; flex-shrink:0; }
+
+.no-results { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px; gap:12px; text-align:center; background:var(--bg3); border:1px solid var(--border); border-radius:10px; }
+.no-results svg { width:36px; height:36px; stroke:var(--text3); fill:none; stroke-width:1; }
+
+.show-more { text-align:center; padding:8px; font-size:11px; color:var(--accent2); cursor:pointer; border-top:0.5px solid var(--border); }
+.show-more:hover { background:var(--bg4); }
+
+/* FOOTER */
+.footer { grid-column:2/-1; background:var(--bg2); border-top:0.5px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding:0 24px; font-size:11px; color:var(--text2); }
+.footer a { color:var(--accent2); text-decoration:none; cursor:pointer; }
+.fl { display:flex; gap:16px; }
+.fr { display:flex; align-items:center; gap:12px; }
+.gdot { width:6px; height:6px; border-radius:50%; background:var(--success); }
+
+mark { background:rgba(37,99,235,0.25); color:var(--accent2); border-radius:3px; padding:0 2px; font-style:normal; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="tl">
+    <div class="logo">
+      <svg viewBox="0 0 339 339" fill="none"><defs><linearGradient id="lg" x1="0" y1="0" x2="339" y2="339" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><path fill-rule="evenodd" clip-rule="evenodd" d="M267.259 74.5966L185.67 34.705C175.452 29.7089 163.548 29.7089 153.33 34.705L71.7413 74.5966C61.5229 79.5927 54.1014 89.0412 51.5777 100.267L31.4269 189.903C28.9032 201.129 31.5519 212.911 38.6232 221.914L95.0844 293.796C102.156 302.799 112.88 308.042 124.222 308.042H214.778C226.12 308.042 236.844 302.799 243.916 293.796L300.377 221.914C307.448 212.911 310.097 201.129 307.573 189.903L287.422 100.267C284.899 89.0412 277.477 79.5927 267.259 74.5966ZM198.9 6.81289C180.321 -2.27096 158.679 -2.27097 140.1 6.81289L58.5113 46.7044C39.9325 55.7883 26.4389 72.9673 21.8503 93.3786L1.6995 183.014C-2.88911 203.425 1.92669 224.847 14.7837 241.216L71.2449 313.098C84.1018 329.466 103.601 339 124.222 339H214.778C235.399 339 254.898 329.466 267.755 313.098L324.216 241.216C337.073 224.847 341.889 203.425 337.301 183.014L317.15 93.3786C312.561 72.9673 299.068 55.7883 280.489 46.7044L198.9 6.81289Z" fill="url(#lg)"/></svg>
+      <div class="logo-text">git<span>мтуси</span></div>
+    </div>
+    <div class="tdiv"></div>
+    <div class="admin-badge">Администратор</div>
+  </div>
+
+  <!-- SEARCH WITH DROPDOWN -->
+  <div class="search-wrap" id="searchWrap">
+    <div class="search-box">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="4" stroke="#888" stroke-width="1.2"/><path d="M10 10l3 3" stroke="#888" stroke-width="1.2" stroke-linecap="round"/></svg>
+      <input type="text" id="searchInput" placeholder="Поиск по системе..." value="петров" autocomplete="off"
+        oninput="onSearchInput(this.value)"
+        onkeydown="if(event.key==='Enter')doSearch(this.value)"
+        onfocus="showDropdown()">
+      <div class="search-clear" onclick="clearSearch()"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13" stroke-linecap="round"/></svg></div>
+      <span class="kbd">↵</span>
+    </div>
+    <!-- LIVE DROPDOWN -->
+    <div class="search-dropdown" id="searchDropdown">
+      <div class="sd-section">
+        <div class="sd-label">Пользователи</div>
+        <div class="sd-item" onclick="hideDropdown()">
+          <div class="sd-icon" style="background:rgba(37,99,235,0.12);color:#60a5fa;"><svg viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 13c0-2.8 2.7-5 6-5s6 2.2 6 5" stroke-linecap="round"/></svg></div>
+          <div><div class="sd-name"><mark>Петров</mark> Иван Алексеевич</div><div class="sd-sub">petrov@mtuci.ru · ИСТ-21</div></div>
+          <span class="sd-badge badge bb">Студент</span>
+        </div>
+        <div class="sd-item" onclick="hideDropdown()">
+          <div class="sd-icon" style="background:rgba(139,92,246,0.12);color:#a78bfa;"><svg viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 13c0-2.8 2.7-5 6-5s6 2.2 6 5" stroke-linecap="round"/></svg></div>
+          <div><div class="sd-name"><mark>Петров</mark>а А.С.</div><div class="sd-sub">petrova@mtuci.ru · ИСТ-22</div></div>
+          <span class="sd-badge badge bb">Студент</span>
+        </div>
+      </div>
+      <div class="sd-section">
+        <div class="sd-label">Репозитории</div>
+        <div class="sd-item" onclick="hideDropdown()">
+          <div class="sd-icon" style="background:rgba(76,175,80,0.12);color:#4caf50;"><svg viewBox="0 0 16 16"><rect x="2" y="1" width="12" height="14" rx="2"/><path d="M5 5h6M5 8h6M5 11h3" stroke-linecap="round"/></svg></div>
+          <div><div class="sd-name"><mark>petrov</mark>/lab-db-petrov</div><div class="sd-sub">Python · 42 коммита</div></div>
+          <span class="sd-badge badge bg">Public</span>
+        </div>
+        <div class="sd-item" onclick="hideDropdown()">
+          <div class="sd-icon" style="background:rgba(139,92,246,0.12);color:#a78bfa;"><svg viewBox="0 0 16 16"><rect x="2" y="1" width="12" height="14" rx="2"/><path d="M5 5h6M5 8h6M5 11h3" stroke-linecap="round"/></svg></div>
+          <div><div class="sd-name"><mark>petrov</mark>/crypto-coursework</div><div class="sd-sub">Python · 18 коммитов</div></div>
+          <span class="sd-badge badge bgr">Private</span>
+        </div>
+      </div>
+      <div class="sd-section">
+        <div class="sd-label">Логи</div>
+        <div class="sd-item" onclick="hideDropdown()">
+          <div class="sd-icon" style="background:rgba(226,75,74,0.12);color:#e24b4a;"><svg viewBox="0 0 16 16"><rect x="1" y="3" width="14" height="10" rx="2"/><path d="M5 7h6M5 9.5h3" stroke-linecap="round"/></svg></div>
+          <div><div class="sd-name">POST /auth/login — <mark>petrov</mark>@mtuci.ru</div><div class="sd-sub">ERROR · 09:02:15 · auth</div></div>
+          <span class="sd-badge badge br">ERROR</span>
+        </div>
+      </div>
+      <div class="sd-footer" onclick="doSearch('петров');hideDropdown()">Показать все результаты для «петров» →</div>
+    </div>
+  </div>
+
+  <div class="tr">
+    <div class="ib"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke-linecap="round"/></svg></div>
+    <div class="ib"><svg viewBox="0 0 16 16"><path d="M8 2a4 4 0 014 4v3l1 2H3l1-2V6a4 4 0 014-4z"/><path d="M6.5 13a1.5 1.5 0 003 0"/></svg><div class="ndot"></div></div>
+    <div class="ubtn"><div class="uav">СА</div><div><div class="uname">Super Admin</div><div class="urole">Администратор</div></div><svg width="10" height="10" viewBox="0 0 16 16" fill="none" style="stroke:#888;stroke-width:1.3"><path d="M4 6l4 4 4-4" stroke-linecap="round"/></svg></div>
+  </div>
+</header>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="ns"><div class="nl">Обзор</div>
+    <div class="ni"><svg viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".5"/><rect x="9" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".5"/><rect x="1" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity=".5"/><rect x="9" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity=".5"/></svg>Дашборд</div>
+  </div>
+  <div class="ns"><div class="nl">Пользователи</div>
+    <div class="ni"><svg viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 13c0-2.8 2.7-5 6-5s6 2.2 6 5" stroke-linecap="round"/></svg>Все пользователи<span class="nc">12</span></div>
+    <div class="ni"><svg viewBox="0 0 16 16"><rect x="1" y="4" width="14" height="9" rx="2"/><path d="M5 4V3a3 3 0 016 0v1"/></svg>Роли и доступ</div>
+  </div>
+  <div class="ns"><div class="nl">Репозитории</div>
+    <div class="ni"><svg viewBox="0 0 16 16"><rect x="2" y="1" width="12" height="14" rx="2"/><path d="M5 5h6M5 8h6M5 11h3" stroke-linecap="round"/></svg>Все репозитории</div>
+    <div class="ni active"><svg viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="4"/><path d="M10 10l3 3" stroke-linecap="round"/></svg>Поиск</div>
+  </div>
+  <div class="ns"><div class="nl">Система</div>
+    <div class="ni"><svg viewBox="0 0 16 16"><rect x="1" y="3" width="14" height="10" rx="2"/><path d="M5 7h6M5 9.5h3" stroke-linecap="round"/></svg>Логи</div>
+    <div class="ni"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 2" stroke-linecap="round"/></svg>Мониторинг</div>
+    <div class="ni"><svg viewBox="0 0 16 16"><path d="M8 1l1.5 3 3.5.5-2.5 2.5.5 3.5L8 9l-3 1.5.5-3.5L3 4.5l3.5-.5z" stroke-linejoin="round"/></svg>Настройки</div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main" onclick="hideDropdown()">
+
+  <div class="search-header">
+    <div>
+      <div class="search-title">Результаты поиска: <span class="search-query">«петров»</span></div>
+      <div class="search-total">Найдено 12 результатов · 0.08 сек</div>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filter-row">
+    <button class="filter-btn active" onclick="filterResults('all',this)">Все <span class="count">12</span></button>
+    <button class="filter-btn" onclick="filterResults('users',this)">Пользователи <span class="count">3</span></button>
+    <button class="filter-btn" onclick="filterResults('repos',this)">Репозитории <span class="count">6</span></button>
+    <button class="filter-btn" onclick="filterResults('courses',this)">Курсы <span class="count">0</span></button>
+    <button class="filter-btn" onclick="filterResults('logs',this)">Логи <span class="count">3</span></button>
+  </div>
+
+  <div class="results-layout">
+    <div style="display:flex;flex-direction:column;gap:20px;">
+
+      <!-- USERS -->
+      <div class="section" id="section-users">
+        <div class="section-title">Пользователи <span>3</span></div>
+
+        <div class="result-card">
+          <div class="rc-icon" style="background:rgba(37,99,235,0.12);color:#60a5fa;"><svg viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 13c0-2.8 2.7-5 6-5s6 2.2 6 5" stroke-linecap="round"/></svg></div>
+          <div class="rc-body">
+            <div class="rc-name"><mark>Петров</mark> Иван Алексеевич</div>
+            <div class="rc-sub">petrov@mtuci.ru · Группа ИСТ-21 · Зарегистрирован 16 апр 2026</div>
+            <div class="rc-meta">
+              <span class="badge bb">Студент</span>
+              <span class="badge bg">Активен</span>
+              <span style="font-size:10px;color:var(--text2)">7 репозиториев · 158 коммитов</span>
+            </div>
+          </div>
+          <div class="rc-right">
+            <button style="font-size:11px;padding:5px 10px;border-radius:7px;border:0.5px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;">Открыть</button>
+            <span style="font-size:10px;color:var(--text3)">3 мин назад</span>
+          </div>
+        </div>
+
+        <div class="result-card">
+          <div class="rc-icon" style="background:rgba(139,92,246,0.12);color:#a78bfa;"><svg viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 13c0-2.8 2.7-5 6-5s6 2.2 6 5" stroke-linecap="round"/></svg></div>
+          <div class="rc-body">
+            <div class="rc-name"><mark>Петров</mark>а Алина Сергеевна</div>
+            <div class="rc-sub">petrova@mtuci.ru · Группа ИСТ-22 · Зарегистрирована 2 апр 2026</div>
+            <div class="rc-meta">
+              <span class="badge bb">Студент</span>
+              <span class="badge bg">Активна</span>
+              <span style="font-size:10px;color:var(--text2)">3 репозитория · 67 коммитов</span>
+            </div>
+          </div>
+          <div class="rc-right">
+            <button style="font-size:11px;padding:5px 10px;border-radius:7px;border:0.5px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;">Открыть</button>
+            <span style="font-size:10px;color:var(--text3)">Вчера</span>
+          </div>
+        </div>
+
+        <div class="result-card">
+          <div class="rc-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b;"><svg viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 13c0-2.8 2.7-5 6-5s6 2.2 6 5" stroke-linecap="round"/></svg></div>
+          <div class="rc-body">
+            <div class="rc-name"><mark>Петров</mark> Кирилл Дмитриевич</div>
+            <div class="rc-sub">petrovkd@mtuci.ru · Группа КБ-21 · Зарегистрирован 18 фев 2026</div>
+            <div class="rc-meta">
+              <span class="badge bb">Студент</span>
+              <span class="badge by">Неактивен</span>
+              <span style="font-size:10px;color:var(--text2)">1 репозиторий · 4 коммита</span>
+            </div>
+          </div>
+          <div class="rc-right">
+            <button style="font-size:11px;padding:5px 10px;border-radius:7px;border:0.5px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;">Открыть</button>
+            <span style="font-size:10px;color:var(--text3)">12 дней назад</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- REPOS -->
+      <div class="section" id="section-repos">
+        <div class="section-title">Репозитории <span>6</span></div>
+
+        <div class="result-card">
+          <div class="rc-icon" style="background:rgba(37,99,235,0.12);color:#60a5fa;"><svg viewBox="0 0 16 16"><rect x="2" y="1" width="12" height="14" rx="2"/><path d="M5 5h6M5 8h6M5 11h3" stroke-linecap="round"/></svg></div>
+          <div class="rc-body">
+            <div class="rc-name"><mark>petrov</mark>/lab-db-<mark>petrov</mark></div>
+            <div class="rc-sub">Лабораторная работа №3 по базам данных. Реализация CRUD с PostgreSQL.</div>
+            <div class="rc-meta">
+              <span style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text2);"><span style="width:7px;height:7px;border-radius:50%;background:#3572A5;display:inline-block;"></span>Python</span>
+              <span style="font-size:10px;color:var(--text2)">42 коммита</span>
+              <span style="font-size:10px;color:var(--text2)">2 форка</span>
+              <span class="badge bg">Public</span>
+            </div>
+          </div>
+          <div class="rc-right">
+            <button style="font-size:11px;padding:5px 10px;border-radius:7px;border:0.5px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;">Открыть</button>
+            <span style="font-size:10px;color:var(--text3)">3 мин назад</span>
+          </div>
+        </div>
+
+        <div class="result-card">
+          <div class="rc-icon" style="background:rgba(139,92,246,0.12);color:#a78bfa;"><svg viewBox="0 0 16 16"><rect x="2" y="1" width="12" height="14" rx="2"/><path d="M5 5h6M5 8h6M5 11h3" stroke-linecap="round"/></svg></div>
+          <div class="rc-body">
+            <div class="rc-name"><mark>petrov</mark>/crypto-coursework</div>
+            <div class="rc-sub">Курсовая работа по криптографии. RSA и AES алгоритмы.</div>
+            <div class="rc-meta">
+              <span style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text2);"><span style="width:7px;height:7px;border-radius:50%;background:#3572A5;display:inline-block;"></span>Python</span>
+              <span style="font-size:10px;color:var(--text2)">18 коммитов</span>
+              <span class="badge bgr">Private</span>
+            </div>
+          </div>
+          <div class="rc-right">
+            <button style="font-size:11px;padding:5px 10px;border-radius:7px;border:0.5px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;">Открыть</button>
+            <span style="font-size:10px;color:var(--text3)">Вчера</span>
+          </div>
+        </div>
+
+        <div class="result-card">
+          <div class="rc-icon" style="background:rgba(76,175,80,0.12);color:#4caf50;"><svg viewBox="0 0 16 16"><rect x="2" y="1" width="12" height="14" rx="2"/><path d="M5 5h6M5 8h6M5 11h3" stroke-linecap="round"/></svg></div>
+          <div class="rc-body">
+            <div class="rc-name"><mark>petrov</mark>/algo-practice</div>
+            <div class="rc-sub">Практика алгоритмов и структур данных.</div>
+            <div class="rc-meta">
+              <span style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text2);"><span style="width:7px;height:7px;border-radius:50%;background:#f1e05a;display:inline-block;"></span>JavaScript</span>
+              <span style="font-size:10px;color:var(--text2)">33 коммита</span>
+              <span class="badge bg">Public</span>
+            </div>
+          </div>
+          <div class="rc-right">
+            <button style="font-size:11px;padding:5px 10px;border-radius:7px;border:0.5px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;">Открыть</button>
+            <span style="font-size:10px;color:var(--text3)">2 дня назад</span>
+          </div>
+        </div>
+
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+          <div class="show-more" onclick="showMoreRepos()">Показать ещё 3 репозитория →</div>
+        </div>
+      </div>
+
+      <!-- COURSES — empty -->
+      <div class="section" id="section-courses">
+        <div class="section-title">Курсы <span>0</span></div>
+        <div class="no-results">
+          <svg viewBox="0 0 16 16"><path d="M1 5l7-3 7 3-7 3-7-3z" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 6.5v4c0 1.1 2.2 2 5 2s5-.9 5-2v-4" stroke-linecap="round"/></svg>
+          <div style="font-size:13px;color:var(--text2);">Курсы не найдены</div>
+          <div style="font-size:11px;color:var(--text3);">Нет курсов с названием «петров»</div>
+        </div>
+      </div>
+
+      <!-- LOGS -->
+      <div class="section" id="section-logs">
+        <div class="section-title">Логи <span>3</span></div>
+
+        <div class="log-card" onclick="this.classList.toggle('open')">
+          <div class="log-card-head">
+            <div class="log-dot" style="background:var(--success)"></div>
+            <span class="badge bg" style="flex-shrink:0;">INFO</span>
+            <span class="badge bgr" style="flex-shrink:0;">auth</span>
+            <div class="log-msg">POST /auth/login — <mark>petrov</mark>@mtuci.ru — успешный вход</div>
+            <span class="log-time">09:01:29</span>
+          </div>
+          <div class="log-detail">
+user_id: 91c452b0-50d1-40d6-a5e1-4ee1dc9ee999
+ip: 172.18.0.5
+user_agent: Mozilla/5.0 Chrome/124.0
+action: login_success
+          </div>
+        </div>
+
+        <div class="log-card" onclick="this.classList.toggle('open')">
+          <div class="log-card-head">
+            <div class="log-dot" style="background:var(--success)"></div>
+            <span class="badge bg" style="flex-shrink:0;">INFO</span>
+            <span class="badge bgr" style="flex-shrink:0;">repositories</span>
+            <div class="log-msg">POST /repositories/ — создан репозиторий lab-db-<mark>petrov</mark></div>
+            <span class="log-time">09:01:55</span>
+          </div>
+          <div class="log-detail">
+user_id: 91c452b0-50d1-40d6-a5e1-4ee1dc9ee999
+repo: petrov/lab-db-petrov
+gitea_clone_url: http://gitea:3000/petrov/lab-db-petrov.git
+http_status: 201
+          </div>
+        </div>
+
+        <div class="log-card" onclick="this.classList.toggle('open')">
+          <div class="log-card-head">
+            <div class="log-dot" style="background:var(--warning)"></div>
+            <span class="badge by" style="flex-shrink:0;">WARN</span>
+            <span class="badge bgr" style="flex-shrink:0;">repositories</span>
+            <div class="log-msg">Gitea repo creation failed for <mark>petrov</mark>/networks-lab1 — timeout</div>
+            <span class="log-time">17:44:12</span>
+          </div>
+          <div class="log-detail">
+user_id: 91c452b0-50d1-40d6-a5e1-4ee1dc9ee999
+error: httpx.ConnectTimeout
+action: fallback to DB-only creation
+repo: petrov/networks-lab1
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="side-panel">
+      <div class="sp-card">
+        <div class="sp-head">Статистика поиска</div>
+        <div class="sp-row"><span class="sp-key">Запрос</span><span class="sp-val" style="color:var(--accent2)">«петров»</span></div>
+        <div class="sp-row"><span class="sp-key">Всего результатов</span><span class="sp-val">12</span></div>
+        <div class="sp-row"><span class="sp-key">Пользователи</span><span class="sp-val">3</span></div>
+        <div class="sp-row"><span class="sp-key">Репозитории</span><span class="sp-val">6</span></div>
+        <div class="sp-row"><span class="sp-key">Курсы</span><span class="sp-val" style="color:var(--text3)">0</span></div>
+        <div class="sp-row"><span class="sp-key">Логи</span><span class="sp-val">3</span></div>
+        <div class="sp-row"><span class="sp-key">Время поиска</span><span class="sp-val">0.08 сек</span></div>
+      </div>
+
+      <div class="sp-card">
+        <div class="sp-head">Быстрые действия</div>
+        <div class="quick-link"><svg viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 13c0-2.8 2.7-5 6-5s6 2.2 6 5" stroke-linecap="round"/></svg>Открыть Петрова И.А.</div>
+        <div class="quick-link"><svg viewBox="0 0 16 16"><rect x="2" y="1" width="12" height="14" rx="2"/><path d="M5 5h6M5 8h6M5 11h3" stroke-linecap="round"/></svg>Все репо Петрова</div>
+        <div class="quick-link"><svg viewBox="0 0 16 16"><rect x="1" y="3" width="14" height="10" rx="2"/><path d="M5 7h6M5 9.5h3" stroke-linecap="round"/></svg>Логи Петрова</div>
+      </div>
+
+      <div class="sp-card">
+        <div class="sp-head">История поиска</div>
+        <div class="quick-link" onclick="document.getElementById('searchInput').value='орлова';onSearchInput('орлова')"><svg viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="4"/><path d="M10 10l3 3" stroke-linecap="round"/></svg>орлова</div>
+        <div class="quick-link" onclick="document.getElementById('searchInput').value='базы данных';onSearchInput('базы данных')"><svg viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="4"/><path d="M10 10l3 3" stroke-linecap="round"/></svg>базы данных</div>
+        <div class="quick-link" onclick="document.getElementById('searchInput').value='ERROR';onSearchInput('ERROR')"><svg viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="4"/><path d="M10 10l3 3" stroke-linecap="round"/></svg>ERROR</div>
+        <div class="quick-link" onclick="document.getElementById('searchInput').value='webhook';onSearchInput('webhook')"><svg viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="4"/><path d="M10 10l3 3" stroke-linecap="round"/></svg>webhook</div>
+      </div>
+
+      <div class="sp-card">
+        <div class="sp-head">Советы по поиску</div>
+        <div style="padding:10px 12px;display:flex;flex-direction:column;gap:7px;font-size:11px;color:var(--text2);">
+          <div>Введи <strong style="color:var(--text)">@email</strong> для поиска по почте</div>
+          <div>Введи <strong style="color:var(--text)">ERROR</strong> для поиска ошибок в логах</div>
+          <div>Введи <strong style="color:var(--text)">ИСТ-21</strong> для поиска группы</div>
+          <div>Введи <strong style="color:var(--text)">repo:</strong>название для поиска репо</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="fl"><a>MTUCI.ru</a><a>Документация</a><a>Сообщить об ошибке</a></div>
+  <div class="fr"><span style="display:flex;align-items:center;gap:5px;"><div class="gdot"></div>Все системы работают</span><span style="color:#333">|</span><span>v1.2.0</span></div>
+</footer>
+
+<script>
+function onSearchInput(val) {
+  const dd = document.getElementById('searchDropdown');
+  if (val.length > 1) { dd.classList.add('open'); }
+  else { dd.classList.remove('open'); }
+}
+function showDropdown() {
+  const val = document.getElementById('searchInput').value;
+  if (val.length > 1) document.getElementById('searchDropdown').classList.add('open');
+}
+function hideDropdown() {
+  document.getElementById('searchDropdown').classList.remove('open');
+}
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  hideDropdown();
+}
+function doSearch(val) {
+  hideDropdown();
+  // в реальности — переход на search?q=val
+}
+document.getElementById('searchInput').addEventListener('click', e => e.stopPropagation());
+document.getElementById('searchWrap').addEventListener('click', e => e.stopPropagation());
+
+function filterResults(type, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const sections = { users:'section-users', repos:'section-repos', courses:'section-courses', logs:'section-logs' };
+  if (type === 'all') {
+    Object.values(sections).forEach(id => document.getElementById(id).style.display = '');
+  } else {
+    Object.entries(sections).forEach(([k,id]) => {
+      document.getElementById(id).style.display = k === type ? '' : 'none';
+    });
+  }
+}
+
+function showMoreRepos() {
+  const extra = `
+    <div class="result-card" style="margin:0 0 0;border-radius:0;border-left:none;border-right:none;border-bottom:none;">
+      <div class="rc-icon" style="background:rgba(226,75,74,0.12);color:#e24b4a;"><svg viewBox="0 0 16 16" fill="none" style="width:18px;height:18px;stroke:currentColor;stroke-width:1.3;"><rect x="2" y="1" width="12" height="14" rx="2"/><path d="M5 5h6M5 8h6M5 11h3" stroke-linecap="round"/></svg></div>
+      <div class="rc-body"><div class="rc-name"><mark>petrov</mark>/networks-lab1</div><div class="rc-sub">Лабораторная по сетям ЭВМ.</div><div class="rc-meta"><span style="font-size:10px;color:var(--text2)">Python · 11 коммитов</span><span class="badge bgr">Private</span></div></div>
+      <div class="rc-right"><button style="font-size:11px;padding:5px 10px;border-radius:7px;border:0.5px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;">Открыть</button></div>
+    </div>`;
+  const cont = document.querySelector('#section-repos .result-card:last-of-type + div');
+  if (cont) { cont.innerHTML = ''; cont.insertAdjacentHTML('beforebegin', extra); }
+}
+</script>
+</body>
+</html>

@@ -20,6 +20,13 @@ class SearchHitRead(BaseModel):
     repo_forks_count: int | None = None
     repo_pushed_at: datetime | None = None
     repo_updated_at: datetime | None = None
+    course_teacher_name: str | None = None
+    course_groups: list[str] | None = None
+    course_status: str | None = None
+    course_assignments_count: int | None = None
+    course_students_count: int | None = None
+    course_nearest_deadline: datetime | None = None
+    course_pr_count: int | None = None
 
 
 class SearchResponseRead(BaseModel):

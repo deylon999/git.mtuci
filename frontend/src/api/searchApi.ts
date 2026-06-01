@@ -14,6 +14,13 @@ export interface SearchHit {
   repo_forks_count?: number | null;
   repo_pushed_at?: string | null;
   repo_updated_at?: string | null;
+  course_teacher_name?: string | null;
+  course_groups?: string[] | null;
+  course_status?: "active" | "archived" | string | null;
+  course_assignments_count?: number | null;
+  course_students_count?: number | null;
+  course_nearest_deadline?: string | null;
+  course_pr_count?: number | null;
 }
 
 export interface SearchResponse {

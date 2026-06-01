@@ -128,6 +128,9 @@ export const adminPagesRu = {
     tipErrorHint: "чтобы найти проблемные логи",
     tipGroupHint: "как пример кода группы",
     tipRepoHint: "для поиска по названию репозитория",
+    nearestDeadlineShort: "Дедлайн:",
+    noDeadline: "Без дедлайна",
+    coursePrCount: "{n} PR",
   },
   courses: {
     myCourses: "Мои курсы",
