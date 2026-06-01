@@ -24,7 +24,7 @@ export function TeacherPageShell({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={`w-full min-w-0 flex flex-col gap-3.5 ${className}`}>{children}</div>;
+  return <div className={`w-full min-w-0 flex flex-col gap-4 ${className}`}>{children}</div>;
 }
 
 /** Plain page title row matching teacher-app.html `.ph` / `.pt` */
@@ -42,11 +42,11 @@ export function TeacherPageTitle({
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="text-lg font-semibold leading-tight" style={{ color: theme.text }}>
+        <h1 className="text-xl font-semibold leading-tight" style={{ color: theme.text }}>
           {title}
         </h1>
         {subtitle ? (
-          <p className="mt-0.5 text-xs" style={{ color: theme.text2 }}>
+          <p className="mt-1 text-sm" style={{ color: theme.text2 }}>
             {subtitle}
           </p>
         ) : null}
@@ -81,11 +81,11 @@ export function TeacherPageHeader({
           </div>
         ) : null}
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold leading-tight" style={{ color: theme.text }}>
+          <h1 className="text-xl font-semibold leading-tight" style={{ color: theme.text }}>
             {title}
           </h1>
           {subtitle ? (
-            <p className="mt-0.5 text-xs leading-snug" style={{ color: theme.text2 }}>
+            <p className="mt-1 text-sm leading-snug" style={{ color: theme.text2 }}>
               {subtitle}
             </p>
           ) : null}
@@ -111,7 +111,7 @@ export function TeacherStatGrid({
           className="rounded-[10px] border px-4 py-4"
           style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         >
-          <p className="mb-1 text-[11px] leading-snug" style={{ color: theme.text2 }}>
+          <p className="mb-1 text-sm leading-snug" style={{ color: theme.text2 }}>
             {card.label}
           </p>
           <p
@@ -121,7 +121,7 @@ export function TeacherStatGrid({
             {card.value}
           </p>
           {card.sub ? (
-            <p className="mt-1 text-[10px]" style={{ color: theme.text3 }}>
+            <p className="mt-1 text-xs" style={{ color: theme.text3 }}>
               {card.sub}
             </p>
           ) : null}
@@ -157,13 +157,13 @@ export function TeacherSurface({
     >
       {title ? (
         <div
-          className="flex items-center justify-between gap-2 px-5 py-3.5 border-b border-b-[0.5px] text-[11px] font-semibold"
+          className="flex items-center justify-between gap-2 px-5 py-4 border-b border-b-[0.5px] text-sm font-semibold"
           style={{ borderColor: theme.border, backgroundColor: theme.bg2, color: theme.text }}
         >
           <span className="flex items-center gap-2 min-w-0">
             {title}
             {subtitle ? (
-              <span className="font-normal text-[10px] truncate" style={{ color: theme.text2 }}>
+              <span className="font-normal text-xs truncate" style={{ color: theme.text2 }}>
                 {subtitle}
               </span>
             ) : null}
@@ -225,7 +225,7 @@ export function TeacherBtn({
   return (
     <button
       type="button"
-      className={`inline-flex items-center justify-center gap-1.5 rounded-[7px] border px-3 py-1.5 text-[11px] font-medium transition hover:opacity-90 disabled:opacity-50 ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-[8px] border px-3.5 py-2 text-sm font-medium transition hover:opacity-90 disabled:opacity-50 ${className}`}
       style={styles[variant]}
       {...props}
     >
@@ -266,7 +266,7 @@ export function TeacherLinkBtn({
   return (
     <Link
       to={to}
-      className={`inline-flex items-center gap-1.5 rounded-[7px] border px-3 py-1.5 text-[11px] font-medium ${variantClass} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-[8px] border px-3.5 py-2 text-sm font-medium ${variantClass} ${className}`}
       style={style}
     >
       {children}
@@ -295,7 +295,7 @@ export function TeacherBadge({
   size?: "md" | "xs";
 }) {
   const sizeClass =
-    size === "xs" ? "rounded-md px-1.5 py-px text-[9px]" : "rounded-md px-[7px] py-[2px] text-[10px]";
+    size === "xs" ? "rounded-md px-1.5 py-px text-[10px]" : "rounded-md px-2 py-0.5 text-xs";
   return (
     <span
       className={`inline-flex items-center font-medium whitespace-nowrap ${sizeClass}`}
@@ -314,7 +314,7 @@ export function TeacherAvatar({
   size?: "sm" | "md";
 }) {
   const { bg, fg } = avatarColorsForName(name);
-  const dim = size === "sm" ? "h-[26px] w-[26px] text-[9px]" : "h-9 w-9 text-[10px]";
+  const dim = size === "sm" ? "h-[30px] w-[30px] text-[10px]" : "h-10 w-10 text-xs";
   return (
     <div
       className={`${dim} rounded-full flex items-center justify-center font-bold shrink-0`}
@@ -357,7 +357,7 @@ export function TeacherIconBtn({
   return (
     <button
       type="button"
-      className={`inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md border transition-colors hover:opacity-90 ${className}`}
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors hover:opacity-90 ${className}`}
       style={{
         borderColor: theme.border,
         backgroundColor: "transparent",
@@ -393,14 +393,14 @@ export function TeacherSearchInput({
 }) {
   return (
     <div
-      className={`flex items-center gap-1.5 rounded-[7px] border px-2.5 py-[5px] ${className}`}
+      className={`flex items-center gap-1.5 rounded-[8px] border px-3 py-2 ${className}`}
       style={{ backgroundColor: theme.bg, borderColor: theme.border }}
     >
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full min-w-0 bg-transparent text-xs outline-none placeholder:text-[#444]"
+        className="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-[#444]"
         style={{ color: theme.text }}
       />
     </div>
@@ -424,7 +424,7 @@ export function TeacherSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`rounded-[7px] border px-2 py-1.5 text-[11px] h-8 ${className}`}
+      className={`rounded-[8px] border px-3 py-2 text-sm h-9 ${className}`}
       style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
     >
       {children}
@@ -453,7 +453,7 @@ export function TeacherTabs<T extends string>({
           key={tab.key}
           type="button"
           onClick={() => onChange(tab.key)}
-          className="rounded-md px-3.5 py-1.5 text-xs transition-colors whitespace-nowrap"
+          className="rounded-md px-4 py-2 text-sm transition-colors whitespace-nowrap"
           style={{
             backgroundColor: active === tab.key ? theme.bg4 : "transparent",
             color: active === tab.key ? theme.text : theme.text2,
@@ -478,7 +478,7 @@ export function TeacherEmptyState({
 }) {
   return (
     <p
-      className={`text-xs text-center ${compact ? "py-5" : "py-6"}`}
+      className={`text-sm text-center ${compact ? "py-5" : "py-6"}`}
       style={{ color: theme.text2 }}
     >
       {children}
@@ -489,7 +489,7 @@ export function TeacherEmptyState({
 export function TeacherLoadingBlock({ theme, label }: { theme: ThemeColors; label?: string }) {
   const { t } = useUserPreferences();
   return (
-    <div className="flex items-center justify-center gap-2 py-8 text-xs" style={{ color: theme.text2 }}>
+    <div className="flex items-center justify-center gap-2 py-8 text-sm" style={{ color: theme.text2 }}>
       <Loader2 className="h-4 w-4 animate-spin" />
       {label ?? t("common.loading")}
     </div>
@@ -512,7 +512,7 @@ export function TeacherAlertBanner({
   const color = tone === "danger" ? theme.danger : theme.warning;
   const inner = (
     <div
-      className="flex flex-wrap items-center gap-2 rounded-lg border px-3.5 py-2 text-xs"
+      className="flex flex-wrap items-center gap-2 rounded-lg border px-3.5 py-2.5 text-sm"
       style={{
         backgroundColor: tone === "danger" ? "rgba(226,75,74,0.07)" : `${color}12`,
         borderColor: tone === "danger" ? "rgba(226,75,74,0.3)" : `${color}50`,
@@ -578,11 +578,11 @@ export function TeacherPendingRow({
     >
       <TeacherAvatar name={studentName} size="sm" />
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium leading-normal" style={{ color: theme.text }}>
+        <p className="text-sm font-medium leading-normal" style={{ color: theme.text }}>
           {titleLine}
         </p>
         {subLine ? (
-          <p className="text-[10px] mt-px truncate" style={{ color: theme.text2 }}>
+          <p className="text-xs mt-px truncate" style={{ color: theme.text2 }}>
             {subLine}
           </p>
         ) : null}
@@ -637,10 +637,10 @@ export function TeacherActivityRow({
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-xs leading-snug" style={{ color: theme.text }}>
+        <div className="text-sm leading-snug" style={{ color: theme.text }}>
           {text}
         </div>
-        <p className="text-[10px] mt-0.5" style={{ color: theme.text3 }}>
+        <p className="text-xs mt-0.5" style={{ color: theme.text3 }}>
           {time}
         </p>
       </div>
@@ -677,10 +677,10 @@ export function TeacherCourseMiniRow({
     >
       <span className="text-xl leading-none">{icon}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium truncate" style={{ color: theme.text }}>
+        <p className="text-sm font-medium truncate" style={{ color: theme.text }}>
           {title}
         </p>
-        <p className="text-[10px] truncate" style={{ color: theme.text2 }}>
+        <p className="text-xs truncate" style={{ color: theme.text2 }}>
           {meta}
         </p>
       </div>
@@ -712,18 +712,18 @@ export function TeacherDeadlineRow({
       style={{ borderColor: theme.border }}
     >
       <div className="min-w-0">
-        <p className="text-xs font-medium truncate" style={{ color: theme.text }}>
+        <p className="text-sm font-medium truncate" style={{ color: theme.text }}>
           {assignmentTitle}
         </p>
-        <p className="text-[10px] truncate" style={{ color: theme.text2 }}>
+        <p className="text-xs truncate" style={{ color: theme.text2 }}>
           {courseTitle}
         </p>
       </div>
       <div className="text-right shrink-0">
-        <p className="text-[11px] font-medium" style={{ color: urgencyColor ?? theme.text2 }}>
+        <p className="text-sm font-medium" style={{ color: urgencyColor ?? theme.text2 }}>
           {deadlineLabel}
         </p>
-        <p className="text-[10px]" style={{ color: theme.text2 }}>
+        <p className="text-xs" style={{ color: theme.text2 }}>
           {submittedLabel}
         </p>
       </div>
@@ -788,11 +788,11 @@ export function TeacherCourseCard({
             {title}
           </h2>
           {groupsLabel ? (
-            <p className="text-[11px] mt-0.5" style={{ color: theme.text2 }}>
+            <p className="text-sm mt-1" style={{ color: theme.text2 }}>
               {groupsLabel}
             </p>
           ) : (
-            <p className="text-[11px] mt-0.5" style={{ color: theme.text2 }}>
+            <p className="text-sm mt-1" style={{ color: theme.text2 }}>
               {tp("teacher.courses.studentsCount", { count: studentsCount })}
               {" · "}
               {tp("teacher.courses.assignmentsCount", { count: assignmentsCount })}
@@ -801,7 +801,7 @@ export function TeacherCourseCard({
         </div>
         {submittedPercent != null ? (
           <div className="flex flex-col gap-1">
-            <div className="flex justify-between text-[11px]">
+            <div className="flex justify-between text-sm">
               <span style={{ color: theme.text2 }}>{t("teacher.courseCard.submittedWorks")}</span>
               <span className="font-semibold" style={{ color: pctColor }}>
                 {Math.round(pct)}%
@@ -829,7 +829,7 @@ export function TeacherCourseCard({
               <div className="text-[15px] font-semibold tabular-nums" style={{ color: theme.text }}>
                 {val}
               </div>
-              <div className="mt-px text-[9px] leading-tight" style={{ color: theme.text2 }}>
+              <div className="mt-px text-[10px] leading-tight" style={{ color: theme.text2 }}>
                 {lbl}
               </div>
             </div>
@@ -840,19 +840,26 @@ export function TeacherCourseCard({
           style={{ borderColor: theme.border }}
         >
           {footerHint ? (
-            <span className="text-[10px] truncate" style={{ color: footerHintColor ?? theme.text3 }}>
+            <span className="text-xs truncate" style={{ color: footerHintColor ?? theme.text3 }}>
               {footerHint}
             </span>
           ) : (
             <span />
           )}
           <div className="flex gap-1">
-            <TeacherLinkBtn to={to} theme={theme} variant="purple" className="!py-1 !px-2 !text-[10px]">
+            <TeacherLinkBtn to={to} theme={theme} variant="purple" className="!py-1.5 !px-2.5 !text-xs">
               {t("common.open")}
             </TeacherLinkBtn>
             {onDelete ? (
-              <TeacherBtn theme={theme} variant="default" className="!py-1 !px-2 !text-[10px]" onClick={onDelete}>
-                ✏️
+              <TeacherBtn
+                theme={theme}
+                variant="danger"
+                className="!py-1.5 !px-2.5 !text-xs"
+                onClick={onDelete}
+                title={t("common.delete")}
+                aria-label={t("common.delete")}
+              >
+                🗑️
               </TeacherBtn>
             ) : null}
           </div>
@@ -874,7 +881,7 @@ export function TeacherDataTable({
   return (
     <TeacherSurface theme={theme} noPadding bodyClassName="overflow-x-auto">
       <table
-        className="w-full text-xs border-collapse"
+        className="w-full text-sm border-collapse"
         style={{ minWidth, backgroundColor: theme.bg3, color: theme.text }}
       >
         {children}
@@ -887,7 +894,7 @@ export function TeacherTableHead({ theme, children }: { theme: ThemeColors; chil
   return (
     <thead style={{ backgroundColor: theme.bg2 }}>
       <tr
-        className="border-b text-left text-[10px] font-semibold uppercase tracking-wide"
+        className="border-b text-left text-xs font-semibold uppercase tracking-wide"
         style={{ borderColor: theme.border, color: theme.text2 }}
       >
         {children}
@@ -969,7 +976,7 @@ export function TeacherChartBars({
           </div>
         ))}
       </div>
-      <div className="flex w-full justify-between mt-1 px-0 text-[10px]" style={{ color: theme.text3 }}>
+      <div className="flex w-full justify-between mt-1 px-0 text-xs" style={{ color: theme.text3 }}>
         {items.map((item) => (
           <span key={item.label} className="flex-1 text-center truncate">
             {item.label}
@@ -982,3 +989,4 @@ export function TeacherChartBars({
 
 // Re-export helpers
 export { initialsFromName, courseEmojiForTitle, courseBannerForId, avatarColorsForName };
+

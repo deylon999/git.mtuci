@@ -131,7 +131,7 @@ export default function TeacherDashboardPage({ isDarkTheme = false }: Props) {
     })) ?? [];
 
   return (
-    <TeacherPageShell className="gap-3.5 min-w-[900px]">
+    <TeacherPageShell className="gap-3.5 min-w-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold leading-tight" style={{ color: theme.text }}>

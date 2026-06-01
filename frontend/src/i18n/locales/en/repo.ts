@@ -374,8 +374,6 @@ export const repoEn = {
     colLanguage: "Language",
     colCommits: "Commits",
     colCloneUrl: "Clone URL",
-    colLanguage: "Language",
-    colCommits: "Commits",
     blockedSuffix: "(blocked)",
     statusBlocked: "Blocked",
     statusActive: "Active",

@@ -161,7 +161,7 @@ function buildLaborantMenu(includePersonal: boolean): MenuSection[] {
     {
       titleKey: "sidebar.repositories",
       items: [
-        { path: "/teacher/code-review", labelKey: "sidebar.studentRepos", icon: FolderGit2, permission: "repo_view_students" },
+        { path: "/teacher/student-repositories", labelKey: "sidebar.studentRepos", icon: FolderGit2, permission: "repo_view_students" },
         { path: "/teacher/activity", labelKey: "sidebar.studentActivity", icon: Activity, permission: "repo_view_students" },
       ],
     },
@@ -410,6 +410,7 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   }, [userRole, mode, canSwitchLaborantMode, studentNav?.sidebar, teacherPending, teacherCoursesCount, hasPermission, hasAnyPermission]);
 
   const isTeacherLike = userRole === "teacher" || userRole === "laborant";
+  const isLaborant = userRole === "laborant";
 
   // While loading, show nothing or student menu to avoid flashing admin menu
   if (userRole === null || permissionsLoading) {
@@ -425,23 +426,23 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
 
   return (
     <aside
-      className={`${isTeacherLike ? "w-[210px]" : "w-[260px]"} flex-shrink-0 h-full border-r`}
-      style={{ backgroundColor: isTeacherLike ? theme.bg2 : theme.bg, borderColor: theme.border }}
+      className="w-[260px] flex-shrink-0 h-full border-r"
+      style={{ backgroundColor: theme.bg, borderColor: theme.border }}
     >
-      <nav className={isTeacherLike ? "py-4 px-0" : "p-4"}>
+      <nav className={isTeacherLike ? "p-4" : "p-4"}>
         {menuSections.map((section) => (
-          <div key={section.titleKey} className={isTeacherLike ? "mb-2 px-2.5" : "mb-6"}>
+          <div key={section.titleKey} className={isTeacherLike ? "mb-6" : "mb-6"}>
             <h3
               className={
                 isTeacherLike
-                  ? "text-[9px] font-semibold uppercase tracking-[0.07em] px-2 pt-1 pb-1"
+                  ? "text-xs font-semibold uppercase tracking-wider mb-2 px-3"
                   : "text-xs font-semibold uppercase tracking-wider mb-2 px-3"
               }
-              style={{ color: isTeacherLike ? theme.text3 : theme.text2 }}
+              style={{ color: isTeacherLike && !isLaborant ? theme.text3 : theme.text2 }}
             >
               {t(section.titleKey)}
             </h3>
-            <ul className={isTeacherLike ? "space-y-0" : "space-y-1"}>
+            <ul className={isTeacherLike ? "space-y-1" : "space-y-1"}>
               {section.items.map((item) => {
                 const active = isActive(item.path);
                 const Icon = item.icon;
@@ -452,14 +453,20 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
                       to={linkTo}
                       className={
                         isTeacherLike
-                          ? "flex items-center justify-between gap-2 rounded-md px-2 py-[7px] text-[11px] transition-colors"
+                          ? "flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
                           : `flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                               active ? "border-l-2 border-blue-500" : ""
                             }`
                       }
                       style={
                         isTeacherLike
-                          ? {
+                          ? isLaborant
+                            ? {
+                                backgroundColor: active ? theme.hoverBg : "transparent",
+                                color: active ? theme.accent : theme.text2,
+                                fontWeight: active ? 500 : 400,
+                              }
+                            : {
                               backgroundColor: active ? "rgba(124,58,237,0.12)" : "transparent",
                               color: active ? "#a78bfa" : theme.text2,
                               fontWeight: active ? 500 : 400,
@@ -470,10 +477,16 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
                             }
                       }
                     >
-                      <div className={`flex items-center ${isTeacherLike ? "gap-2" : "gap-3"}`}>
+                      <div className={`flex items-center ${isTeacherLike ? "gap-3" : "gap-3"}`}>
                         <Icon
-                          className={isTeacherLike ? "h-[13px] w-[13px] shrink-0" : "h-5 w-5"}
-                          style={isTeacherLike ? undefined : { color: active ? theme.accent : theme.text3 }}
+                          className="h-5 w-5 shrink-0"
+                          style={
+                            isTeacherLike
+                              ? isLaborant
+                                ? { color: active ? theme.accent : theme.text3 }
+                                : { color: active ? "#a78bfa" : theme.text3 }
+                              : { color: active ? theme.accent : theme.text3 }
+                          }
                         />
                         <span>{t(item.labelKey)}</span>
                       </div>
@@ -484,7 +497,7 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
                       )}
                       {item.path !== "/users" && item.badge && isTeacherLike ? (
                         <span
-                          className="rounded-lg px-1.5 py-px text-[9px] font-semibold"
+                          className="rounded-full px-1.5 py-0.5 text-xs font-semibold"
                           style={
                             item.badge.variant === "red"
                               ? { backgroundColor: "rgba(226,75,74,0.15)", color: theme.danger }

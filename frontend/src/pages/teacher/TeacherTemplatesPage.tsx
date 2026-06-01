@@ -44,7 +44,7 @@ export default function TeacherTemplatesPage({ isDarkTheme = false }: Props) {
   }, [t]);
 
   return (
-    <TeacherPageShell className="gap-3.5 min-w-[900px]">
+    <TeacherPageShell className="gap-3.5 min-w-0">
       <TeacherPageTitle
         theme={theme}
         title={t("teacher.templates.title")}

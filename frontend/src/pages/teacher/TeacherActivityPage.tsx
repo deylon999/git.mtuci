@@ -109,7 +109,7 @@ export default function TeacherActivityPage({ isDarkTheme = false }: Props) {
   const maxTop = Math.max(1, ...topStudents.map(([, v]) => v));
 
   return (
-    <TeacherPageShell className="gap-3.5 min-w-[900px]">
+    <TeacherPageShell className="gap-3.5 min-w-0">
       <TeacherPageTitle
         theme={theme}
         title={t("teacher.activity.title")}

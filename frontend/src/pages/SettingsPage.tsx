@@ -49,9 +49,11 @@ export default function SettingsPage({ isDarkTheme = false, onToggleTheme }: Set
   };
 
   const handleThemeToggle = () => {
-    const nextDark = !isDarkTheme;
     onToggleTheme?.();
-    void persistTheme(nextDark ? "dark" : "light");
+    if (!onToggleTheme) {
+      const nextDark = !isDarkTheme;
+      void persistTheme(nextDark ? "dark" : "light");
+    }
   };
 
   const sections: { id: SettingsSection; label: string; icon: typeof Moon }[] = [

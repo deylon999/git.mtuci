@@ -8,8 +8,8 @@ from app.core.database import get_session
 from app.core.security import get_current_user
 from app.core.permission_checks import (
     ensure_assignment_read,
+    ensure_any_permission,
     ensure_grade_view,
-    ensure_lab_workflow,
     ensure_permission,
     ensure_repo_content_access,
 )
@@ -76,8 +76,7 @@ async def teacher_grading_queue_stats(
     current_user: User = Depends(get_current_user),
 ) -> TeacherGradingQueueStatsRead:
     _require_teacher_or_laborant(current_user)
-    await ensure_lab_workflow(current_user, session)
-    await ensure_permission(current_user, session, "grade_edit")
+    await ensure_any_permission(current_user, session, "grade_edit", "lab_accept")
     return await get_teacher_grading_queue_stats(
         session, user=current_user, course_id=course_id
     )
@@ -91,8 +90,7 @@ async def teacher_grading_queue(
     current_user: User = Depends(get_current_user),
 ) -> list[TeacherGradingQueueItemRead]:
     _require_teacher_or_laborant(current_user)
-    await ensure_lab_workflow(current_user, session)
-    await ensure_permission(current_user, session, "grade_edit")
+    await ensure_any_permission(current_user, session, "grade_edit", "lab_accept")
     return await get_teacher_grading_queue(
         session, user=current_user, limit=limit, course_id=course_id
     )

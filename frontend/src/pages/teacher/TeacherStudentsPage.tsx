@@ -121,7 +121,7 @@ export default function TeacherStudentsPage({ isDarkTheme = false }: Props) {
     summary?.average_grade != null ? `${Math.round(summary.average_grade)}%` : "—";
 
   return (
-    <TeacherPageShell className="gap-[14px] min-w-[900px]">
+    <TeacherPageShell className="gap-[14px] min-w-0">
       <TeacherPageTitle
         theme={theme}
         title={t("teacher.students.title")}

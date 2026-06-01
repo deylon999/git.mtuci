@@ -82,12 +82,16 @@ function applySettingsToState(
   setLanguageState: (locale: Locale) => void,
   setIsDarkTheme: (dark: boolean) => void,
   setNotifications: React.Dispatch<React.SetStateAction<NotificationSettings>>,
+  options?: { applyTheme?: boolean },
 ) {
+  const applyTheme = options?.applyTheme ?? true;
   const locale = resolveLocale(settings.language);
   setLanguageState(locale);
   localStorage.setItem(LANGUAGE_STORAGE_KEY, locale);
   applyDocumentLanguage(locale);
-  resolveThemeFromSettings(settings.theme, setIsDarkTheme);
+  if (applyTheme) {
+    resolveThemeFromSettings(settings.theme, setIsDarkTheme);
+  }
   setNotifications((prev) => ({
     ...prev,
     ...settings.notifications,
@@ -107,6 +111,7 @@ export function UserPreferencesProvider({ children, isDarkTheme, setIsDarkTheme 
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [notifications, setNotifications] = useState<NotificationSettings>(defaultNotifications);
   const hydratedRef = useRef(false);
+  const manualThemeOverrideRef = useRef(false);
 
   useEffect(() => {
     applyDocumentLanguage(language);
@@ -125,7 +130,9 @@ export function UserPreferencesProvider({ children, isDarkTheme, setIsDarkTheme 
       void getUserSettings()
         .then((settings) => {
           if (cancelled) return;
-          applySettingsToState(settings, setLanguageState, setIsDarkTheme, setNotifications);
+          applySettingsToState(settings, setLanguageState, setIsDarkTheme, setNotifications, {
+            applyTheme: !manualThemeOverrideRef.current,
+          });
         })
         .catch(() => {
           /* keep local fallbacks */
@@ -170,6 +177,7 @@ export function UserPreferencesProvider({ children, isDarkTheme, setIsDarkTheme 
   }, []);
 
   const persistTheme = useCallback(async (theme: UserSettings["theme"]) => {
+    manualThemeOverrideRef.current = true;
     if (!getToken()) return;
     await patchUserSettings({ theme });
   }, []);

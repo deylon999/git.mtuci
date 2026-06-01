@@ -282,6 +282,7 @@ function AppShell({
                   </Route>
                   <Route element={<RequirePermission anyOf={["grade_edit", "repo_view_students", "lab_accept"]} />}>
                     <Route path="/teacher/code-review" element={<TeacherCodeReviewPage isDarkTheme={isDarkTheme} />} />
+                    <Route path="/teacher/student-repositories" element={<TeacherCodeReviewPage isDarkTheme={isDarkTheme} />} />
                   </Route>
                   <Route element={<RequirePermission permission="repo_view" />}>
                     <Route path="/teacher/templates" element={<TeacherTemplatesPage isDarkTheme={isDarkTheme} />} />

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.security import get_current_user
-from app.core.permissions import require_permission
+from app.core.permissions import require_any_permission, require_permission
 from app.core.permission_checks import (
     ensure_assignment_read,
     ensure_grade_view,
@@ -913,7 +913,7 @@ async def list_submissions_endpoint(
     "/courses/{course_id}/assignments/{assignment_id}/submissions/{student_id}/grade",
     response_model=AssignmentSubmissionStatusRead,
 )
-@require_permission("grade_edit")
+@require_any_permission("grade_edit", "lab_accept")
 async def grade_submission_endpoint(
     course_id: UUID,
     assignment_id: UUID,

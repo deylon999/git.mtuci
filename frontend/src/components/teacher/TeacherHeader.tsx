@@ -67,19 +67,19 @@ export default function TeacherHeader({ isDarkTheme = true, onToggleTheme }: Pro
   return (
     <header
       className="shrink-0 border-b z-10"
-      style={{ backgroundColor: theme.bg2, borderColor: theme.border, height: 48 }}
+      style={{ backgroundColor: theme.bg2, borderColor: theme.border, height: 56 }}
     >
       <div className="flex h-full items-center justify-between gap-4 px-6">
         <div className="flex items-center gap-3.5 min-w-0">
-          <Link to="/dashboard" className="flex items-center gap-2 shrink-0">
+          <Link to="/dashboard" className="flex items-center gap-2.5 shrink-0">
             <GitMtuciLogo />
-            <span className="text-sm font-semibold" style={{ color: theme.text }}>
+            <span className="text-base font-semibold" style={{ color: theme.text }}>
               git<span style={{ color: theme.accent2 }}>мтуси</span>
             </span>
           </Link>
           <div className="h-[18px] w-px shrink-0" style={{ backgroundColor: theme.border }} />
           <span
-            className="shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium"
+            className="shrink-0 rounded-md border px-2.5 py-1 text-xs font-medium"
             style={{
               color: "#a78bfa",
               backgroundColor: "rgba(167,139,250,0.1)",
@@ -92,19 +92,19 @@ export default function TeacherHeader({ isDarkTheme = true, onToggleTheme }: Pro
 
         <form
           onSubmit={onSearch}
-          className="hidden md:flex items-center gap-1.5 rounded-[7px] border px-3 py-1.5 w-[260px]"
+          className="hidden md:flex items-center gap-2 rounded-[8px] border px-3.5 py-2 w-[280px]"
           style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         >
-          <Search className="h-3.5 w-3.5 shrink-0" style={{ color: theme.text3 }} />
+          <Search className="h-4 w-4 shrink-0" style={{ color: theme.text3 }} />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t("teacher.header.searchPlaceholder")}
-            className="w-full bg-transparent text-xs outline-none"
+            className="w-full bg-transparent text-sm outline-none"
             style={{ color: theme.text2 }}
           />
           <span
-            className="shrink-0 rounded border px-1 text-[9px]"
+            className="shrink-0 rounded border px-1.5 text-[10px]"
             style={{ color: theme.text3, borderColor: theme.border }}
           >
             ⌘K
@@ -115,11 +115,11 @@ export default function TeacherHeader({ isDarkTheme = true, onToggleTheme }: Pro
           <button
             type="button"
             onClick={onToggleTheme}
-            className="flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border"
+            className="flex h-9 w-9 items-center justify-center rounded-[8px] border"
             style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text2 }}
             title={isDarkTheme ? t("header.themeToLight") : t("header.themeToDark")}
           >
-            {isDarkTheme ? <Sun className="h-[15px] w-[15px]" /> : <Moon className="h-[15px] w-[15px]" />}
+            {isDarkTheme ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
 
           <NotificationBell isDarkTheme={isDarkTheme} />
@@ -128,24 +128,24 @@ export default function TeacherHeader({ isDarkTheme = true, onToggleTheme }: Pro
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="flex items-center gap-2 rounded-lg border px-2.5 py-1"
+              className="flex items-center gap-2.5 rounded-lg border px-3 py-1.5"
               style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
             >
               <div
-                className="flex h-[26px] w-[26px] items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white"
                 style={{ background: "linear-gradient(135deg,#7c3aed,#a78bfa)" }}
               >
                 {initials}
               </div>
               <div className="hidden lg:block text-left">
-                <div className="text-xs font-medium leading-tight" style={{ color: theme.text }}>
+                <div className="text-sm font-medium leading-tight" style={{ color: theme.text }}>
                   {displayName}
                 </div>
-                <div className="text-[10px] leading-tight" style={{ color: theme.text2 }}>
+                <div className="text-xs leading-tight" style={{ color: theme.text2 }}>
                   {t("roles.teacher")}
                 </div>
               </div>
-              <ChevronDown className="h-2.5 w-2.5 hidden sm:block" style={{ color: theme.text2 }} />
+              <ChevronDown className="h-3.5 w-3.5 hidden sm:block" style={{ color: theme.text2 }} />
             </button>
             {menuOpen ? (
               <div
