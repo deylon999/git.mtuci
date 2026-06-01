@@ -95,6 +95,7 @@ services:
     container_name: mtuci-gitea
     ports:
       - "3000:3000"
+      - "2222:22"
     volumes:
       - gitea_data:/data
     environment:
@@ -113,7 +114,10 @@ services:
       - GITEA__server__DOMAIN=localhost
       - GITEA__server__HTTP_PORT=3000
       - GITEA__server__ROOT_URL=http://localhost:3000/
-      - GITEA__server__DISABLE_SSH=true
+      - GITEA__server__DISABLE_SSH=false
+      - GITEA__server__START_SSH_SERVER=false
+      - GITEA__server__SSH_DOMAIN=localhost
+      - GITEA__server__SSH_PORT=2222
       # Разрешение webhook для контейнера api
       - GITEA__webhook__ALLOWED_HOST_LIST=api,172.18.0.0/16,*
     depends_on:

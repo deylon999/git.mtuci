@@ -272,6 +272,10 @@ export default function ProfilePage({ isDarkTheme = false }: ProfilePageProps) {
       setPasswordError(t("admin.profile.passwordTooShort"));
       return;
     }
+    if (oldPassword === newPassword) {
+      setPasswordError(t("admin.profile.passwordSameAsOld"));
+      return;
+    }
 
     setSaving(true);
     try {

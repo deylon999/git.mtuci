@@ -301,6 +301,7 @@ export const adminRu = {
     avatarLoadError: "Не удалось загрузить аватар",
     passwordMismatch: "Новые пароли не совпадают.",
     passwordTooShort: "Новый пароль должен быть не короче 8 символов.",
+    passwordSameAsOld: "Новый пароль должен отличаться от старого.",
     passwordChanged: "Пароль успешно изменен.",
     passwordChangeError: "Не удалось сменить пароль",
     title: "Профиль",

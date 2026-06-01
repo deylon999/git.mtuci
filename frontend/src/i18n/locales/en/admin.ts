@@ -301,6 +301,7 @@ export const adminEn = {
     avatarLoadError: "Failed to load avatar",
     passwordMismatch: "New passwords do not match.",
     passwordTooShort: "New password must be at least 8 characters.",
+    passwordSameAsOld: "New password must be different from the old password.",
     passwordChanged: "Password changed successfully.",
     passwordChangeError: "Failed to change password",
     title: "Profile",

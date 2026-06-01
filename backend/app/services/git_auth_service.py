@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.git_auth import UserGitToken, UserSshKey
@@ -15,9 +15,13 @@ from app.services.gitea_service import (
     create_gitea_user_access_token,
     delete_gitea_user_access_token,
     delete_gitea_user_ssh_key,
+    ensure_gitea_user,
     list_gitea_user_access_tokens,
 )
 from app.utils.gitea_user import resolve_gitea_username
+
+MAX_ACTIVE_GIT_TOKENS_PER_USER = 10
+ACTIVE_GIT_TOKENS_LIMIT_ERROR = "Отключите старый токен или перевыпустите существующий"
 
 
 def _split_scopes(scopes_csv: str) -> list[str]:
@@ -113,7 +117,26 @@ async def create_git_token(
     scopes: list[str],
     expires_at: datetime | None,
 ) -> GitTokenCreateRead:
-    username = resolve_gitea_username(user)
+    # Serialize token creation per user to avoid race conditions on limit checks.
+    await session.execute(select(User.id).where(User.id == user.id).with_for_update())
+    active_tokens_count = await session.scalar(
+        select(func.count())
+        .select_from(UserGitToken)
+        .where(
+            UserGitToken.user_id == user.id,
+            UserGitToken.is_active.is_(True),
+        )
+    )
+    if int(active_tokens_count or 0) >= MAX_ACTIVE_GIT_TOKENS_PER_USER:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=ACTIVE_GIT_TOKENS_LIMIT_ERROR,
+        )
+
+    username = await ensure_gitea_user(
+        resolve_gitea_username(user),
+        email=user.email,
+    )
     gitea_name = f"mtuci-{name.strip()[:80]}"
     raw = await create_gitea_user_access_token(username, name=gitea_name)
     gitea_tokens = await list_gitea_user_access_tokens(username)
@@ -139,7 +162,10 @@ async def revoke_git_token(session: AsyncSession, *, user: User, token_id: UUID)
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
     if row.gitea_token_id is not None:
-        username = resolve_gitea_username(user)
+        username = await ensure_gitea_user(
+            resolve_gitea_username(user),
+            email=user.email,
+        )
         await delete_gitea_user_access_token(username, row.gitea_token_id)
     row.is_active = False
     row.updated_at = datetime.now(timezone.utc)
@@ -183,7 +209,10 @@ async def add_ssh_key(
     public_key: str,
     read_only: bool,
 ) -> UserSshKeyRead:
-    username = resolve_gitea_username(user)
+    username = await ensure_gitea_user(
+        resolve_gitea_username(user),
+        email=user.email,
+    )
     data = await add_gitea_user_ssh_key(
         username=username,
         title=title.strip(),
@@ -209,6 +238,9 @@ async def delete_ssh_key(session: AsyncSession, *, user: User, key_id: UUID) -> 
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SSH key not found")
     if row.gitea_key_id is not None:
-        username = resolve_gitea_username(user)
+        username = await ensure_gitea_user(
+            resolve_gitea_username(user),
+            email=user.email,
+        )
         await delete_gitea_user_ssh_key(username=username, key_id=row.gitea_key_id)
     await session.delete(row)

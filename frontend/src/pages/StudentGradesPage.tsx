@@ -102,9 +102,7 @@ export default function StudentGradesPage({ isDarkTheme = false }: StudentGrades
         if (cancelled) return;
         setData(summary);
         setGroupPlace(getCachedStudentGroupRanking()?.your_place ?? null);
-        if (summary.courses.length > 0) {
-          setExpandedCourses(new Set([summary.courses[0].course_id]));
-        }
+        setExpandedCourses(new Set());
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : t("student.errors.loadGrades"));

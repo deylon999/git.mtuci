@@ -119,6 +119,11 @@ async def change_my_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Old password is incorrect",
         )
+    if payload.old_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from old password",
+        )
 
     current_user.password_hash = hash_password(payload.new_password)
     session.add(current_user)

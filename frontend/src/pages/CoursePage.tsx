@@ -11,7 +11,7 @@ interface CoursePageProps {
   isDarkTheme?: boolean;
 }
 
-export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
+export default function CoursePage({ isDarkTheme = false }: CoursePageProps) {
   const { t } = useUserPreferences();
   const pageBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-gray-50";
   const textPrimary = isDarkTheme ? "text-[#ccd0d4]" : "text-gray-900";

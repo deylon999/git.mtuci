@@ -219,7 +219,7 @@ function AppShell({
                   <Route path="/profile" element={<ProfilePage isDarkTheme={isDarkTheme} />} />
                   <Route element={<RequirePermission permission="assignment_view" />}>
                     <Route path="/courses" element={<CoursesRoute isDarkTheme={isDarkTheme} />} />
-                    <Route path="/courses/:courseId" element={<CoursePage />} />
+                    <Route path="/courses/:courseId" element={<CoursePage isDarkTheme={isDarkTheme} />} />
                     <Route
                       path="/courses/:courseId/assignments/:assignmentId"
                       element={<AssignmentPage />}
