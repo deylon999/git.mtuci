@@ -14,6 +14,9 @@ import type {
   LogsStats,
   LogsFilters,
   LogsPagination,
+  AdminNotificationsResponse,
+  AdminNotificationsStatsResponse,
+  AdminNotificationCategory,
 } from "./types";
 
 export async function getAdminUsers(): Promise<AdminUserRead[]> {
@@ -498,4 +501,40 @@ export async function deleteOldLogs(days: number = 30): Promise<{ deleted_count:
   return apiRequest<{ deleted_count: number }>(`/admin/logs/old?days=${days}`, {
     method: "DELETE",
   });
+}
+
+export interface AdminNotificationsQuery {
+  page?: number;
+  limit?: number;
+  category?: "all" | AdminNotificationCategory;
+  unread?: boolean;
+  severity?: "info" | "warning" | "critical" | "success";
+  actionable?: boolean;
+  q?: string;
+}
+
+export async function getAdminNotifications(
+  query: AdminNotificationsQuery = {},
+): Promise<AdminNotificationsResponse> {
+  const params = new URLSearchParams();
+  if (query.page != null) params.set("page", String(query.page));
+  if (query.limit != null) params.set("limit", String(query.limit));
+  if (query.category) params.set("category", query.category);
+  if (query.unread != null) params.set("unread", String(query.unread));
+  if (query.severity) params.set("severity", query.severity);
+  if (query.actionable != null) params.set("actionable", String(query.actionable));
+  if (query.q && query.q.trim()) params.set("q", query.q.trim());
+  const qs = params.toString();
+  return apiRequest<AdminNotificationsResponse>(`/admin/notifications${qs ? `?${qs}` : ""}`);
+}
+
+export async function clearReadAdminNotifications(): Promise<void> {
+  await apiRequest<void>("/admin/notifications/read", { method: "DELETE" });
+}
+
+export async function getAdminNotificationsStats(q?: string): Promise<AdminNotificationsStatsResponse> {
+  const params = new URLSearchParams();
+  if (q && q.trim()) params.set("q", q.trim());
+  const qs = params.toString();
+  return apiRequest<AdminNotificationsStatsResponse>(`/admin/notifications/stats${qs ? `?${qs}` : ""}`);
 }

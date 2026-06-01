@@ -2,7 +2,6 @@ import os
 import secrets
 import string
 import asyncio
-import base64
 import csv
 import io
 import subprocess
@@ -11,19 +10,20 @@ import shutil
 import re
 import time
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List, Optional, Literal
 from uuid import UUID
 
 import httpx
 import psutil
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Query, Request, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import func, select, and_, or_, text
+from sqlalchemy import delete, func, select, and_, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.security import get_current_user
 from app.core.permissions import require_permission
+from app.models.notification import Notification
 from app.models.repository import Repository, RepositoryType
 from app.models.student_repository import StudentRepository
 from app.models.assignment import Assignment
@@ -34,9 +34,18 @@ from app.models.system_log import SystemLog, LogLevel, LogSource
 from app.models.user import User, UserRole
 from app.schemas.admin_forks import AdminForkEventsRead
 from app.schemas.admin_reports import AdminCourseSummaryRead, AdminReportsOverviewRead
+from app.schemas.notification import (
+    AdminNotificationActionRead,
+    AdminNotificationRead,
+    AdminNotificationsResponse,
+    AdminNotificationsStatsResponse,
+)
 from app.services.admin_reports_service import get_admin_reports_overview
 from app.schemas.repository import RepositoryRead
 from app.services.admin_forks_service import get_admin_fork_events
+from app.services.notification_realtime import push_notifications_updated
+from app.services.notification_service import sync_user_notifications
+from app.services.notification_delivery import upsert_notification
 from app.services.repository_presenter import build_repository_read
 from app.schemas.system_log import LogEntry, LogsResponse, LogsStats
 from app.services.system_log_display import build_log_entry, logs_select_with_user
@@ -131,6 +140,22 @@ class BackupInfo(BaseModel):
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+NotificationCategory = Literal["users", "system", "security"]
+NotificationSeverity = Literal["info", "warning", "critical", "success"]
+NotificationEventKind = Literal[
+    "pending_user",
+    "webhook_failed",
+    "service_down",
+    "disk_warning",
+    "backup_failed",
+    "backup_success",
+    "suspicious_login",
+    "failed_login",
+    "http_5xx",
+    "security_alert",
+    "generic",
+]
+
 
 def get_client_ip(request: Request) -> str:
     """Get client IP address from request, handling proxy headers."""
@@ -160,6 +185,404 @@ def _check_target_not_admin(target_user: User) -> None:
 def _generate_password(length: int = 12) -> str:
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+async def _emit_admin_backup_notification(
+    session: AsyncSession,
+    *,
+    title: str,
+    message: str,
+    ntype: str,
+    href: str = "/admin/monitoring",
+    dedupe_key: str,
+) -> None:
+    """Best-effort notification for backup events; never raises outside."""
+    try:
+        admins_result = await session.execute(
+            select(User.id).where(User.role == UserRole.admin)
+        )
+        admin_ids = list(admins_result.scalars().all())
+        if not admin_ids:
+            return
+
+        created_at = datetime.now(timezone.utc)
+        event_type = "backup_success" if (ntype or "").lower() == "success" else "backup_failed"
+        touched_admin_ids: list[UUID] = []
+        for admin_id in admin_ids:
+            created = await upsert_notification(
+                session,
+                user_id=admin_id,
+                dedupe_key=dedupe_key,
+                title=title,
+                message=message,
+                ntype=ntype,
+                href=href,
+                created_at=created_at,
+                event_type=event_type,
+            )
+            if created:
+                touched_admin_ids.append(admin_id)
+        await session.commit()
+        for admin_id in touched_admin_ids:
+            await push_notifications_updated(admin_id)
+    except Exception:
+        await session.rollback()
+
+
+def _contains_any(haystack: str, *needles: str) -> bool:
+    return any(needle in haystack for needle in needles)
+
+
+def _extract_first_int(haystack: str) -> int | None:
+    match = re.search(r"\b(\d{1,4})\b", haystack)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def _extract_percent(haystack: str) -> int | None:
+    match = re.search(r"(\d{1,3})\s*%", haystack)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def _extract_minutes(haystack: str) -> int | None:
+    match = re.search(r"(\d{1,4})\s*(мин|мину|minutes|min)\b", haystack)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def _extract_ip(haystack: str) -> str | None:
+    match = re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", haystack)
+    return match.group(0) if match else None
+
+
+def _base_notification_category(*, haystack: str, href: str | None) -> NotificationCategory:
+    if (
+        "/users" in (href or "")
+        or _contains_any(haystack, "пользоват", "user", "регистр", "pending", "одобр")
+    ):
+        return "users"
+    if _contains_any(
+        haystack,
+        "безопас",
+        "security",
+        "auth",
+        "логин",
+        "login",
+        "подозр",
+        "failed",
+        "неудач",
+    ):
+        return "security"
+    return "system"
+
+
+def _detect_notification_event(
+    *,
+    title: str,
+    message: str,
+    href: str | None,
+    ntype: str,
+) -> tuple[NotificationEventKind, NotificationCategory, dict[str, int | float | bool | str | None]]:
+    haystack = f"{title} {message} {href or ''}".lower()
+    base_category = _base_notification_category(haystack=haystack, href=href)
+    context: dict[str, int | float | bool | str | None] = {
+        "service_down_minutes": _extract_minutes(haystack),
+        "service_recovered_quickly": _contains_any(haystack, "восстанов", "restored", "recovered"),
+        "disk_percent": _extract_percent(haystack),
+        "backup_consecutive_failures": _extract_first_int(haystack),
+        "failed_login_count_5m_ip": _extract_first_int(haystack),
+        "error_5xx_rate_10m": _extract_percent(haystack),
+        "ip": _extract_ip(haystack),
+        "is_webhook_timeout": _contains_any(haystack, "timeout", "таймаут"),
+    }
+
+    # 1) Пользователи: ожидают подтверждения.
+    if _contains_any(haystack, "ожида", "pending", "подтверж") and (
+        "/users" in (href or "") or "пользоват" in haystack or "user" in haystack
+    ):
+        return "pending_user", "users", context
+
+    # 2) Вебхуки.
+    if _contains_any(haystack, "вебхук", "webhook"):
+        has_delivery_issue = _contains_any(
+            haystack,
+            "failed",
+            "error",
+            "timeout",
+            "не достав",
+            "retry",
+            "redeliver",
+            "ошиб",
+            "недоступ",
+        )
+        if has_delivery_issue:
+            return "webhook_failed", "system", context
+
+    # 3) Диск.
+    if _contains_any(haystack, "диск", "disk"):
+        return "disk_warning", "system", context
+
+    # 4) Бэкапы.
+    if _contains_any(haystack, "backup", "бэкап", "резервн"):
+        if _contains_any(haystack, "error", "failed", "timeout", "ошиб", "неуда"):
+            return "backup_failed", "system", context
+        if _contains_any(haystack, "success", "выполн", "created", "создан"):
+            return "backup_success", "system", context
+
+    # 5) Сервисы.
+    is_service = _contains_any(
+        haystack,
+        "service",
+        "сервис",
+        "недоступ",
+        "unavailable",
+        "down",
+        "offline",
+        "не отвечает",
+    )
+    if is_service:
+        context["is_core_service"] = _contains_any(haystack, "gitea", "postgres", "database", "db", "api")
+        context["is_smtp_service"] = _contains_any(haystack, "smtp", "mail")
+        return "service_down", "system", context
+
+    # 6) 5xx.
+    if _contains_any(haystack, "5xx", "error rate", "ошибки 5"):
+        return "http_5xx", "system", context
+
+    # 7) Безопасность логинов.
+    if _contains_any(haystack, "подозр", "suspicious", "bruteforce", "brute force"):
+        return "suspicious_login", "security", context
+
+    if _contains_any(haystack, "failed login", "неудач", "auth failed", "unauthorized"):
+        return "failed_login", "security", context
+
+    if base_category == "security":
+        return "security_alert", "security", context
+
+    return "generic", base_category, context
+
+
+
+
+def _notification_unread_color(
+    severity: Literal["info", "warning", "critical", "success"],
+    is_read: bool,
+) -> Literal["blue", "yellow", "red"] | None:
+    if is_read:
+        return None
+    if severity == "critical":
+        return "red"
+    if severity == "warning":
+        return "yellow"
+    return "blue"
+
+
+def _try_extract_pending_user_id(value: str) -> UUID | None:
+    match = re.search(r"[0-9a-fA-F-]{36}", value)
+    if not match:
+        return None
+    try:
+        return UUID(match.group(0))
+    except ValueError:
+        return None
+
+
+def _try_extract_repo_webhook_ids(href: str | None) -> tuple[UUID, UUID] | None:
+    if not href:
+        return None
+    match = re.search(
+        r"/repositories/([0-9a-fA-F-]{36})/settings/webhooks/([0-9a-fA-F-]{36})",
+        href,
+    )
+    if not match:
+        return None
+    try:
+        return UUID(match.group(1)), UUID(match.group(2))
+    except ValueError:
+        return None
+
+
+def _build_notification_actions(
+    *,
+    title: str,
+    message: str,
+    href: str | None,
+    event_kind: NotificationEventKind,
+) -> list[AdminNotificationActionRead]:
+    actions: list[AdminNotificationActionRead] = []
+
+    pending_user_id = _try_extract_pending_user_id(f"{href or ''} {message}")
+    if event_kind == "pending_user" and pending_user_id:
+        actions.append(
+            AdminNotificationActionRead(
+                kind="approve_user",
+                label="Принять",
+                payload={"user_id": str(pending_user_id)},
+            )
+        )
+        actions.append(
+            AdminNotificationActionRead(
+                kind="reject_user",
+                label="Отклонить",
+                payload={"user_id": str(pending_user_id)},
+            )
+        )
+        return actions
+    if event_kind == "pending_user" and href:
+        actions.append(AdminNotificationActionRead(kind="open_link", label="Открыть", href=href))
+        return actions
+
+    if event_kind == "webhook_failed":
+        parsed = _try_extract_repo_webhook_ids(href)
+        if parsed:
+            repo_id, webhook_id = parsed
+            actions.append(
+                AdminNotificationActionRead(
+                    kind="retry_webhook",
+                    label="Повторить",
+                    payload={"repo_id": str(repo_id), "webhook_id": str(webhook_id)},
+                )
+            )
+        elif href:
+            actions.append(AdminNotificationActionRead(kind="open_link", label="Открыть", href=href))
+        return actions
+
+    if event_kind in {"service_down", "backup_failed"}:
+        actions.append(
+            AdminNotificationActionRead(kind="open_link", label="Мониторинг", href="/admin/monitoring")
+        )
+        return actions
+
+    if event_kind == "disk_warning":
+        actions.append(
+            AdminNotificationActionRead(kind="open_link", label="Настройки", href="/admin/settings")
+        )
+        return actions
+
+    if event_kind == "suspicious_login":
+        actions.append(AdminNotificationActionRead(kind="open_link", label="Логи", href="/logs"))
+        return actions
+
+    return actions
+
+
+def _severity_from_row(row: Notification) -> NotificationSeverity:
+    value = (row.severity or "").lower()
+    if value in {"info", "warning", "critical", "success"}:
+        return value  # type: ignore[return-value]
+    ntype = (row.type or "").lower()
+    if ntype == "success":
+        return "success"
+    if ntype == "warning":
+        return "warning"
+    if ntype == "error":
+        return "critical"
+    return "info"
+
+
+def _category_from_event(
+    event_kind: NotificationEventKind,
+    *,
+    title: str,
+    message: str,
+    href: str | None,
+) -> NotificationCategory:
+    if event_kind == "pending_user":
+        return "users"
+    if event_kind in {"suspicious_login", "failed_login", "security_alert"}:
+        return "security"
+    if event_kind == "generic":
+        haystack = f"{title} {message} {href or ''}".lower()
+        return _base_notification_category(haystack=haystack, href=href)
+    return "system"
+
+
+async def _build_admin_notifications_feed(
+    session: AsyncSession,
+    current_user: User,
+) -> list[AdminNotificationRead]:
+    await sync_user_notifications(
+        session,
+        user_id=current_user.id,
+        group_name=current_user.group_name,
+        role=current_user.role,
+    )
+
+    combined: list[AdminNotificationRead] = []
+
+    notifications_result = await session.execute(
+        select(Notification)
+        .where(Notification.user_id == current_user.id)
+        .order_by(Notification.created_at.desc())
+    )
+    for row in notifications_result.scalars().all():
+        if row.event_type and row.event_type in {
+            "pending_user",
+            "webhook_failed",
+            "service_down",
+            "disk_warning",
+            "backup_failed",
+            "backup_success",
+            "suspicious_login",
+            "failed_login",
+            "http_5xx",
+            "security_alert",
+            "generic",
+        }:
+            event_kind: NotificationEventKind = row.event_type  # type: ignore[assignment]
+        else:
+            event_kind, _, _ = _detect_notification_event(
+                title=row.title,
+                message=row.message,
+                href=row.href,
+                ntype=row.type,
+            )
+        inferred_severity = _severity_from_row(row)
+        is_actionable = bool(row.actionable)
+        inferred_category = _category_from_event(
+            event_kind,
+            title=row.title,
+            message=row.message,
+            href=row.href,
+        )
+        actions = _build_notification_actions(
+            title=row.title,
+            message=row.message,
+            href=row.href,
+            event_kind=event_kind,
+        ) if is_actionable else []
+        combined.append(
+            AdminNotificationRead(
+                id=row.id,
+                title=row.title,
+                message=row.message,
+                type=row.type,
+                read=row.read,
+                href=row.href,
+                created_at=row.created_at,
+                category=inferred_category,
+                severity=inferred_severity,
+                unread_color=_notification_unread_color(inferred_severity, row.read),
+                actionable=is_actionable,
+                virtual=False,
+                actions=actions,
+            )
+        )
+    combined.sort(key=lambda item: item.created_at, reverse=True)
+    return combined
 
 
 @router.get("/users", response_model=list[AdminUserRead])
@@ -559,6 +982,109 @@ async def admin_reset_password(
     return AdminResetPasswordResponse(new_password=new_password)
 
 
+@router.get("/notifications", response_model=AdminNotificationsResponse)
+@require_permission("settings_view")
+async def admin_get_notifications(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    category: Literal["all", "users", "system", "security"] = Query(default="all"),
+    unread: bool | None = Query(default=None),
+    severity: Literal["info", "warning", "critical", "success"] | None = Query(default=None),
+    actionable: bool | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=200),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AdminNotificationsResponse:
+    _require_admin(current_user)
+    combined = await _build_admin_notifications_feed(session, current_user)
+
+    # 3) Filtering
+    filtered = combined
+    if category != "all":
+        filtered = [item for item in filtered if item.category == category]
+    if unread is True:
+        filtered = [item for item in filtered if not item.read]
+    elif unread is False:
+        filtered = [item for item in filtered if item.read]
+    if severity is not None:
+        filtered = [item for item in filtered if item.severity == severity]
+    if actionable is not None:
+        filtered = [item for item in filtered if item.actionable is actionable]
+
+    if q and q.strip():
+        query_lower = q.strip().lower()
+        filtered = [
+            item
+            for item in filtered
+            if query_lower in item.title.lower()
+            or query_lower in item.message.lower()
+            or query_lower in (item.href or "").lower()
+        ]
+
+    total = len(filtered)
+    pages = max(1, (total + limit - 1) // limit)
+    offset = (page - 1) * limit
+    page_items = filtered[offset: offset + limit]
+
+    return AdminNotificationsResponse(
+        items=page_items,
+        total=total,
+        page=page,
+        pages=pages,
+    )
+
+
+@router.get("/notifications/stats", response_model=AdminNotificationsStatsResponse)
+@require_permission("settings_view")
+async def admin_get_notifications_stats(
+    q: str | None = Query(default=None, max_length=200),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AdminNotificationsStatsResponse:
+    _require_admin(current_user)
+    items = await _build_admin_notifications_feed(session, current_user)
+
+    if q and q.strip():
+        query_lower = q.strip().lower()
+        items = [
+            item
+            for item in items
+            if query_lower in item.title.lower()
+            or query_lower in item.message.lower()
+            or query_lower in (item.href or "").lower()
+        ]
+
+    return AdminNotificationsStatsResponse(
+        total=len(items),
+        unread=sum(1 for item in items if not item.read),
+        action_required=sum(1 for item in items if item.actionable),
+        critical=sum(1 for item in items if item.severity == "critical"),
+        users=sum(1 for item in items if item.category == "users"),
+        system=sum(1 for item in items if item.category == "system"),
+        security=sum(1 for item in items if item.category == "security"),
+    )
+
+
+@router.delete("/notifications/read", status_code=status.HTTP_204_NO_CONTENT)
+@require_permission("settings_view")
+async def admin_clear_read_notifications(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    _require_admin(current_user)
+
+    result = await session.execute(
+        delete(Notification).where(
+            Notification.user_id == current_user.id,
+            Notification.read.is_(True),
+        )
+    )
+    await session.commit()
+    if (result.rowcount or 0) > 0:
+        await push_notifications_updated(current_user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/system-metrics", response_model=SystemMetrics)
 @require_permission("settings_view")
 async def admin_system_metrics(
@@ -765,6 +1291,13 @@ async def admin_create_backup(
             )
 
             if result.returncode != 0:
+                await _emit_admin_backup_notification(
+                    session,
+                    title="Ошибка бэкапа",
+                    message=f"pg_dump failed: {result.stderr}"[:240],
+                    ntype="error",
+                    dedupe_key=f"backup:error:pgdump:{timestamp}",
+                )
                 raise HTTPException(status_code=500, detail=f"Backup failed: {result.stderr}")
 
             backup_file_gz = f"{backup_file}.gz"
@@ -776,13 +1309,36 @@ async def admin_create_backup(
 
             await asyncio.to_thread(_compress_sql_to_gzip, backup_file, backup_file_gz)
 
-            return {"success": True, "file": f"backup_{timestamp}.sql.gz", "message": "Backup created successfully"}
+            backup_name = f"backup_{timestamp}.sql.gz"
+            await _emit_admin_backup_notification(
+                session,
+                title="Бэкап выполнен успешно",
+                message=f"Создан файл {backup_name}",
+                ntype="success",
+                dedupe_key=f"backup:success:{timestamp}",
+            )
+
+            return {"success": True, "file": backup_name, "message": "Backup created successfully"}
 
         except subprocess.TimeoutExpired:
+            await _emit_admin_backup_notification(
+                session,
+                title="Ошибка бэкапа",
+                message="Создание бэкапа завершилось по таймауту",
+                ntype="error",
+                dedupe_key=f"backup:error:timeout:{timestamp}",
+            )
             raise HTTPException(status_code=500, detail="Backup timeout")
         except HTTPException:
             raise
         except Exception as e:
+            await _emit_admin_backup_notification(
+                session,
+                title="Ошибка бэкапа",
+                message=f"Backup error: {str(e)}"[:240],
+                ntype="error",
+                dedupe_key=f"backup:error:{timestamp}",
+            )
             raise HTTPException(status_code=500, detail=f"Backup error: {str(e)}")
 
 

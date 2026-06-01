@@ -8,6 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.notification import Notification
 from app.models.user import User
+from app.services.notification_classification import (
+    NotificationEventType,
+    build_classification_context,
+    classify_notification,
+    detect_notification_event_type,
+)
 from app.services.email_service import send_notification_email
 from app.services.notification_prefs import NotificationCategory, notification_prefs_from_user
 from app.services.notification_realtime import push_notifications_updated
@@ -23,6 +29,7 @@ async def upsert_notification(
     ntype: str,
     href: str | None = None,
     created_at: datetime | None = None,
+    event_type: NotificationEventType | None = None,
 ) -> bool:
     result = await session.execute(
         select(Notification).where(
@@ -33,6 +40,23 @@ async def upsert_notification(
     if result.scalar_one_or_none():
         return False
 
+    resolved_event_type = event_type or detect_notification_event_type(
+        title=title,
+        message=message,
+        href=href,
+        ntype=ntype,
+    )
+    context = await build_classification_context(
+        session,
+        user_id=user_id,
+        event_type=resolved_event_type,
+        title=title,
+        message=message,
+        href=href,
+        created_at=created_at,
+    )
+    severity, actionable = classify_notification(resolved_event_type, context)
+
     session.add(
         Notification(
             user_id=user_id,
@@ -40,6 +64,9 @@ async def upsert_notification(
             title=title,
             message=message,
             type=ntype,
+            severity=severity,
+            actionable=actionable,
+            event_type=resolved_event_type,
             href=href,
             read=False,
             created_at=created_at or datetime.now(timezone.utc),
@@ -60,6 +87,7 @@ async def deliver_notification(
     href: str | None = None,
     created_at: datetime | None = None,
     email_subject: str | None = None,
+    event_type: NotificationEventType | None = None,
 ) -> bool:
     """Create in-app notification when category is enabled; optionally send email."""
     prefs = notification_prefs_from_user(user)
@@ -75,6 +103,7 @@ async def deliver_notification(
         ntype=ntype,
         href=href,
         created_at=created_at,
+        event_type=event_type,
     )
     if not created:
         return False

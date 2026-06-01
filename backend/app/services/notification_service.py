@@ -18,6 +18,7 @@ from app.models.submission import Submission
 from app.models.user import User, UserRole
 from app.services.email_service import send_notification_email
 from app.services.notification_delivery import deliver_notification, upsert_notification
+from app.services.notification_classification import classify_notification
 from app.services.notification_prefs import STALE_REVIEW_HOURS, notification_prefs_from_user
 from app.services.notification_realtime import push_notifications_updated
 from app.services.student_dashboard_service import _load_student_assignment_context, _start_of_day, _submission_points
@@ -48,6 +49,7 @@ async def _sync_admin_pending_users_notification(
     existing = result.scalar_one_or_none()
     message = f"{pending} пользователь(ей) ждут подтверждения"
     title = "Ожидают одобрения"
+    severity, actionable = classify_notification("pending_user", {})
 
     if pending <= 0:
         if existing:
@@ -58,10 +60,23 @@ async def _sync_admin_pending_users_notification(
     if existing:
         previous = _pending_count_from_message(existing.message)
         if previous == pending:
-            return False
+            changed = False
+            if existing.event_type != "pending_user":
+                existing.event_type = "pending_user"
+                changed = True
+            if existing.severity != severity:
+                existing.severity = severity
+                changed = True
+            if existing.actionable != actionable:
+                existing.actionable = actionable
+                changed = True
+            return changed
         existing.title = title
         existing.message = message
         existing.href = "/users"
+        existing.event_type = "pending_user"
+        existing.severity = severity
+        existing.actionable = actionable
         if previous is not None and pending > previous:
             existing.read = False
         return True
@@ -73,6 +88,9 @@ async def _sync_admin_pending_users_notification(
             title=title,
             message=message,
             type="warning",
+            severity=severity,
+            actionable=actionable,
+            event_type="pending_user",
             href="/users",
             read=False,
             created_at=now,

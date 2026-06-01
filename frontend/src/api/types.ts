@@ -14,6 +14,42 @@ export interface Notification {
   created_at: string;
 }
 
+export type AdminNotificationCategory = "users" | "system" | "security";
+export type AdminNotificationSeverity = "info" | "warning" | "critical" | "success";
+
+export interface AdminNotificationAction {
+  kind: string;
+  label: string;
+  href?: string | null;
+  payload?: Record<string, string> | null;
+}
+
+export interface AdminNotificationItem extends Notification {
+  category: AdminNotificationCategory;
+  severity: AdminNotificationSeverity;
+  unread_color?: "blue" | "yellow" | "red" | null;
+  actionable: boolean;
+  virtual: boolean;
+  actions: AdminNotificationAction[];
+}
+
+export interface AdminNotificationsResponse {
+  items: AdminNotificationItem[];
+  total: number;
+  page: number;
+  pages: number;
+}
+
+export interface AdminNotificationsStatsResponse {
+  total: number;
+  unread: number;
+  action_required: number;
+  critical: number;
+  users: number;
+  system: number;
+  security: number;
+}
+
 export interface TokenResponse {
   access_token: string;
   token_type: TokenType | string;
