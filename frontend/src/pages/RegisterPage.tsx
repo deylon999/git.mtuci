@@ -66,7 +66,7 @@ export default function RegisterPage() {
     setError(null);
     try {
       if (useMtuci && mtuciLogin && mtuciPassword) {
-        await registerStudentMtuci(email, password, fullName, groupName, mtuciLogin, mtuciPassword);
+        await registerStudentMtuci(email, password, fullName, undefined, mtuciLogin, mtuciPassword);
       } else {
         await register(email, password, fullName, groupName);
       }
@@ -203,19 +203,6 @@ export default function RegisterPage() {
               </div>
             </>
           )}
-          {useMtuci ? (
-            <div>
-              <label className={`mb-1 block text-sm font-medium ${labelText} transition-colors`}>{t("auth.register.group")}</label>
-              <input
-                className={`w-full rounded-lg border px-3 py-2.5 outline-none transition ${inputBg} ${inputFocus}`}
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-                autoComplete="off"
-                placeholder="ИСТ-21"
-              />
-            </div>
-          ) : null}
-
           {error ? (
             <div className={`rounded-lg border p-3 text-sm ${errorBg} transition-colors`}>{error}</div>
           ) : null}
