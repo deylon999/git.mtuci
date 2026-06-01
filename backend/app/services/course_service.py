@@ -211,7 +211,7 @@ async def get_course_for_user(
     user: User,
     course_id: UUID,
 ) -> Course:
-    """Return course if the user may access it (teacher owner, laborant assistant, or student)."""
+    """Return course if the user may access it (teacher owner, laborant assistant, student, or admin)."""
     from app.services.teacher_dashboard_service import _teacher_course_ids
 
     course_q = await session.execute(select(Course).where(Course.id == course_id))
@@ -234,6 +234,8 @@ async def get_course_for_user(
             group_name=user.group_name,
         ):
             raise PermissionError("Access denied")
+    elif user.role == UserRole.admin:
+        pass
     else:
         raise PermissionError("Access denied")
 
@@ -254,6 +256,26 @@ async def delete_teacher_course(
         raise ValueError("Course not found")
     if course.teacher_id != teacher_id:
         raise PermissionError("Course not found or not owned by teacher")
+
+    await session.delete(course)
+    await session.commit()
+
+
+async def delete_course_for_actor(
+    session: AsyncSession,
+    *,
+    actor: User,
+    course_id: UUID,
+) -> None:
+    course_q = await session.execute(select(Course).where(Course.id == course_id))
+    course = course_q.scalar_one_or_none()
+    if not course:
+        raise ValueError("Course not found")
+
+    if actor.role == UserRole.teacher and course.teacher_id != actor.id:
+        raise PermissionError("Course not found or not owned by teacher")
+    if actor.role not in {UserRole.teacher, UserRole.admin}:
+        raise PermissionError("Access denied")
 
     await session.delete(course)
     await session.commit()

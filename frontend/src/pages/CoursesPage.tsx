@@ -106,8 +106,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
   }, []);
 
   const isAdmin = me?.role === "admin" || authUser?.role === "admin";
-  const canCreateCourse =
-    hasPermission("assignment_create") && (me?.role === "teacher" || isAdmin);
+  const canCreateCourse = isAdmin || (hasPermission("assignment_create") && me?.role === "teacher");
 
   useEffect(() => {
     if (!isAdmin || !showCreateForm) return;
@@ -117,7 +116,6 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
         if (cancelled) return;
         const teachers = users.filter((u) => u.role === "teacher" && !u.is_blocked);
         setTeacherOptions(teachers);
-        setCreateTeacherId((prev) => prev || teachers[0]?.id || "");
       })
       .catch(() => {
         if (!cancelled) setTeacherOptions([]);
@@ -155,16 +153,12 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
         setCreateError(t("admin.courses.gradeMaxError"));
         return;
       }
-      if (isAdmin && !createTeacherId) {
-        setCreateError(t("admin.courses.teacherRequired"));
-        return;
-      }
       const created = await createCourse({
         title: createTitle.trim(),
         description: createDescription.trim(),
         grade_max: createGradeMax,
         target_groups: selectedGroups.length > 0 ? selectedGroups : undefined,
-        ...(isAdmin ? { teacher_id: createTeacherId } : {}),
+        ...(isAdmin && createTeacherId ? { teacher_id: createTeacherId } : {}),
       });
       setCourses((prev) => [created, ...prev]);
       resetCreateForm();
@@ -194,7 +188,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
   return (
     <div className="w-full min-h-screen py-4" style={{ backgroundColor: theme.bg }}>
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
+        <div className="flex items-center gap-3">
           <div
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"
             style={{ backgroundColor: `${theme.accent}22`, color: theme.accent }}
@@ -264,15 +258,17 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
                     onChange={(e) => setCreateTeacherId(e.target.value)}
                     className={inputClass}
                     style={inputStyle}
-                    required
                   >
-                    <option value="">{t("admin.courses.selectTeacher")}</option>
+                    <option value="">{t("admin.courses.selfOwnerOption")}</option>
                     {teacherOptions.map((teacher) => (
                       <option key={teacher.id} value={teacher.id}>
                         {teacher.full_name || teacher.email}
                       </option>
                     ))}
                   </select>
+                  <p className="text-xs -mt-2" style={{ color: theme.text3 }}>
+                    {t("admin.courses.ownerHint")}
+                  </p>
                 </>
               ) : null}
               {fieldLabel(theme, t("admin.courses.fieldTitle"))}

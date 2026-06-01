@@ -615,7 +615,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
 
   return (
     <div className={ui.pageWrapper}>
-      <div className="mx-auto w-full max-w-7xl space-y-6 pb-20">
+      <div className="w-full py-6 px-6 space-y-6 pb-20">
         <AdminPageHeader
           isDarkTheme={isDarkTheme}
           title={t("repo.repositories.title")}

@@ -19,7 +19,7 @@ export function CustomCheckbox({ checked, onChange, className = "", isDarkTheme 
         w-[18px] h-[18px] rounded-[4px] cursor-pointer transition-all duration-200 ease-in-out
         flex items-center justify-center shrink-0
         ${checked
-          ? "bg-gradient-to-r from-blue-600 to-violet-600 border-transparent"
+          ? "bg-blue-500 border border-blue-500"
           : `${uncheckedBg} border ${uncheckedBorder} ${uncheckedHover}`
         }
         ${className}

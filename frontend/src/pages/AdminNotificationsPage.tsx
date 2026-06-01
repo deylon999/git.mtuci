@@ -433,6 +433,8 @@ export default function AdminNotificationsPage({ isDarkTheme = true }: Props) {
   }, [busy, labels.clearReadDone, labels.clearReadError, load]);
 
   const shown = total === 0 ? 0 : Math.min(page * PAGE_SIZE, total);
+  const headerActionBtnClass =
+    "inline-flex items-center gap-2 rounded-lg border border-[#2d2d2d] bg-[#1e1e1e] px-3 py-2 text-sm text-[#e6e6e6] transition-colors hover:border-[#3c3c3c] hover:bg-[#252525] disabled:cursor-not-allowed disabled:opacity-50";
 
   const tabMeta: Array<{ key: FilterTab; label: string }> = [
     { key: "all", label: labels.all },
@@ -456,7 +458,7 @@ export default function AdminNotificationsPage({ isDarkTheme = true }: Props) {
                 type="button"
                 onClick={() => void handleReadAll()}
                 disabled={busy || stats.unread === 0}
-                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50 ${ui.tableBorder} ${ui.textSecondary}`}
+                className={headerActionBtnClass}
               >
                 {labels.readAll}
               </button>
@@ -464,7 +466,7 @@ export default function AdminNotificationsPage({ isDarkTheme = true }: Props) {
                 type="button"
                 onClick={() => void handleClearRead()}
                 disabled={busy}
-                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50 ${ui.tableBorder} ${ui.textSecondary}`}
+                className={headerActionBtnClass}
               >
                 {labels.clearRead}
               </button>
@@ -631,18 +633,18 @@ export default function AdminNotificationsPage({ isDarkTheme = true }: Props) {
               type="button"
               onClick={() => setPage((prev) => Math.max(1, prev - 1))}
               disabled={page <= 1}
-              className="h-8 min-w-[32px] px-2 rounded-md border border-[#2d2d2d] text-xs text-[#8b949e] disabled:opacity-50"
+              className="h-8 min-w-[32px] px-2 rounded-md border border-[#2563eb] bg-[#2563eb] text-xs text-white transition-colors hover:bg-[#1d4ed8] disabled:opacity-50 disabled:hover:bg-[#2563eb]"
             >
               {"<"}
             </button>
-            <span className={`text-xs px-2 ${ui.textSecondary}`}>
+            <span className="text-xs px-2 text-[#2563eb]">
               {labels.page} {page}/{pages}
             </span>
             <button
               type="button"
               onClick={() => setPage((prev) => Math.min(pages, prev + 1))}
               disabled={page >= pages}
-              className="h-8 min-w-[32px] px-2 rounded-md border border-[#2d2d2d] text-xs text-[#8b949e] disabled:opacity-50"
+              className="h-8 min-w-[32px] px-2 rounded-md border border-[#2563eb] bg-[#2563eb] text-xs text-white transition-colors hover:bg-[#1d4ed8] disabled:opacity-50 disabled:hover:bg-[#2563eb]"
             >
               {">"}
             </button>

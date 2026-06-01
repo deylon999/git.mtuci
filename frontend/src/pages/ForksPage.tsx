@@ -95,7 +95,7 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
 
   return (
     <div className={`h-full overflow-y-auto ${ui.pageWrapper}`}>
-      <div className="mx-auto max-w-7xl px-6 py-6 pb-20 space-y-6">
+      <div className="w-full py-6 px-6 pb-20 space-y-6">
         <div className="flex items-start justify-between gap-4">
           <AdminPageHeader isDarkTheme={isDarkTheme} title={t("admin.forks.title")} />
           <div className="mt-1 flex gap-2">

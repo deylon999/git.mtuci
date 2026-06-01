@@ -142,6 +142,8 @@ export const adminPagesEn = {
     newCourseHint: "Students in selected groups are enrolled automatically.",
     fieldTeacher: "Teacher",
     selectTeacher: "Select teacher",
+    selfOwnerOption: "Create as admin owner",
+    ownerHint: "You can assign a teacher or keep admin as the course owner.",
     teacherRequired: "Select a teacher for the course",
     fieldTitle: "Course title",
     fieldTitlePlaceholder: "e.g. Python programming",

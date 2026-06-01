@@ -56,6 +56,7 @@ import AdminPageHeader from "../components/AdminPageHeader";
 import { getTheme } from "../theme";
 import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+import { useAuthUser } from "../context/AuthUserContext";
 import { translate, translateWithParams } from "../i18n";
 import { getI18nLocale } from "../i18n/runtime";
 
@@ -276,6 +277,7 @@ function getStatusBadge(status: string, t: (key: string) => string) {
 export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   const { t, tp, language } = useUserPreferences();
   const navigate = useNavigate();
+  const { user } = useAuthUser();
   const dateLocale = language === "en" ? "en-US" : "ru-RU";
   const { hasPermission } = usePermissions();
   const [loading, setLoading] = useState(true);
@@ -485,7 +487,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   };
 
   const handleNewCourse = () => {
-    if (hasPermission("assignment_create")) {
+    if ((user?.role ?? null) === "admin" || hasPermission("assignment_create")) {
       navigate("/courses?create=1");
       return;
     }
@@ -500,7 +502,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
 
   return (
     <div className={`h-full overflow-auto transition-colors ${ui.pageWrapper}`}>
-      <div className="max-w-7xl mx-auto py-6 px-6 space-y-6">
+      <div className="w-full py-6 px-6 space-y-6">
         {/* Header */}
         <div className="mb-8">
           <AdminPageHeader
@@ -543,8 +545,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
           <div className={`lg:col-span-3 ${ui.cardShell}`}>
             <div className={`p-5 flex items-center justify-between border-b ${ui.tableBorder} ${ui.sectionHeaderBg}`}>
               <h2 className={`text-lg font-semibold transition-colors ${ui.textPrimary}`}>{t("admin.dashboard.newUsers")}</h2>
-              <Link to="/users" className="group text-sm flex items-center gap-1 font-medium"
-              style={{ color: theme.accent }}>
+              <Link to="/users" className="group text-sm flex items-center gap-1 font-medium text-blue-600">
                 {t("admin.dashboard.viewAll")} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>
@@ -553,7 +554,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                 <div className="text-sm text-center py-8"
                 style={{ color: theme.text2 }}>{t("common.loading")}</div>
               ) : (
-                <table className="w-auto">
+                <table className="w-full">
                   <thead>
                     <tr className="text-left">
                       <th className="pb-3 pr-8 text-xs font-semibold uppercase tracking-wider"
@@ -706,7 +707,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
             <div className={`p-5 flex items-center justify-between border-b ${ui.tableBorder} ${ui.sectionHeaderBg}`}>
               <h2 className={`text-lg font-semibold transition-colors ${ui.textPrimary}`}>{t("admin.dashboard.notifications")}</h2>
               <div className="flex items-center gap-3">
-                <Link to="/admin/notifications" className="group text-sm flex items-center gap-1 font-medium" style={{ color: theme.accent }}>
+                <Link to="/admin/notifications" className="group text-sm flex items-center gap-1 font-medium text-blue-600">
                   {t("admin.dashboard.viewAll")} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Link>
                 {notifications.length > 0 && (

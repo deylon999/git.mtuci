@@ -371,7 +371,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
 
   return (
     <div className={`h-full overflow-y-auto ${ui.pageWrapper} transition-colors`}>
-      <div className="max-w-7xl mx-auto py-6 px-6 space-y-6 pb-20">
+      <div className="w-full py-6 px-6 space-y-6 pb-20">
         {/* Header */}
         <AdminPageHeader
           isDarkTheme={isDarkTheme}

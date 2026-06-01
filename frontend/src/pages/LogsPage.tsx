@@ -18,6 +18,7 @@ interface LogRowProps {
   log: LogEntry;
   isExpanded: boolean;
   isHighlighted: boolean;
+  highlightActive: boolean;
   rowId: string;
   onToggle: (id: string) => void;
   isDarkTheme: boolean;
@@ -34,6 +35,7 @@ const LogRow = memo(function LogRow({
   log,
   isExpanded,
   isHighlighted,
+  highlightActive,
   rowId,
   onToggle,
   isDarkTheme,
@@ -58,7 +60,14 @@ const LogRow = memo(function LogRow({
       <tr
         id={rowId}
         className={`border-b ${borderColor} ${isClickable ? "cursor-pointer" : ""} ${hoverBg} transition-colors`}
-        style={isHighlighted ? { backgroundColor: ui.colors.hover } : undefined}
+        style={
+          isHighlighted
+            ? {
+                backgroundColor: highlightActive ? ui.colors.hover : "transparent",
+                transition: "background-color 320ms ease",
+              }
+            : undefined
+        }
         onClick={() => isClickable && onToggle(log.id)}
         title={formatFullDate(log.created_at)}
       >
@@ -99,6 +108,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
   const location = useLocation();
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [highlightedLogId, setHighlightedLogId] = useState<string | null>(null);
+  const [highlightActive, setHighlightActive] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -142,6 +152,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
     }
     if (typeof navState.highlightLogId === "string" && navState.highlightLogId.trim()) {
       setHighlightedLogId(navState.highlightLogId);
+      setHighlightActive(false);
       flashedLogIdRef.current = null;
     }
   }, [location.key, location.state, setPage]);
@@ -155,10 +166,23 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
     const row = document.getElementById(`log-row-${highlightedLogId}`);
     row?.scrollIntoView({ behavior: "smooth", block: "center" });
 
-    const timer = window.setTimeout(() => {
+    const activateTimer = window.setTimeout(() => {
+      setHighlightActive(true);
+    }, 20);
+
+    const fadeOutTimer = window.setTimeout(() => {
+      setHighlightActive(false);
+    }, 2200);
+
+    const cleanupTimer = window.setTimeout(() => {
       setHighlightedLogId((current) => (current === highlightedLogId ? null : current));
-    }, 2400);
-    return () => window.clearTimeout(timer);
+    }, 2600);
+
+    return () => {
+      window.clearTimeout(activateTimer);
+      window.clearTimeout(fadeOutTimer);
+      window.clearTimeout(cleanupTimer);
+    };
   }, [highlightedLogId, logsLoading, logs]);
 
   const toggleRow = (id: string) => {
@@ -285,7 +309,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
 
   return (
     <div className={`min-h-screen ${ui.pageWrapper}`}>
-      <div className="max-w-7xl mx-auto py-6 px-6 pb-20 space-y-6">
+      <div className="w-full py-6 px-6 pb-20 space-y-6">
         <AdminPageHeader
           isDarkTheme={isDarkTheme}
           title={t("admin.logs.title")}
@@ -438,6 +462,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
                       log={log}
                       isExpanded={expandedRows.has(log.id)}
                       isHighlighted={highlightedLogId === log.id}
+                      highlightActive={highlightActive}
                       rowId={`log-row-${log.id}`}
                       onToggle={toggleRow}
                       isDarkTheme={isDarkTheme}

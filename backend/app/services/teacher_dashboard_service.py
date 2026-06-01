@@ -38,6 +38,10 @@ STALE_HOURS = 48
 
 
 async def _teacher_course_ids(session: AsyncSession, *, user: User) -> list[UUID]:
+    if user.role == UserRole.admin:
+        result = await session.execute(select(Course.id))
+        return list(result.scalars().all())
+
     if user.role == UserRole.teacher:
         result = await session.execute(select(Course.id).where(Course.teacher_id == user.id))
         return list(result.scalars().all())

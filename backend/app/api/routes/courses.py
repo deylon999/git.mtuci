@@ -55,7 +55,7 @@ from app.services.assignment_service import (
 from app.services.notification_service import notify_grade_posted
 from app.services.course_service import (
     create_course,
-    delete_teacher_course,
+    delete_course_for_actor,
     enroll_student_to_course,
     get_course_for_user,
     list_all_courses,
@@ -171,7 +171,21 @@ async def _ensure_teacher_owns_course(*, course: Course, current_user) -> None:
         raise HTTPException(status_code=403, detail="Teacher access only for this course")
 
 
-_STAFF_ROLES = {UserRole.teacher, UserRole.laborant}
+_STAFF_ROLES = {UserRole.teacher, UserRole.laborant, UserRole.admin}
+
+
+async def _resolve_teacher_id_for_course_actor(
+    *,
+    session: AsyncSession,
+    current_user,
+    course_id: UUID,
+) -> UUID:
+    if current_user.role == UserRole.teacher:
+        return current_user.id
+    if current_user.role == UserRole.admin:
+        course = await _get_course_or_404(session, course_id=course_id)
+        return course.teacher_id
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
 
 
 async def _ensure_staff_course_access(
@@ -188,6 +202,8 @@ async def _ensure_staff_course_access(
             await get_course_for_user(session, user=current_user, course_id=course_id)
         except PermissionError as e:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    elif current_user.role == UserRole.admin:
+        return
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
@@ -261,30 +277,34 @@ async def _get_repo_name_for_requester(
 
 
 @router.post("/courses", response_model=CourseRead, status_code=status.HTTP_201_CREATED)
-@require_permission("assignment_create")
 async def create_course_endpoint(
     payload: CourseCreateRequest,
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
+    if current_user.role != UserRole.admin:
+        await ensure_permission(current_user, session, "assignment_create")
+
     if current_user.role == UserRole.teacher:
         teacher_id = current_user.id
     elif current_user.role == UserRole.admin:
+        # Admin can create a course as owner (self) or assign ownership to a teacher/admin.
         if payload.teacher_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="teacher_id is required for admin",
+            teacher_id = current_user.id
+        else:
+            result = await session.execute(
+                select(User).where(
+                    User.id == payload.teacher_id,
+                    User.role.in_([UserRole.teacher, UserRole.admin]),
+                )
             )
-        result = await session.execute(
-            select(User).where(User.id == payload.teacher_id, User.role == UserRole.teacher)
-        )
-        teacher = result.scalar_one_or_none()
-        if not teacher:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Teacher not found",
-            )
-        teacher_id = teacher.id
+            owner_user = result.scalar_one_or_none()
+            if not owner_user:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Owner user not found",
+                )
+            teacher_id = owner_user.id
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
 
@@ -334,7 +354,7 @@ async def get_course_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> CourseRead:
-    if current_user.role not in {UserRole.teacher, UserRole.laborant, UserRole.student}:
+    if current_user.role not in {UserRole.teacher, UserRole.laborant, UserRole.student, UserRole.admin}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     await ensure_assignment_read(current_user, session)
     try:
@@ -357,13 +377,13 @@ async def delete_course_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role != UserRole.teacher:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    if current_user.role not in {UserRole.teacher, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
 
     try:
-        await delete_teacher_course(
+        await delete_course_for_actor(
             session,
-            teacher_id=current_user.id,
+            actor=current_user,
             course_id=course_id,
         )
     except PermissionError as e:
@@ -384,13 +404,18 @@ async def enroll_student_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role != UserRole.teacher:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    if current_user.role not in {UserRole.teacher, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
 
     try:
+        teacher_id = await _resolve_teacher_id_for_course_actor(
+            session=session,
+            current_user=current_user,
+            course_id=course_id,
+        )
         enrollment = await enroll_student_to_course(
             session,
-            teacher_id=current_user.id,
+            teacher_id=teacher_id,
             course_id=course_id,
             student_id=student_id,
         )
@@ -409,10 +434,11 @@ async def list_course_students_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> list[CourseStudentRead]:
-    if current_user.role != UserRole.teacher:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    if current_user.role not in {UserRole.teacher, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
     course = await _get_course_or_404(session, course_id=course_id)
-    await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    if current_user.role == UserRole.teacher:
+        await _ensure_teacher_owns_course(course=course, current_user=current_user)
     return await list_course_students(session, course_id=course_id)
 
 
@@ -427,12 +453,17 @@ async def unenroll_student_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> None:
-    if current_user.role != UserRole.teacher:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    if current_user.role not in {UserRole.teacher, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
     try:
+        teacher_id = await _resolve_teacher_id_for_course_actor(
+            session=session,
+            current_user=current_user,
+            course_id=course_id,
+        )
         await unenroll_student_from_course(
             session,
-            teacher_id=current_user.id,
+            teacher_id=teacher_id,
             course_id=course_id,
             student_id=student_id,
         )
@@ -454,12 +485,17 @@ async def enroll_by_group_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> EnrollByGroupResult:
-    if current_user.role != UserRole.teacher:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    if current_user.role not in {UserRole.teacher, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
     try:
+        teacher_id = await _resolve_teacher_id_for_course_actor(
+            session=session,
+            current_user=current_user,
+            course_id=course_id,
+        )
         return await enroll_group_to_course(
             session,
-            teacher_id=current_user.id,
+            teacher_id=teacher_id,
             course_id=course_id,
             group_name=payload.group_name,
         )
@@ -479,10 +515,11 @@ async def export_course_grades_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> PlainTextResponse:
-    if current_user.role != UserRole.teacher:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    if current_user.role not in {UserRole.teacher, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
     course = await _get_course_or_404(session, course_id=course_id)
-    await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    if current_user.role == UserRole.teacher:
+        await _ensure_teacher_owns_course(course=course, current_user=current_user)
     try:
         csv_body = await build_course_grades_csv(session, course_id=course_id)
     except ValueError as e:
@@ -504,12 +541,13 @@ async def assignment_stats_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> AssignmentStatsRead:
-    if current_user.role != UserRole.teacher:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    if current_user.role not in {UserRole.teacher, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
     await ensure_assignment_read(current_user, session)
     await ensure_grade_view(current_user, session)
     course = await _get_course_or_404(session, course_id=course_id)
-    await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    if current_user.role == UserRole.teacher:
+        await _ensure_teacher_owns_course(course=course, current_user=current_user)
     try:
         return await get_assignment_stats(
             session,
@@ -542,8 +580,8 @@ async def create_assignment_endpoint(
     if "assignment_create" not in user_perms:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied: assignment_create required")
     
-    if current_user.role != UserRole.teacher:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    if current_user.role not in {UserRole.teacher, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
 
     import json
     from datetime import datetime
@@ -593,9 +631,14 @@ async def create_assignment_endpoint(
             })
 
     try:
+        teacher_id = await _resolve_teacher_id_for_course_actor(
+            session=session,
+            current_user=current_user,
+            course_id=course_id,
+        )
         assignment = await create_assignment(
             session,
-            teacher_id=current_user.id,
+            teacher_id=teacher_id,
             course_id=course_id,
             title=title,
             description=description,
@@ -643,6 +686,14 @@ async def list_assignments_endpoint(
         except PermissionError as e:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
         return [AssignmentRead.model_validate(a) for a in assignments]
+    if current_user.role == UserRole.admin:
+        await _get_course_or_404(session, course_id=course_id)
+        result = await session.execute(
+            select(Assignment)
+            .where(Assignment.course_id == course_id)
+            .order_by(Assignment.deadline.asc())
+        )
+        return [AssignmentRead.model_validate(a) for a in result.scalars().all()]
 
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
@@ -658,13 +709,18 @@ async def delete_assignment_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role != UserRole.teacher:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    if current_user.role not in {UserRole.teacher, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
 
     try:
+        teacher_id = await _resolve_teacher_id_for_course_actor(
+            session=session,
+            current_user=current_user,
+            course_id=course_id,
+        )
         await delete_assignment(
             session,
-            teacher_id=current_user.id,
+            teacher_id=teacher_id,
             course_id=course_id,
             assignment_id=assignment_id,
         )
@@ -757,13 +813,14 @@ async def list_submissions_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role != UserRole.teacher:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    if current_user.role not in {UserRole.teacher, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
     await ensure_lab_workflow(current_user, session)
     await ensure_grade_view(current_user, session)
 
     course = await _get_course_or_404(session, course_id=course_id)
-    await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    if current_user.role == UserRole.teacher:
+        await _ensure_teacher_owns_course(course=course, current_user=current_user)
 
     assignment = await _get_assignment_or_404(
         session,
@@ -865,12 +922,13 @@ async def grade_submission_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role != UserRole.teacher:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    if current_user.role not in {UserRole.teacher, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
     await ensure_lab_workflow(current_user, session)
 
     course = await _get_course_or_404(session, course_id=course_id)
-    await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    if current_user.role == UserRole.teacher:
+        await _ensure_teacher_owns_course(course=course, current_user=current_user)
     assignment = await _get_assignment_or_404(
         session,
         course_id=course_id,
@@ -1041,13 +1099,14 @@ async def compare_students_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role != UserRole.teacher:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    if current_user.role not in {UserRole.teacher, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
     await ensure_assignment_read(current_user, session)
     await ensure_permission(current_user, session, "repo_view_students")
 
     course = await _get_course_or_404(session, course_id=course_id)
-    await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    if current_user.role == UserRole.teacher:
+        await _ensure_teacher_owns_course(course=course, current_user=current_user)
     await _get_assignment_or_404(
         session,
         course_id=course_id,
@@ -1080,13 +1139,14 @@ async def check_plagiarism_endpoint(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role != UserRole.teacher:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
+    if current_user.role not in {UserRole.teacher, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher or admin access only")
     await ensure_assignment_read(current_user, session)
     await ensure_permission(current_user, session, "repo_view_students")
 
     course = await _get_course_or_404(session, course_id=course_id)
-    await _ensure_teacher_owns_course(course=course, current_user=current_user)
+    if current_user.role == UserRole.teacher:
+        await _ensure_teacher_owns_course(course=course, current_user=current_user)
     await _get_assignment_or_404(
         session,
         course_id=course_id,

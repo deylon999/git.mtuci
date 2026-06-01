@@ -29,7 +29,7 @@ export default function CoursePage({ isDarkTheme = true }: CoursePageProps) {
   const [error, setError] = useState<string | null>(null);
   const { user: me, loading: authLoading } = useAuthUser();
 
-  const isTeacher = me?.role === "teacher" || me?.role === "laborant";
+  const isTeacher = me?.role === "teacher" || me?.role === "laborant" || me?.role === "admin";
   const isStudent = me?.role === "student";
 
   useEffect(() => {

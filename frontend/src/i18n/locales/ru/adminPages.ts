@@ -142,6 +142,8 @@ export const adminPagesRu = {
     newCourseHint: "Студенты из выбранных групп зачисляются автоматически.",
     fieldTeacher: "Преподаватель",
     selectTeacher: "Выберите преподавателя",
+    selfOwnerOption: "Создать от своего имени (админ)",
+    ownerHint: "Можно выбрать преподавателя или оставить создание от имени администратора.",
     teacherRequired: "Выберите преподавателя для курса",
     fieldTitle: "Название курса",
     fieldTitlePlaceholder: "Например, Программирование на Python",

@@ -42,7 +42,7 @@ router = APIRouter(prefix="/teachers/me", tags=["teacher-dashboard"])
 
 
 def _require_teacher_or_laborant(user: User) -> None:
-    if user.role not in {UserRole.teacher, UserRole.laborant}:
+    if user.role not in {UserRole.teacher, UserRole.laborant, UserRole.admin}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
 
 
