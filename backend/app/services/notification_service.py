@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -27,11 +26,6 @@ from app.services.user_settings_service import set_last_digest_at
 _ADMIN_PENDING_DEDUPE = "admin:pending-users"
 
 
-def _pending_count_from_message(message: str) -> int | None:
-    match = re.search(r"(\d+)", message)
-    return int(match.group(1)) if match else None
-
-
 async def _sync_admin_pending_users_notification(
     session: AsyncSession,
     *,
@@ -47,8 +41,7 @@ async def _sync_admin_pending_users_notification(
         )
     )
     existing = result.scalar_one_or_none()
-    message = f"{pending} пользователь(ей) ждут подтверждения"
-    title = "Ожидают одобрения"
+    title = "Новый пользователь ожидает подтверждения"
     severity, actionable = classify_notification("pending_user", {})
 
     if pending <= 0:
@@ -57,29 +50,50 @@ async def _sync_admin_pending_users_notification(
             return True
         return False
 
+    pending_user_result = await session.execute(
+        select(User)
+        .where(User.is_pending.is_(True))
+        .order_by(User.created_at.desc())
+        .limit(1)
+    )
+    pending_user = pending_user_result.scalar_one_or_none()
+    if not pending_user:
+        if existing:
+            await session.delete(existing)
+            return True
+        return False
+
+    display_name = (pending_user.full_name or "").strip() or pending_user.email
+    message = (
+        f"Студент {display_name} ({pending_user.email}) зарегистрировался и ожидает одобрения администратора."
+    )
+    if pending_user.group_name and pending_user.group_name.strip():
+        message += f" Группа: {pending_user.group_name.strip()}"
+    href = f"/users?highlight={pending_user.id}"
+
     if existing:
-        previous = _pending_count_from_message(existing.message)
-        if previous == pending:
-            changed = False
-            if existing.event_type != "pending_user":
-                existing.event_type = "pending_user"
-                changed = True
-            if existing.severity != severity:
-                existing.severity = severity
-                changed = True
-            if existing.actionable != actionable:
-                existing.actionable = actionable
-                changed = True
-            return changed
-        existing.title = title
-        existing.message = message
-        existing.href = "/users"
-        existing.event_type = "pending_user"
-        existing.severity = severity
-        existing.actionable = actionable
-        if previous is not None and pending > previous:
+        changed = False
+        if existing.title != title:
+            existing.title = title
+            changed = True
+        if existing.message != message:
+            existing.message = message
+            changed = True
+        if existing.href != href:
+            existing.href = href
+            changed = True
+        if existing.event_type != "pending_user":
+            existing.event_type = "pending_user"
+            changed = True
+        if existing.severity != severity:
+            existing.severity = severity
+            changed = True
+        if existing.actionable != actionable:
+            existing.actionable = actionable
+            changed = True
+        if changed:
             existing.read = False
-        return True
+        return changed
 
     session.add(
         Notification(
@@ -91,7 +105,7 @@ async def _sync_admin_pending_users_notification(
             severity=severity,
             actionable=actionable,
             event_type="pending_user",
-            href="/users",
+            href=href,
             read=False,
             created_at=now,
         )

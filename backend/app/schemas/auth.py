@@ -7,6 +7,7 @@ class AuthRegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     full_name: str
+    group_name: str | None = Field(default=None, max_length=50)
 
 
 class StudentRegisterRequest(BaseModel):
@@ -14,6 +15,7 @@ class StudentRegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     full_name: str = ""
+    group_name: str | None = Field(default=None, max_length=50)
     mtuci_login: str | None = None
     mtuci_password: str | None = None
 

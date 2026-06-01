@@ -75,6 +75,7 @@ async def register(
         password_hash=password_hash,
         full_name=payload.full_name,
         role=UserRole.student,
+        group_name=payload.group_name.strip() if payload.group_name and payload.group_name.strip() else None,
         student_id=student_id,
     )
     session.add(user)
@@ -123,7 +124,9 @@ async def register_student_mtuci(
 
     # Use MTUCI data or fallback to payload
     full_name = mtuci_info["name"] if mtuci_info else payload.full_name
-    group_name = mtuci_info["group"] if mtuci_info else None
+    group_name = mtuci_info["group"] if mtuci_info else (
+        payload.group_name.strip() if payload.group_name and payload.group_name.strip() else None
+    )
 
     if not full_name:
         raise HTTPException(

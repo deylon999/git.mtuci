@@ -34,6 +34,7 @@ type Props = {
 type FilterTab = "all" | "unread" | "users" | "system" | "security";
 
 const PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 350;
 
 function pluralRu(value: number, one: string, few: string, many: string): string {
   const abs = Math.abs(value);
@@ -129,6 +130,12 @@ function unreadStripeClass(color: AdminNotificationItem["unread_color"]) {
   if (color === "red") return "border-l-red-500";
   if (color === "yellow") return "border-l-yellow-500";
   return "border-l-blue-500";
+}
+
+function unreadDotClass(color: AdminNotificationItem["unread_color"]) {
+  if (color === "red") return "bg-red-500";
+  if (color === "yellow") return "bg-yellow-500";
+  return "bg-blue-500";
 }
 
 function severityTag(item: AdminNotificationItem, language: string): string {
@@ -239,6 +246,7 @@ export default function AdminNotificationsPage({ isDarkTheme = true }: Props) {
 
   const [tab, setTab] = useState<FilterTab>("all");
   const [searchText, setSearchText] = useState("");
+  const [debouncedSearchText, setDebouncedSearchText] = useState("");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -259,7 +267,14 @@ export default function AdminNotificationsPage({ isDarkTheme = true }: Props) {
     critical: 0,
   });
 
-  const currentQuery = searchText.trim();
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchText(searchText);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchText]);
+
+  const currentQuery = debouncedSearchText.trim();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -506,14 +521,14 @@ export default function AdminNotificationsPage({ isDarkTheme = true }: Props) {
                 </button>
               );
             })}
-            <div className="ml-auto flex items-center gap-2 rounded-md border border-[#2d2d2d] px-3 py-1.5 bg-[#111111]">
+            <div className="ml-auto flex items-center gap-2 rounded-md border border-[#2d2d2d] px-3 py-1.5 bg-transparent">
               <Search className="h-3.5 w-3.5 text-[#6e7681]" />
               <input
                 type="text"
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
                 placeholder={labels.searchPlaceholder}
-                className="w-[200px] bg-transparent outline-none text-xs text-white placeholder:text-[#6e7681]"
+                className="w-[200px] bg-transparent outline-none text-xs text-gray-400 placeholder:text-[#8b949e]"
               />
             </div>
           </div>
@@ -542,7 +557,7 @@ export default function AdminNotificationsPage({ isDarkTheme = true }: Props) {
                           <article
                             key={`${item.id}-${idx}`}
                             onClick={() => void handleMarkRead(item)}
-                            className={`group flex items-start gap-3 px-4 py-3 border-l-[3px] ${rowBorder} ${
+                            className={`group flex items-start gap-3 px-4 py-3 border-l-[3px] transition-colors hover:bg-[#151515] ${rowBorder} ${
                               idx > 0 ? "border-t border-t-[#232323]" : ""
                             }`}
                           >
@@ -553,7 +568,7 @@ export default function AdminNotificationsPage({ isDarkTheme = true }: Props) {
                               <p className={`text-sm font-medium ${ui.textPrimary}`}>{item.title}</p>
                               <p className={`text-xs mt-1 leading-relaxed ${ui.textSecondary}`}>{item.message}</p>
                               <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                <span className={`text-[10px] ${ui.textTertiary}`}>
+                                <span className="text-[10px] text-[#6e7681]">
                                   {formatRelativeTime(item.created_at, dateLocale, language)}
                                 </span>
                                 <span className={`text-[10px] px-2 py-0.5 rounded-full ${severityTagClass(item.severity)}`}>
@@ -565,7 +580,7 @@ export default function AdminNotificationsPage({ isDarkTheme = true }: Props) {
                               </div>
                             </div>
                             <div className="shrink-0 flex flex-col items-end gap-2 min-w-[130px]">
-                              {!item.read && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                              {!item.read && <div className={`w-2 h-2 rounded-full ${unreadDotClass(item.unread_color)}`} />}
                               <div className="flex flex-wrap justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 {item.actions.map((action, actionIdx) => (
                                   <button
