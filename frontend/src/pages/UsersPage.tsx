@@ -434,24 +434,6 @@ useEffect(() => {
     },
   ];
 
-  const toggleSelectAll = () => {
-    if (selectedUsers.length === users.length) {
-      setSelectedUsers([]);
-    } else {
-      setSelectedUsers(users.map((u) => u.id));
-    }
-  };
-
-  const toggleSelectUser = (id: string) => {
-    if (selectedUsers.includes(id)) {
-      setSelectedUsers(selectedUsers.filter((uid) => uid !== id));
-    } else {
-      setSelectedUsers([...selectedUsers, id]);
-    }
-  };
-
-  const totalPages = Math.ceil(totalUsers / itemsPerPage);
-
   // Apply filters and search (cumulative)
   const filteredUsers = users.filter((user) => {
     // Role filter
@@ -469,6 +451,29 @@ useEffect(() => {
     }
     return true;
   });
+
+  const filteredUserIds = useMemo(() => filteredUsers.map((user) => user.id), [filteredUsers]);
+  const selectedUsersSet = useMemo(() => new Set(selectedUsers), [selectedUsers]);
+  const allFilteredSelected =
+    filteredUserIds.length > 0 && filteredUserIds.every((id) => selectedUsersSet.has(id));
+
+  const toggleSelectAll = () => {
+    if (filteredUserIds.length === 0) return;
+    const filteredSet = new Set(filteredUserIds);
+    if (allFilteredSelected) {
+      setSelectedUsers((prev) => prev.filter((id) => !filteredSet.has(id)));
+      return;
+    }
+    setSelectedUsers((prev) => Array.from(new Set([...prev, ...filteredUserIds])));
+  };
+
+  const toggleSelectUser = (id: string) => {
+    setSelectedUsers((prev) =>
+      prev.includes(id) ? prev.filter((uid) => uid !== id) : [...prev, id],
+    );
+  };
+
+  const totalPages = Math.ceil(totalUsers / itemsPerPage);
 
   // Reset selection when filters change
   useEffect(() => {
@@ -804,12 +809,12 @@ useEffect(() => {
                   <div
                     onClick={toggleSelectAll}
                     className={`w-[18px] h-[18px] rounded-[4px] border-[1.5px] flex items-center justify-center cursor-pointer transition-colors ${
-                      selectedUsers.length === users.length && users.length > 0
+                      allFilteredSelected
                         ? "bg-blue-500 border-blue-500"
                         : `bg-transparent ${checkboxBorder} ${checkboxHoverBorder}`
                     }`}
                   >
-                    {selectedUsers.length === users.length && users.length > 0 && (
+                    {allFilteredSelected && (
                       <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                       </svg>
