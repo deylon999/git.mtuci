@@ -216,3 +216,4 @@ GITHUB_PARITY_ROADMAP.md
 docs/**/*.md
 
 search.html
+.claude/
