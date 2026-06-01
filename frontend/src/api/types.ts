@@ -319,13 +319,27 @@ export type LogSource = "auth" | "repositories" | "webhooks" | "admin" | "gitea"
 export interface LogEntry {
   id: string;
   created_at: string;
+  timestamp?: string | null;
   level: LogLevel;
   source: LogSource;
   user_id: string | null;
   user_email: string | null;
   user_full_name: string | null;
+  user_agent?: string | null;
   message: string;
   detail: string | null;
+  details?: string | Record<string, unknown> | null;
+  payload?: unknown;
+  metadata?: unknown;
+  data?: unknown;
+  context?: unknown;
+  action?: string | null;
+  repo?: string | null;
+  repository?: string | null;
+  source_repo?: string | null;
+  request_id?: string | null;
+  method?: string | null;
+  path?: string | null;
   ip_address: string;
   http_status: number | null;
 }

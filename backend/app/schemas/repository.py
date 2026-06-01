@@ -68,3 +68,4 @@ class RepositoryRead(BaseModel):
     faculty_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
+    last_pushed_at: datetime | None = None

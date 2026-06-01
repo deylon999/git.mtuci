@@ -558,6 +558,7 @@ async def list_all_repositories(
             "faculty_id": repo.faculty_id,
             "created_at": repo.created_at,
             "updated_at": repo.updated_at,
+            "last_pushed_at": repo.last_pushed_at,
         }
         repositories.append(RepositoryRead.model_validate(repo_dict))
     

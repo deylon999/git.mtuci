@@ -44,6 +44,11 @@ class Repository(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+    last_pushed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
     # Repository visibility type
     repo_type: Mapped[RepositoryType] = mapped_column(
         SAEnum(RepositoryType, name="repository_type"),

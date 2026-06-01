@@ -13,9 +13,10 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from app.core.database import get_session
+from app.models.repository import Repository, RepositoryType
 from app.models.user import User
 from app.models.system_log import LogLevel, LogSource
 from app.services.activity_service import (
@@ -105,6 +106,22 @@ class GiteaIssueCommentPayload(BaseModel):
     comment: dict
     repository: dict
     sender: dict
+
+
+def _parse_gitea_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    normalized = raw.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def verify_webhook_signature(payload: bytes, signature: Optional[str]) -> bool:
@@ -216,8 +233,34 @@ async def handle_push_event(body: bytes, session: AsyncSession, logger: logging.
     
     # Extract info
     repo_name = payload.repository.get("full_name", "unknown")
+    repo_id = payload.repository.get("id")
+    repo_short_name = payload.repository.get("name")
     pusher_email = payload.pusher.get("email", "")
     commit_count = len(payload.commits)
+    event_pushed_at = max(
+        (
+            parsed
+            for parsed in (_parse_gitea_timestamp(c.timestamp) for c in payload.commits)
+            if parsed is not None
+        ),
+        default=datetime.now(timezone.utc),
+    )
+
+    # Update repository last push timestamp in real time.
+    repo_match_conditions = []
+    if isinstance(repo_id, int):
+        repo_match_conditions.append(Repository.gitea_repo_id == repo_id)
+    if repo_name and repo_name != "unknown":
+        repo_match_conditions.append(func.lower(Repository.gitea_repo_name) == repo_name.lower())
+    if repo_short_name:
+        repo_match_conditions.append(func.lower(Repository.name) == str(repo_short_name).lower())
+    if repo_match_conditions:
+        repo_result = await session.execute(
+            select(Repository).where(or_(*repo_match_conditions)).limit(1)
+        )
+        repo_row = repo_result.scalar_one_or_none()
+        if repo_row:
+            repo_row.last_pushed_at = event_pushed_at
 
     # Find user by email from Gitea
     user_id = None
@@ -288,6 +331,10 @@ async def handle_push_event(body: bytes, session: AsyncSession, logger: logging.
                 ip_address=None,
                 user_login=gitea_username if not user_id else None,
             )
+    else:
+        # No commits can still happen on push events (e.g., refs update).
+        # Persist last_pushed_at even when activity log records are not created.
+        await session.commit()
 
     # Broadcast real-time update to connected clients
     if user_id:
@@ -340,8 +387,6 @@ async def handle_repository_event(body: bytes, session: AsyncSession, logger: lo
         user_row = result.scalar_one_or_none()
         if user_row:
             user_id = user_row
-
-    from app.models.repository import Repository, RepositoryType
 
     if action == "created":
         # Sync repository to local database

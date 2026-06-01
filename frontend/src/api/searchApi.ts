@@ -4,12 +4,23 @@ export interface SearchHit {
   type: "course" | "assignment" | "user" | "repository";
   id: string;
   title: string;
+  display_name?: string | null;
   subtitle: string | null;
   href: string;
+  repo_description?: string | null;
+  repo_language?: string | null;
+  repo_visibility?: string | null;
+  repo_commits_count?: number | null;
+  repo_forks_count?: number | null;
+  repo_pushed_at?: string | null;
+  repo_updated_at?: string | null;
 }
 
 export interface SearchResponse {
   query: string;
+  total: number;
+  page: number;
+  pages: number;
   hits: SearchHit[];
 }
 
@@ -45,8 +56,8 @@ export interface SavedSearch {
   updated_at: string;
 }
 
-export function globalSearch(q: string, limit = 20): Promise<SearchResponse> {
-  const params = new URLSearchParams({ q, limit: String(limit) });
+export function globalSearch(q: string, limit = 20, page = 1): Promise<SearchResponse> {
+  const params = new URLSearchParams({ q, limit: String(limit), page: String(page) });
   return apiRequest<SearchResponse>(`/search?${params.toString()}`);
 }
 

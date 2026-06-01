@@ -27,10 +27,11 @@ router = APIRouter(prefix="/search", tags=["search"])
 async def global_search(
     q: str = Query(min_length=1, max_length=200),
     limit: int = Query(default=20, ge=1, le=50),
+    page: int = Query(default=1, ge=1),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> SearchResponseRead:
-    return await search_for_user(session, user=current_user, query=q, limit=limit)
+    return await search_for_user(session, user=current_user, query=q, limit=limit, page=page)
 
 
 @router.get("/code", response_model=CodeSearchResponseRead)
