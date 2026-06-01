@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, memo } from "react";
+import { useLocation } from "react-router-dom";
 import { Search, Download, Trash2, ChevronLeft, ChevronRight, FileX } from "lucide-react";
 import { useLogsFilters, useLogsPagination, useLogsData, useLogsStats, useDebounce } from "../hooks/useLogs";
 import { exportLogs, deleteOldLogs } from "../api/adminApi";
@@ -16,6 +17,8 @@ interface LogsPageProps {
 interface LogRowProps {
   log: LogEntry;
   isExpanded: boolean;
+  isHighlighted: boolean;
+  rowId: string;
   onToggle: (id: string) => void;
   isDarkTheme: boolean;
   getLevelBadge: (level: string) => React.ReactNode;
@@ -30,6 +33,8 @@ interface LogRowProps {
 const LogRow = memo(function LogRow({
   log,
   isExpanded,
+  isHighlighted,
+  rowId,
   onToggle,
   isDarkTheme,
   getLevelBadge,
@@ -51,7 +56,9 @@ const LogRow = memo(function LogRow({
   return (
     <>
       <tr
+        id={rowId}
         className={`border-b ${borderColor} ${isClickable ? "cursor-pointer" : ""} ${hoverBg} transition-colors`}
+        style={isHighlighted ? { backgroundColor: ui.colors.hover } : undefined}
         onClick={() => isClickable && onToggle(log.id)}
         title={formatFullDate(log.created_at)}
       >
@@ -89,11 +96,15 @@ const LogRow = memo(function LogRow({
 
 export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
   const { t, tp } = useUserPreferences();
+  const location = useLocation();
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [highlightedLogId, setHighlightedLogId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const handledLocationKeyRef = useRef<string | null>(null);
+  const flashedLogIdRef = useRef<string | null>(null);
 
   // Hooks
   const {
@@ -120,6 +131,35 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
 
   const { logs, total, loading: logsLoading, error: logsError, refetch: refetchLogs } = useLogsData(filters, pagination);
   const { stats, loading: statsLoading } = useLogsStats();
+
+  useEffect(() => {
+    if (handledLocationKeyRef.current === location.key) return;
+    handledLocationKeyRef.current = location.key;
+
+    const navState = (location.state ?? {}) as { targetPage?: number; highlightLogId?: string };
+    if (typeof navState.targetPage === "number" && Number.isFinite(navState.targetPage) && navState.targetPage > 0) {
+      setPage(Math.floor(navState.targetPage));
+    }
+    if (typeof navState.highlightLogId === "string" && navState.highlightLogId.trim()) {
+      setHighlightedLogId(navState.highlightLogId);
+      flashedLogIdRef.current = null;
+    }
+  }, [location.key, location.state, setPage]);
+
+  useEffect(() => {
+    if (!highlightedLogId || logsLoading) return;
+    if (!logs.some((item) => item.id === highlightedLogId)) return;
+    if (flashedLogIdRef.current === highlightedLogId) return;
+
+    flashedLogIdRef.current = highlightedLogId;
+    const row = document.getElementById(`log-row-${highlightedLogId}`);
+    row?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    const timer = window.setTimeout(() => {
+      setHighlightedLogId((current) => (current === highlightedLogId ? null : current));
+    }, 2400);
+    return () => window.clearTimeout(timer);
+  }, [highlightedLogId, logsLoading, logs]);
 
   const toggleRow = (id: string) => {
     const newExpanded = new Set(expandedRows);
@@ -397,6 +437,8 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
                       key={log.id}
                       log={log}
                       isExpanded={expandedRows.has(log.id)}
+                      isHighlighted={highlightedLogId === log.id}
+                      rowId={`log-row-${log.id}`}
                       onToggle={toggleRow}
                       isDarkTheme={isDarkTheme}
                       getLevelBadge={getLevelBadge}

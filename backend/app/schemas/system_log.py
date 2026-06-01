@@ -61,6 +61,16 @@ class LogsResponse(BaseModel):
     total: int
 
 
+class LogLocateResponse(BaseModel):
+    """Response for locating a log position in filtered/paginated list."""
+    found: bool
+    total: int
+    page: int
+    pages: int
+    limit: int
+    offset: int
+
+
 class LogsStats(BaseModel):
     """Statistics for logs."""
     total: int

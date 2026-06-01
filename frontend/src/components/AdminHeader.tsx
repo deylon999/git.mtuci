@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Search, ChevronDown, LogOut, User, Shield, Activity, Moon, Sun, Users, FolderGit2, FileText, Loader2 } from "lucide-react";
 import { clearToken } from "../api/client";
 import { useAuthUser } from "../context/AuthUserContext";
-import { getLogs, getServiceStatus } from "../api/adminApi";
+import { getLogs, getServiceStatus, locateLogInAdminLogs } from "../api/adminApi";
 import { globalSearch, type SearchHit } from "../api/searchApi";
 import { getTheme } from "../theme";
 import NotificationBell from "./NotificationBell";
@@ -21,6 +21,7 @@ interface LiveSearchIntent {
 
 const LIVE_GLOBAL_LIMIT = 24;
 const LIVE_LOGS_LIMIT = 5;
+const LOGS_PAGE_LIMIT = 10;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -333,6 +334,30 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
     navigate(`/admin/search?q=${encodeURIComponent(trimmed)}`);
   }
 
+  async function openLiveLog(log: LogEntry): Promise<void> {
+    const filters: { search?: string; level?: "ERROR" | "WARNING"; sort: "desc" } = { sort: "desc" };
+    if (searchIntent.logsQuery) filters.search = searchIntent.logsQuery;
+    if (searchIntent.logsLevel) filters.level = searchIntent.logsLevel;
+
+    let targetPage = 1;
+    try {
+      const located = await locateLogInAdminLogs(log.id, filters, LOGS_PAGE_LIMIT);
+      if (located.found) targetPage = located.page;
+    } catch {
+      targetPage = 1;
+    }
+
+    const params = new URLSearchParams();
+    params.set("sort", "desc");
+    if (filters.search) params.set("search", filters.search);
+    if (filters.level) params.set("level", filters.level);
+
+    setIsSearchFocused(false);
+    navigate(`/logs?${params.toString()}`, {
+      state: { targetPage, highlightLogId: log.id },
+    });
+  }
+
   const searchForm = (
     <div className="relative group" data-live-search>
       <form onSubmit={handleSearch}>
@@ -466,8 +491,7 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
                         key={log.id}
                         type="button"
                         onClick={() => {
-                          setIsSearchFocused(false);
-                          navigate("/logs");
+                          void openLiveLog(log);
                         }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors"
                         style={{ color: theme.text2 }}

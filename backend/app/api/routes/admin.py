@@ -47,7 +47,7 @@ from app.services.notification_realtime import push_notifications_updated
 from app.services.notification_service import sync_user_notifications
 from app.services.notification_delivery import upsert_notification
 from app.services.repository_presenter import build_repository_read
-from app.schemas.system_log import LogEntry, LogsResponse, LogsStats
+from app.schemas.system_log import LogEntry, LogLocateResponse, LogsResponse, LogsStats
 from app.services.system_log_display import build_log_entry, logs_select_with_user
 from app.schemas.user import (
     AdminResetPasswordRequest,
@@ -1713,6 +1713,43 @@ async def sync_gitea_repositories(
 
 # ============ LOGS ENDPOINTS ============
 
+def _build_log_conditions(
+    *,
+    level: Optional[LogLevel],
+    source: Optional[LogSource],
+    search: Optional[str],
+    date_from: Optional[datetime],
+    date_to: Optional[datetime],
+) -> list:
+    conditions = []
+    if level:
+        conditions.append(SystemLog.level == level)
+    if source:
+        conditions.append(SystemLog.source == source)
+    if date_from:
+        conditions.append(SystemLog.created_at >= date_from)
+    if date_to:
+        conditions.append(SystemLog.created_at <= date_to)
+    if search:
+        search_pattern = f"%{search}%"
+        conditions.append(
+            or_(
+                SystemLog.message.ilike(search_pattern),
+                SystemLog.user_email.ilike(search_pattern),
+                SystemLog.user_full_name.ilike(search_pattern),
+                SystemLog.ip_address.ilike(search_pattern),
+                User.email.ilike(search_pattern),
+                User.full_name.ilike(search_pattern),
+            )
+        )
+    return conditions
+
+
+def _apply_logs_sort(query, sort: str):
+    if sort == "desc":
+        return query.order_by(SystemLog.created_at.desc(), SystemLog.id.desc())
+    return query.order_by(SystemLog.created_at.asc(), SystemLog.id.asc())
+
 
 @router.get("/logs", response_model=LogsResponse)
 async def get_logs(
@@ -1737,28 +1774,13 @@ async def get_logs(
         .join(User, SystemLog.user_id == User.id, isouter=True)
     )
 
-    # Apply filters
-    conditions = []
-    if level:
-        conditions.append(SystemLog.level == level)
-    if source:
-        conditions.append(SystemLog.source == source)
-    if date_from:
-        conditions.append(SystemLog.created_at >= date_from)
-    if date_to:
-        conditions.append(SystemLog.created_at <= date_to)
-    if search:
-        search_pattern = f"%{search}%"
-        conditions.append(
-            or_(
-                SystemLog.message.ilike(search_pattern),
-                SystemLog.user_email.ilike(search_pattern),
-                SystemLog.user_full_name.ilike(search_pattern),
-                SystemLog.ip_address.ilike(search_pattern),
-                User.email.ilike(search_pattern),
-                User.full_name.ilike(search_pattern),
-            )
-        )
+    conditions = _build_log_conditions(
+        level=level,
+        source=source,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
     if conditions:
         query = query.where(and_(*conditions))
@@ -1767,11 +1789,7 @@ async def get_logs(
     total_result = await session.execute(count_query)
     total = total_result.scalar()
 
-    # Apply sorting
-    if sort == "desc":
-        query = query.order_by(SystemLog.created_at.desc())
-    else:
-        query = query.order_by(SystemLog.created_at.asc())
+    query = _apply_logs_sort(query, sort)
 
     # Apply pagination
     query = query.limit(limit).offset(offset)
@@ -1785,6 +1803,95 @@ async def get_logs(
             for log, joined_email, joined_full_name in rows
         ],
         total=total,
+    )
+
+
+@router.get("/logs/locate", response_model=LogLocateResponse)
+async def locate_log_page(
+    log_id: UUID = Query(...),
+    level: Optional[LogLevel] = Query(None),
+    source: Optional[LogSource] = Query(None),
+    search: Optional[str] = Query(None),
+    date_from: Optional[datetime] = Query(None),
+    date_to: Optional[datetime] = Query(None),
+    sort: str = Query("desc", pattern="^(desc|asc)$"),
+    limit: int = Query(10, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> LogLocateResponse:
+    """Locate which page contains the requested log under current filters/sort."""
+    _require_admin(current_user)
+
+    conditions = _build_log_conditions(
+        level=level,
+        source=source,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    count_query = (
+        select(func.count())
+        .select_from(SystemLog)
+        .join(User, SystemLog.user_id == User.id, isouter=True)
+    )
+    if conditions:
+        count_query = count_query.where(and_(*conditions))
+    total_result = await session.execute(count_query)
+    total = int(total_result.scalar() or 0)
+    pages = (total + limit - 1) // limit if total > 0 else 0
+
+    target_query = (
+        select(SystemLog.id, SystemLog.created_at)
+        .select_from(SystemLog)
+        .join(User, SystemLog.user_id == User.id, isouter=True)
+        .where(SystemLog.id == log_id)
+    )
+    if conditions:
+        target_query = target_query.where(and_(*conditions))
+    target_result = await session.execute(target_query)
+    target = target_result.first()
+    if not target:
+        return LogLocateResponse(
+            found=False,
+            total=total,
+            page=1,
+            pages=pages,
+            limit=limit,
+            offset=0,
+        )
+
+    _, target_created_at = target
+    if sort == "desc":
+        before_cmp = or_(
+            SystemLog.created_at > target_created_at,
+            and_(SystemLog.created_at == target_created_at, SystemLog.id > log_id),
+        )
+    else:
+        before_cmp = or_(
+            SystemLog.created_at < target_created_at,
+            and_(SystemLog.created_at == target_created_at, SystemLog.id < log_id),
+        )
+
+    before_conditions = [*conditions, before_cmp]
+    before_query = (
+        select(func.count())
+        .select_from(SystemLog)
+        .join(User, SystemLog.user_id == User.id, isouter=True)
+        .where(and_(*before_conditions))
+    )
+    before_result = await session.execute(before_query)
+    before = int(before_result.scalar() or 0)
+    page = before // limit + 1
+    offset = max(0, (page - 1) * limit)
+
+    return LogLocateResponse(
+        found=True,
+        total=total,
+        page=page,
+        pages=pages,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -1871,35 +1978,18 @@ async def export_logs(
 
     query = logs_select_with_user()
 
-    conditions = []
-    if level:
-        conditions.append(SystemLog.level == level)
-    if source:
-        conditions.append(SystemLog.source == source)
-    if date_from:
-        conditions.append(SystemLog.created_at >= date_from)
-    if date_to:
-        conditions.append(SystemLog.created_at <= date_to)
-    if search:
-        search_pattern = f"%{search}%"
-        conditions.append(
-            or_(
-                SystemLog.message.ilike(search_pattern),
-                SystemLog.user_email.ilike(search_pattern),
-                SystemLog.user_full_name.ilike(search_pattern),
-                SystemLog.ip_address.ilike(search_pattern),
-                User.email.ilike(search_pattern),
-                User.full_name.ilike(search_pattern),
-            )
-        )
+    conditions = _build_log_conditions(
+        level=level,
+        source=source,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
     if conditions:
         query = query.where(and_(*conditions))
 
-    if sort == "desc":
-        query = query.order_by(SystemLog.created_at.desc())
-    else:
-        query = query.order_by(SystemLog.created_at.asc())
+    query = _apply_logs_sort(query, sort)
 
     result = await session.execute(query)
     rows = result.all()

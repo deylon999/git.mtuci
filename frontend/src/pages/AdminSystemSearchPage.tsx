@@ -9,7 +9,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { globalSearch, type SearchHit } from "../api/searchApi";
-import { getAdminUsers, getLogs } from "../api/adminApi";
+import { getAdminUsers, getLogs, locateLogInAdminLogs } from "../api/adminApi";
 import type { AdminUserRead, LogEntry } from "../api/types";
 import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
@@ -21,6 +21,26 @@ interface Props {
 }
 
 const HISTORY_KEY = "admin_system_search_history_v1";
+const LOGS_PAGE_LIMIT = 10;
+
+interface LogSearchIntent {
+  search: string | null;
+  level: "ERROR" | "WARNING" | null;
+}
+
+function resolveLogSearchIntent(rawQuery: string): LogSearchIntent {
+  const query = rawQuery.trim();
+  if (!query) return { search: null, level: null };
+  const logMatch = query.match(/^(ERROR|WARNING)\b[:\s-]*(.*)$/i);
+  if (!logMatch) {
+    return { search: query, level: null };
+  }
+  const rest = logMatch[2].trim();
+  return {
+    search: rest || null,
+    level: logMatch[1].toUpperCase() as "ERROR" | "WARNING",
+  };
+}
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -420,6 +440,29 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
       event.preventDefault();
       navigate(href);
     }
+  };
+
+  const openLogInLogsPage = async (log: LogEntry): Promise<void> => {
+    const intent = resolveLogSearchIntent(queryFromUrl);
+    const filters: { search?: string; level?: "ERROR" | "WARNING"; sort: "desc" } = { sort: "desc" };
+    if (intent.search) filters.search = intent.search;
+    if (intent.level) filters.level = intent.level;
+
+    let targetPage = 1;
+    try {
+      const located = await locateLogInAdminLogs(log.id, filters, LOGS_PAGE_LIMIT);
+      if (located.found) targetPage = located.page;
+    } catch {
+      targetPage = 1;
+    }
+
+    const params = new URLSearchParams();
+    params.set("sort", "desc");
+    if (filters.search) params.set("search", filters.search);
+    if (filters.level) params.set("level", filters.level);
+    navigate(`/logs?${params.toString()}`, {
+      state: { targetPage, highlightLogId: log.id },
+    });
   };
 
   const getLogDetailText = (log: LogEntry): string => {
@@ -899,7 +942,7 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                       <article key={log.id} className={`${sectionCard} rounded-xl overflow-hidden hover:border-blue-500/40 transition-colors`}>
                         <button
                           type="button"
-                          onClick={() => setOpenLogIds((prev) => ({ ...prev, [log.id]: !isOpen }))}
+                          onClick={() => void openLogInLogsPage(log)}
                           className="w-full text-left p-3"
                         >
                           <div className="flex items-center gap-2">
@@ -916,6 +959,15 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                             <span className={`text-[10px] ${ui.tableHeaderText}`}>{formatDate(log.created_at, dateLocale)}</span>
                           </div>
                         </button>
+                        <div className="px-3 pb-1">
+                          <button
+                            type="button"
+                            onClick={() => setOpenLogIds((prev) => ({ ...prev, [log.id]: !isOpen }))}
+                            className={`text-[10px] ${ui.tableHeaderText} hover:text-blue-400 transition-colors`}
+                          >
+                            {isOpen ? "Скрыть детали" : "Показать детали"}
+                          </button>
+                        </div>
                         {isOpen ? (
                           <div className={`px-3 pb-3 text-xs font-mono whitespace-pre-wrap ${ui.tableCellText}`}>
                             {getLogDetailText(log)}

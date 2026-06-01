@@ -467,6 +467,34 @@ export async function getLogs(
   return apiRequest<LogsResponse>(`/admin/logs?${params.toString()}`);
 }
 
+export interface LogLocateResponse {
+  found: boolean;
+  total: number;
+  page: number;
+  pages: number;
+  limit: number;
+  offset: number;
+}
+
+export async function locateLogInAdminLogs(
+  logId: string,
+  filters?: LogsFilters,
+  limit: number = 10,
+): Promise<LogLocateResponse> {
+  const params = new URLSearchParams();
+  params.set("log_id", logId);
+
+  if (filters?.level) params.append("level", filters.level);
+  if (filters?.source) params.append("source", filters.source);
+  if (filters?.search) params.append("search", filters.search);
+  if (filters?.date_from) params.append("date_from", filters.date_from);
+  if (filters?.date_to) params.append("date_to", filters.date_to);
+  if (filters?.sort) params.append("sort", filters.sort);
+  params.set("limit", String(limit));
+
+  return apiRequest<LogLocateResponse>(`/admin/logs/locate?${params.toString()}`);
+}
+
 export async function getLogsStats(): Promise<LogsStats> {
   return apiRequest<LogsStats>("/admin/logs/stats");
 }
