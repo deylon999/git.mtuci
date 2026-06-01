@@ -850,11 +850,9 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                           >
                             {t("admin.search.open")}
                           </button>
-                          {prCount > 0 ? (
-                            <span className={`mt-1.5 text-[10px] text-right ${ui.tableHeaderText}`}>
-                              {tp("admin.search.coursePrCount", { n: prCount })}
-                            </span>
-                          ) : null}
+                          <span className={`mt-1.5 text-[10px] text-right ${ui.tableHeaderText}`}>
+                            {tp("admin.search.coursePrCount", { n: prCount })}
+                          </span>
                         </div>
                       </article>
                     );

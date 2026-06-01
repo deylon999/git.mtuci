@@ -130,7 +130,7 @@ export const adminPagesEn = {
     tipRepoHint: "to search by repository name",
     nearestDeadlineShort: "Deadline:",
     noDeadline: "No deadline",
-    coursePrCount: "{n} PR",
+    coursePrCount: "{n} PR waiting",
   },
   courses: {
     myCourses: "My courses",

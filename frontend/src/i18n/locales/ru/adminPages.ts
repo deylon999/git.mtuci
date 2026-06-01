@@ -130,7 +130,7 @@ export const adminPagesRu = {
     tipRepoHint: "для поиска по названию репозитория",
     nearestDeadlineShort: "Дедлайн:",
     noDeadline: "Без дедлайна",
-    coursePrCount: "{n} PR",
+    coursePrCount: "{n} PR ждут",
   },
   courses: {
     myCourses: "Мои курсы",
