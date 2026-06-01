@@ -6,6 +6,8 @@ import base64
 import csv
 import io
 import subprocess
+import gzip
+import shutil
 import re
 import time
 from datetime import datetime, timedelta, timezone
@@ -51,6 +53,8 @@ from app.services.user_service import (
     update_user_role_and_block,
 )
 from app.services.logging_service import log_event_background
+
+_BACKUP_CREATE_LOCK = asyncio.Lock()
 
 
 class TableSizeEntry(BaseModel):
@@ -716,12 +720,17 @@ async def admin_create_backup(
     current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    if _BACKUP_CREATE_LOCK.locked():
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Backup is already in progress. Please wait a few seconds and retry.",
+        )
 
     # Use backups directory in project root for local development
     backup_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "backups")
     os.makedirs(backup_dir, exist_ok=True)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     backup_file = os.path.join(backup_dir, f"backup_{timestamp}.sql")
 
     # Get DB connection from environment
@@ -731,40 +740,50 @@ async def admin_create_backup(
     db_user = os.getenv("POSTGRES_USER", "postgres")
     db_pass = os.getenv("POSTGRES_PASSWORD", "postgres")
 
-    try:
-        # Run pg_dump
-        env = os.environ.copy()
-        env["PGPASSWORD"] = db_pass
+    async with _BACKUP_CREATE_LOCK:
+        try:
+            # Run pg_dump
+            env = os.environ.copy()
+            env["PGPASSWORD"] = db_pass
 
-        result = subprocess.run(
-            [
-                "pg_dump",
-                "-h", db_host,
-                "-p", db_port,
-                "-U", db_user,
-                "-d", db_name,
-                "-f", backup_file,
-                "--clean",
-                "--if-exists",
-            ],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+            result = await asyncio.to_thread(
+                subprocess.run,
+                [
+                    "pg_dump",
+                    "-h", db_host,
+                    "-p", db_port,
+                    "-U", db_user,
+                    "-d", db_name,
+                    "-f", backup_file,
+                    "--clean",
+                    "--if-exists",
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
 
-        if result.returncode == 0:
-            # Compress the backup
-            subprocess.run(["gzip", backup_file], check=True)
+            if result.returncode != 0:
+                raise HTTPException(status_code=500, detail=f"Backup failed: {result.stderr}")
+
             backup_file_gz = f"{backup_file}.gz"
-            return {"success": True, "file": f"backup_{timestamp}.sql.gz", "message": "Backup created successfully"}
-        else:
-            raise HTTPException(status_code=500, detail=f"Backup failed: {result.stderr}")
 
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="Backup timeout")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Backup error: {str(e)}")
+            def _compress_sql_to_gzip(src: str, dst: str) -> None:
+                with open(src, "rb") as src_file, gzip.open(dst, "wb") as dst_file:
+                    shutil.copyfileobj(src_file, dst_file)
+                os.remove(src)
+
+            await asyncio.to_thread(_compress_sql_to_gzip, backup_file, backup_file_gz)
+
+            return {"success": True, "file": f"backup_{timestamp}.sql.gz", "message": "Backup created successfully"}
+
+        except subprocess.TimeoutExpired:
+            raise HTTPException(status_code=500, detail="Backup timeout")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Backup error: {str(e)}")
 
 
 @router.get("/repositories", response_model=List[RepositoryRead])

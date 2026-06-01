@@ -49,6 +49,7 @@ export const adminPagesEn = {
     backupCreatedTitle: "Backup created",
     backupCreatedMsg: "File: {file}",
     backupErrorTitle: "Backup error",
+    backupInProgress: "Backup is already running. Please wait a few seconds.",
     roleAdmin: "Admin",
     roleTeacher: "Instructor",
     roleLaborant: "TA",

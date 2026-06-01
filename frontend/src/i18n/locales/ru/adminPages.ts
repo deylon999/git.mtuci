@@ -49,6 +49,7 @@ export const adminPagesRu = {
     backupCreatedTitle: "Бэкап создан",
     backupCreatedMsg: "Файл: {file}",
     backupErrorTitle: "Ошибка бэкапа",
+    backupInProgress: "Бэкап уже создаётся. Подождите несколько секунд.",
     roleAdmin: "Админ",
     roleTeacher: "Препод",
     roleLaborant: "Лаборант",

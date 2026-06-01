@@ -549,12 +549,14 @@ async def list_notifications(
     group_name: str | None,
     role: UserRole,
     limit: int = 50,
+    offset: int = 0,
 ) -> list[Notification]:
     await sync_user_notifications(session, user_id=user_id, group_name=group_name, role=role)
     result = await session.execute(
         select(Notification)
         .where(Notification.user_id == user_id)
         .order_by(Notification.created_at.desc())
+        .offset(offset)
         .limit(limit)
     )
     return list(result.scalars().all())

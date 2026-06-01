@@ -61,6 +61,7 @@ const IssueDetailPage = lazy(() => import("./components/issues/IssueDetail"));
 const ReviewsPage = lazy(() => import("./pages/ReviewsPage"));
 const CodeSearchPage = lazy(() => import("./pages/CodeSearchPage"));
 const AdminSystemSearchPage = lazy(() => import("./pages/AdminSystemSearchPage"));
+const AdminNotificationsPage = lazy(() => import("./pages/AdminNotificationsPage"));
 
 const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 
@@ -294,6 +295,7 @@ function AppShell({
                   <Route element={<AdminRequired />}>
                     <Route path="/admin" element={<AdminPage isDarkTheme={isDarkTheme} />} />
                     <Route path="/admin/search" element={<AdminSystemSearchPage isDarkTheme={isDarkTheme} />} />
+                    <Route path="/admin/notifications" element={<AdminNotificationsPage isDarkTheme={isDarkTheme} />} />
                     <Route path="/roles" element={<RolesPage isDarkTheme={isDarkTheme} />} />
                     <Route element={<RequirePermission permission="user_view" />}>
                       <Route path="/users" element={<UsersPage isDarkTheme={isDarkTheme} />} />

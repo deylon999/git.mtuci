@@ -79,6 +79,7 @@ interface AdminPageProps {
 }
 
 const DASH_EMPTY = "—";
+const DASHBOARD_NOTIFICATIONS_LIMIT = 4;
 
 function roundPercent(value: number | null | undefined): number | null {
   if (value == null || Number.isNaN(value)) return null;
@@ -338,7 +339,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
 
       const inboxNotifications: Notification[] = appNotifs
         .filter((n) => !n.read)
-        .slice(0, 10)
+        .slice(0, DASHBOARD_NOTIFICATIONS_LIMIT)
         .map((n) => ({
         id: n.id,
         type:
@@ -377,6 +378,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   }, [showRepoDropdown]);
 
   const handleCreateBackup = useCallback(async () => {
+    if (backupLoading) return;
     setBackupLoading(true);
     try {
       const result = await createBackup();
@@ -394,25 +396,31 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
         timestamp: justNow,
         category: "server",
       };
-      setNotifications((prev) => [newNotification, ...prev]);
+      setNotifications((prev) => [newNotification, ...prev].slice(0, DASHBOARD_NOTIFICATIONS_LIMIT));
       toast.success(t("admin.dashboard.backupSuccess"));
     } catch (err) {
+      const isBackupBusy = err instanceof Error && err.message.includes("429");
+      const uiError = isBackupBusy
+        ? t("admin.dashboard.backupInProgress")
+        : err instanceof Error
+          ? err.message
+          : t("admin.dashboard.backupFailed");
       const loc = getI18nLocale();
       const justNow = translate(loc, "time.justNow");
       const errorNotification: Notification = {
         id: Date.now().toString(),
         type: "critical",
         title: translate(loc, "admin.dashboard.backupErrorTitle"),
-        message: err instanceof Error ? err.message : t("admin.dashboard.backupFailed"),
+        message: uiError,
         timestamp: justNow,
         category: "server",
       };
-      setNotifications((prev) => [errorNotification, ...prev]);
-      toast.error(err instanceof Error ? err.message : t("admin.dashboard.backupError"));
+      setNotifications((prev) => [errorNotification, ...prev].slice(0, DASHBOARD_NOTIFICATIONS_LIMIT));
+      toast.error(uiError);
     } finally {
       setBackupLoading(false);
     }
-  }, [t]);
+  }, [backupLoading, t]);
 
   useEffect(() => {
     load();
@@ -697,16 +705,21 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
           <div className={ui.cardShell}>
             <div className={`p-5 flex items-center justify-between border-b ${ui.tableBorder} ${ui.sectionHeaderBg}`}>
               <h2 className={`text-lg font-semibold transition-colors ${ui.textPrimary}`}>{t("admin.dashboard.notifications")}</h2>
-              {notifications.length > 0 && (
-                <button
-                  onClick={clearAllNotifications}
-                  className="flex items-center gap-1 text-xs font-medium transition-colors"
-                  style={{ color: theme.text2 }}
-                >
-                  <X className="h-3 w-3" />
-                  {t("admin.dashboard.clearAll")}
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                <Link to="/admin/notifications" className="group text-sm flex items-center gap-1 font-medium" style={{ color: theme.accent }}>
+                  {t("admin.dashboard.viewAll")} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </Link>
+                {notifications.length > 0 && (
+                  <button
+                    onClick={clearAllNotifications}
+                    className="flex items-center gap-1 text-xs font-medium transition-colors"
+                    style={{ color: theme.text2 }}
+                  >
+                    <X className="h-3 w-3" />
+                    {t("admin.dashboard.clearAll")}
+                  </button>
+                )}
+              </div>
             </div>
             <div className="p-5">
               {notifications.length === 0 ? (

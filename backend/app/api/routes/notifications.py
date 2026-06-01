@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
@@ -19,6 +19,8 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 @router.get("", response_model=list[NotificationRead])
 async def get_notifications(
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[NotificationRead]:
@@ -27,6 +29,8 @@ async def get_notifications(
         user_id=current_user.id,
         group_name=current_user.group_name,
         role=current_user.role,
+        limit=limit,
+        offset=offset,
     )
     return [NotificationRead.model_validate(n) for n in rows]
 
