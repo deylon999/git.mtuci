@@ -685,22 +685,22 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                   repositories.map((hit) => {
                     const commitsCount = Number.isFinite(hit.repo_commits_count as number) ? Number(hit.repo_commits_count) : 0;
                     const forksCount = Number.isFinite(hit.repo_forks_count as number) ? Number(hit.repo_forks_count) : 0;
-                    const languageLabel = (hit.repo_language ?? "").trim() || "—";
+                    const languageLabel = (hit.repo_language ?? "").trim();
                     const visibilityLabel = formatRepoVisibility(hit.repo_visibility, language);
                     const visibilityBadgeClass =
                       hit.repo_visibility === "private"
                         ? isDarkTheme
-                          ? "bg-red-500/20 text-red-400"
-                          : "bg-red-100 text-red-700"
+                          ? "bg-[#2d2d2d] text-[#ccd0d4]"
+                          : "bg-slate-200 text-slate-700"
                         : hit.repo_visibility === "course"
                         ? isDarkTheme
                           ? "bg-violet-500/20 text-violet-400"
                           : "bg-violet-100 text-violet-700"
                         : isDarkTheme
-                        ? "bg-[#2d2d2d] text-[#ccd0d4]"
-                        : "bg-slate-200 text-slate-700";
-                    const repoDescription = (hit.repo_description ?? hit.subtitle ?? "—").trim() || "—";
-                    const lastRepoActivityText = formatLastSeen(hit.repo_pushed_at ?? hit.repo_updated_at, dateLocale, language);
+                        ? "bg-green-500/20 text-green-400"
+                        : "bg-green-100 text-green-700";
+                    const repoDescription = (hit.repo_description ?? "").trim();
+                    const lastRepoActivityText = formatLastSeen(hit.repo_pushed_at, dateLocale, language);
 
                     return (
                       <article
@@ -718,11 +718,13 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                           <h3 className={`text-sm font-medium truncate ${ui.tableNameText}`}>
                             {highlightText(getSearchHitTitle(hit), queryFromUrl, markClassName)}
                           </h3>
-                          <p className={`text-xs mt-1 truncate ${ui.tableHeaderText}`}>
-                            {highlightText(repoDescription, queryFromUrl, markClassName)}
-                          </p>
+                          {repoDescription ? (
+                            <p className={`text-xs mt-1 truncate ${ui.tableHeaderText}`}>
+                              {highlightText(repoDescription, queryFromUrl, markClassName)}
+                            </p>
+                          ) : null}
                           <div className="mt-2 flex items-center gap-2 flex-wrap">
-                            <span className={`text-[10px] ${ui.tableHeaderText}`}>{languageLabel}</span>
+                            {languageLabel ? <span className={`text-[10px] ${ui.tableHeaderText}`}>{languageLabel}</span> : null}
                             <span className={`text-[10px] ${ui.tableHeaderText}`}>{formatCommitCount(commitsCount, language)}</span>
                             <span className={`text-[10px] ${ui.tableHeaderText}`}>{formatForkCount(forksCount, language)}</span>
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${visibilityBadgeClass}`}>

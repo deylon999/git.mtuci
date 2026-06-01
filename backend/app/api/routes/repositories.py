@@ -276,7 +276,7 @@ async def list_my_repositories(
         .order_by(Repository.created_at.desc())
     )
     repositories = result.scalars().all()
-    return [RepositoryRead.model_validate(repo) for repo in repositories]
+    return [await build_repository_read(repo, current_user) for repo in repositories]
 
 
 @router.post("/", response_model=RepositoryRead, status_code=status.HTTP_201_CREATED)
@@ -334,6 +334,7 @@ async def create_repository(
             logger.info(f"Creating Gitea repo for {owner_username}: {payload.name}")
             gitea_repo = await create_personal_repository_in_gitea(
                 owner_username=owner_username,
+                owner_email=current_user.email,
                 name=payload.name,
                 description=payload.description,
                 private=is_private,
@@ -342,7 +343,12 @@ async def create_repository(
                 license_template=license_tpl,
             )
             gitea_repo_name = gitea_repo.get("name") or payload.name
-            actual_owner = await resolve_repo_owner(
+            owner_payload = gitea_repo.get("owner") if isinstance(gitea_repo, dict) else None
+            actual_owner = (
+                owner_payload.get("login")
+                if isinstance(owner_payload, dict) and isinstance(owner_payload.get("login"), str)
+                else None
+            ) or await resolve_repo_owner(
                 primary_owner=owner_username,
                 repo_name=gitea_repo_name,
             )
@@ -351,6 +357,14 @@ async def create_repository(
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
                     detail="Gitea не подтвердил создание репозитория. Проверьте логи API и Gitea.",
+                )
+            if payload.description is not None:
+                from app.services.gitea_service import update_repository_settings
+
+                await update_repository_settings(
+                    owner=actual_owner,
+                    repo=gitea_repo_name,
+                    description=payload.description,
                 )
             clone_url = build_clone_url(actual_owner, gitea_repo_name)
             logger.info(f"Gitea repo created successfully: {clone_url}")
@@ -452,6 +466,7 @@ async def import_github_repository(
     try:
         imported = await migrate_repository_for_owner(
             owner_username=owner_username,
+            owner_email=current_user.email,
             source_url=source_url,
             repo_name=target_name,
             private=private,
@@ -464,10 +479,23 @@ async def import_github_repository(
         ) from exc
 
     gitea_repo_name = str(imported.get("name") or target_name)
-    actual_owner = await resolve_repo_owner(
+    imported_owner = imported.get("owner") if isinstance(imported, dict) else None
+    actual_owner = (
+        imported_owner.get("login")
+        if isinstance(imported_owner, dict) and isinstance(imported_owner.get("login"), str)
+        else None
+    ) or await resolve_repo_owner(
         primary_owner=owner_username,
         repo_name=gitea_repo_name,
     )
+    if payload.description is not None:
+        from app.services.gitea_service import update_repository_settings
+
+        await update_repository_settings(
+            owner=actual_owner,
+            repo=gitea_repo_name,
+            description=payload.description,
+        )
     clone_url = build_clone_url(actual_owner, gitea_repo_name)
     await ensure_repo_webhook(owner=actual_owner, repo_name=gitea_repo_name)
 

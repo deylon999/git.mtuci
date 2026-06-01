@@ -72,14 +72,20 @@ async def ensure_student_repository(
         student_login=owner,
     )
 
-    await create_repository_for_owner(
+    created = await create_repository_for_owner(
         owner_username=owner,
+        owner_email=student.email,
         name=repo_name,
         description=f"{course_title} · {assignment_title}",
         private=True,
         auto_init=True,
     )
-    await ensure_repo_webhook(owner=owner, repo_name=repo_name)
+    created_owner = (
+        ((created.get("owner") if isinstance(created, dict) else {}) or {}).get("login")
+        if isinstance(created, dict)
+        else None
+    ) or owner
+    await ensure_repo_webhook(owner=str(created_owner), repo_name=repo_name)
 
     record = StudentRepository(
         assignment_id=assignment_id,
@@ -107,15 +113,21 @@ async def sync_assignment_repository_to_gitea(
     if await get_repo_metadata(owner=resolved, repo=repo_name):
         return resolved, repo_name
 
-    await create_repository_for_owner(
+    created = await create_repository_for_owner(
         owner_username=owner,
+        owner_email=student.email,
         name=repo_name,
         description="Assignment repository",
         private=True,
         auto_init=True,
     )
-    await ensure_repo_webhook(owner=owner, repo_name=repo_name)
-    return owner, repo_name
+    created_owner = (
+        ((created.get("owner") if isinstance(created, dict) else {}) or {}).get("login")
+        if isinstance(created, dict)
+        else None
+    ) or owner
+    await ensure_repo_webhook(owner=str(created_owner), repo_name=repo_name)
+    return str(created_owner), repo_name
 
 
 async def resolve_assignment_repo_owner_and_name(

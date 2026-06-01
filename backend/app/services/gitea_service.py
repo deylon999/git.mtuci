@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import re
 from datetime import datetime
 from typing import Any
 from urllib.parse import quote, urlparse, urlunparse
@@ -515,44 +516,122 @@ async def get_last_commit_for_path(
     }
 
 
-async def ensure_gitea_user(username: str) -> None:
-    """Create Gitea user via admin API if missing (idempotent)."""
+_GITEA_USERNAME_RE = re.compile(r"^[a-zA-Z0-9](?:[a-zA-Z0-9._-]{0,38}[a-zA-Z0-9])?$")
+
+
+def _fallback_gitea_email(username: str) -> str:
+    return f"{username}@gitmtuci.lab"
+
+
+def _extract_gitea_user_email(data: Any) -> str | None:
+    if not isinstance(data, dict):
+        return None
+    value = data.get("email")
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
+def _candidate_username(base: str, step: int) -> str:
+    if step <= 1:
+        return base
+    suffix = str(step)
+    head = base[: max(1, 40 - len(suffix))]
+    return f"{head}{suffix}"
+
+
+async def ensure_gitea_user(username: str, *, email: str | None = None) -> str:
+    """Create Gitea user via admin API if missing and return actual username."""
+    base = (username or "").strip()
+    if not base:
+        raise RuntimeError("Gitea username is empty")
+    if not _GITEA_USERNAME_RE.match(base):
+        raise RuntimeError(f"Invalid Gitea username: {base}")
+
+    provided_email = (email or "").strip()
+    target_email = provided_email.lower()
     base_url = settings.GITEA_URL.rstrip("/")
     async with httpx.AsyncClient(timeout=30) as client:
-        check = await _gitea_request(
-            client,
-            "GET",
-            f"{base_url}/api/v1/users/{gitea_owner_path(username)}",
-        )
-        if check.status_code == 200:
-            return
-        if _gitea_response_unauthorized(check):
-            raise GiteaAuthError(gitea_auth_error_message())
-        if check.status_code != 404:
-            logger.warning("Gitea user check for %s: %s", username, check.status_code)
-            return
+        if not provided_email:
+            check = await _gitea_request(
+                client,
+                "GET",
+                f"{base_url}/api/v1/users/{gitea_owner_path(base)}",
+            )
+            if check.status_code == 200:
+                return base
+            if _gitea_response_unauthorized(check):
+                raise GiteaAuthError(gitea_auth_error_message())
+            if check.status_code != 404:
+                logger.warning("Gitea user check for %s: %s", base, check.status_code)
+                return base
 
-        create = await _gitea_request(
-            client,
-            "POST",
-            f"{base_url}/api/v1/admin/users",
-            headers={"Content-Type": "application/json"},
-            json={
-                "username": username,
-                "email": f"{username}@gitmtuci.lab",
-                "password": "changeme123",
-                "must_change_password": False,
-            },
-        )
-        if create.status_code not in (200, 201):
+            create = await _gitea_request(
+                client,
+                "POST",
+                f"{base_url}/api/v1/admin/users",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "username": base,
+                    "email": _fallback_gitea_email(base),
+                    "password": "changeme123",
+                    "must_change_password": False,
+                },
+            )
+            if create.status_code not in (200, 201):
+                msg = create.text[:300]
+                logger.error("Failed to create Gitea user %s: %s", base, msg)
+                raise RuntimeError(f"Gitea create user failed: {create.status_code} {msg}")
+            return base
+
+        for step in range(1, 1000):
+            candidate = _candidate_username(base, step)
+            check = await _gitea_request(
+                client,
+                "GET",
+                f"{base_url}/api/v1/users/{gitea_owner_path(candidate)}",
+            )
+            if check.status_code == 200:
+                payload = check.json() if check.content else {}
+                existing_email = (_extract_gitea_user_email(payload) or "").lower()
+                if existing_email == target_email:
+                    return candidate
+                continue
+            if _gitea_response_unauthorized(check):
+                raise GiteaAuthError(gitea_auth_error_message())
+            if check.status_code != 404:
+                logger.warning("Gitea user check for %s: %s", candidate, check.status_code)
+                continue
+
+            create_email = provided_email
+            create = await _gitea_request(
+                client,
+                "POST",
+                f"{base_url}/api/v1/admin/users",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "username": candidate,
+                    "email": create_email,
+                    "password": "changeme123",
+                    "must_change_password": False,
+                },
+            )
+            if create.status_code in (200, 201):
+                return candidate
+            if create.status_code in (409, 422):
+                # Race / validation collision, try next suffix.
+                continue
             msg = create.text[:300]
-            logger.error("Failed to create Gitea user %s: %s", username, msg)
+            logger.error("Failed to create Gitea user %s: %s", candidate, msg)
             raise RuntimeError(f"Gitea create user failed: {create.status_code} {msg}")
+    raise RuntimeError(f"Failed to resolve unique Gitea username for '{base}'")
 
 
 async def create_repository_for_owner(
     *,
     owner_username: str,
+    owner_email: str | None = None,
     name: str,
     description: str | None = None,
     private: bool = False,
@@ -562,7 +641,7 @@ async def create_repository_for_owner(
     readme: str | None = None,
 ) -> dict[str, Any]:
     """Create repository under a specific Gitea user (admin API)."""
-    await ensure_gitea_user(owner_username)
+    resolved_owner = await ensure_gitea_user(owner_username, email=owner_email)
     base_url = settings.GITEA_URL.rstrip("/")
     payload: dict[str, Any] = {
         "name": name,
@@ -582,13 +661,13 @@ async def create_repository_for_owner(
         resp = await _gitea_request(
             client,
             "POST",
-            f"{base_url}/api/v1/admin/users/{gitea_owner_path(owner_username)}/repos",
+            f"{base_url}/api/v1/admin/users/{gitea_owner_path(resolved_owner)}/repos",
             headers={"Content-Type": "application/json"},
             json=payload,
         )
 
     if resp.status_code == 409:
-        meta = await get_repo_metadata(owner=owner_username, repo=name)
+        meta = await get_repo_metadata(owner=resolved_owner, repo=name)
         if meta:
             return meta
         raise RuntimeError(f"Gitea repo conflict: {name}")
@@ -603,20 +682,21 @@ async def create_repository_for_owner(
 async def migrate_repository_for_owner(
     *,
     owner_username: str,
+    owner_email: str | None = None,
     source_url: str,
     repo_name: str,
     private: bool = False,
     description: str | None = None,
 ) -> dict[str, Any]:
     """Import a repository from a remote URL into a target Gitea user namespace."""
-    await ensure_gitea_user(owner_username)
+    resolved_owner = await ensure_gitea_user(owner_username, email=owner_email)
     base_url = settings.GITEA_URL.rstrip("/")
 
     async with httpx.AsyncClient(timeout=90) as client:
         user_resp = await _gitea_request(
             client,
             "GET",
-            f"{base_url}/api/v1/users/{gitea_owner_path(owner_username)}",
+            f"{base_url}/api/v1/users/{gitea_owner_path(resolved_owner)}",
         )
         if user_resp.status_code != 200:
             raise RuntimeError(
@@ -645,7 +725,7 @@ async def migrate_repository_for_owner(
         )
 
     if resp.status_code == 409:
-        meta = await get_repo_metadata(owner=owner_username, repo=repo_name)
+        meta = await get_repo_metadata(owner=resolved_owner, repo=repo_name)
         if meta:
             return meta
         raise RuntimeError(f"Gitea repo conflict: {repo_name}")

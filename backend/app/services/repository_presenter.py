@@ -29,6 +29,7 @@ async def build_repository_read(
     gitea_web_url: str | None = None
     clone_url = repo.clone_url
     gitea_available = False
+    effective_description = repo.description
 
     if gitea_repo_name and owner_user:
         primary_owner = resolve_gitea_username(owner_user)
@@ -38,6 +39,10 @@ async def build_repository_read(
             gitea_available = True
             gitea_web_url = build_repo_web_url(gitea_owner, gitea_repo_name)
             clone_url = clone_url or build_clone_url(gitea_owner, gitea_repo_name)
+            if not (effective_description or "").strip():
+                meta_description = meta.get("description")
+                if isinstance(meta_description, str) and meta_description.strip():
+                    effective_description = meta_description.strip()
 
     owner_name = owner_full_name
     if owner_user and owner_user.full_name:
@@ -46,7 +51,7 @@ async def build_repository_read(
     return RepositoryRead(
         id=repo.id,
         name=repo.name,
-        description=repo.description,
+        description=effective_description,
         gitea_repo_name=gitea_repo_name,
         clone_url=clone_url,
         gitea_web_url=gitea_web_url,

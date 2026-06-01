@@ -9,6 +9,7 @@ from app.services.gitea_service import create_repo_file, create_repository_for_o
 async def create_personal_repository_in_gitea(
     *,
     owner_username: str,
+    owner_email: str | None = None,
     name: str,
     description: str | None,
     private: bool,
@@ -27,6 +28,7 @@ async def create_personal_repository_in_gitea(
     if not add_readme and not gitignore and not license_key:
         return await create_repository_for_owner(
             owner_username=owner_username,
+            owner_email=owner_email,
             name=name,
             description=description,
             private=private,
@@ -38,13 +40,19 @@ async def create_personal_repository_in_gitea(
     if readme_only:
         meta = await create_repository_for_owner(
             owner_username=owner_username,
+            owner_email=owner_email,
             name=name,
             description=description,
             private=private,
             auto_init=False,
         )
+        actual_owner = (
+            ((meta.get("owner") if isinstance(meta, dict) else {}) or {}).get("login")
+            if isinstance(meta, dict)
+            else None
+        ) or owner_username
         await create_repo_file(
-            owner=owner_username,
+            owner=str(actual_owner),
             repo=name,
             filepath="README.md",
             content=build_readme_markdown(name=name, description=description),
@@ -55,6 +63,7 @@ async def create_personal_repository_in_gitea(
 
     return await create_repository_for_owner(
         owner_username=owner_username,
+        owner_email=owner_email,
         name=name,
         description=description,
         private=private,

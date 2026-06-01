@@ -55,8 +55,8 @@ def _normalize_login_candidate(raw: str) -> str | None:
 def resolve_gitea_username(user: User | object) -> str:
     """
     Gitea owner for a platform user.
-    Prefer MTUCI login (matches webhook pusher). Never returns empty or strings with '@'
-    (email in mtuci_login breaks Gitea API URLs).
+    Prefer email local-part (`name` in `name@example.com`) as canonical Gitea login.
+    Never returns empty or strings with '@' (email in owner breaks Gitea API URLs).
     """
     candidates: list[str] = []
     mtuci_login = getattr(user, "mtuci_login", None)
@@ -64,14 +64,14 @@ def resolve_gitea_username(user: User | object) -> str:
     login = getattr(user, "login", None)
     username = getattr(user, "username", None)
 
+    if isinstance(email, str) and "@" in email:
+        candidates.append(email.split("@", 1)[0].strip())
     if isinstance(mtuci_login, str) and mtuci_login.strip():
         candidates.append(mtuci_login.strip())
     if isinstance(login, str) and login.strip():
         candidates.append(login.strip())
     if isinstance(username, str) and username.strip():
         candidates.append(username.strip())
-    if isinstance(email, str) and "@" in email:
-        candidates.append(email.split("@", 1)[0].strip())
 
     for raw in candidates:
         login = _normalize_login_candidate(raw)

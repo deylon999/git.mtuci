@@ -516,7 +516,9 @@ async def _search_admin(session: AsyncSession, *, pattern: str, limit: int, offs
         .correlate(Repository)
         .scalar_subquery()
     )
-    effective_pushed_at_sq = func.coalesce(Repository.last_pushed_at, pushed_at_sq)
+    # If no push is known yet, treat repository creation time as initial activity
+    # so new repositories don't show an empty last-updated value.
+    effective_pushed_at_sq = func.coalesce(Repository.last_pushed_at, pushed_at_sq, Repository.created_at)
     repos_offset = min(cursor, repos_total)
     if cursor < repos_total and remaining > 0:
         repos_q = await session.execute(
@@ -545,9 +547,10 @@ async def _search_admin(session: AsyncSession, *, pattern: str, limit: int, offs
         )
         for r, owner, commits_count, forks_count, pushed_at in repos_q.all():
             owner_login = resolve_gitea_username(owner) if owner else None
+            owner_display = (owner.full_name or "").strip() if owner and owner.full_name else None
             repo_name = (r.name or "").strip() or (r.gitea_repo_name or "").strip() or str(r.id)
-            display_name = f"{owner_login}/{repo_name}" if owner_login else repo_name
-            owner_subtitle = owner.full_name if owner and owner.full_name else owner_login
+            display_owner = owner_display or owner_login
+            display_name = f"{display_owner}/{repo_name}" if display_owner else repo_name
             repo_description = (r.description or "").strip() or None
             hits.append(
                 SearchHitRead(
@@ -555,7 +558,7 @@ async def _search_admin(session: AsyncSession, *, pattern: str, limit: int, offs
                     id=str(r.id),
                     title=repo_name,
                     display_name=display_name,
-                    subtitle=repo_description or owner_subtitle or r.gitea_repo_name,
+                    subtitle=repo_description,
                     href="/repositories",
                     repo_description=repo_description,
                     repo_language=r.language,

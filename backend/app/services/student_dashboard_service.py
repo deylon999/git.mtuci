@@ -359,7 +359,7 @@ async def ensure_student_gitea_clone_token(session: AsyncSession, user: User) ->
         return existing
 
     username = resolve_gitea_username(user)
-    await ensure_gitea_user(username)
+    username = await ensure_gitea_user(username, email=user.email)
     token = await create_gitea_user_access_token(username)
     prefs["gitea_clone_token"] = token
     user.preferences = prefs
@@ -490,6 +490,7 @@ async def sync_personal_repository_to_gitea(
     from app.services.repo_init_service import create_personal_repository_in_gitea
 
     owner = resolve_gitea_username(student_user)
+    owner = await ensure_gitea_user(owner, email=student_user.email)
     repo_name = (repo.gitea_repo_name or repo.name or "").strip()
     if not repo_name:
         raise ValueError("У репозитория нет имени — пересоздайте его в разделе «Мои репозитории».")
@@ -502,7 +503,6 @@ async def sync_personal_repository_to_gitea(
             "Gitea недоступен. Проверьте настройки сервера или обратитесь к администратору."
         )
 
-    await ensure_gitea_user(owner)
     repo_type = repo.repo_type
     if isinstance(repo_type, RepositoryType):
         is_private = repo_type == RepositoryType.private
@@ -512,6 +512,7 @@ async def sync_personal_repository_to_gitea(
     try:
         await create_personal_repository_in_gitea(
             owner_username=owner,
+            owner_email=student_user.email,
             name=repo_name,
             description=repo.description,
             private=is_private,
