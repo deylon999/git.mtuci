@@ -279,7 +279,7 @@ async def search_code_for_user(
                 SearchIndexEntry.branch == filters.branch,
                 func.to_tsvector("simple", indexed_text).op("@@")(tsq),
             )
-            .order_by(text("rank DESC"))
+            .order_by(rank_expr.desc())
             .limit(max(limit * 8, 200))
         )
         if ext:

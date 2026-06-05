@@ -10,7 +10,7 @@ from app.models.assignment import Assignment
 from app.models.activity_log import ActivityLog, ActivityType
 from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
-from app.models.repository import Repository
+from app.models.repository import Repository, RepositoryType
 from app.models.student_repository import StudentRepository
 from app.services.repository_access_service import repository_not_blocked_clause
 from app.models.user import User, UserRole
@@ -39,16 +39,21 @@ async def search_for_user(
     total = 0
 
     if role == UserRole.student:
+        total_repositories = await _count_student_repositories(session, user=user, pattern=pattern)
         total_courses = await _count_student_courses(session, user=user, pattern=pattern)
         total_assignments = await _count_student_assignments(session, user=user, pattern=pattern)
-        total = total_courses + total_assignments
+        total_students = await _count_student_classmates(session, user=user, pattern=pattern)
+        total = total_repositories + total_courses + total_assignments + total_students
         hits = await _collect_student_hits(
             session,
             user=user,
             pattern=pattern,
             offset=offset,
             limit=limit,
+            total_repositories=total_repositories,
             total_courses=total_courses,
+            total_assignments=total_assignments,
+            total_students=total_students,
         )
     elif role == UserRole.teacher:
         total_courses = await _count_teacher_courses(session, user=user, pattern=pattern)
@@ -85,13 +90,39 @@ async def search_for_user(
 async def _search_student_courses(
     session: AsyncSession, *, user: User, pattern: str, limit: int, offset: int = 0
 ) -> list[SearchHitRead]:
+    now_utc = datetime.now(timezone.utc)
     enrolled = (
         select(Course.id)
         .join(CourseEnrollment, CourseEnrollment.course_id == Course.id)
         .where(CourseEnrollment.student_id == user.id)
     )
+    assignments_count_sq = (
+        select(func.count(Assignment.id))
+        .where(Assignment.course_id == Course.id)
+        .correlate(Course)
+        .scalar_subquery()
+    )
+    students_count_sq = (
+        select(func.count(CourseEnrollment.id))
+        .where(CourseEnrollment.course_id == Course.id)
+        .correlate(Course)
+        .scalar_subquery()
+    )
+    nearest_deadline_sq = (
+        select(func.min(Assignment.deadline))
+        .where(and_(Assignment.course_id == Course.id, Assignment.deadline >= now_utc))
+        .correlate(Course)
+        .scalar_subquery()
+    )
     result = await session.execute(
-        select(Course)
+        select(
+            Course,
+            User,
+            assignments_count_sq.label("assignments_count"),
+            students_count_sq.label("students_count"),
+            nearest_deadline_sq.label("nearest_deadline"),
+        )
+        .outerjoin(User, User.id == Course.teacher_id)
         .where(
             Course.id.in_(enrolled),
             or_(Course.title.ilike(pattern), Course.description.ilike(pattern)),
@@ -99,15 +130,200 @@ async def _search_student_courses(
         .offset(offset)
         .limit(limit)
     )
+    hits: list[SearchHitRead] = []
+    for c, teacher, assignments_count, students_count, nearest_deadline in result.all():
+        groups = [g.strip() for g in (c.target_groups or []) if isinstance(g, str) and g.strip()]
+        teacher_name = teacher.full_name if teacher and teacher.full_name else None
+        groups_text = ", ".join(groups) if groups else None
+        subtitle_parts = [teacher_name, groups_text]
+        status = "active" if int(assignments_count or 0) == 0 or nearest_deadline is not None else "archived"
+        hits.append(
+            SearchHitRead(
+                type="course",
+                id=str(c.id),
+                title=c.title,
+                subtitle=" · ".join(part for part in subtitle_parts if part) or c.description,
+                href=f"/courses/{c.id}",
+                course_teacher_name=teacher_name,
+                course_groups=groups or None,
+                course_status=status,
+                course_assignments_count=int(assignments_count or 0),
+                course_students_count=int(students_count or 0),
+                course_nearest_deadline=nearest_deadline,
+            )
+        )
+    return hits
+
+
+async def _count_student_repositories(session: AsyncSession, *, user: User, pattern: str) -> int:
+    repo_match = or_(
+        Repository.name.ilike(pattern),
+        Repository.gitea_repo_name.ilike(pattern),
+        Repository.description.ilike(pattern),
+        Repository.language.ilike(pattern),
+        User.full_name.ilike(pattern),
+        User.mtuci_login.ilike(pattern),
+    )
+    result = await session.execute(
+        select(func.count(Repository.id))
+        .outerjoin(User, User.id == Repository.owner_id)
+        .where(
+            repository_not_blocked_clause(),
+            or_(Repository.owner_id == user.id, Repository.repo_type == RepositoryType.public),
+            repo_match,
+        )
+    )
+    return int(result.scalar() or 0)
+
+
+async def _search_student_repositories(
+    session: AsyncSession, *, user: User, pattern: str, limit: int, offset: int = 0
+) -> list[SearchHitRead]:
+    repo_match = or_(
+        Repository.name.ilike(pattern),
+        Repository.gitea_repo_name.ilike(pattern),
+        Repository.description.ilike(pattern),
+        Repository.language.ilike(pattern),
+        User.full_name.ilike(pattern),
+        User.mtuci_login.ilike(pattern),
+    )
+    repo_lookup_key = func.lower(func.coalesce(Repository.gitea_repo_name, Repository.name))
+    commit_count_sq = (
+        select(func.count(ActivityLog.id))
+        .where(
+            and_(
+                func.lower(ActivityLog.repo_name) == repo_lookup_key,
+                ActivityLog.activity_type == ActivityType.commit,
+            )
+        )
+        .correlate(Repository)
+        .scalar_subquery()
+    )
+    fork_count_sq = (
+        select(func.count(ActivityLog.id))
+        .where(
+            and_(
+                func.lower(ActivityLog.repo_name) == repo_lookup_key,
+                ActivityLog.activity_type == ActivityType.fork,
+            )
+        )
+        .correlate(Repository)
+        .scalar_subquery()
+    )
+    pushed_at_sq = (
+        select(func.max(ActivityLog.created_at))
+        .where(
+            and_(
+                func.lower(ActivityLog.repo_name) == repo_lookup_key,
+                ActivityLog.activity_type.in_([ActivityType.commit, ActivityType.push]),
+            )
+        )
+        .correlate(Repository)
+        .scalar_subquery()
+    )
+    effective_pushed_at_sq = func.coalesce(Repository.last_pushed_at, pushed_at_sq, Repository.created_at)
+    result = await session.execute(
+        select(
+            Repository,
+            User,
+            commit_count_sq.label("commits_count"),
+            fork_count_sq.label("forks_count"),
+            effective_pushed_at_sq.label("pushed_at"),
+        )
+        .outerjoin(User, User.id == Repository.owner_id)
+        .where(
+            repository_not_blocked_clause(),
+            or_(Repository.owner_id == user.id, Repository.repo_type == RepositoryType.public),
+            repo_match,
+        )
+        .order_by(
+            case((Repository.owner_id == user.id, 0), else_=1),
+            case((or_(Repository.name.ilike(pattern), Repository.gitea_repo_name.ilike(pattern)), 0), else_=1),
+            effective_pushed_at_sq.desc(),
+            Repository.id.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+    )
+    hits: list[SearchHitRead] = []
+    for r, owner, commits_count, forks_count, pushed_at in result.all():
+        owner_login = resolve_gitea_username(owner) if owner else None
+        repo_name = (r.name or "").strip() or (r.gitea_repo_name or "").strip() or str(r.id)
+        display_name = f"{owner_login}/{repo_name}" if owner_login else repo_name
+        repo_description = (r.description or "").strip() or None
+        hits.append(
+            SearchHitRead(
+                type="repository",
+                id=str(r.id),
+                title=repo_name,
+                display_name=display_name,
+                subtitle=repo_description,
+                href=f"/repositories/{r.id}",
+                repo_description=repo_description,
+                repo_language=r.language,
+                repo_visibility=r.repo_type.value if r.repo_type else None,
+                repo_commits_count=int(commits_count or 0),
+                repo_forks_count=int(forks_count or 0),
+                repo_pushed_at=pushed_at,
+                repo_updated_at=r.updated_at,
+            )
+        )
+    return hits
+
+
+async def _count_student_classmates(session: AsyncSession, *, user: User, pattern: str) -> int:
+    group_name = (user.group_name or "").strip()
+    if not group_name:
+        return 0
+    result = await session.execute(
+        select(func.count(User.id)).where(
+            User.id != user.id,
+            User.role == UserRole.student,
+            User.group_name == group_name,
+            or_(
+                User.full_name.ilike(pattern),
+                User.email.ilike(pattern),
+                User.mtuci_login.ilike(pattern),
+                User.group_name.ilike(pattern),
+            ),
+        )
+    )
+    return int(result.scalar() or 0)
+
+
+async def _search_student_classmates(
+    session: AsyncSession, *, user: User, pattern: str, limit: int, offset: int = 0
+) -> list[SearchHitRead]:
+    group_name = (user.group_name or "").strip()
+    if not group_name:
+        return []
+    result = await session.execute(
+        select(User)
+        .where(
+            User.id != user.id,
+            User.role == UserRole.student,
+            User.group_name == group_name,
+            or_(
+                User.full_name.ilike(pattern),
+                User.email.ilike(pattern),
+                User.mtuci_login.ilike(pattern),
+                User.group_name.ilike(pattern),
+            ),
+        )
+        .order_by(User.full_name.asc(), User.id.asc())
+        .offset(offset)
+        .limit(limit)
+    )
     return [
         SearchHitRead(
-            type="course",
-            id=str(c.id),
-            title=c.title,
-            subtitle=c.description,
-            href=f"/courses/{c.id}",
+            type="user",
+            id=str(classmate.id),
+            title=classmate.full_name,
+            display_name=classmate.mtuci_login,
+            subtitle=classmate.group_name,
+            href=f"/profile?user={classmate.id}",
         )
-        for c in result.scalars().all()
+        for classmate in result.scalars().all()
     ]
 
 
@@ -172,15 +388,33 @@ async def _collect_student_hits(
     pattern: str,
     offset: int,
     limit: int,
+    total_repositories: int,
     total_courses: int,
+    total_assignments: int,
+    total_students: int,
 ) -> list[SearchHitRead]:
     hits: list[SearchHitRead] = []
     if limit <= 0:
         return hits
 
     remaining = limit
-    courses_offset = min(offset, total_courses)
-    if offset < total_courses:
+    cursor = offset
+
+    repos_offset = min(cursor, total_repositories)
+    if cursor < total_repositories and remaining > 0:
+        repo_hits = await _search_student_repositories(
+            session,
+            user=user,
+            pattern=pattern,
+            limit=remaining,
+            offset=repos_offset,
+        )
+        hits.extend(repo_hits)
+        remaining -= len(repo_hits)
+    cursor = max(0, cursor - total_repositories)
+
+    courses_offset = min(cursor, total_courses)
+    if cursor < total_courses and remaining > 0:
         course_hits = await _search_student_courses(
             session,
             user=user,
@@ -190,8 +424,9 @@ async def _collect_student_hits(
         )
         hits.extend(course_hits)
         remaining -= len(course_hits)
+    cursor = max(0, cursor - total_courses)
 
-    assignments_offset = max(0, offset - total_courses)
+    assignments_offset = min(cursor, total_assignments)
     if remaining > 0:
         assignment_hits = await _search_student_assignments(
             session,
@@ -201,6 +436,19 @@ async def _collect_student_hits(
             offset=assignments_offset,
         )
         hits.extend(assignment_hits)
+        remaining -= len(assignment_hits)
+    cursor = max(0, cursor - total_assignments)
+
+    students_offset = min(cursor, total_students)
+    if remaining > 0:
+        student_hits = await _search_student_classmates(
+            session,
+            user=user,
+            pattern=pattern,
+            limit=remaining,
+            offset=students_offset,
+        )
+        hits.extend(student_hits)
     return hits
 
 
