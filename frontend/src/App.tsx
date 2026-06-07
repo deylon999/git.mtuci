@@ -178,12 +178,9 @@ function AppShell({
   }
 
   const toggleTheme = () => {
-    setIsDarkTheme((prev) => {
-      const next = !prev;
-      localStorage.setItem("theme", next ? "dark" : "light");
-      void persistTheme(next ? "dark" : "light");
-      return next;
-    });
+    const next = !isDarkTheme;
+    setIsDarkTheme(next);
+    void persistTheme(next ? "dark" : "light");
   };
 
   const theme = getTheme(isDarkTheme);
@@ -222,7 +219,7 @@ function AppShell({
                     <Route path="/courses/:courseId" element={<CoursePage isDarkTheme={isDarkTheme} />} />
                     <Route
                       path="/courses/:courseId/assignments/:assignmentId"
-                      element={<AssignmentPage />}
+                      element={<AssignmentPage isDarkTheme={isDarkTheme} />}
                     />
                     <Route path="/assignments" element={<StudentAssignmentsPage isDarkTheme={isDarkTheme} />} />
                     <Route path="/deadlines" element={<StudentDeadlinesPage isDarkTheme={isDarkTheme} />} />

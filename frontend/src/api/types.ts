@@ -276,6 +276,15 @@ export interface RepoFile {
 
 export type SubmissionStatus = "submitted" | "not_submitted";
 
+export interface SubmissionAttachmentRead {
+  id: string;
+  kind: "report" | "attachment";
+  original_filename: string;
+  content_type: string | null;
+  file_size: number;
+  uploaded_at: string;
+}
+
 export interface SubmissionStatusRead {
   student_id: string;
   student_full_name: string;
@@ -287,6 +296,9 @@ export interface SubmissionStatusRead {
   weeks_late: number;
   late_max_grade: number | null;
   comment: string | null;
+  answer_text: string | null;
+  repository_url: string | null;
+  attachments: SubmissionAttachmentRead[];
   submitted_at: string | null;
   graded_at: string | null;
 }
@@ -298,6 +310,10 @@ export interface MyGradeRead {
   weeks_late: number;
   late_max_grade: number | null;
   comment: string | null;
+  answer_text: string | null;
+  repository_url: string | null;
+  attachments: SubmissionAttachmentRead[];
+  submitted_at: string | null;
   graded_at: string | null;
   grade_max: number;
 }

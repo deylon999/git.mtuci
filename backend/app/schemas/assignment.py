@@ -84,6 +84,9 @@ class AssignmentSubmissionStatusRead(BaseModel):
     weeks_late: int = 0
     late_max_grade: float | None = None
     comment: str | None = None
+    answer_text: str | None = None
+    repository_url: str | None = None
+    attachments: list["SubmissionAttachmentRead"] = Field(default_factory=list)
     submitted_at: datetime | None = None
     graded_at: datetime | None = None
 
@@ -100,8 +103,21 @@ class MyGradeRead(BaseModel):
     weeks_late: int = 0
     late_max_grade: float | None = None
     comment: str | None = None
+    answer_text: str | None = None
+    repository_url: str | None = None
+    attachments: list["SubmissionAttachmentRead"] = Field(default_factory=list)
+    submitted_at: datetime | None = None
     graded_at: datetime | None = None
     grade_max: int = 100
+
+
+class SubmissionAttachmentRead(BaseModel):
+    id: str
+    kind: Literal["report", "attachment"]
+    original_filename: str
+    content_type: str | None = None
+    file_size: int
+    uploaded_at: datetime
 
 
 class PlagiarismStudentRead(BaseModel):

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,6 +39,9 @@ class Submission(Base):
     final_grade: Mapped[float | None] = mapped_column(Float, nullable=True)
     penalty_points: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     weeks_late: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    answer_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    repository_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    attachments: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     comment: Mapped[str | None] = mapped_column(Text(), nullable=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     graded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

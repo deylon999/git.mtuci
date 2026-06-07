@@ -183,6 +183,34 @@ async def notify_grade_posted(
     )
 
 
+async def notify_submission_created(
+    session: AsyncSession,
+    *,
+    student: User,
+    assignment: Assignment,
+    course: Course,
+    submission: Submission,
+) -> bool:
+    teacher = await session.get(User, course.teacher_id)
+    if not teacher:
+        return False
+
+    href = f"/courses/{assignment.course_id}/assignments/{assignment.id}"
+    student_name = student.full_name or student.email or "Студент"
+    submitted_at = submission.submitted_at or datetime.now(timezone.utc)
+    return await deliver_notification(
+        session,
+        teacher,
+        category="teacher_pr_submitted",
+        dedupe_key=f"submission-manual:{submission.id}:{int(submitted_at.timestamp())}",
+        title="Новая сдача работы",
+        message=f"{student_name} отправил ответ · {assignment.title} ({course.title})",
+        ntype="info",
+        href=href,
+        created_at=submitted_at,
+    )
+
+
 async def _sync_teacher_course_notifications(
     session: AsyncSession,
     *,

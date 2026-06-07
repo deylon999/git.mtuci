@@ -8,6 +8,7 @@ import type {
   MyGradeRead,
   PlagiarismCompareResult,
   RepoFile,
+  SubmissionAttachmentRead,
   SubmissionStatusRead,
 } from "./types";
 
@@ -121,6 +122,33 @@ export async function gradeSubmission(
   );
 }
 
+export async function submitAssignment(
+  courseId: string,
+  assignmentId: string,
+  payload: {
+    answer_text?: string | null;
+    repository_url?: string | null;
+    report_file?: File | null;
+    files?: File[];
+  },
+): Promise<MyGradeRead> {
+  const formData = new FormData();
+  formData.append("answer_text", payload.answer_text ?? "");
+  formData.append("repository_url", payload.repository_url ?? "");
+  if (payload.report_file) {
+    formData.append("report_file", payload.report_file);
+  }
+  payload.files?.forEach((file) => {
+    formData.append("files", file);
+  });
+
+  return apiRequest<MyGradeRead>(`/courses/${courseId}/assignments/${assignmentId}/submit`, {
+    method: "POST",
+    body: formData,
+    headers: {},
+  });
+}
+
 export async function getMyGrade(
   courseId: string,
   assignmentId: string,
@@ -128,6 +156,33 @@ export async function getMyGrade(
   return apiRequest<MyGradeRead>(
     `/courses/${courseId}/assignments/${assignmentId}/my-grade`,
   );
+}
+
+export async function downloadSubmissionAttachment(
+  courseId: string,
+  assignmentId: string,
+  studentId: string,
+  attachment: SubmissionAttachmentRead,
+): Promise<void> {
+  const token = localStorage.getItem("token");
+  const res = await fetch(
+    `${import.meta.env.VITE_API_URL ?? "/api"}/courses/${courseId}/assignments/${assignmentId}/submissions/${studentId}/attachments/${encodeURIComponent(attachment.id)}`,
+    {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+      },
+    },
+  );
+  if (!res.ok) throw new Error(tr("repo.errors.attachmentDownloadFailed"));
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = attachment.original_filename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
 }
 
 export async function comparePlagiarism(

@@ -1,16 +1,19 @@
 from datetime import datetime, timezone
 import math
 import os
+import re
+from pathlib import Path as FsPath
 from typing import List, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from fastapi import Path, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_session
 from app.core.security import get_current_user
 from app.core.permissions import require_any_permission, require_permission
@@ -42,6 +45,7 @@ from app.schemas.assignment import (
     PlagiarismCompareRead,
     PlagiarismCompareRequest,
     PlagiarismCheckRead,
+    SubmissionAttachmentRead,
     GiteaCommitRead,
     GiteaFileContentRead,
     GiteaRepoFileRead,
@@ -52,7 +56,7 @@ from app.services.assignment_service import (
     list_assignments_for_student,
     list_assignments_for_teacher,
 )
-from app.services.notification_service import notify_grade_posted
+from app.services.notification_service import notify_grade_posted, notify_submission_created
 from app.services.course_service import (
     create_course,
     delete_course_for_actor,
@@ -143,6 +147,168 @@ def _max_grade_for_weeks_late(periods: list[dict], weeks_late: int) -> float:
         if weeks_late <= max_weeks:
             return max_grade
     return 0.0
+
+
+_MAX_SUBMISSION_FILE_BYTES = 50 * 1024 * 1024
+_MAX_SUBMISSION_FILES = 10
+_FILENAME_SAFE_RE = re.compile(r"[^0-9A-Za-zА-Яа-яЁё._ -]+")
+
+
+def _safe_upload_filename(filename: str | None) -> str:
+    raw = (filename or "attachment").strip().replace("\\", "_").replace("/", "_")
+    cleaned = _FILENAME_SAFE_RE.sub("_", raw).strip(" ._")
+    return cleaned[:160] or "attachment"
+
+
+def _parse_attachment_datetime(value: object) -> datetime:
+    if isinstance(value, datetime):
+        return _as_utc(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return _as_utc(datetime.fromisoformat(value.replace("Z", "+00:00")))
+        except ValueError:
+            pass
+    return datetime.now(timezone.utc)
+
+
+def _submission_attachments(submission: Submission | None) -> list[SubmissionAttachmentRead]:
+    raw_items = submission.attachments if submission and isinstance(submission.attachments, list) else []
+    result: list[SubmissionAttachmentRead] = []
+    for raw in raw_items:
+        if not isinstance(raw, dict):
+            continue
+        attachment_id = str(raw.get("id") or "").strip()
+        original_filename = str(raw.get("original_filename") or "").strip()
+        kind = str(raw.get("kind") or "attachment")
+        if kind not in {"report", "attachment"} or not attachment_id or not original_filename:
+            continue
+        try:
+            file_size = int(raw.get("file_size") or 0)
+        except (TypeError, ValueError):
+            file_size = 0
+        result.append(
+            SubmissionAttachmentRead(
+                id=attachment_id,
+                kind=kind,
+                original_filename=original_filename,
+                content_type=raw.get("content_type") if isinstance(raw.get("content_type"), str) else None,
+                file_size=max(0, file_size),
+                uploaded_at=_parse_attachment_datetime(raw.get("uploaded_at")),
+            )
+        )
+    return result
+
+
+def _effective_submission_at(
+    *,
+    submission: Submission | None,
+    last_commit_at: datetime | None,
+) -> datetime | None:
+    manual_at = submission.submitted_at if submission else None
+    if manual_at and last_commit_at:
+        return max(_as_utc(manual_at), _as_utc(last_commit_at))
+    return manual_at or last_commit_at
+
+
+def _submission_status_read(
+    *,
+    student: User,
+    assignment: Assignment,
+    submission: Submission | None,
+    last_commit_at: datetime | None,
+) -> AssignmentSubmissionStatusRead:
+    submitted_at = _effective_submission_at(submission=submission, last_commit_at=last_commit_at)
+    return AssignmentSubmissionStatusRead(
+        student_id=student.id,
+        student_full_name=student.full_name,
+        status="submitted" if submitted_at else "not_submitted",
+        last_commit_at=last_commit_at,
+        grade=submission.grade if submission else None,
+        final_grade=submission.final_grade if submission else None,
+        penalty_points=submission.penalty_points if submission else 0.0,
+        weeks_late=submission.weeks_late if submission else 0,
+        late_max_grade=(
+            _max_grade_for_weeks_late(assignment.late_penalty_periods, submission.weeks_late)
+            if submission and submission.weeks_late > 0
+            else None
+        ),
+        comment=submission.comment if submission else None,
+        answer_text=submission.answer_text if submission else None,
+        repository_url=submission.repository_url if submission else None,
+        attachments=_submission_attachments(submission),
+        submitted_at=submitted_at,
+        graded_at=submission.graded_at if submission else None,
+    )
+
+
+def _submission_upload_dir(*, course_id: UUID, assignment_id: UUID, student_id: UUID) -> FsPath:
+    return FsPath(settings.UPLOAD_DIR) / "submissions" / str(course_id) / str(assignment_id) / str(student_id)
+
+
+async def _store_submission_upload(
+    upload: UploadFile,
+    *,
+    course_id: UUID,
+    assignment_id: UUID,
+    student_id: UUID,
+    kind: str,
+    uploaded_at: datetime,
+) -> dict:
+    target_dir = _submission_upload_dir(course_id=course_id, assignment_id=assignment_id, student_id=student_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    original_filename = _safe_upload_filename(upload.filename)
+    stored_filename = f"{uuid4().hex}_{original_filename}"
+    storage_path = target_dir / stored_filename
+
+    size = 0
+    try:
+        with storage_path.open("wb") as out:
+            while True:
+                chunk = await upload.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > _MAX_SUBMISSION_FILE_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail="Submission file is too large",
+                    )
+                out.write(chunk)
+    except Exception:
+        if storage_path.exists():
+            storage_path.unlink(missing_ok=True)
+        raise
+    finally:
+        await upload.close()
+
+    return {
+        "id": uuid4().hex,
+        "kind": kind,
+        "original_filename": original_filename,
+        "storage_path": str(storage_path),
+        "content_type": upload.content_type,
+        "file_size": size,
+        "uploaded_at": uploaded_at.isoformat(),
+    }
+
+
+def _find_submission_attachment(submission: Submission, attachment_id: str) -> dict:
+    for raw in submission.attachments or []:
+        if isinstance(raw, dict) and str(raw.get("id") or "") == attachment_id:
+            return raw
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+
+
+def _safe_attachment_path(raw: dict) -> FsPath:
+    path = FsPath(str(raw.get("storage_path") or "")).resolve()
+    root = FsPath(settings.UPLOAD_DIR).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found") from exc
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+    return path
 
 
 async def _get_course_or_404(session: AsyncSession, *, course_id: UUID) -> Course:
@@ -840,7 +1006,6 @@ async def list_submissions_endpoint(
     )
     students = list(students_q.scalars().all())
 
-    student_id_to_name = {s.id: s.full_name for s in students}
     last_commit_at_by_student_id: dict[UUID, datetime | None] = {s.id: None for s in students}
     for student in students:
         try:
@@ -882,31 +1047,176 @@ async def list_submissions_endpoint(
     submission_by_student_id = {sub.student_id: sub for sub in submissions}
 
     return [
-        AssignmentSubmissionStatusRead(
-            student_id=s.id,
-            student_full_name=student_id_to_name[s.id],
-            status="submitted" if last_commit_at_by_student_id[s.id] else "not_submitted",
+        _submission_status_read(
+            student=s,
+            assignment=assignment,
+            submission=submission_by_student_id.get(s.id),
             last_commit_at=last_commit_at_by_student_id[s.id],
-            grade=submission_by_student_id[s.id].grade if s.id in submission_by_student_id else None,
-            final_grade=submission_by_student_id[s.id].final_grade if s.id in submission_by_student_id else None,
-            penalty_points=submission_by_student_id[s.id].penalty_points if s.id in submission_by_student_id else 0.0,
-            weeks_late=submission_by_student_id[s.id].weeks_late if s.id in submission_by_student_id else 0,
-            late_max_grade=(
-                _max_grade_for_weeks_late(
-                    assignment.late_penalty_periods,
-                    submission_by_student_id[s.id].weeks_late,
-                )
-                if s.id in submission_by_student_id and submission_by_student_id[s.id].weeks_late > 0
-                else None
-            ),
-            comment=submission_by_student_id[s.id].comment if s.id in submission_by_student_id else None,
-            submitted_at=submission_by_student_id[s.id].submitted_at
-            if s.id in submission_by_student_id
-            else None,
-            graded_at=submission_by_student_id[s.id].graded_at if s.id in submission_by_student_id else None,
         )
         for s in students
     ]
+
+
+@router.post(
+    "/courses/{course_id}/assignments/{assignment_id}/submit",
+    response_model=MyGradeRead,
+)
+async def submit_assignment_endpoint(
+    course_id: UUID,
+    assignment_id: UUID,
+    answer_text: str | None = Form(default=None),
+    repository_url: str | None = Form(default=None),
+    report_file: UploadFile | None = File(default=None),
+    files: list[UploadFile] | None = File(default=None),
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(get_current_user),
+) -> MyGradeRead:
+    if current_user.role != UserRole.student:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Student access only")
+    await ensure_assignment_read(current_user, session)
+    await _ensure_student_enrolled(session=session, course_id=course_id, student_id=current_user.id)
+    course = await _get_course_or_404(session, course_id=course_id)
+    assignment = await _get_assignment_or_404(
+        session,
+        course_id=course_id,
+        assignment_id=assignment_id,
+    )
+
+    cleaned_answer = (answer_text or "").strip() or None
+    cleaned_repo_url = (repository_url or "").strip() or None
+    uploads: list[tuple[UploadFile, str]] = []
+    if report_file and report_file.filename:
+        uploads.append((report_file, "report"))
+    for upload in files or []:
+        if upload and upload.filename:
+            uploads.append((upload, "attachment"))
+
+    if len(uploads) > _MAX_SUBMISSION_FILES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many files. Maximum is {_MAX_SUBMISSION_FILES}.",
+        )
+    if not cleaned_answer and not cleaned_repo_url and not uploads:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Add an answer, repository link, report, or attachment.",
+        )
+
+    sub_q = await session.execute(
+        select(Submission).where(
+            Submission.assignment_id == assignment_id,
+            Submission.student_id == current_user.id,
+        )
+    )
+    submission = sub_q.scalar_one_or_none()
+    if not submission:
+        submission = Submission(assignment_id=assignment_id, student_id=current_user.id)
+        session.add(submission)
+        await session.flush()
+
+    now = datetime.now(timezone.utc)
+    existing_attachments = list(submission.attachments or [])
+    if len(existing_attachments) + len(uploads) > _MAX_SUBMISSION_FILES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many stored files. Maximum is {_MAX_SUBMISSION_FILES}.",
+        )
+
+    new_attachments = [
+        await _store_submission_upload(
+            upload,
+            course_id=course_id,
+            assignment_id=assignment_id,
+            student_id=current_user.id,
+            kind=kind,
+            uploaded_at=now,
+        )
+        for upload, kind in uploads
+    ]
+
+    submission.answer_text = cleaned_answer
+    submission.repository_url = cleaned_repo_url
+    submission.attachments = existing_attachments + new_attachments
+    submission.submitted_at = now
+    session.add(submission)
+    await session.flush()
+
+    await notify_submission_created(
+        session,
+        student=current_user,
+        assignment=assignment,
+        course=course,
+        submission=submission,
+    )
+    await session.commit()
+    await session.refresh(submission)
+
+    return MyGradeRead(
+        grade=submission.grade,
+        final_grade=submission.final_grade,
+        penalty_points=submission.penalty_points,
+        weeks_late=submission.weeks_late,
+        late_max_grade=_max_grade_for_weeks_late(assignment.late_penalty_periods, submission.weeks_late)
+        if submission.weeks_late > 0
+        else None,
+        comment=submission.comment,
+        answer_text=submission.answer_text,
+        repository_url=submission.repository_url,
+        attachments=_submission_attachments(submission),
+        submitted_at=submission.submitted_at,
+        graded_at=submission.graded_at,
+        grade_max=course.grade_max,
+    )
+
+
+@router.get(
+    "/courses/{course_id}/assignments/{assignment_id}/submissions/{student_id}/attachments/{attachment_id}",
+)
+async def download_submission_attachment_endpoint(
+    course_id: UUID,
+    assignment_id: UUID,
+    student_id: UUID,
+    attachment_id: str,
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(get_current_user),
+) -> FileResponse:
+    await ensure_assignment_read(current_user, session)
+    course = await _get_course_or_404(session, course_id=course_id)
+    await _get_assignment_or_404(session, course_id=course_id, assignment_id=assignment_id)
+
+    if current_user.role == UserRole.student:
+        if student_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=current_user.id)
+    elif current_user.role in _STAFF_ROLES:
+        await _ensure_staff_course_access(
+            session=session,
+            course=course,
+            current_user=current_user,
+            course_id=course_id,
+        )
+        await ensure_grade_view(current_user, session)
+        await _ensure_student_enrolled(session=session, course_id=course_id, student_id=student_id)
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    sub_q = await session.execute(
+        select(Submission).where(
+            Submission.assignment_id == assignment_id,
+            Submission.student_id == student_id,
+        )
+    )
+    submission = sub_q.scalar_one_or_none()
+    if not submission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    raw = _find_submission_attachment(submission, attachment_id)
+    path = _safe_attachment_path(raw)
+    return FileResponse(
+        path,
+        filename=str(raw.get("original_filename") or path.name),
+        media_type=raw.get("content_type") if isinstance(raw.get("content_type"), str) else None,
+    )
 
 
 @router.post(
@@ -987,9 +1297,13 @@ async def grade_submission_endpoint(
         )
         session.add(submission)
 
+    submitted_at_for_grade = _effective_submission_at(
+        submission=submission,
+        last_commit_at=last_commit_at,
+    )
     weeks_late = 0
-    if last_commit_at and last_commit_at > assignment.deadline:
-        days_late = (last_commit_at - assignment.deadline).days
+    if submitted_at_for_grade and submitted_at_for_grade > assignment.deadline:
+        days_late = (submitted_at_for_grade - assignment.deadline).days
         weeks_late = max(0, math.ceil(days_late / 7))
     cap_max_grade = _max_grade_for_weeks_late(assignment.late_penalty_periods, weeks_late)
     final_grade = float(payload.grade) if cap_max_grade == float("inf") else min(float(payload.grade), cap_max_grade)
@@ -1001,8 +1315,8 @@ async def grade_submission_endpoint(
     submission.weeks_late = weeks_late
     submission.comment = payload.comment
     submission.graded_at = now
-    if last_commit_at and not submission.submitted_at:
-        submission.submitted_at = last_commit_at
+    if submitted_at_for_grade and not submission.submitted_at:
+        submission.submitted_at = submitted_at_for_grade
 
     await session.flush()
     await notify_grade_posted(
@@ -1015,21 +1329,11 @@ async def grade_submission_endpoint(
     await session.commit()
     await session.refresh(submission)
 
-    return AssignmentSubmissionStatusRead(
-        student_id=student.id,
-        student_full_name=student.full_name,
-        status="submitted" if (last_commit_at or submission.submitted_at) else "not_submitted",
+    return _submission_status_read(
+        student=student,
+        assignment=assignment,
+        submission=submission,
         last_commit_at=last_commit_at,
-        grade=submission.grade,
-        final_grade=submission.final_grade,
-        penalty_points=submission.penalty_points,
-        weeks_late=submission.weeks_late,
-        late_max_grade=_max_grade_for_weeks_late(assignment.late_penalty_periods, submission.weeks_late)
-        if submission.weeks_late > 0
-        else None,
-        comment=submission.comment,
-        submitted_at=submission.submitted_at,
-        graded_at=submission.graded_at,
     )
 
 
@@ -1070,6 +1374,10 @@ async def get_my_grade_endpoint(
             weeks_late=0,
             late_max_grade=None,
             comment=None,
+            answer_text=None,
+            repository_url=None,
+            attachments=[],
+            submitted_at=None,
             graded_at=None,
             grade_max=course.grade_max,
         )
@@ -1083,6 +1391,10 @@ async def get_my_grade_endpoint(
         if submission.weeks_late > 0
         else None,
         comment=submission.comment,
+        answer_text=submission.answer_text,
+        repository_url=submission.repository_url,
+        attachments=_submission_attachments(submission),
+        submitted_at=submission.submitted_at,
         graded_at=submission.graded_at,
         grade_max=course.grade_max,
     )

@@ -558,6 +558,102 @@ mark { background: rgba(37,99,235,0.2); color: rgb(147,197,253); border-radius: 
 .suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
 .suggestion-chip { padding: 5px 12px; border-radius: 20px; font-size: 12px; border: 1px solid rgb(40,40,40); background: rgb(20,20,20); color: rgb(100,100,100); cursor: pointer; transition: all .15s; font-family: inherit; }
 .suggestion-chip:hover { border-color: rgba(37,99,235,0.4); color: rgb(96,165,250); background: rgba(37,99,235,0.05); }
+.student-search-page {
+  --search-text: rgb(230,230,230);
+  --search-text-soft: rgb(136,136,136);
+  --search-text-muted: rgb(100,100,100);
+  --search-text-faint: rgb(68,68,68);
+  --search-surface: rgb(17,17,17);
+  --search-surface-muted: rgb(20,20,20);
+  --search-surface-hover: rgb(19,19,19);
+  --search-surface-strong: rgb(28,28,28);
+  --search-border: rgb(40,40,40);
+  --search-border-strong: rgb(55,55,55);
+  --search-accent: rgb(96,165,250);
+  --search-accent-strong: rgb(37,99,235);
+  --search-accent-soft: rgba(37,99,235,0.1);
+  --search-accent-mark: rgba(37,99,235,0.2);
+  --search-mark-text: rgb(147,197,253);
+  --search-shadow: rgba(37,99,235,0.08);
+  color: var(--search-text);
+}
+.student-search-page[data-theme="light"] {
+  --search-text: #101828;
+  --search-text-soft: #475467;
+  --search-text-muted: #667085;
+  --search-text-faint: #98a2b3;
+  --search-surface: #ffffff;
+  --search-surface-muted: #f8fafc;
+  --search-surface-hover: #f1f5f9;
+  --search-surface-strong: #eef2f7;
+  --search-border: #d0d5dd;
+  --search-border-strong: #98a2b3;
+  --search-accent: #2563eb;
+  --search-accent-strong: #1d4ed8;
+  --search-accent-soft: rgba(37,99,235,0.08);
+  --search-accent-mark: rgba(37,99,235,0.14);
+  --search-mark-text: #1d4ed8;
+  --search-shadow: rgba(37,99,235,0.12);
+}
+.student-search-page .search-hero-bar svg { color: var(--search-text-faint); }
+.student-search-page .search-hero-input { background: var(--search-surface); border-color: var(--search-border); color: var(--search-text); box-shadow: 0 1px 2px rgba(16,24,40,0.04); }
+.student-search-page .search-hero-input:focus { border-color: color-mix(in srgb, var(--search-accent) 65%, transparent); box-shadow: 0 0 0 3px var(--search-shadow); }
+.student-search-page .search-hero-input::placeholder { color: var(--search-text-faint); }
+.student-search-page .search-query-info,
+.student-search-page .section-title,
+.student-search-page .ftab { color: var(--search-text-soft); }
+.student-search-page .search-query-info strong,
+.student-search-page .course-card-name,
+.student-search-page .assign-name,
+.student-search-page .student-name { color: var(--search-text); }
+.student-search-page .search-total,
+.student-search-page .result-time,
+.student-search-page .course-prog-label,
+.student-search-page .assign-score,
+.student-search-page .assign-score-label,
+.student-search-page .student-meta { color: var(--search-text-faint); }
+.student-search-page .ftab,
+.student-search-page .result-card,
+.student-search-page .course-card,
+.student-search-page .assign-card,
+.student-search-page .student-card,
+.student-search-page .empty-section,
+.student-search-page .suggestion-chip,
+.student-search-page .no-query-icon { background: var(--search-surface); border-color: var(--search-border); }
+.student-search-page .ftab:hover,
+.student-search-page .result-card:hover,
+.student-search-page .course-card:hover,
+.student-search-page .assign-card:hover,
+.student-search-page .student-card:hover,
+.student-search-page .suggestion-chip:hover { background: var(--search-surface-hover); border-color: var(--search-border-strong); }
+.student-search-page .ftab:hover { color: var(--search-text); }
+.student-search-page .ftab.active { background: var(--search-accent-soft); border-color: color-mix(in srgb, var(--search-accent) 45%, transparent); color: var(--search-accent); }
+.student-search-page .ftab-count { background: var(--search-surface-strong); color: var(--search-text-muted); }
+.student-search-page .ftab.active .ftab-count { background: color-mix(in srgb, var(--search-accent) 16%, transparent); color: var(--search-accent); }
+.student-search-page .section-count { background: var(--search-surface-strong); border-color: var(--search-border); color: var(--search-text-soft); }
+.student-search-page .section-more,
+.student-search-page .result-title { color: var(--search-accent); }
+.student-search-page mark { background: var(--search-accent-mark); color: var(--search-mark-text); }
+.student-search-page .repo-icon { background: var(--search-accent-soft); color: var(--search-accent); }
+.student-search-page .result-sub,
+.student-search-page .course-teacher-line,
+.student-search-page .assign-course,
+.student-search-page .student-login,
+.student-search-page .no-query h3 { color: var(--search-text-soft); }
+.student-search-page .result-meta span,
+.student-search-page .empty-section,
+.student-search-page .no-query p,
+.student-search-page .no-query-icon svg,
+.student-search-page .suggestion-chip { color: var(--search-text-muted); }
+.student-search-page .open-btn { background: var(--search-surface-muted); border-color: var(--search-border); color: var(--search-text-soft); }
+.student-search-page .tag-blue { background: rgba(37,99,235,0.10); color: var(--search-accent); }
+.student-search-page .tag-green { background: rgba(34,197,94,0.10); color: #16a34a; }
+.student-search-page .tag-yellow { background: rgba(245,158,11,0.13); color: #d97706; }
+.student-search-page .tag-gray { background: var(--search-surface-strong); border-color: var(--search-border); color: var(--search-text-muted); }
+.student-search-page .course-abbr { background: var(--search-accent-soft); color: var(--search-accent); }
+.student-search-page .prog-bar { background: var(--search-surface-strong); }
+.student-search-page .prog-fill { background: var(--search-accent); }
+.student-search-page .assign-icon { background: rgba(124,58,237,0.10); color: #7c3aed; }
 @media (max-width: 900px) {
   .course-result, .student-result { grid-template-columns: 1fr; }
   .result-card { align-items: flex-start; }

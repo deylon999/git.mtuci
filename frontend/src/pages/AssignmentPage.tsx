@@ -5,6 +5,8 @@ import {
   getSubmissions,
   getMyGrade,
   gradeSubmission,
+  submitAssignment,
+  downloadSubmissionAttachment,
   getCourse,
   getAssignments,
   getCommits,
@@ -20,6 +22,7 @@ import type {
   MyGradeRead,
   PlagiarismCompareResult,
   RepoFile,
+  SubmissionAttachmentRead,
   SubmissionStatusRead,
   UserRead,
 } from "../api/types";
@@ -52,51 +55,41 @@ function getInitials(fullName: string) {
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }
 
-export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: AssignmentPageProps) {
+export default function AssignmentPage({ isDarkTheme = false }: AssignmentPageProps) {
   const { t, tp } = useUserPreferences();
-  const [isDarkTheme, setIsDarkTheme] = useState(() => {
-    if (isDarkThemeProp !== undefined) return isDarkThemeProp;
-    const saved = localStorage.getItem("theme");
-    return saved ? saved === "dark" : true;
-  });
-
-  useEffect(() => {
-    if (isDarkThemeProp === undefined) return;
-    setIsDarkTheme(isDarkThemeProp);
-  }, [isDarkThemeProp]);
   // Theme-based colors
-  const pageBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-gray-50";
-  const cardBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-gray-100";
-  const cardBorder = isDarkTheme ? "border-[#2d2d2d]" : "border-gray-200";
-  const textPrimary = isDarkTheme ? "text-[#ccd0d4]" : "text-gray-900";
-  const textSecondary = isDarkTheme ? "text-[#8b949e]" : "text-gray-600";
-  const textTertiary = isDarkTheme ? "text-[#6e7681]" : "text-gray-500";
-  const inputBg = isDarkTheme ? "bg-[#1f2937]" : "bg-gray-100";
-  const inputBorder = isDarkTheme ? "border-[#30363d]" : "border-gray-300";
-  const hoverBg = isDarkTheme ? "hover:bg-[#1f2937]" : "hover:bg-gray-200";
-  const tabActiveBg = isDarkTheme ? "bg-purple-900/30 border-purple-700 text-purple-300" : "bg-purple-100 border-purple-200 text-purple-700";
-  const tabInactiveBg = isDarkTheme ? "bg-[#1f2937] border-[#30363d] text-gray-300 hover:border-purple-700 hover:text-purple-300" : "bg-gray-100 border-gray-200 text-gray-700 hover:border-purple-200 hover:text-purple-700";
-  const buttonPrimary = isDarkTheme ? "bg-purple-600 hover:bg-purple-500 text-white" : "bg-purple-600 hover:bg-purple-700 text-white";
-  const breadcrumbText = isDarkTheme ? "text-purple-400" : "text-purple-700";
-  const breadcrumbHover = isDarkTheme ? "hover:text-purple-300" : "hover:text-purple-800";
-  const separatorColor = isDarkTheme ? "text-[#484f58]" : "text-gray-400";
-  const deadlineBadge = isDarkTheme ? "bg-purple-900/30 text-purple-300" : "bg-purple-50 text-purple-700";
-  const penaltyBox = isDarkTheme ? "bg-[#1f2937] border-[#30363d]" : "bg-gray-100 border-gray-200";
-  const errorBox = isDarkTheme ? "bg-red-900/20 border-red-800 text-red-300" : "bg-red-50 border-red-200 text-red-800";
-  const successBox = isDarkTheme ? "bg-green-900/20 border-green-300" : "bg-green-50 border-green-200 text-green-700";
-  const codeHeader = isDarkTheme ? "bg-[#1f2937] border-[#30363d] text-[#ccd0d4]" : "bg-gray-100 border-gray-200 text-gray-800";
-  const codeLineNum = isDarkTheme ? "border-r-[#30363d] text-[#6e7681]" : "border-r border-gray-200 text-gray-500";
-  const timelineDot = isDarkTheme ? "bg-purple-500" : "bg-purple-500";
-  const timelineLine = isDarkTheme ? "bg-purple-800" : "bg-purple-100";
-  const commitCard = isDarkTheme ? "bg-[#1f2937] border-[#30363d]" : "bg-gray-100 border-gray-100";
-  const commitHash = isDarkTheme ? "text-purple-400" : "text-purple-700";
+  const pageBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-[#f9fafb]";
+  const cardBg = isDarkTheme ? "bg-[#1e1e1e]" : "bg-[#f5f5f5]";
+  const cardBorder = isDarkTheme ? "border-[#30363d]" : "border-[#d4d4d4]";
+  const textPrimary = isDarkTheme ? "text-[#e6e6e6]" : "text-[#171717]";
+  const textSecondary = isDarkTheme ? "text-[#888888]" : "text-[#737373]";
+  const textTertiary = isDarkTheme ? "text-[#444444]" : "text-[#a3a3a3]";
+  const inputBg = isDarkTheme ? "bg-[#0a0a0a]" : "bg-[#f5f5f5]";
+  const inputBorder = isDarkTheme ? "border-[#30363d]" : "border-[#d4d4d4]";
+  const hoverBg = isDarkTheme ? "hover:bg-[#1a1a1a]" : "hover:bg-[#f3f4f6]";
+  const tabActiveBg = isDarkTheme ? "bg-[#2563eb]/20 border-[#3b82f6] text-[#60a5fa]" : "bg-[#2563eb]/10 border-[#3b82f6] text-[#2563eb]";
+  const tabInactiveBg = isDarkTheme ? "bg-[#1e1e1e] border-[#30363d] text-[#888888] hover:border-[#3b82f6] hover:text-[#3b82f6]" : "bg-[#f5f5f5] border-[#d4d4d4] text-[#737373] hover:border-[#3b82f6] hover:text-[#2563eb]";
+  const buttonPrimary = "bg-[#2563eb] hover:bg-[#1d4ed8] text-white";
+  const breadcrumbText = "text-[#3b82f6]";
+  const breadcrumbHover = isDarkTheme ? "hover:text-[#60a5fa]" : "hover:text-[#1d4ed8]";
+  const separatorColor = isDarkTheme ? "text-[#30363d]" : "text-[#a3a3a3]";
+  const deadlineBadge = isDarkTheme ? "bg-[#2563eb]/20 text-[#60a5fa]" : "bg-[#2563eb]/10 text-[#2563eb]";
+  const penaltyBox = isDarkTheme ? "bg-[#1e1e1e] border-[#30363d]" : "bg-[#f5f5f5] border-[#d4d4d4]";
+  const errorBox = isDarkTheme ? "bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]" : "bg-[#ef4444]/10 border-[#ef4444]/25 text-[#dc2626]";
+  const successBox = isDarkTheme ? "bg-[#22c55e]/15 border-[#22c55e]/30 text-[#22c55e]" : "bg-[#22c55e]/10 border-[#22c55e]/25 text-[#16a34a]";
+  const codeHeader = isDarkTheme ? "bg-[#111111] border-[#30363d] text-[#e6e6e6]" : "bg-white border-[#d4d4d4] text-[#171717]";
+  const codeLineNum = isDarkTheme ? "border-r-[#30363d] text-[#444444]" : "border-r border-[#d4d4d4] text-[#a3a3a3]";
+  const timelineDot = "bg-[#3b82f6]";
+  const timelineLine = isDarkTheme ? "bg-[#2563eb]/30" : "bg-[#2563eb]/15";
+  const commitCard = isDarkTheme ? "bg-[#1e1e1e] border-[#30363d]" : "bg-[#f5f5f5] border-[#d4d4d4]";
+  const commitHash = "text-[#3b82f6]";
   const modalOverlay = isDarkTheme ? "bg-black/60" : "bg-black/40";
-  const modalBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-gray-100";
-  const avatarBg = isDarkTheme ? "bg-indigo-900/30 text-indigo-300" : "bg-indigo-100 text-indigo-700";
+  const modalBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-[#f9fafb]";
+  const avatarBg = isDarkTheme ? "bg-[#2563eb]/20 text-[#60a5fa]" : "bg-[#2563eb]/10 text-[#2563eb]";
   const gaugeBg = isDarkTheme ? "#30363d" : "#e5e7eb";
-  const similarityHigh = isDarkTheme ? "bg-red-900/30 text-red-300" : "bg-red-100 text-red-800";
-  const similarityMedium = isDarkTheme ? "bg-yellow-900/30 text-yellow-300" : "bg-yellow-100 text-yellow-800";
-  const similarityLow = isDarkTheme ? "bg-green-900/30 text-green-300" : "bg-green-100 text-green-800";
+  const similarityHigh = isDarkTheme ? "bg-[#ef4444]/15 text-[#ef4444]" : "bg-[#ef4444]/10 text-[#dc2626]";
+  const similarityMedium = isDarkTheme ? "bg-[#f59e0b]/15 text-[#f59e0b]" : "bg-[#f59e0b]/10 text-[#d97706]";
+  const similarityLow = isDarkTheme ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#22c55e]/10 text-[#16a34a]";
   const { courseId, assignmentId } = useParams();
 
   const [loading, setLoading] = useState(true);
@@ -116,6 +109,13 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
   const [myGrade, setMyGrade] = useState<MyGradeRead | null>(null);
   const [myGradeLoading, setMyGradeLoading] = useState(false);
   const [myGradeError, setMyGradeError] = useState<string | null>(null);
+  const [submissionAnswer, setSubmissionAnswer] = useState("");
+  const [submissionRepoUrl, setSubmissionRepoUrl] = useState("");
+  const [submissionReportFile, setSubmissionReportFile] = useState<File | null>(null);
+  const [submissionFiles, setSubmissionFiles] = useState<File[]>([]);
+  const [submissionSaving, setSubmissionSaving] = useState(false);
+  const [submissionSuccess, setSubmissionSuccess] = useState<string | null>(null);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
   const [plagiarism, setPlagiarism] = useState<PlagiarismCompareResult | null>(null);
   const [plagiarismLoading, setPlagiarismLoading] = useState(false);
   const [plagiarismError, setPlagiarismError] = useState<string | null>(null);
@@ -266,6 +266,8 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
         const data = await getMyGrade(courseId, assignmentId);
         if (cancelled) return;
         setMyGrade(data);
+        setSubmissionAnswer(data.answer_text ?? "");
+        setSubmissionRepoUrl(data.repository_url ?? "");
       } catch (err) {
         if (!cancelled) setMyGradeError(err instanceof Error ? err.message : t("repo.errors.gradeLoadFailed"));
       } finally {
@@ -328,6 +330,50 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
     }
   }
 
+  async function onSubmitWork() {
+    if (!courseId || !assignmentId) return;
+    setSubmissionSaving(true);
+    setMyGradeError(null);
+    setSubmissionSuccess(null);
+    try {
+      const updated = await submitAssignment(courseId, assignmentId, {
+        answer_text: submissionAnswer,
+        repository_url: submissionRepoUrl,
+        report_file: submissionReportFile,
+        files: submissionFiles,
+      });
+      setMyGrade(updated);
+      setSubmissionAnswer(updated.answer_text ?? "");
+      setSubmissionRepoUrl(updated.repository_url ?? "");
+      setSubmissionReportFile(null);
+      setSubmissionFiles([]);
+      setSubmissionSuccess(t("repo.assignment.submissionSaved"));
+    } catch (err) {
+      setMyGradeError(err instanceof Error ? err.message : t("repo.errors.submitFailed"));
+    } finally {
+      setSubmissionSaving(false);
+    }
+  }
+
+  async function onDownloadAttachment(studentId: string, attachment: SubmissionAttachmentRead) {
+    if (!courseId || !assignmentId) return;
+    setDownloadingAttachmentId(attachment.id);
+    try {
+      await downloadSubmissionAttachment(courseId, assignmentId, studentId, attachment);
+    } catch (err) {
+      setSubmissionsError(err instanceof Error ? err.message : t("repo.errors.attachmentDownloadFailed"));
+      setMyGradeError(err instanceof Error ? err.message : t("repo.errors.attachmentDownloadFailed"));
+    } finally {
+      setDownloadingAttachmentId(null);
+    }
+  }
+
+  function formatFileSize(bytes: number) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
   async function onComparePlagiarism() {
     if (!courseId || !assignmentId) return;
     if (!selectedStudent1Id || !selectedStudent2Id) {
@@ -355,27 +401,32 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
   }
 
   function verdictClass(verdict: "high" | "medium" | "low") {
-    if (verdict === "high") return "bg-red-100 text-red-800";
-    if (verdict === "medium") return "bg-yellow-100 text-yellow-800";
-    return "bg-green-100 text-green-800";
+    if (verdict === "high") return isDarkTheme ? "bg-[#ef4444]/15 text-[#ef4444]" : "bg-[#ef4444]/10 text-[#dc2626]";
+    if (verdict === "medium") return isDarkTheme ? "bg-[#f59e0b]/15 text-[#f59e0b]" : "bg-[#f59e0b]/10 text-[#d97706]";
+    return isDarkTheme ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#22c55e]/10 text-[#16a34a]";
   }
 
   function gaugeColor(similarity: number) {
     const percent = similarity * 100;
-    if (percent > 80) return "#dc2626";
-    if (percent >= 60) return "#ca8a04";
+    if (percent > 80) return "#ef4444";
+    if (percent >= 60) return "#f59e0b";
     return "#16a34a";
   }
 
   function featureBadgeClass(feature: string) {
-    if (feature.startsWith("operator:")) return "bg-purple-100 text-purple-800 border-purple-200";
-    if (feature.startsWith("function:")) return "bg-purple-100 text-purple-800 border-purple-200";
-    return "bg-gray-100 text-gray-700 border-gray-200";
+    if (feature.startsWith("operator:") || feature.startsWith("function:")) {
+      return isDarkTheme
+        ? "bg-[#2563eb]/20 text-[#60a5fa] border-[#3b82f6]/40"
+        : "bg-[#2563eb]/10 text-[#2563eb] border-[#3b82f6]/30";
+    }
+    return isDarkTheme
+      ? "bg-[#2a2a2a] text-[#888888] border-[#30363d]"
+      : "bg-[#e5e7eb] text-[#737373] border-[#d4d4d4]";
   }
 
   function lineStatusClass(status: "exact" | "similar" | "different") {
-    if (status === "exact") return "bg-red-100/80";
-    if (status === "similar") return "bg-yellow-100/80";
+    if (status === "exact") return isDarkTheme ? "bg-[#ef4444]/15" : "bg-[#ef4444]/10";
+    if (status === "similar") return isDarkTheme ? "bg-[#f59e0b]/15" : "bg-[#f59e0b]/10";
     return "bg-transparent";
   }
 
@@ -437,7 +488,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
           <select
             value={selectedRepoStudentId}
             onChange={(e) => setSelectedRepoStudentId(e.target.value)}
-            className={`w-full max-w-md rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 ${inputBg} ${textPrimary}`}
+            className={`w-full max-w-md rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
           >
             <option value="">{t("repo.assignment.selectStudent")}</option>
             {submissions.map((s) => (
@@ -739,7 +790,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                   <div className={`text-sm font-semibold ${textPrimary}`}>{s.student_full_name}</div>
                   <div
                     className={`rounded px-2 py-0.5 text-xs ${
-                      s.status === "submitted" ? (isDarkTheme ? "bg-green-900/30 text-green-300" : "bg-green-100 text-green-800") : (isDarkTheme ? "bg-gray-800 text-gray-300" : "bg-gray-100 text-gray-700")
+                      s.status === "submitted" ? (isDarkTheme ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#22c55e]/10 text-[#16a34a]") : (isDarkTheme ? "bg-[#2a2a2a] text-[#888888]" : "bg-[#e5e7eb] text-[#737373]")
                     }`}
                   >
                     {s.status === "submitted" ? t("repo.assignment.submitted") : t("repo.assignment.notSubmitted")}
@@ -747,6 +798,52 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                   <div className={`text-xs ${textTertiary}`}>
                     {t("repo.assignment.lastCommit")} {s.last_commit_at ? formatDate(s.last_commit_at) : "—"}
                   </div>
+                  <div className={`text-xs ${textTertiary}`}>
+                    {t("repo.assignment.submittedAt")} {s.submitted_at ? formatDate(s.submitted_at) : "—"}
+                  </div>
+                </div>
+
+                <div className={`mt-3 rounded-lg border ${cardBorder} ${cardBg} p-3`}>
+                  <div className={`mb-2 text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.teacherSubmissionTitle")}</div>
+                  {s.answer_text ? (
+                    <div className={`whitespace-pre-wrap text-sm ${textSecondary}`}>{s.answer_text}</div>
+                  ) : null}
+                  {s.repository_url ? (
+                    <a
+                      href={s.repository_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`mt-2 inline-flex text-sm ${breadcrumbText} ${breadcrumbHover}`}
+                    >
+                      {t("repo.assignment.repositoryLink")}
+                    </a>
+                  ) : null}
+                  {s.attachments.length > 0 ? (
+                    <div className="mt-3">
+                      <div className={`mb-2 text-xs font-semibold ${textTertiary}`}>{t("repo.assignment.attachments")}</div>
+                      <div className="flex flex-wrap gap-2">
+                        {s.attachments.map((attachment) => (
+                          <button
+                            key={attachment.id}
+                            type="button"
+                            onClick={() => onDownloadAttachment(s.student_id, attachment)}
+                            disabled={downloadingAttachmentId === attachment.id}
+                            className={`rounded-lg border ${inputBorder} px-3 py-2 text-left text-xs transition disabled:opacity-60 ${inputBg} ${hoverBg}`}
+                          >
+                            <span className={`block font-medium ${textPrimary}`}>
+                              {attachment.kind === "report" ? t("repo.assignment.report") : t("repo.assignment.attachment")}: {attachment.original_filename}
+                            </span>
+                            <span className={textTertiary}>
+                              {formatFileSize(attachment.file_size)} · {downloadingAttachmentId === attachment.id ? t("common.loading") : t("repo.assignment.download")}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {!s.answer_text && !s.repository_url && s.attachments.length === 0 ? (
+                    <div className={`text-sm ${textTertiary}`}>{t("repo.assignment.noSubmissionDetails")}</div>
+                  ) : null}
                 </div>
 
                 <div className={`mt-3 text-xs ${textTertiary}`}>{tp("repo.assignment.gradeRange", { max: course?.grade_max ?? 100 })}</div>
@@ -764,7 +861,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                       }))
                     }
                     placeholder={`0 — ${course?.grade_max ?? 100}`}
-                    className={`w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 ${inputBg} ${textPrimary}`}
+                    className={`w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
                   />
                   <input
                     type="text"
@@ -776,7 +873,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                       }))
                     }
                     placeholder={t("repo.assignment.commentPlaceholder")}
-                    className={`w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 ${inputBg} ${textPrimary}`}
+                    className={`w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
                   />
                   <button
                     type="button"
@@ -811,20 +908,118 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
               {myGradeError}
             </div>
           ) : null}
+          <div className={`mb-4 rounded-lg border ${cardBorder} ${cardBg} p-4`}>
+            <div className={`text-base font-semibold ${textPrimary}`}>{t("repo.assignment.submissionTitle")}</div>
+            <div className={`mt-1 text-sm ${textSecondary}`}>{t("repo.assignment.submissionHint")}</div>
+
+            <label className={`mt-4 block text-xs font-semibold ${textTertiary}`}>
+              {t("repo.assignment.answerLabel")}
+            </label>
+            <textarea
+              value={submissionAnswer}
+              onChange={(e) => setSubmissionAnswer(e.target.value)}
+              rows={4}
+              placeholder={t("repo.assignment.answerPlaceholder")}
+              className={`mt-1 w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
+            />
+
+            <label className={`mt-3 block text-xs font-semibold ${textTertiary}`}>
+              {t("repo.assignment.repoUrlLabel")}
+            </label>
+            <input
+              type="url"
+              value={submissionRepoUrl}
+              onChange={(e) => setSubmissionRepoUrl(e.target.value)}
+              placeholder={t("repo.assignment.repoUrlPlaceholder")}
+              className={`mt-1 w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
+            />
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <label className={`block text-xs font-semibold ${textTertiary}`}>
+                {t("repo.assignment.reportFileLabel")}
+                <input
+                  type="file"
+                  onChange={(e) => setSubmissionReportFile(e.target.files?.[0] ?? null)}
+                  className={`mt-1 block w-full text-sm ${textSecondary}`}
+                />
+                {submissionReportFile ? (
+                  <span className={`mt-1 block text-xs ${textTertiary}`}>
+                    {submissionReportFile.name} · {formatFileSize(submissionReportFile.size)}
+                  </span>
+                ) : null}
+              </label>
+              <label className={`block text-xs font-semibold ${textTertiary}`}>
+                {t("repo.assignment.extraFilesLabel")}
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setSubmissionFiles(Array.from(e.target.files ?? []))}
+                  className={`mt-1 block w-full text-sm ${textSecondary}`}
+                />
+                {submissionFiles.length > 0 ? (
+                  <span className={`mt-1 block text-xs ${textTertiary}`}>
+                    {submissionFiles.map((file) => file.name).join(", ")}
+                  </span>
+                ) : null}
+              </label>
+            </div>
+
+            {submissionSuccess ? (
+              <div className={`mt-3 rounded-md border p-3 text-sm ${successBox}`}>{submissionSuccess}</div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={onSubmitWork}
+              disabled={submissionSaving}
+              className={`mt-4 rounded-lg px-4 py-2 text-sm transition disabled:opacity-60 ${buttonPrimary}`}
+            >
+              {submissionSaving ? t("repo.assignment.submittingWork") : t("repo.assignment.submitWork")}
+            </button>
+
+            {myGrade?.submitted_at ? (
+              <div className={`mt-3 text-xs ${textTertiary}`}>
+                {t("repo.assignment.submittedAt")} {formatDate(myGrade.submitted_at)}
+              </div>
+            ) : null}
+            {myGrade?.attachments && myGrade.attachments.length > 0 && me ? (
+              <div className="mt-3">
+                <div className={`mb-2 text-xs font-semibold ${textTertiary}`}>{t("repo.assignment.attachments")}</div>
+                <div className="flex flex-wrap gap-2">
+                  {myGrade.attachments.map((attachment) => (
+                    <button
+                      key={attachment.id}
+                      type="button"
+                      onClick={() => onDownloadAttachment(me.id, attachment)}
+                      disabled={downloadingAttachmentId === attachment.id}
+                      className={`rounded-lg border ${inputBorder} px-3 py-2 text-left text-xs transition disabled:opacity-60 ${inputBg} ${hoverBg}`}
+                    >
+                      <span className={`block font-medium ${textPrimary}`}>
+                        {attachment.kind === "report" ? t("repo.assignment.report") : t("repo.assignment.attachment")}: {attachment.original_filename}
+                      </span>
+                      <span className={textTertiary}>
+                        {formatFileSize(attachment.file_size)} · {downloadingAttachmentId === attachment.id ? t("common.loading") : t("repo.assignment.download")}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
           {!myGradeLoading && !myGradeError && myGrade ? (
             <div>
               <div className="mb-2">
                 {myGrade.grade === null ? (
                   <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.gradePendingHint")}</div>
                 ) : myGrade.weeks_late > 0 ? (
-                  <div className={`text-sm ${isDarkTheme ? "text-red-400" : "text-red-700"}`}>
+                  <div className={`text-sm ${isDarkTheme ? "text-[#ef4444]" : "text-[#dc2626]"}`}>
                     {tp("repo.assignment.weeksLate", {
                       n: myGrade.weeks_late,
                       max: myGrade.late_max_grade !== null ? myGrade.late_max_grade : 0,
                     })}
                   </div>
                 ) : (
-                  <div className={`text-sm ${isDarkTheme ? "text-green-400" : "text-green-700"}`}>{t("repo.assignment.onTime")}</div>
+                  <div className={`text-sm ${isDarkTheme ? "text-[#22c55e]" : "text-[#16a34a]"}`}>{t("repo.assignment.onTime")}</div>
                 )}
               </div>
               {myGrade.grade !== null ? (
@@ -835,12 +1030,12 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                 <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.gradeNotSet")}</div>
               )}
               {myGrade.final_grade !== null ? (
-                <div className={`mt-1 text-base font-semibold ${isDarkTheme ? "text-purple-400" : "text-purple-700"}`}>
+                <div className="mt-1 text-base font-semibold text-[#3b82f6]">
                   {tp("repo.assignment.gradeWithPenalty", { grade: myGrade.final_grade.toFixed(1), max: myGrade.grade_max })}
                 </div>
               ) : null}
               {myGrade.comment ? (
-                <div className={`mt-2 rounded-md border ${cardBorder} ${isDarkTheme ? "bg-[#1f2937]" : "bg-gray-50"} p-3 text-sm ${textSecondary}`}>
+                <div className={`mt-2 rounded-md border ${cardBorder} ${cardBg} p-3 text-sm ${textSecondary}`}>
                   {tp("repo.assignment.teacherComment", { comment: myGrade.comment })}
                 </div>
               ) : null}
@@ -863,7 +1058,7 @@ export default function AssignmentPage({ isDarkTheme: isDarkThemeProp }: Assignm
                 onClick={() =>
                   setView({ file: null, loading: false, content: null, error: null })
                 }
-                className={`rounded-md border px-3 py-1 text-sm transition ${isDarkTheme ? "border-[#30363d] hover:bg-[#2d2d2d]" : "border-gray-300 hover:bg-gray-50"} ${inputBg} ${textPrimary}`}
+                className={`rounded-md border px-3 py-1 text-sm transition ${inputBorder} ${hoverBg} ${inputBg} ${textPrimary}`}
               >
                 {t("repo.assignment.close")}
               </button>
