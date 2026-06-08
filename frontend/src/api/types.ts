@@ -238,7 +238,16 @@ export interface Course {
   target_groups: string[] | null;
   teacher_id: string;
   created_at: string;
+  files: CourseFileRead[];
   enrolled_count?: number;
+}
+
+export interface CourseFileRead {
+  id: string;
+  original_filename: string;
+  content_type: string | null;
+  file_size: number;
+  created_at: string;
 }
 
 export interface Assignment {
@@ -319,6 +328,7 @@ export interface MyGradeRead {
 }
 
 export type PlagiarismVerdict = "high" | "medium" | "low";
+export type PlagiarismSource = "code" | "report" | "combined";
 
 export interface PlagiarismStudent {
   id: string;
@@ -331,6 +341,7 @@ export interface PlagiarismPair {
   student2: PlagiarismStudent;
   similarity: number;
   verdict: PlagiarismVerdict;
+  source: PlagiarismSource;
 }
 
 export interface PlagiarismCheckResult {
@@ -341,6 +352,7 @@ export interface PlagiarismCheckResult {
 export interface PlagiarismCompareResult {
   similarity: number;
   verdict: PlagiarismVerdict;
+  source: PlagiarismSource;
   common_features: string[];
   lines1: { line: string; status: "exact" | "similar" | "different" }[];
   lines2: { line: string; status: "exact" | "similar" | "different" }[];

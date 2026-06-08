@@ -22,6 +22,16 @@ class CourseUpdateRequest(BaseModel):
     target_groups: Optional[List[str]] = None
 
 
+class CourseFileRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    original_filename: str
+    content_type: Optional[str]
+    file_size: int
+    created_at: datetime
+
+
 class CourseRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -32,6 +42,7 @@ class CourseRead(BaseModel):
     target_groups: Optional[List[str]] = None
     teacher_id: UUID
     created_at: datetime
+    files: list[CourseFileRead] = []
 
     @computed_field
     @property

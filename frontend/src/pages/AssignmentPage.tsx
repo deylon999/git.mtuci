@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  checkPlagiarism,
   comparePlagiarism,
   getSubmissions,
   getMyGrade,
@@ -20,7 +21,9 @@ import type {
   Course,
   FileContent,
   MyGradeRead,
+  PlagiarismCheckResult,
   PlagiarismCompareResult,
+  PlagiarismSource,
   RepoFile,
   SubmissionAttachmentRead,
   SubmissionStatusRead,
@@ -117,8 +120,11 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   const [submissionSuccess, setSubmissionSuccess] = useState<string | null>(null);
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
   const [plagiarism, setPlagiarism] = useState<PlagiarismCompareResult | null>(null);
+  const [plagiarismPairs, setPlagiarismPairs] = useState<PlagiarismCheckResult | null>(null);
   const [plagiarismLoading, setPlagiarismLoading] = useState(false);
+  const [plagiarismCheckLoading, setPlagiarismCheckLoading] = useState(false);
   const [plagiarismError, setPlagiarismError] = useState<string | null>(null);
+  const [plagiarismSource, setPlagiarismSource] = useState<PlagiarismSource>("code");
   const [selectedStudent1Id, setSelectedStudent1Id] = useState("");
   const [selectedStudent2Id, setSelectedStudent2Id] = useState("");
   const [selectedRepoStudentId, setSelectedRepoStudentId] = useState("");
@@ -281,6 +287,12 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     };
   }, [courseId, assignmentId, me?.role]);
 
+  useEffect(() => {
+    setPlagiarism(null);
+    setPlagiarismPairs(null);
+    setPlagiarismError(null);
+  }, [plagiarismSource]);
+
   async function onViewFile(f: RepoFile) {
     if (!courseId || !assignmentId) return;
     setView({ file: f, loading: true, content: null, error: null });
@@ -374,13 +386,13 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  async function onComparePlagiarism() {
+  async function comparePlagiarismPair(student1Id: string, student2Id: string) {
     if (!courseId || !assignmentId) return;
-    if (!selectedStudent1Id || !selectedStudent2Id) {
+    if (!student1Id || !student2Id) {
       setPlagiarismError(t("repo.errors.selectTwoStudents"));
       return;
     }
-    if (selectedStudent1Id === selectedStudent2Id) {
+    if (student1Id === student2Id) {
       setPlagiarismError(t("repo.errors.selectDifferentStudents"));
       return;
     }
@@ -389,8 +401,9 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     setPlagiarismError(null);
     try {
       const result = await comparePlagiarism(courseId, assignmentId, {
-        student1_id: selectedStudent1Id,
-        student2_id: selectedStudent2Id,
+        student1_id: student1Id,
+        student2_id: student2Id,
+        source: plagiarismSource,
       });
       setPlagiarism(result);
     } catch (err) {
@@ -398,6 +411,30 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     } finally {
       setPlagiarismLoading(false);
     }
+  }
+
+  async function onComparePlagiarism() {
+    await comparePlagiarismPair(selectedStudent1Id, selectedStudent2Id);
+  }
+
+  async function onCheckAllPlagiarism() {
+    if (!courseId || !assignmentId) return;
+    setPlagiarismCheckLoading(true);
+    setPlagiarismError(null);
+    try {
+      const result = await checkPlagiarism(courseId, assignmentId, plagiarismSource);
+      setPlagiarismPairs(result);
+    } catch (err) {
+      setPlagiarismError(err instanceof Error ? err.message : t("repo.errors.compareFailed"));
+    } finally {
+      setPlagiarismCheckLoading(false);
+    }
+  }
+
+  function plagiarismSourceLabel(source: PlagiarismSource) {
+    if (source === "report") return t("repo.assignment.plagiarismSourceReport");
+    if (source === "combined") return t("repo.assignment.plagiarismSourceCombined");
+    return t("repo.assignment.plagiarismSourceCode");
   }
 
   function verdictClass(verdict: "high" | "medium" | "low") {
@@ -589,6 +626,25 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
         <div className={`rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className={`text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.plagiarismTitle")}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={plagiarismSource}
+                onChange={(e) => setPlagiarismSource(e.target.value as PlagiarismSource)}
+                className={`rounded-md border ${inputBorder} px-3 py-2 text-sm ${inputBg} ${textPrimary}`}
+              >
+                <option value="code">{t("repo.assignment.plagiarismSourceCode")}</option>
+                <option value="report">{t("repo.assignment.plagiarismSourceReport")}</option>
+                <option value="combined">{t("repo.assignment.plagiarismSourceCombined")}</option>
+              </select>
+              <button
+                type="button"
+                onClick={onCheckAllPlagiarism}
+                disabled={plagiarismCheckLoading || submissions.length < 2}
+                className={`rounded-lg px-3 py-2 text-sm transition disabled:opacity-60 ${buttonPrimary}`}
+              >
+                {plagiarismCheckLoading ? t("repo.assignment.checkingAll") : t("repo.assignment.checkAll")}
+              </button>
+            </div>
           </div>
 
           <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
@@ -629,6 +685,56 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
           {plagiarismError ? (
             <div className={`mb-3 mt-3 rounded-md border p-3 text-sm ${errorBox}`}>
               {plagiarismError}
+            </div>
+          ) : null}
+
+          {plagiarismPairs ? (
+            <div className={`mb-4 mt-3 rounded-md border ${cardBorder} ${cardBg} p-3`}>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className={`text-sm font-semibold ${textPrimary}`}>
+                  {t("repo.assignment.suspiciousPairs")} · {plagiarismSourceLabel(plagiarismSource)}
+                </div>
+                <div className={`text-xs ${textTertiary}`}>
+                  {new Date(plagiarismPairs.checked_at).toLocaleString()}
+                </div>
+              </div>
+              {plagiarismPairs.pairs.length === 0 ? (
+                <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.noSuspiciousPairs")}</div>
+              ) : (
+                <div className="space-y-2">
+                  {plagiarismPairs.pairs.map((pair) => (
+                    <div
+                      key={`${pair.student1.id}-${pair.student2.id}-${pair.source}`}
+                      className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border ${commitCard} p-3`}
+                    >
+                      <div className="min-w-0">
+                        <div className={`text-sm font-semibold ${textPrimary}`}>
+                          {pair.student1.full_name} ↔ {pair.student2.full_name}
+                        </div>
+                        <div className={`mt-1 text-xs ${textSecondary}`}>
+                          {plagiarismSourceLabel(pair.source)} · {(pair.similarity * 100).toFixed(1)}%
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded px-2 py-0.5 text-xs ${verdictClass(pair.verdict)}`}>
+                          {pair.verdict}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedStudent1Id(pair.student1.id);
+                            setSelectedStudent2Id(pair.student2.id);
+                            void comparePlagiarismPair(pair.student1.id, pair.student2.id);
+                          }}
+                          className={`rounded-lg px-3 py-1.5 text-xs transition ${buttonPrimary}`}
+                        >
+                          {t("repo.assignment.comparePair")}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : null}
 
@@ -697,7 +803,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
                   </div>
 
                   <div>
-                    <div className={`text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.matchingAst")}</div>
+                    <div className={`text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.matchingFeatures")}</div>
                     {plagiarism.common_features.length > 0 ? (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {plagiarism.common_features.map((feature) => (
@@ -710,7 +816,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
                         ))}
                       </div>
                     ) : (
-                      <div className={`mt-2 text-sm ${textSecondary}`}>{t("repo.assignment.noMatchingAst")}</div>
+                      <div className={`mt-2 text-sm ${textSecondary}`}>{t("repo.assignment.noMatchingFeatures")}</div>
                     )}
                   </div>
 

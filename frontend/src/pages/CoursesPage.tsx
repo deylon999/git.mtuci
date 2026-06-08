@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { BookOpen, Plus, Users, X } from "lucide-react";
+import { BookOpen, FileText, Plus, Users, X } from "lucide-react";
 import { getMe } from "../api/authApi";
 import { getAdminUsers } from "../api/adminApi";
 import { createCourse, deleteCourse, getCourses, getGroups } from "../api/coursesApi";
@@ -43,6 +43,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
   const [createTitle, setCreateTitle] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [createGradeMax, setCreateGradeMax] = useState(10);
+  const [createFiles, setCreateFiles] = useState<File[]>([]);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
@@ -139,6 +140,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
     setCreateTitle("");
     setCreateDescription("");
     setCreateGradeMax(10);
+    setCreateFiles([]);
     setSelectedGroups([]);
     setCreateTeacherId("");
     setCreateError(null);
@@ -159,6 +161,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
         grade_max: createGradeMax,
         target_groups: selectedGroups.length > 0 ? selectedGroups : undefined,
         ...(isAdmin && createTeacherId ? { teacher_id: createTeacherId } : {}),
+        files: createFiles,
       });
       setCourses((prev) => [created, ...prev]);
       resetCreateForm();
@@ -290,6 +293,39 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
                 className={`${inputClass} min-h-[120px] resize-y`}
                 style={inputStyle}
               />
+
+              {fieldLabel(theme, t("admin.courses.fieldFiles"))}
+              <label
+                className="flex cursor-pointer flex-col gap-2 rounded-xl border border-dashed px-4 py-4 text-sm transition hover:opacity-90"
+                style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text2 }}
+              >
+                <span className="inline-flex items-center gap-2 font-medium" style={{ color: theme.text }}>
+                  <FileText className="h-4 w-4" style={{ color: theme.accent }} />
+                  {t("admin.courses.filesButton")}
+                </span>
+                <span className="text-xs leading-relaxed" style={{ color: theme.text3 }}>
+                  {t("admin.courses.filesHint")}
+                </span>
+                <input
+                  type="file"
+                  multiple
+                  className="sr-only"
+                  onChange={(e) => setCreateFiles(Array.from(e.target.files ?? []))}
+                />
+              </label>
+              {createFiles.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {createFiles.map((file) => (
+                    <span
+                      key={`${file.name}-${file.size}-${file.lastModified}`}
+                      className="rounded-lg px-2.5 py-1 text-xs"
+                      style={{ backgroundColor: theme.bg4, color: theme.text2 }}
+                    >
+                      {file.name}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-5">

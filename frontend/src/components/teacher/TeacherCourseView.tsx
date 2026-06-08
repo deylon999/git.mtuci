@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { buildDefaultPenaltyPeriods, type PenaltyPeriod } from "../../utils/penaltyDefaults";
-import { AlertCircle, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, FileText, Plus, Trash2 } from "lucide-react";
 import {
   createAssignment,
   deleteAssignment,
+  downloadCourseFile,
   exportCourseGradesCsv,
   getAssignmentStats,
   getAssignments,
@@ -47,6 +48,12 @@ const STATUS_COLOR: Record<string, string> = {
   inactive: "#6b7280",
 };
 
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function localDatetimeMin(): string {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -80,6 +87,7 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
   );
   const [createDateError, setCreateDateError] = useState<string | null>(null);
   const [createLoading, setCreateLoading] = useState(false);
+  const [downloadingCourseFileId, setDownloadingCourseFileId] = useState<string | null>(null);
 
   const dateMin = useMemo(() => localDatetimeMin(), [showCreateForm]);
   const gradeCap = detail?.grade_max ?? 10;
@@ -201,6 +209,18 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
     });
   }
 
+  async function onDownloadCourseFile(file: NonNullable<TeacherCourseDetail["files"]>[number]) {
+    setDownloadingCourseFileId(file.id);
+    setError(null);
+    try {
+      await downloadCourseFile(courseId, file);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("repo.errors.attachmentDownloadFailed"));
+    } finally {
+      setDownloadingCourseFileId(null);
+    }
+  }
+
   if (loading && !detail) {
     return <TeacherLoadingBlock theme={theme} label={t("teacher.courseView.loading")} />;
   }
@@ -266,6 +286,32 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
                   >
                     {g}
                   </span>
+                ))}
+              </div>
+            </TeacherSurface>
+          ) : null}
+          {detail.files.length > 0 ? (
+            <TeacherSurface theme={theme} title={t("teacher.courseView.materialsTitle")}>
+              <div className="px-4 py-3 flex flex-col gap-2">
+                {detail.files.map((file) => (
+                  <button
+                    key={file.id}
+                    type="button"
+                    onClick={() => void onDownloadCourseFile(file)}
+                    disabled={downloadingCourseFileId === file.id}
+                    className="flex items-start gap-2 rounded-lg border px-3 py-2 text-left text-xs transition disabled:opacity-60"
+                    style={{ borderColor: theme.border, backgroundColor: theme.bg4, color: theme.text2 }}
+                  >
+                    <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: theme.accent }} />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium" style={{ color: theme.text }}>
+                        {file.original_filename}
+                      </span>
+                      <span style={{ color: theme.text3 }}>
+                        {formatFileSize(file.file_size)} · {downloadingCourseFileId === file.id ? t("common.loading") : t("teacher.courseView.downloadMaterial")}
+                      </span>
+                    </span>
+                  </button>
                 ))}
               </div>
             </TeacherSurface>

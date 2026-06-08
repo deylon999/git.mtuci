@@ -2,21 +2,69 @@ from __future__ import annotations
 
 import ast
 import difflib
+import html
 import re
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from itertools import combinations
+from pathlib import Path
+from xml.etree import ElementTree
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.assignment import Assignment
 from app.models.course_enrollment import CourseEnrollment
-from app.models.student_repository import StudentRepository
+from app.models.submission import Submission
 from app.models.user import User
-from app.services.gitea_service import GITEA_ADMIN_USERNAME, get_repo_contents, get_repo_file_content
+from app.services.gitea_service import get_repo_contents, get_repo_file_content
+from app.services.student_repository_service import resolve_assignment_repo_owner_and_name
+
+PlagiarismSource = str
+
+_VALID_SOURCES = {"code", "report", "combined"}
+_CODE_EXTENSIONS = {
+    ".py",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".java",
+    ".c",
+    ".cc",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cs",
+    ".go",
+    ".rs",
+    ".php",
+    ".rb",
+    ".kt",
+    ".swift",
+    ".sql",
+    ".html",
+    ".css",
+    ".scss",
+    ".md",
+}
+_TEXT_EXTENSIONS = {
+    ".txt",
+    ".md",
+    ".rst",
+    ".csv",
+    ".json",
+    ".xml",
+    ".html",
+    ".htm",
+    ".log",
+    ".tex",
+}
+_WORD_RE = re.compile(r"[0-9A-Za-zА-Яа-яЁё_-]{3,}", flags=re.UNICODE)
 
 
 class _VariableNormalizer(ast.NodeTransformer):
@@ -42,7 +90,14 @@ class _AstFeatures:
     node_types: set[str]
 
 
-async def _collect_python_paths(*, owner: str, repo: str, root: str = "") -> list[str]:
+def _normalize_source(source: PlagiarismSource | None) -> PlagiarismSource:
+    value = (source or "code").strip().lower()
+    if value not in _VALID_SOURCES:
+        raise ValueError("Invalid plagiarism source")
+    return value
+
+
+async def _collect_code_paths(*, owner: str, repo: str, root: str = "") -> list[str]:
     items = await get_repo_contents(owner=owner, repo=repo, filepath=root)
     if not isinstance(items, list):
         return []
@@ -53,23 +108,23 @@ async def _collect_python_paths(*, owner: str, repo: str, root: str = "") -> lis
         item_path = str(item.get("path") or "").strip("/")
         if not item_path:
             continue
-        if item_type == "file" and item_path.endswith(".py"):
+        if item_type == "file" and Path(item_path).suffix.lower() in _CODE_EXTENSIONS:
             result.append(item_path)
         elif item_type == "dir":
-            result.extend(await _collect_python_paths(owner=owner, repo=repo, root=item_path))
+            result.extend(await _collect_code_paths(owner=owner, repo=repo, root=item_path))
     return result
 
 
-async def get_student_code(repo_name: str) -> str:
+async def get_student_code(owner: str, repo_name: str) -> str:
     """
-    Загружает все .py файлы из репозитория и склеивает в один текст.
+    Загружает основные текстовые/code файлы из репозитория и склеивает в один текст.
     """
-    paths = await _collect_python_paths(owner=GITEA_ADMIN_USERNAME, repo=repo_name)
+    paths = await _collect_code_paths(owner=owner, repo=repo_name)
     chunks: list[str] = []
     for p in sorted(set(paths)):
         try:
             content = await get_repo_file_content(
-                owner=GITEA_ADMIN_USERNAME,
+                owner=owner,
                 repo=repo_name,
                 filepath=p,
             )
@@ -264,7 +319,7 @@ def _line_score(status: str) -> float:
 
 def _line_similarity(lines: list[dict[str, str]]) -> float:
     if not lines:
-        return 1.0
+        return 0.0
     total_score = sum(_line_score(row.get("status", "different")) for row in lines)
     return max(0.0, min(1.0, total_score / len(lines)))
 
@@ -287,6 +342,268 @@ def line_by_line_compare(code1: str, code2: str) -> dict[str, list[dict[str, str
     return {"lines1": result1, "lines2": result2}
 
 
+def _safe_stored_attachment_path(raw: dict) -> Path | None:
+    try:
+        path = Path(str(raw.get("storage_path") or "")).resolve()
+        root = Path(settings.UPLOAD_DIR).resolve()
+        path.relative_to(root)
+    except (TypeError, ValueError, RuntimeError):
+        return None
+    if not path.exists() or not path.is_file():
+        return None
+    return path
+
+
+def _read_text_file(path: Path) -> str:
+    raw = path.read_bytes()
+    for encoding in ("utf-8", "utf-8-sig", "cp1251", "latin-1"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="ignore")
+
+
+def _extract_docx_text(path: Path) -> str:
+    chunks: list[str] = []
+    with zipfile.ZipFile(path) as archive:
+        for name in ("word/document.xml", "word/footnotes.xml", "word/endnotes.xml"):
+            if name not in archive.namelist():
+                continue
+            root = ElementTree.fromstring(archive.read(name))
+            for node in root.iter():
+                if node.text and node.tag.endswith("}t"):
+                    chunks.append(node.text)
+                elif node.tag.endswith("}p"):
+                    chunks.append("\n")
+    return html.unescape(" ".join(chunks)).replace(" \n ", "\n")
+
+
+def _decode_pdf_literal(value: str) -> str:
+    value = value[1:-1]
+    value = value.replace(r"\(", "(").replace(r"\)", ")").replace(r"\\", "\\")
+    value = value.replace(r"\n", "\n").replace(r"\r", "\n").replace(r"\t", "\t")
+    return value
+
+
+def _extract_pdf_text_fallback(path: Path) -> str:
+    raw = path.read_bytes().decode("latin-1", errors="ignore")
+    literals = re.findall(r"\((?:\\.|[^\\()]){3,}\)", raw)
+    text = "\n".join(_decode_pdf_literal(item) for item in literals)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _extract_pdf_text(path: Path) -> str:
+    try:
+        from pypdf import PdfReader  # type: ignore
+
+        reader = PdfReader(str(path))
+        return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+    except Exception:
+        return _extract_pdf_text_fallback(path)
+
+
+def _extract_attachment_text(raw: dict) -> str:
+    path = _safe_stored_attachment_path(raw)
+    if path is None:
+        return ""
+    suffix = path.suffix.lower()
+    try:
+        if suffix == ".pdf":
+            return _extract_pdf_text(path)
+        if suffix == ".docx":
+            return _extract_docx_text(path)
+        if suffix in _TEXT_EXTENSIONS:
+            return _read_text_file(path)
+    except Exception:
+        return ""
+    return ""
+
+
+def _submission_report_text(submission: Submission | None) -> str:
+    if not submission or not isinstance(submission.attachments, list):
+        return ""
+    chunks: list[str] = []
+    for raw in submission.attachments:
+        if not isinstance(raw, dict) or raw.get("kind") != "report":
+            continue
+        original = str(raw.get("original_filename") or "report").strip()
+        text = _extract_attachment_text(raw).strip()
+        if text:
+            chunks.append(f"# REPORT: {original}\n{text}\n")
+    return "\n".join(chunks)
+
+
+def _normalize_text_tokens(text: str) -> list[str]:
+    return [token.lower().replace("_", "-") for token in _WORD_RE.findall(text)]
+
+
+def _ngrams(tokens: list[str], size: int) -> set[str]:
+    if len(tokens) < size:
+        return set(tokens)
+    return {" ".join(tokens[i : i + size]) for i in range(len(tokens) - size + 1)}
+
+
+def compare_text_documents(text1: str, text2: str) -> dict[str, Any]:
+    if not text1.strip() or not text2.strip():
+        return {"similarity": 0.0, "common_features": []}
+    tokens1 = _normalize_text_tokens(text1)
+    tokens2 = _normalize_text_tokens(text2)
+    token_sim = _jaccard_similarity(set(tokens1), set(tokens2))
+    phrase_sim = _jaccard_similarity(_ngrams(tokens1, 3), _ngrams(tokens2, 3))
+    compact1 = " ".join(tokens1[:5000])
+    compact2 = " ".join(tokens2[:5000])
+    sequence_sim = difflib.SequenceMatcher(a=compact1, b=compact2, autojunk=True).ratio()
+    score = max(0.0, min(1.0, token_sim * 0.35 + phrase_sim * 0.45 + sequence_sim * 0.20))
+    common_phrases = sorted(_ngrams(tokens1, 3) & _ngrams(tokens2, 3), key=len, reverse=True)[:30]
+    common_words = sorted((set(tokens1) & set(tokens2)) - set(" ".join(common_phrases).split()))[:30]
+    common_features = [f"phrase:{item}" for item in common_phrases]
+    common_features.extend(f"word:{item}" for item in common_words)
+    return {"similarity": score, "common_features": common_features}
+
+
+async def _assignment_code_text(
+    session: AsyncSession,
+    *,
+    assignment_id: UUID,
+    student_id: UUID,
+) -> str:
+    try:
+        owner, repo_name = await resolve_assignment_repo_owner_and_name(
+            session,
+            assignment_id=assignment_id,
+            student_id=student_id,
+        )
+    except ValueError:
+        return ""
+    return await get_student_code(owner, repo_name)
+
+
+async def _submission_map_for_students(
+    session: AsyncSession,
+    *,
+    assignment_id: UUID,
+    student_ids: list[UUID],
+) -> dict[UUID, Submission]:
+    if not student_ids:
+        return {}
+    submissions_q = await session.execute(
+        select(Submission).where(
+            Submission.assignment_id == assignment_id,
+            Submission.student_id.in_(student_ids),
+        )
+    )
+    return {item.student_id: item for item in submissions_q.scalars().all()}
+
+
+async def _student_work_parts(
+    session: AsyncSession,
+    *,
+    assignment_id: UUID,
+    student_id: UUID,
+    submission: Submission | None = None,
+) -> tuple[str, str]:
+    code_text = await _assignment_code_text(session, assignment_id=assignment_id, student_id=student_id)
+    report_text = _submission_report_text(submission)
+    return code_text, report_text
+
+
+def _compare_work_text(text1: str, text2: str, *, source: PlagiarismSource) -> dict[str, Any]:
+    line_comparison = line_by_line_compare(text1, text2)
+    if not text1.strip() or not text2.strip():
+        score = 0.0
+    elif source == "report":
+        score = float(compare_text_documents(text1, text2)["similarity"])
+    elif source == "combined":
+        line_score = _line_similarity(line_comparison["lines1"])
+        text_score = float(compare_text_documents(text1, text2)["similarity"])
+        score = max(line_score, text_score)
+    else:
+        score = _line_similarity(line_comparison["lines1"])
+
+    if source == "code":
+        comparison = compare_submissions(text1, text2)
+    elif source == "combined":
+        code_comparison = compare_submissions(text1, text2)
+        text_comparison = compare_text_documents(text1, text2)
+        comparison = {
+            "common_features": [
+                *list(code_comparison["common_features"])[:40],
+                *list(text_comparison["common_features"])[:40],
+            ],
+        }
+    else:
+        comparison = compare_text_documents(text1, text2)
+
+    return {
+        "similarity": round(score, 4),
+        "verdict": _verdict(score),
+        "source": source,
+        "common_features": list(comparison["common_features"]),
+        "lines1": line_comparison["lines1"],
+        "lines2": line_comparison["lines2"],
+    }
+
+
+def _merge_unique_features(*feature_lists: list[str]) -> list[str]:
+    seen: set[str] = set()
+    merged: list[str] = []
+    for feature_list in feature_lists:
+        for feature in feature_list:
+            if feature in seen:
+                continue
+            seen.add(feature)
+            merged.append(feature)
+    return merged
+
+
+def _compare_student_work(
+    code1: str,
+    report1: str,
+    code2: str,
+    report2: str,
+    *,
+    source: PlagiarismSource,
+) -> dict[str, Any]:
+    if source == "code":
+        return _compare_work_text(code1, code2, source="code")
+    if source == "report":
+        return _compare_work_text(report1, report2, source="report")
+
+    code_comparison = _compare_work_text(code1, code2, source="code") if (code1.strip() or code2.strip()) else {
+        "similarity": 0.0,
+        "verdict": _verdict(0.0),
+        "source": source,
+        "common_features": [],
+        "lines1": [],
+        "lines2": [],
+    }
+    report_comparison = _compare_work_text(report1, report2, source="report") if (report1.strip() or report2.strip()) else {
+        "similarity": 0.0,
+        "verdict": _verdict(0.0),
+        "source": source,
+        "common_features": [],
+        "lines1": [],
+        "lines2": [],
+    }
+    score = max(float(code_comparison["similarity"]), float(report_comparison["similarity"]))
+    combined_text1 = "\n\n".join(part for part in (code1, report1) if part.strip())
+    combined_text2 = "\n\n".join(part for part in (code2, report2) if part.strip())
+    line_comparison = line_by_line_compare(combined_text1, combined_text2)
+    return {
+        "similarity": round(score, 4),
+        "verdict": _verdict(score),
+        "source": source,
+        "common_features": _merge_unique_features(
+            list(code_comparison["common_features"]),
+            list(report_comparison["common_features"]),
+        ),
+        "lines1": line_comparison["lines1"],
+        "lines2": line_comparison["lines2"],
+    }
+
+
 async def compare_students_plagiarism(
     session: AsyncSession,
     *,
@@ -294,7 +611,9 @@ async def compare_students_plagiarism(
     assignment_id: UUID,
     student1_id: UUID,
     student2_id: UUID,
+    source: PlagiarismSource = "code",
 ) -> dict[str, Any]:
+    normalized_source = _normalize_source(source)
     assignment_q = await session.execute(
         select(Assignment).where(
             Assignment.id == assignment_id,
@@ -319,28 +638,25 @@ async def compare_students_plagiarism(
     if len(students) != 2:
         raise ValueError("Students must be enrolled in this course")
 
-    repos_q = await session.execute(
-        select(StudentRepository).where(
-            StudentRepository.assignment_id == assignment_id,
-            StudentRepository.student_id.in_([student1_id, student2_id]),
-        )
+    submission_map = await _submission_map_for_students(
+        session,
+        assignment_id=assignment_id,
+        student_ids=[student1_id, student2_id],
     )
-    repos = list(repos_q.scalars().all())
-    repo_map = {r.student_id: r.repo_name for r in repos}
-    code1 = await get_student_code(repo_map[student1_id]) if student1_id in repo_map else ""
-    code2 = await get_student_code(repo_map[student2_id]) if student2_id in repo_map else ""
+    code1, report1 = await _student_work_parts(
+        session,
+        assignment_id=assignment_id,
+        student_id=student1_id,
+        submission=submission_map.get(student1_id),
+    )
+    code2, report2 = await _student_work_parts(
+        session,
+        assignment_id=assignment_id,
+        student_id=student2_id,
+        submission=submission_map.get(student2_id),
+    )
 
-    comparison = compare_submissions(code1, code2)
-    line_comparison = line_by_line_compare(code1, code2)
-    score = _line_similarity(line_comparison["lines1"])
-
-    return {
-        "similarity": round(score, 4),
-        "verdict": _verdict(score),
-        "common_features": list(comparison["common_features"]),
-        "lines1": line_comparison["lines1"],
-        "lines2": line_comparison["lines2"],
-    }
+    return _compare_student_work(code1, report1, code2, report2, source=normalized_source)
 
 
 async def check_assignment_plagiarism(
@@ -348,7 +664,9 @@ async def check_assignment_plagiarism(
     *,
     course_id: UUID,
     assignment_id: UUID,
+    source: PlagiarismSource = "code",
 ) -> dict[str, Any]:
+    normalized_source = _normalize_source(source)
     assignment_q = await session.execute(
         select(Assignment).where(
             Assignment.id == assignment_id,
@@ -366,21 +684,25 @@ async def check_assignment_plagiarism(
     )
     students = list(students_q.scalars().all())
 
-    code_by_student_id: dict[UUID, str] = {}
-    repos_q = await session.execute(
-        select(StudentRepository).where(StudentRepository.assignment_id == assignment_id)
+    submission_map = await _submission_map_for_students(
+        session,
+        assignment_id=assignment_id,
+        student_ids=[student.id for student in students],
     )
-    repo_map = {repo.student_id: repo.repo_name for repo in repos_q.scalars().all()}
+    work_by_student_id: dict[UUID, tuple[str, str]] = {}
     for student in students:
-        repo_name = repo_map.get(student.id)
-        code_by_student_id[student.id] = await get_student_code(repo_name) if repo_name else ""
+        work_by_student_id[student.id] = await _student_work_parts(
+            session,
+            assignment_id=assignment_id,
+            student_id=student.id,
+            submission=submission_map.get(student.id),
+        )
 
     pairs: list[dict[str, Any]] = []
     for s1, s2 in combinations(students, 2):
-        comparison = compare_submissions(
-            code_by_student_id.get(s1.id, ""),
-            code_by_student_id.get(s2.id, ""),
-        )
+        code1, report1 = work_by_student_id.get(s1.id, ("", ""))
+        code2, report2 = work_by_student_id.get(s2.id, ("", ""))
+        comparison = _compare_student_work(code1, report1, code2, report2, source=normalized_source)
         score = float(comparison["similarity"])
         if score <= 0.7:
             continue
@@ -398,6 +720,7 @@ async def check_assignment_plagiarism(
                 },
                 "similarity": round(score, 4),
                 "verdict": _verdict(score),
+                "source": normalized_source,
             }
         )
 

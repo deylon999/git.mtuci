@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.course import CourseFileRead
+
 
 class TeacherGradingQueueStatsRead(BaseModel):
     pending: int
@@ -154,6 +156,7 @@ class TeacherCourseDetailRead(BaseModel):
     average_grade: float | None = None
     completion_percent: float | None = None
     pending_grading: int = 0
+    files: list[CourseFileRead] = Field(default_factory=list)
     activity_by_week: list[TeacherCourseWeekActivityRead] = Field(default_factory=list)
     students: list[TeacherCourseStudentDetailRead] = Field(default_factory=list)
 

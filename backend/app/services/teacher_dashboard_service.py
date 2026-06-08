@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.activity_log import ActivityLog, ActivityType
 from app.models.assignment import Assignment
@@ -33,8 +35,12 @@ from app.schemas.teacher_dashboard import (
     TeacherStudentsSummaryRead,
     TeacherTemplateRepoRead,
 )
+from app.schemas.course import CourseFileRead
+from app.services.gitea_service import list_repo_commits_page
+from app.services.student_repository_service import resolve_assignment_repo_owner_and_name
 
 STALE_HOURS = 48
+logger = logging.getLogger(__name__)
 
 
 async def _teacher_course_ids(session: AsyncSession, *, user: User) -> list[UUID]:
@@ -83,6 +89,148 @@ def _waiting_meta(submitted_at: datetime, *, now: datetime) -> tuple[float, bool
     delta = now - submitted_at
     hours = max(0.0, delta.total_seconds() / 3600.0)
     return hours, hours >= STALE_HOURS
+
+
+def _parse_gitea_commit_date(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _gitea_commit_message(item: dict) -> str | None:
+    commit = item.get("commit") if isinstance(item.get("commit"), dict) else item
+    if not isinstance(commit, dict):
+        return None
+    message = str(commit.get("message") or "").strip()
+    if not message:
+        return None
+    return message.split("\n", 1)[0].strip()
+
+
+async def _course_weekly_activity_from_gitea(
+    session: AsyncSession,
+    *,
+    course_id: UUID,
+    now: datetime,
+) -> list[TeacherCourseWeekActivityRead]:
+    windows: list[tuple[datetime, datetime, str]] = []
+    for week_offset in range(4):
+        start = now - timedelta(days=(3 - week_offset) * 7 + 7)
+        end = now - timedelta(days=(3 - week_offset) * 7)
+        windows.append((start, end, start.strftime("%d.%m")))
+
+    repo_rows = await session.execute(
+        select(StudentRepository, User.full_name)
+        .join(Assignment, Assignment.id == StudentRepository.assignment_id)
+        .join(User, User.id == StudentRepository.student_id)
+        .where(Assignment.course_id == course_id)
+        .order_by(StudentRepository.created_at.desc())
+    )
+
+    counts = [0, 0, 0, 0]
+    for student_repo, _student_name in repo_rows.all():
+        try:
+            owner, repo_name = await resolve_assignment_repo_owner_and_name(
+                session,
+                assignment_id=student_repo.assignment_id,
+                student_id=student_repo.student_id,
+            )
+            commits, _ = await list_repo_commits_page(
+                owner=owner,
+                repo=repo_name,
+                limit=20,
+                page=1,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to load weekly activity from Gitea for student_repo=%s: %s",
+                student_repo.id,
+                exc,
+            )
+            continue
+
+        for item in commits:
+            if not isinstance(item, dict):
+                continue
+            commit = item.get("commit") if isinstance(item.get("commit"), dict) else {}
+            author = commit.get("author") if isinstance(commit.get("author"), dict) else {}
+            created_at = _parse_gitea_commit_date(author.get("date") or item.get("created"))
+            if created_at is None:
+                continue
+            for index, (start, end, _) in enumerate(windows):
+                if start <= created_at < end:
+                    counts[index] += 1
+                    break
+
+    return [
+        TeacherCourseWeekActivityRead(week_label=label, commits=counts[index])
+        for index, (_start, _end, label) in enumerate(windows)
+    ]
+
+
+async def _recent_commits_from_gitea(
+    session: AsyncSession,
+    *,
+    course_ids: list[UUID],
+    limit: int = 12,
+) -> list[TeacherDashboardCommitRead]:
+    repo_rows = await session.execute(
+        select(StudentRepository, User.full_name)
+        .join(Assignment, Assignment.id == StudentRepository.assignment_id)
+        .join(User, User.id == StudentRepository.student_id)
+        .where(Assignment.course_id.in_(course_ids))
+        .order_by(StudentRepository.created_at.desc())
+        .limit(40)
+    )
+
+    commits: list[TeacherDashboardCommitRead] = []
+    for student_repo, student_name in repo_rows.all():
+        try:
+            owner, repo_name = await resolve_assignment_repo_owner_and_name(
+                session,
+                assignment_id=student_repo.assignment_id,
+                student_id=student_repo.student_id,
+            )
+            raw_commits, _ = await list_repo_commits_page(
+                owner=owner,
+                repo=repo_name,
+                limit=5,
+                page=1,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to load dashboard commits from Gitea for student_repo=%s: %s",
+                student_repo.id,
+                exc,
+            )
+            continue
+
+        for item in raw_commits:
+            if not isinstance(item, dict):
+                continue
+            commit = item.get("commit") if isinstance(item.get("commit"), dict) else {}
+            author = commit.get("author") if isinstance(commit.get("author"), dict) else {}
+            created_at = _parse_gitea_commit_date(author.get("date") or item.get("created"))
+            if created_at is None:
+                continue
+            commits.append(
+                TeacherDashboardCommitRead(
+                    student_id=student_repo.student_id,
+                    student_name=student_name or "Студент",
+                    repo_name=student_repo.repo_name,
+                    message=_gitea_commit_message(item),
+                    created_at=created_at,
+                )
+            )
+
+    commits.sort(key=lambda item: item.created_at, reverse=True)
+    return commits[:limit]
 
 
 async def get_teacher_dashboard(session: AsyncSession, *, user: User) -> TeacherDashboardRead:
@@ -234,6 +382,15 @@ async def get_teacher_dashboard_full(session: AsyncSession, *, user: User) -> Te
                 )
             )
 
+    if not recent_commits:
+        recent_commits = await _recent_commits_from_gitea(
+            session,
+            course_ids=course_ids,
+            limit=12,
+        )
+        if commits_today == 0:
+            commits_today = sum(1 for item in recent_commits if item.created_at >= today_start)
+
     courses_result = await session.execute(
         select(Course).where(Course.id.in_(course_ids)).order_by(Course.title)
     )
@@ -341,6 +498,11 @@ async def get_teacher_dashboard_full(session: AsyncSession, *, user: User) -> Te
                 continue
             d = day_val.date() if hasattr(day_val, "date") else day_val
             counts_by_date[str(d)] = int(cnt)
+        if not counts_by_date and recent_commits:
+            for item in recent_commits:
+                if item.created_at >= week_start:
+                    key = str(item.created_at.date())
+                    counts_by_date[key] = counts_by_date.get(key, 0) + 1
         for i in range(7):
             d = (week_start + timedelta(days=i)).date()
             key = str(d)
@@ -781,7 +943,10 @@ async def get_teacher_course_detail(
     if course_id not in course_ids:
         raise PermissionError("Course not found")
 
-    course = await session.get(Course, course_id)
+    course_q = await session.execute(
+        select(Course).options(selectinload(Course.files)).where(Course.id == course_id)
+    )
+    course = course_q.scalar_one_or_none()
     if not course:
         raise ValueError("Course not found")
 
@@ -855,6 +1020,12 @@ async def get_teacher_course_detail(
             )
             label = start.strftime("%d.%m")
             activity_by_week.append(TeacherCourseWeekActivityRead(week_label=label, commits=cnt))
+        if not any(item.commits for item in activity_by_week):
+            activity_by_week = await _course_weekly_activity_from_gitea(
+                session,
+                course_id=course_id,
+                now=now,
+            )
 
     student_details: list[TeacherCourseStudentDetailRead] = []
     for student in students:
@@ -898,6 +1069,7 @@ async def get_teacher_course_detail(
         average_grade=average_grade,
         completion_percent=completion_percent,
         pending_grading=pending_grading,
+        files=[CourseFileRead.model_validate(file) for file in course.files],
         activity_by_week=activity_by_week,
         students=student_details,
     )

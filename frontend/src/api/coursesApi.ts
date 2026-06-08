@@ -6,8 +6,11 @@ import type {
   Course,
   FileContent,
   MyGradeRead,
+  PlagiarismCheckResult,
   PlagiarismCompareResult,
+  PlagiarismSource,
   RepoFile,
+  CourseFileRead,
   SubmissionAttachmentRead,
   SubmissionStatusRead,
 } from "./types";
@@ -26,10 +29,26 @@ export async function createCourse(payload: {
   grade_max: number;
   target_groups?: string[];
   teacher_id?: string;
+  files?: File[];
 }): Promise<Course> {
+  const formData = new FormData();
+  formData.append("title", payload.title);
+  formData.append("description", payload.description);
+  formData.append("grade_max", String(payload.grade_max));
+  if (payload.target_groups) {
+    formData.append("target_groups", JSON.stringify(payload.target_groups));
+  }
+  if (payload.teacher_id) {
+    formData.append("teacher_id", payload.teacher_id);
+  }
+  payload.files?.forEach((file) => {
+    formData.append("files", file);
+  });
+
   return apiRequest<Course>("/courses", {
     method: "POST",
-    body: payload,
+    body: formData,
+    headers: {},
   });
 }
 
@@ -185,10 +204,35 @@ export async function downloadSubmissionAttachment(
   document.body.removeChild(a);
 }
 
+export async function downloadCourseFile(
+  courseId: string,
+  file: CourseFileRead,
+): Promise<void> {
+  const token = localStorage.getItem("token");
+  const res = await fetch(
+    `${import.meta.env.VITE_API_URL ?? "/api"}/courses/${courseId}/files/${encodeURIComponent(file.id)}`,
+    {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+      },
+    },
+  );
+  if (!res.ok) throw new Error(tr("repo.errors.attachmentDownloadFailed"));
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.original_filename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
 export async function comparePlagiarism(
   courseId: string,
   assignmentId: string,
-  payload: { student1_id: string; student2_id: string },
+  payload: { student1_id: string; student2_id: string; source?: PlagiarismSource },
 ): Promise<PlagiarismCompareResult> {
   return apiRequest<PlagiarismCompareResult>(
     `/courses/${courseId}/assignments/${assignmentId}/compare`,
@@ -196,6 +240,17 @@ export async function comparePlagiarism(
       method: "POST",
       body: payload,
     },
+  );
+}
+
+export async function checkPlagiarism(
+  courseId: string,
+  assignmentId: string,
+  source: PlagiarismSource,
+): Promise<PlagiarismCheckResult> {
+  return apiRequest<PlagiarismCheckResult>(
+    `/courses/${courseId}/assignments/${assignmentId}/check-plagiarism?source=${encodeURIComponent(source)}`,
+    { method: "POST" },
   );
 }
 

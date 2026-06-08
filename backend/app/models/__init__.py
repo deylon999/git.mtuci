@@ -4,6 +4,7 @@ from app.models.assignment_file import AssignmentFile
 from app.models.base import Base
 from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
+from app.models.course_file import CourseFile
 from app.models.repository import Repository
 from app.models.student_repository import StudentRepository
 from app.models.submission import Submission
@@ -16,6 +17,7 @@ __all__ = [
     "User",
     "Course",
     "CourseEnrollment",
+    "CourseFile",
     "Assignment",
     "AssignmentFile",
     "Submission",

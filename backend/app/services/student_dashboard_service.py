@@ -97,6 +97,33 @@ def _score_color(score: int | None, score_max: int) -> str:
     return "danger"
 
 
+def _positive_int(value: object) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return max(0, value)
+    if isinstance(value, str):
+        try:
+            return max(0, int(value.strip()))
+        except ValueError:
+            return 0
+    return 0
+
+
+def _compare_has_head_commits(cmp: dict | None) -> bool:
+    if not isinstance(cmp, dict):
+        return False
+    if _positive_int(cmp.get("ahead_by")) > 0:
+        return True
+    if _positive_int(cmp.get("total_commits")) > 0:
+        return True
+    commits = cmp.get("commits")
+    if isinstance(commits, list) and len(commits) > 0:
+        return True
+    status_value = str(cmp.get("status") or "").strip().lower()
+    return status_value in {"ahead", "diverged"}
+
+
 def _deadline_urgency(deadline: datetime, now: datetime) -> str:
     today = _start_of_day(now)
     tomorrow = today + timedelta(days=1)
@@ -2430,8 +2457,7 @@ async def list_student_repository_unmerged_branches(
         if not name or name == base:
             continue
         cmp = await compare_branches(owner=target.owner, repo=target.repo_name, base=base, head=name)
-        ahead = cmp.get("ahead_by") if isinstance(cmp, dict) else None
-        if isinstance(ahead, int) and ahead > 0:
+        if _compare_has_head_commits(cmp):
             out.append(name)
         if len(out) >= limit:
             break

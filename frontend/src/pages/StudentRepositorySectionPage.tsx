@@ -508,15 +508,18 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
       .then((rows) => {
         if (cancelled) return;
         setHeadOptions(rows);
-        if (!head && rows.length > 0) setHead(rows[0]);
+        setHead((current) => (rows.includes(current) ? current : rows[0] ?? ""));
       })
       .catch(() => {
-        if (!cancelled) setHeadOptions([]);
+        if (!cancelled) {
+          setHeadOptions([]);
+          setHead("");
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [createOpen, repoId, base, isBlocked, head]);
+  }, [createOpen, repoId, base, isBlocked]);
 
   useEffect(() => {
     let cancelled = false;

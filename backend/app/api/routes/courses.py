@@ -26,11 +26,12 @@ from app.core.permission_checks import (
 )
 from app.models.assignment import Assignment
 from app.models.course import Course
+from app.models.course_file import CourseFile
 from app.models.course_enrollment import CourseEnrollment
 from app.models.submission import Submission
 from app.models.user import User, UserRole
 from app.schemas.assignment_stats import AssignmentStatsRead
-from app.schemas.course import CourseCreateRequest, CourseEnrollmentRead, CourseRead
+from app.schemas.course import CourseEnrollmentRead, CourseRead
 from app.schemas.course_roster import (
     CourseStudentRead,
     EnrollByGroupRequest,
@@ -151,6 +152,8 @@ def _max_grade_for_weeks_late(periods: list[dict], weeks_late: int) -> float:
 
 _MAX_SUBMISSION_FILE_BYTES = 50 * 1024 * 1024
 _MAX_SUBMISSION_FILES = 10
+_MAX_COURSE_FILE_BYTES = 50 * 1024 * 1024
+_MAX_COURSE_FILES = 10
 _FILENAME_SAFE_RE = re.compile(r"[^0-9A-Za-zА-Яа-яЁё._ -]+")
 
 
@@ -245,6 +248,10 @@ def _submission_upload_dir(*, course_id: UUID, assignment_id: UUID, student_id: 
     return FsPath(settings.UPLOAD_DIR) / "submissions" / str(course_id) / str(assignment_id) / str(student_id)
 
 
+def _course_upload_dir(*, course_id: UUID) -> FsPath:
+    return FsPath(settings.UPLOAD_DIR) / "courses" / str(course_id)
+
+
 async def _store_submission_upload(
     upload: UploadFile,
     *,
@@ -292,6 +299,42 @@ async def _store_submission_upload(
     }
 
 
+async def _store_course_upload(upload: UploadFile, *, course_id: UUID) -> dict:
+    target_dir = _course_upload_dir(course_id=course_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    original_filename = _safe_upload_filename(upload.filename)
+    stored_filename = f"{uuid4().hex}_{original_filename}"
+    storage_path = target_dir / stored_filename
+
+    size = 0
+    try:
+        with storage_path.open("wb") as out:
+            while True:
+                chunk = await upload.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > _MAX_COURSE_FILE_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail="Course file is too large",
+                    )
+                out.write(chunk)
+    except Exception:
+        if storage_path.exists():
+            storage_path.unlink(missing_ok=True)
+        raise
+    finally:
+        await upload.close()
+
+    return {
+        "original_filename": original_filename,
+        "storage_path": str(storage_path),
+        "content_type": upload.content_type,
+        "file_size": size,
+    }
+
+
 def _find_submission_attachment(submission: Submission, attachment_id: str) -> dict:
     for raw in submission.attachments or []:
         if isinstance(raw, dict) and str(raw.get("id") or "") == attachment_id:
@@ -308,6 +351,18 @@ def _safe_attachment_path(raw: dict) -> FsPath:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found") from exc
     if not path.exists() or not path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+    return path
+
+
+def _safe_course_file_path(course_file: CourseFile) -> FsPath:
+    path = FsPath(course_file.storage_path).resolve()
+    root = FsPath(settings.UPLOAD_DIR).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course file not found") from exc
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course file not found")
     return path
 
 
@@ -444,7 +499,12 @@ async def _get_repo_name_for_requester(
 
 @router.post("/courses", response_model=CourseRead, status_code=status.HTTP_201_CREATED)
 async def create_course_endpoint(
-    payload: CourseCreateRequest,
+    title: str = Form(...),
+    description: str | None = Form(None),
+    grade_max: int = Form(100),
+    target_groups: str | None = Form(None),
+    teacher_id: UUID | None = Form(None),
+    files: list[UploadFile] = File(default=[]),
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
@@ -452,15 +512,15 @@ async def create_course_endpoint(
         await ensure_permission(current_user, session, "assignment_create")
 
     if current_user.role == UserRole.teacher:
-        teacher_id = current_user.id
+        owner_id = current_user.id
     elif current_user.role == UserRole.admin:
         # Admin can create a course as owner (self) or assign ownership to a teacher/admin.
-        if payload.teacher_id is None:
-            teacher_id = current_user.id
+        if teacher_id is None:
+            owner_id = current_user.id
         else:
             result = await session.execute(
                 select(User).where(
-                    User.id == payload.teacher_id,
+                    User.id == teacher_id,
                     User.role.in_([UserRole.teacher, UserRole.admin]),
                 )
             )
@@ -470,20 +530,56 @@ async def create_course_endpoint(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Owner user not found",
                 )
-            teacher_id = owner_user.id
+            owner_id = owner_user.id
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access only")
 
+    import json
+    import shutil
+
+    normalized_groups: list[str] | None = None
+    if target_groups and target_groups.strip():
+        try:
+            parsed_groups = json.loads(target_groups)
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid target_groups JSON") from e
+        if not isinstance(parsed_groups, list):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="target_groups must be a list")
+        normalized_groups = [
+            str(group).strip()
+            for group in parsed_groups
+            if str(group).strip()
+        ]
+
+    uploads = [upload for upload in files if upload.filename]
+    if len(uploads) > _MAX_COURSE_FILES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Upload up to {_MAX_COURSE_FILES} course files",
+        )
+
+    course_id = uuid4()
+    file_infos: list[dict] = []
     try:
+        for upload in uploads:
+            file_infos.append(await _store_course_upload(upload, course_id=course_id))
         course = await create_course(
             session,
-            teacher_id=teacher_id,
-            title=payload.title,
-            description=payload.description,
-            grade_max=payload.grade_max,
-            target_groups=payload.target_groups,
+            course_id=course_id,
+            teacher_id=owner_id,
+            title=title,
+            description=description,
+            grade_max=grade_max,
+            target_groups=normalized_groups,
+            files=file_infos,
         )
+    except HTTPException:
+        if file_infos:
+            shutil.rmtree(_course_upload_dir(course_id=course_id), ignore_errors=True)
+        raise
     except Exception as e:
+        if file_infos:
+            shutil.rmtree(_course_upload_dir(course_id=course_id), ignore_errors=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     return CourseRead.model_validate(course)
@@ -534,6 +630,39 @@ async def get_course_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return CourseRead.model_validate(course)
+
+
+@router.get("/courses/{course_id}/files/{file_id}")
+async def download_course_file_endpoint(
+    course_id: UUID,
+    file_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(get_current_user),
+) -> FileResponse:
+    await ensure_assignment_read(current_user, session)
+    try:
+        await get_course_for_user(session, user=current_user, course_id=course_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+    result = await session.execute(
+        select(CourseFile).where(
+            CourseFile.id == file_id,
+            CourseFile.course_id == course_id,
+        )
+    )
+    course_file = result.scalar_one_or_none()
+    if not course_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course file not found")
+
+    path = _safe_course_file_path(course_file)
+    return FileResponse(
+        path,
+        media_type=course_file.content_type or "application/octet-stream",
+        filename=course_file.original_filename,
+    )
 
 
 @router.delete("/courses/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1432,6 +1561,7 @@ async def compare_students_endpoint(
             assignment_id=assignment_id,
             student1_id=payload.student1_id,
             student2_id=payload.student2_id,
+            source=payload.source,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -1448,6 +1578,7 @@ async def compare_students_endpoint(
 async def check_plagiarism_endpoint(
     course_id: UUID,
     assignment_id: UUID,
+    source: str = Query(default="code", pattern="^(code|report|combined)$"),
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
@@ -1470,6 +1601,7 @@ async def check_plagiarism_endpoint(
             session,
             course_id=course_id,
             assignment_id=assignment_id,
+            source=source,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

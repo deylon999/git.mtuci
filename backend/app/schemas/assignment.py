@@ -63,7 +63,7 @@ class AssignmentRead(BaseModel):
 
 class GiteaCommitAuthorRead(BaseModel):
     name: str
-    email: EmailStr | None = None
+    email: str | None = None
 
 
 class GiteaCommitRead(BaseModel):
@@ -131,6 +131,7 @@ class PlagiarismPairRead(BaseModel):
     student2: PlagiarismStudentRead
     similarity: float
     verdict: Literal["high", "medium", "low"]
+    source: Literal["code", "report", "combined"] = "code"
 
 
 class PlagiarismCheckRead(BaseModel):
@@ -141,6 +142,7 @@ class PlagiarismCheckRead(BaseModel):
 class PlagiarismCompareRequest(BaseModel):
     student1_id: UUID
     student2_id: UUID
+    source: Literal["code", "report", "combined"] = "code"
 
 
 class PlagiarismLineCompareRead(BaseModel):
@@ -151,6 +153,7 @@ class PlagiarismLineCompareRead(BaseModel):
 class PlagiarismCompareRead(BaseModel):
     similarity: float
     verdict: Literal["high", "medium", "low"]
+    source: Literal["code", "report", "combined"] = "code"
     common_features: list[str]
     lines1: list[PlagiarismLineCompareRead]
     lines2: list[PlagiarismLineCompareRead]

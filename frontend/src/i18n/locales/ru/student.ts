@@ -131,6 +131,8 @@ export const studentRu = {
     open: "Открыть",
     defaultTitle: "Курс",
     maxScore: "Макс. балл за курс: {max}",
+    materials: "Материалы курса",
+    downloadMaterial: "Скачать",
     progress: "Прогресс",
     assignments: "Заданий",
     overdue: "Просрочено",

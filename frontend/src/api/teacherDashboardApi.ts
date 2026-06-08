@@ -1,5 +1,6 @@
 import { tr } from "../utils/i18nLabels";
 import { apiRequest } from "./client";
+import type { CourseFileRead } from "./types";
 
 export interface TeacherGradingQueueStats {
   pending: number;
@@ -169,6 +170,7 @@ export interface TeacherCourseDetail {
   average_grade: number | null;
   completion_percent: number | null;
   pending_grading: number;
+  files: CourseFileRead[];
   activity_by_week: { week_label: string; commits: number }[];
   students: TeacherCourseStudentDetail[];
 }

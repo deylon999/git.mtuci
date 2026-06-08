@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from uuid import UUID
 
 from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
+from app.models.course_file import CourseFile
 from app.models.assignment import Assignment
 from app.models.user import User, UserRole
 from app.services.student_repository_service import ensure_student_repository
@@ -53,19 +55,33 @@ async def _enroll_students_by_target_groups(
 async def create_course(
     session: AsyncSession,
     *,
+    course_id: UUID | None = None,
     teacher_id: UUID,
     title: str,
     description: str | None,
     grade_max: int,
     target_groups: list[str] | None = None,
+    files: list[dict] | None = None,
 ) -> Course:
-    course = Course(
-        title=title,
-        description=description,
-        teacher_id=teacher_id,
-        grade_max=grade_max,
-        target_groups=target_groups,
-    )
+    course_data = {
+        "title": title,
+        "description": description,
+        "teacher_id": teacher_id,
+        "grade_max": grade_max,
+        "target_groups": target_groups,
+        "files": [
+            CourseFile(
+                original_filename=file_info["original_filename"],
+                storage_path=file_info["storage_path"],
+                content_type=file_info.get("content_type"),
+                file_size=file_info["file_size"],
+            )
+            for file_info in files or []
+        ],
+    }
+    if course_id is not None:
+        course_data["id"] = course_id
+    course = Course(**course_data)
     session.add(course)
     await session.flush()
     await _enroll_students_by_target_groups(
@@ -94,7 +110,9 @@ async def _get_enrolled_counts(session: AsyncSession, course_ids: list[UUID]) ->
 
 
 async def list_all_courses(session: AsyncSession) -> list[Course]:
-    result = await session.execute(select(Course).order_by(Course.created_at.desc()))
+    result = await session.execute(
+        select(Course).options(selectinload(Course.files)).order_by(Course.created_at.desc())
+    )
     courses = list(result.scalars().all())
     counts = await _get_enrolled_counts(session, [c.id for c in courses])
     for course in courses:
@@ -104,7 +122,10 @@ async def list_all_courses(session: AsyncSession) -> list[Course]:
 
 async def list_teacher_courses(session: AsyncSession, *, teacher_id: UUID) -> list[Course]:
     result = await session.execute(
-        select(Course).where(Course.teacher_id == teacher_id).order_by(Course.created_at.desc())
+        select(Course)
+        .options(selectinload(Course.files))
+        .where(Course.teacher_id == teacher_id)
+        .order_by(Course.created_at.desc())
     )
     courses = list(result.scalars().all())
     
@@ -129,6 +150,7 @@ async def list_student_courses(session: AsyncSession, *, student_id: UUID, group
     # Get courses student is enrolled in
     enrolled_q = await session.execute(
         select(Course)
+        .options(selectinload(Course.files))
         .join(
             CourseEnrollment,
             CourseEnrollment.course_id == Course.id,
@@ -143,6 +165,7 @@ async def list_student_courses(session: AsyncSession, *, student_id: UUID, group
         # Courses with no target_groups OR courses including student's group
         available_q = await session.execute(
             select(Course)
+            .options(selectinload(Course.files))
             .where(
                 or_(
                     Course.target_groups.is_(None),
@@ -156,6 +179,7 @@ async def list_student_courses(session: AsyncSession, *, student_id: UUID, group
         # Only courses with no target_groups (available to all)
         available_q = await session.execute(
             select(Course)
+            .options(selectinload(Course.files))
             .where(
                 or_(
                     Course.target_groups.is_(None),
@@ -214,7 +238,9 @@ async def get_course_for_user(
     """Return course if the user may access it (teacher owner, laborant assistant, student, or admin)."""
     from app.services.teacher_dashboard_service import _teacher_course_ids
 
-    course_q = await session.execute(select(Course).where(Course.id == course_id))
+    course_q = await session.execute(
+        select(Course).options(selectinload(Course.files)).where(Course.id == course_id)
+    )
     course = course_q.scalar_one_or_none()
     if not course:
         raise ValueError("Course not found")
@@ -267,7 +293,9 @@ async def delete_course_for_actor(
     actor: User,
     course_id: UUID,
 ) -> None:
-    course_q = await session.execute(select(Course).where(Course.id == course_id))
+    course_q = await session.execute(
+        select(Course).options(selectinload(Course.files)).where(Course.id == course_id)
+    )
     course = course_q.scalar_one_or_none()
     if not course:
         raise ValueError("Course not found")

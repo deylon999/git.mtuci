@@ -131,6 +131,8 @@ export const studentEn = {
     open: "Open",
     defaultTitle: "Course",
     maxScore: "Max course score: {max}",
+    materials: "Course materials",
+    downloadMaterial: "Download",
     progress: "Progress",
     assignments: "Assignments",
     overdue: "Overdue",

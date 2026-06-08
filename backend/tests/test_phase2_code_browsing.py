@@ -264,3 +264,36 @@ def test_compare_refs_skips_empty_filenames_and_normalizes_negative_counts(monke
     assert data["files"][0]["additions"] == 0
     assert data["files"][0]["deletions"] == 0
     assert data["files"][0]["changes"] == 0
+
+
+def test_unmerged_branches_accepts_gitea_total_commits_fallback(monkeypatch) -> None:
+    import app.services.gitea_service as gitea_service
+    import app.services.student_dashboard_service as svc
+
+    async def _fake_target(*args, **kwargs):
+        return type("T", (), {"owner": "owner1", "repo_name": "repo1"})()
+
+    async def _fake_meta(*args, **kwargs):
+        return {"default_branch": "main"}
+
+    async def _fake_branches(*args, **kwargs):
+        return [{"name": "main"}, {"name": "dev"}, {"name": "old"}]
+
+    async def _fake_compare(*args, **kwargs):
+        if kwargs.get("head") == "dev":
+            return {"total_commits": 1, "commits": [{"sha": "abc"}]}
+        return {"total_commits": 0, "commits": []}
+
+    monkeypatch.setattr(svc, "resolve_student_repo_gitea_target", _fake_target)
+    monkeypatch.setattr(gitea_service, "get_repo_metadata", _fake_meta)
+    monkeypatch.setattr(gitea_service, "list_repo_branches", _fake_branches)
+    monkeypatch.setattr(gitea_service, "compare_branches", _fake_compare)
+
+    data = asyncio.run(
+        svc.list_student_repository_unmerged_branches(
+            session=object(),
+            student_id=uuid4(),
+            repo_item_id=str(uuid4()),
+        )
+    )
+    assert data == ["dev"]

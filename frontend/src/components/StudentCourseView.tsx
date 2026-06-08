@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { BookOpen, Calendar, CheckCircle2, Clock, Loader2 } from "lucide-react";
-import type { Assignment, Course } from "../api/types";
+import { BookOpen, Calendar, CheckCircle2, Clock, FileText, Loader2 } from "lucide-react";
+import { downloadCourseFile } from "../api/coursesApi";
+import type { Assignment, Course, CourseFileRead } from "../api/types";
 import type { StudentAssignmentListItem } from "../api/studentDashboardApi";
 import { getStudentAssignmentsDeduped } from "../api/studentRequestDedup";
 import { useUserPreferences } from "../context/UserPreferencesContext";
@@ -15,6 +16,12 @@ interface StudentCourseViewProps {
   assignments: Assignment[];
   loading: boolean;
   isDarkTheme?: boolean;
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export default function StudentCourseView({
@@ -33,6 +40,7 @@ export default function StudentCourseView({
   } | null>(null);
   const [extraLoading, setExtraLoading] = useState(true);
   const [extraError, setExtraError] = useState<string | null>(null);
+  const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,6 +101,18 @@ export default function StudentCourseView({
   const now = new Date();
   const busy = loading || extraLoading;
 
+  async function onDownloadCourseFile(file: CourseFileRead) {
+    setDownloadingFileId(file.id);
+    setExtraError(null);
+    try {
+      await downloadCourseFile(courseId, file);
+    } catch (e) {
+      setExtraError(e instanceof Error ? e.message : t("repo.errors.attachmentDownloadFailed"));
+    } finally {
+      setDownloadingFileId(null);
+    }
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(260px,320px)_1fr] gap-5">
       <aside className="flex flex-col gap-4">
@@ -120,6 +140,41 @@ export default function StudentCourseView({
             </p>
           </div>
         </div>
+
+        {course?.files?.length ? (
+          <div
+            className="rounded-xl border p-4"
+            style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}
+          >
+            <h2 className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: theme.text3 }}>
+              {t("student.courses.materials")}
+            </h2>
+            <div className="flex flex-col gap-2">
+              {course.files.map((file) => (
+                <button
+                  key={file.id}
+                  type="button"
+                  onClick={() => void onDownloadCourseFile(file)}
+                  disabled={downloadingFileId === file.id}
+                  className="rounded-lg border px-3 py-2 text-left text-xs transition disabled:opacity-60"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg4, color: theme.text2 }}
+                >
+                  <span className="flex items-start gap-2">
+                    <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: theme.accent }} />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium" style={{ color: theme.text }}>
+                        {file.original_filename}
+                      </span>
+                      <span style={{ color: theme.text3 }}>
+                        {formatFileSize(file.file_size)} · {downloadingFileId === file.id ? t("common.loading") : t("student.courses.downloadMaterial")}
+                      </span>
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div
           className="rounded-xl border p-4"

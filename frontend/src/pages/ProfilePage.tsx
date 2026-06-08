@@ -594,7 +594,7 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
               <div className="profile-meta">
                 <MetaItem icon={<CalendarDays />}>Зарегистрирован {formatDate(me.created_at)}</MetaItem>
                 {me.group_name ? <MetaItem icon={<UserRound />}>Группа {me.group_name}</MetaItem> : null}
-                <MetaItem icon={<Clock />}>Последний вход {formatRelative(me.last_login)}</MetaItem>
+                <MetaItem icon={<Clock />}>Сейчас онлайн</MetaItem>
                 <MetaItem icon={<GitFork />}>{stats.repositories} репозиториев</MetaItem>
               </div>
             </div>
@@ -1074,11 +1074,27 @@ const profileStyles = `
   flex-direction: column;
   gap: 20px;
 }
+.profile-html-page[data-theme="light"] {
+  --bg: #f8fafc;
+  --bg2: #ffffff;
+  --bg3: #f1f5f9;
+  --bg4: #e2e8f0;
+  --border: #d8e0ea;
+  --text: #0f172a;
+  --text2: #475569;
+  --text3: #94a3b8;
+  --accent: #2563eb;
+  --accent2: #1d4ed8;
+  --danger: #dc2626;
+  --success: #15803d;
+  --warning: #d97706;
+}
 .profile-html-page * { box-sizing: border-box; letter-spacing: 0; }
 .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text3); }
 .breadcrumb a { color: var(--accent2); text-decoration: none; }
 .profile-header { display: flex; align-items: flex-start; gap: 20px; }
 .profile-avatar { width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg,#7c3aed,#3b82f6); display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #fff; flex-shrink: 0; border: 2px solid var(--border); overflow: hidden; cursor: pointer; }
+.profile-html-page[data-theme="light"] .profile-avatar { border-color: #fff; box-shadow: 0 10px 24px rgba(15,23,42,0.16); }
 .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .profile-info { flex: 1; min-width: 0; }
 .profile-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -1096,6 +1112,10 @@ const profileStyles = `
 .btn-danger { color: var(--danger); border-color: rgba(226,75,74,0.3); }
 .stats-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .stat-box { background: var(--bg2); border: 0.5px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.profile-html-page[data-theme="light"] .stat-box,
+.profile-html-page[data-theme="light"] .card {
+  box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 10px 28px rgba(15,23,42,0.05);
+}
 .stat-box-num { font-size: 22px; font-weight: 700; font-family: 'Courier New', monospace; }
 .stat-box-label { font-size: 11px; color: var(--text2); margin-top: 3px; }
 .stat-box-delta { font-size: 10px; color: var(--success); margin-top: 4px; }
@@ -1172,6 +1192,11 @@ a .feed-item { text-decoration: none; }
 .badge-red { background: rgba(226,75,74,0.12); color: #e24b4a; border: 0.5px solid rgba(226,75,74,0.2); }
 .badge-yellow { background: rgba(245,158,11,0.12); color: #f59e0b; border: 0.5px solid rgba(245,158,11,0.2); }
 .badge-purple { background: rgba(124,58,237,0.12); color: #a78bfa; border: 0.5px solid rgba(124,58,237,0.2); }
+.profile-html-page[data-theme="light"] .badge-blue { background: rgba(37,99,235,0.10); color: #1d4ed8; border-color: rgba(37,99,235,0.22); }
+.profile-html-page[data-theme="light"] .badge-green { background: rgba(22,163,74,0.10); color: #15803d; border-color: rgba(22,163,74,0.22); }
+.profile-html-page[data-theme="light"] .badge-red { background: rgba(220,38,38,0.10); color: #b91c1c; border-color: rgba(220,38,38,0.22); }
+.profile-html-page[data-theme="light"] .badge-yellow { background: rgba(217,119,6,0.12); color: #b45309; border-color: rgba(217,119,6,0.24); }
+.profile-html-page[data-theme="light"] .badge-purple { background: rgba(124,58,237,0.10); color: #6d28d9; border-color: rgba(124,58,237,0.22); }
 .mini-stat { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; border-bottom: 0.5px solid var(--border); }
 .mini-stat-label { font-size: 12px; color: var(--text2); }
 .mini-stat-val { font-size: 12px; font-weight: 600; color: var(--text); font-family: 'Courier New',monospace; text-align: right; word-break: break-word; }
