@@ -379,6 +379,37 @@ def _extract_docx_text(path: Path) -> str:
     return html.unescape(" ".join(chunks)).replace(" \n ", "\n")
 
 
+def _extract_odt_text(path: Path) -> str:
+    chunks: list[str] = []
+    with zipfile.ZipFile(path) as archive:
+        if "content.xml" not in archive.namelist():
+            return ""
+        root = ElementTree.fromstring(archive.read("content.xml"))
+        for node in root.iter():
+            if node.text:
+                chunks.append(node.text)
+            if node.tag.endswith("}p") or node.tag.endswith("}h"):
+                chunks.append("\n")
+    return html.unescape(" ".join(chunks)).replace(" \n ", "\n").strip()
+
+
+def _extract_rtf_text(path: Path) -> str:
+    text = _read_text_file(path)
+
+    def decode_hex(match: re.Match[str]) -> str:
+        try:
+            return bytes.fromhex(match.group(1)).decode("cp1251", errors="ignore")
+        except Exception:
+            return ""
+
+    text = re.sub(r"\\'([0-9a-fA-F]{2})", decode_hex, text)
+    text = re.sub(r"\\u(-?\d+)\??", lambda m: chr(int(m.group(1)) % 65536), text)
+    text = re.sub(r"\\[a-zA-Z]+-?\d* ?", " ", text)
+    text = text.replace(r"\{", "{").replace(r"\}", "}").replace(r"\\", "\\")
+    text = re.sub(r"[{}]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _decode_pdf_literal(value: str) -> str:
     value = value[1:-1]
     value = value.replace(r"\(", "(").replace(r"\)", ")").replace(r"\\", "\\")
@@ -414,6 +445,10 @@ def _extract_attachment_text(raw: dict) -> str:
             return _extract_pdf_text(path)
         if suffix == ".docx":
             return _extract_docx_text(path)
+        if suffix == ".odt":
+            return _extract_odt_text(path)
+        if suffix == ".rtf":
+            return _extract_rtf_text(path)
         if suffix in _TEXT_EXTENSIONS:
             return _read_text_file(path)
     except Exception:

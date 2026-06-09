@@ -17,8 +17,12 @@ export default function RequirePermission({
   children,
 }: RequirePermissionProps) {
   const { t } = useUserPreferences();
-  const { user } = useAuthUser();
+  const { user, loading: authLoading } = useAuthUser();
   const { hasPermission, hasAnyPermission, loading } = usePermissions();
+
+  if (authLoading) {
+    return <div className="text-sm text-slate-500 p-4">{t("common.loading")}</div>;
+  }
 
   if (!user) {
     return <Navigate to="/login" replace />;

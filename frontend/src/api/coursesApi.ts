@@ -2,6 +2,7 @@ import { tr } from "../utils/i18nLabels";
 import { apiRequest } from "./client";
 import type {
   Assignment,
+  AiReviewResult,
   Commit,
   Course,
   FileContent,
@@ -250,6 +251,17 @@ export async function checkPlagiarism(
 ): Promise<PlagiarismCheckResult> {
   return apiRequest<PlagiarismCheckResult>(
     `/courses/${courseId}/assignments/${assignmentId}/check-plagiarism?source=${encodeURIComponent(source)}`,
+    { method: "POST" },
+  );
+}
+
+export async function analyzeAssignmentAiReview(
+  courseId: string,
+  assignmentId: string,
+  studentId: string,
+): Promise<AiReviewResult> {
+  return apiRequest<AiReviewResult>(
+    `/courses/${courseId}/assignments/${assignmentId}/ai-review?student_id=${encodeURIComponent(studentId)}`,
     { method: "POST" },
   );
 }

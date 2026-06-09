@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import {
   checkPlagiarism,
   comparePlagiarism,
+  analyzeAssignmentAiReview,
   getSubmissions,
   getMyGrade,
   gradeSubmission,
@@ -16,6 +17,7 @@ import {
 } from "../api/coursesApi";
 import { getMe } from "../api/authApi";
 import type {
+  AiReviewResult,
   Assignment,
   Commit,
   Course,
@@ -30,6 +32,16 @@ import type {
   UserRead,
 } from "../api/types";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+import {
+  BookOpen,
+  Clock,
+  Files,
+  GitCommit,
+  Paperclip,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from "lucide-react";
 
 type ViewState = {
   file: RepoFile | null;
@@ -39,6 +51,7 @@ type ViewState = {
 };
 
 type AssignmentTab = "commits" | "files" | "grading" | "plagiarism";
+type GradingFilter = "all" | "submitted" | "ungraded";
 
 interface AssignmentPageProps {
   isDarkTheme?: boolean;
@@ -63,6 +76,11 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   // Theme-based colors
   const pageBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-[#f9fafb]";
   const cardBg = isDarkTheme ? "bg-[#1e1e1e]" : "bg-[#f5f5f5]";
+  const elevatedCardBg = isDarkTheme ? "bg-[#171717]" : "bg-white";
+  const softCardBg = isDarkTheme ? "bg-[#141414]" : "bg-[#f8fafc]";
+  const heroBg = isDarkTheme
+    ? "bg-[radial-gradient(circle_at_top_left,rgba(82,82,82,0.30),transparent_34%),linear-gradient(135deg,#171717,#0f0f10)]"
+    : "bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_36%),linear-gradient(135deg,#ffffff,#f8fafc)]";
   const cardBorder = isDarkTheme ? "border-[#30363d]" : "border-[#d4d4d4]";
   const textPrimary = isDarkTheme ? "text-[#e6e6e6]" : "text-[#171717]";
   const textSecondary = isDarkTheme ? "text-[#888888]" : "text-[#737373]";
@@ -70,13 +88,13 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   const inputBg = isDarkTheme ? "bg-[#0a0a0a]" : "bg-[#f5f5f5]";
   const inputBorder = isDarkTheme ? "border-[#30363d]" : "border-[#d4d4d4]";
   const hoverBg = isDarkTheme ? "hover:bg-[#1a1a1a]" : "hover:bg-[#f3f4f6]";
-  const tabActiveBg = isDarkTheme ? "bg-[#2563eb]/20 border-[#3b82f6] text-[#60a5fa]" : "bg-[#2563eb]/10 border-[#3b82f6] text-[#2563eb]";
-  const tabInactiveBg = isDarkTheme ? "bg-[#1e1e1e] border-[#30363d] text-[#888888] hover:border-[#3b82f6] hover:text-[#3b82f6]" : "bg-[#f5f5f5] border-[#d4d4d4] text-[#737373] hover:border-[#3b82f6] hover:text-[#2563eb]";
-  const buttonPrimary = "bg-[#2563eb] hover:bg-[#1d4ed8] text-white";
-  const breadcrumbText = "text-[#3b82f6]";
-  const breadcrumbHover = isDarkTheme ? "hover:text-[#60a5fa]" : "hover:text-[#1d4ed8]";
+  const tabActiveBg = isDarkTheme ? "bg-[#2a2a2a] border-[#525252] text-[#e6e6e6]" : "bg-[#2563eb]/10 border-[#3b82f6] text-[#2563eb]";
+  const tabInactiveBg = isDarkTheme ? "bg-[#171717] border-[#30363d] text-[#888888] hover:border-[#525252] hover:text-[#e6e6e6]" : "bg-[#f5f5f5] border-[#d4d4d4] text-[#737373] hover:border-[#3b82f6] hover:text-[#2563eb]";
+  const buttonPrimary = isDarkTheme ? "bg-[#2a2a2a] hover:bg-[#333333] text-[#e6e6e6] border border-[#3a3a3a]" : "bg-[#2563eb] hover:bg-[#1d4ed8] text-white";
+  const breadcrumbText = isDarkTheme ? "text-[#a3a3a3]" : "text-[#3b82f6]";
+  const breadcrumbHover = isDarkTheme ? "hover:text-[#e6e6e6]" : "hover:text-[#1d4ed8]";
   const separatorColor = isDarkTheme ? "text-[#30363d]" : "text-[#a3a3a3]";
-  const deadlineBadge = isDarkTheme ? "bg-[#2563eb]/20 text-[#60a5fa]" : "bg-[#2563eb]/10 text-[#2563eb]";
+  const deadlineBadge = isDarkTheme ? "bg-[#2a2a2a] text-[#e6e6e6]" : "bg-[#2563eb]/10 text-[#2563eb]";
   const penaltyBox = isDarkTheme ? "bg-[#1e1e1e] border-[#30363d]" : "bg-[#f5f5f5] border-[#d4d4d4]";
   const errorBox = isDarkTheme ? "bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]" : "bg-[#ef4444]/10 border-[#ef4444]/25 text-[#dc2626]";
   const successBox = isDarkTheme ? "bg-[#22c55e]/15 border-[#22c55e]/30 text-[#22c55e]" : "bg-[#22c55e]/10 border-[#22c55e]/25 text-[#16a34a]";
@@ -85,14 +103,17 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   const timelineDot = "bg-[#3b82f6]";
   const timelineLine = isDarkTheme ? "bg-[#2563eb]/30" : "bg-[#2563eb]/15";
   const commitCard = isDarkTheme ? "bg-[#1e1e1e] border-[#30363d]" : "bg-[#f5f5f5] border-[#d4d4d4]";
-  const commitHash = "text-[#3b82f6]";
+  const commitHash = isDarkTheme ? "text-[#a3a3a3]" : "text-[#3b82f6]";
   const modalOverlay = isDarkTheme ? "bg-black/60" : "bg-black/40";
   const modalBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-[#f9fafb]";
-  const avatarBg = isDarkTheme ? "bg-[#2563eb]/20 text-[#60a5fa]" : "bg-[#2563eb]/10 text-[#2563eb]";
+  const avatarBg = isDarkTheme ? "bg-[#2a2a2a] text-[#e6e6e6]" : "bg-[#2563eb]/10 text-[#2563eb]";
   const gaugeBg = isDarkTheme ? "#30363d" : "#e5e7eb";
   const similarityHigh = isDarkTheme ? "bg-[#ef4444]/15 text-[#ef4444]" : "bg-[#ef4444]/10 text-[#dc2626]";
   const similarityMedium = isDarkTheme ? "bg-[#f59e0b]/15 text-[#f59e0b]" : "bg-[#f59e0b]/10 text-[#d97706]";
   const similarityLow = isDarkTheme ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#22c55e]/10 text-[#16a34a]";
+  const sectionShell = `rounded-2xl border ${cardBorder} ${elevatedCardBg} p-5 shadow-sm`;
+  const compactPanel = `rounded-2xl border ${cardBorder} ${softCardBg} p-4`;
+  const iconTile = isDarkTheme ? "bg-[#2a2a2a] text-[#e6e6e6]" : "bg-[#2563eb]/10 text-[#2563eb]";
   const { courseId, assignmentId } = useParams();
 
   const [loading, setLoading] = useState(true);
@@ -119,6 +140,9 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   const [submissionSaving, setSubmissionSaving] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState<string | null>(null);
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
+  const [aiReviews, setAiReviews] = useState<Record<string, AiReviewResult>>({});
+  const [aiReviewLoadingFor, setAiReviewLoadingFor] = useState<string | null>(null);
+  const [aiReviewErrorFor, setAiReviewErrorFor] = useState<Record<string, string | null>>({});
   const [plagiarism, setPlagiarism] = useState<PlagiarismCompareResult | null>(null);
   const [plagiarismPairs, setPlagiarismPairs] = useState<PlagiarismCheckResult | null>(null);
   const [plagiarismLoading, setPlagiarismLoading] = useState(false);
@@ -128,6 +152,9 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   const [selectedStudent1Id, setSelectedStudent1Id] = useState("");
   const [selectedStudent2Id, setSelectedStudent2Id] = useState("");
   const [selectedRepoStudentId, setSelectedRepoStudentId] = useState("");
+  const [selectedGradingStudentId, setSelectedGradingStudentId] = useState("");
+  const [gradingSearch, setGradingSearch] = useState("");
+  const [gradingFilter, setGradingFilter] = useState<GradingFilter>("all");
   const [activeTab, setActiveTab] = useState<AssignmentTab>("commits");
 
   const [view, setView] = useState<ViewState>({
@@ -157,6 +184,49 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   const sortedPenaltyPeriods = useMemo(
     () => (assignment ? [...assignment.late_penalty_periods].sort((a, b) => a.weeks - b.weeks) : []),
     [assignment],
+  );
+  const selectedRepoStudent = useMemo(
+    () => submissions.find((s) => s.student_id === selectedRepoStudentId) ?? null,
+    [submissions, selectedRepoStudentId],
+  );
+  const submittedCount = useMemo(
+    () => submissions.filter((s) => s.status === "submitted").length,
+    [submissions],
+  );
+  const gradedCount = useMemo(
+    () => submissions.filter((s) => s.grade !== null || s.final_grade !== null).length,
+    [submissions],
+  );
+  const ungradedCount = useMemo(
+    () => submissions.filter((s) => s.status === "submitted" && s.grade === null && s.final_grade === null).length,
+    [submissions],
+  );
+  const attachmentCount = useMemo(
+    () => submissions.reduce((sum, s) => sum + s.attachments.length, 0),
+    [submissions],
+  );
+  const filteredGradingSubmissions = useMemo(() => {
+    const query = gradingSearch.trim().toLowerCase();
+
+    return submissions.filter((submission) => {
+      const matchesQuery =
+        !query ||
+        submission.student_full_name.toLowerCase().includes(query) ||
+        submission.repository_url?.toLowerCase().includes(query);
+      const matchesFilter =
+        gradingFilter === "all" ||
+        (gradingFilter === "submitted" && submission.status === "submitted") ||
+        (gradingFilter === "ungraded" &&
+          submission.status === "submitted" &&
+          submission.grade === null &&
+          submission.final_grade === null);
+
+      return matchesQuery && matchesFilter;
+    });
+  }, [gradingFilter, gradingSearch, submissions]);
+  const selectedGradingStudent = useMemo(
+    () => filteredGradingSubmissions.find((s) => s.student_id === selectedGradingStudentId) ?? filteredGradingSubmissions[0] ?? null,
+    [filteredGradingSubmissions, selectedGradingStudentId],
   );
 
   useEffect(() => {
@@ -245,6 +315,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
         setCommentInputs(Object.fromEntries(data.map((s) => [s.student_id, s.comment ?? ""])));
         if (data.length > 0) {
           setSelectedRepoStudentId((prev) => prev || data[0].student_id);
+          setSelectedGradingStudentId((prev) => prev || data[0].student_id);
         }
       } catch (err) {
         if (!cancelled) {
@@ -286,6 +357,17 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
       cancelled = true;
     };
   }, [courseId, assignmentId, me?.role]);
+
+  useEffect(() => {
+    if (me?.role !== "teacher") return;
+    if (submissions.length === 0) {
+      setSelectedGradingStudentId("");
+      return;
+    }
+    if (!selectedGradingStudentId || !submissions.some((s) => s.student_id === selectedGradingStudentId)) {
+      setSelectedGradingStudentId(submissions[0].student_id);
+    }
+  }, [me?.role, selectedGradingStudentId, submissions]);
 
   useEffect(() => {
     setPlagiarism(null);
@@ -378,6 +460,29 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     } finally {
       setDownloadingAttachmentId(null);
     }
+  }
+
+  async function onAiReview(studentId: string) {
+    if (!courseId || !assignmentId) return;
+    setAiReviewLoadingFor(studentId);
+    setAiReviewErrorFor((prev) => ({ ...prev, [studentId]: null }));
+    try {
+      const result = await analyzeAssignmentAiReview(courseId, assignmentId, studentId);
+      setAiReviews((prev) => ({ ...prev, [studentId]: result }));
+    } catch (err) {
+      setAiReviewErrorFor((prev) => ({
+        ...prev,
+        [studentId]: err instanceof Error ? err.message : t("repo.errors.loadFailed"),
+      }));
+    } finally {
+      setAiReviewLoadingFor(null);
+    }
+  }
+
+  function insertAiComment(studentId: string) {
+    const comment = aiReviews[studentId]?.recommended_comment?.trim();
+    if (!comment) return;
+    setCommentInputs((prev) => ({ ...prev, [studentId]: comment }));
   }
 
   function formatFileSize(bytes: number) {
@@ -478,92 +583,181 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   if (!courseId || !assignmentId) return null;
 
   return (
-    <div className={`mx-auto max-w-7xl px-4 ${pageBg} min-h-screen py-4`}>
-      <div className={`mb-3 text-sm ${textSecondary}`}>
-        <Link to="/courses" className={`${breadcrumbText} ${breadcrumbHover}`}>
-          {t("repo.assignment.coursesBreadcrumb")}
-        </Link>
-        <span className={`mx-2 ${separatorColor}`}>&gt;</span>
-        <Link to={`/courses/${courseId}`} className={`${breadcrumbText} ${breadcrumbHover}`}>
-          {course?.title || t("repo.assignment.courseFallback")}
-        </Link>
-        <span className={`mx-2 ${separatorColor}`}>&gt;</span>
-        <span className={`font-medium ${textPrimary}`}>{headerTitle}</span>
-      </div>
+    <div className={`${pageBg} min-h-screen`}>
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className={`mb-3 text-sm ${textSecondary}`}>
+          <Link to="/courses" className={`${breadcrumbText} ${breadcrumbHover}`}>
+            {t("repo.assignment.coursesBreadcrumb")}
+          </Link>
+          <span className={`mx-2 ${separatorColor}`}>&gt;</span>
+          <Link to={`/courses/${courseId}`} className={`${breadcrumbText} ${breadcrumbHover}`}>
+            {course?.title || t("repo.assignment.courseFallback")}
+          </Link>
+          <span className={`mx-2 ${separatorColor}`}>&gt;</span>
+          <span className={`font-medium ${textPrimary}`}>{headerTitle}</span>
+        </div>
 
-      <div className={`mb-5 rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
-        <h1 className={`text-3xl font-semibold ${textPrimary}`}>{headerTitle}</h1>
-        {assignment?.description ? <div className={`mt-2 text-sm ${textSecondary}`}>{assignment.description}</div> : null}
-        {assignment?.deadline ? (
-          <div className={`mt-3 inline-flex rounded-full px-3 py-1 text-sm ${deadlineBadge}`}>
-            {t("repo.assignment.deadline")} <span className="ml-1 font-medium">{formatDate(assignment.deadline)}</span>
-          </div>
-        ) : null}
-        {assignment && assignment.late_penalty_periods.length > 0 ? (
-          <div className={`mt-3 rounded-lg border ${penaltyBox} p-3 text-sm`}>
-            <div className={`mb-1 font-medium ${textPrimary}`}>{t("repo.assignment.penaltiesTitle")}</div>
-            {sortedPenaltyPeriods.map((p, idx) => (
-                <div key={`${p.weeks}-${idx}`} className={textSecondary}>
-                  {tp("repo.assignment.penaltyWeek", { weeks: p.weeks, grade: p.max_grade })}
+        <div className={`relative mb-6 overflow-hidden rounded-3xl border ${cardBorder} ${heroBg} p-6 shadow-lg`}>
+          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[#2563eb]/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-16 left-1/3 h-36 w-36 rounded-full bg-[#22c55e]/10 blur-3xl" />
+
+          <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div>
+              <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${cardBorder} ${cardBg} ${textSecondary}`}>
+                <BookOpen className="h-3.5 w-3.5" />
+                {me?.role === "teacher" ? "Панель преподавателя" : "Панель студента"}
+              </div>
+              <h1 className={`mt-4 text-3xl font-semibold leading-tight sm:text-4xl ${textPrimary}`}>{headerTitle}</h1>
+              <p className={`mt-3 max-w-3xl text-sm leading-6 ${textSecondary}`}>
+                {assignment?.description || "Страница задания, сдач, проверок и аналитики собрана в одном месте."}
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                {assignment?.deadline ? (
+                  <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm ${deadlineBadge}`}>
+                    <Clock className="h-3.5 w-3.5" />
+                    {t("repo.assignment.deadline")} {formatDate(assignment.deadline)}
+                  </span>
+                ) : null}
+                {assignment && assignment.late_penalty_periods.length > 0 ? (
+                  <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm ${penaltyBox} ${textSecondary}`}>
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    {t("repo.assignment.penaltiesTitle")}
+                  </span>
+                ) : null}
+                {me?.role === "teacher" && selectedRepoStudent ? (
+                  <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm ${cardBg} ${textSecondary}`}>
+                    <Users className="h-3.5 w-3.5" />
+                    {selectedRepoStudent.student_full_name}
+                  </span>
+                ) : null}
+              </div>
+
+              {assignment && assignment.late_penalty_periods.length > 0 ? (
+                <div className={`mt-5 rounded-2xl border ${cardBorder} ${softCardBg} p-4 text-sm`}>
+                  <div className={`mb-2 font-medium ${textPrimary}`}>{t("repo.assignment.penaltiesTitle")}</div>
+                  <div className="space-y-1">
+                    {sortedPenaltyPeriods.map((p, idx) => (
+                      <div key={`${p.weeks}-${idx}`} className={textSecondary}>
+                        {tp("repo.assignment.penaltyWeek", { weeks: p.weeks, grade: p.max_grade })}
+                      </div>
+                    ))}
+                  </div>
+                  <div className={`mt-2 ${textPrimary}`}>{t("repo.assignment.penaltyLater")}</div>
                 </div>
-              ))}
-            <div className={textPrimary}>{t("repo.assignment.penaltyLater")}</div>
+              ) : null}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <div className={`rounded-2xl border ${cardBorder} ${cardBg} p-4`}>
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${iconTile}`}>
+                    <GitCommit className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className={`text-xs uppercase tracking-wide ${textTertiary}`}>{t("repo.assignment.tabCommits")}</div>
+                    <div className={`text-xl font-semibold ${textPrimary}`}>{commits.length}</div>
+                  </div>
+                </div>
+              </div>
+              <div className={`rounded-2xl border ${cardBorder} ${cardBg} p-4`}>
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${iconTile}`}>
+                    <Files className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className={`text-xs uppercase tracking-wide ${textTertiary}`}>{t("repo.assignment.tabFiles")}</div>
+                    <div className={`text-xl font-semibold ${textPrimary}`}>{files.length}</div>
+                  </div>
+                </div>
+              </div>
+              <div className={`rounded-2xl border ${cardBorder} ${cardBg} p-4`}>
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${iconTile}`}>
+                    <Users className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className={`text-xs uppercase tracking-wide ${textTertiary}`}>Сдачи</div>
+                    <div className={`text-xl font-semibold ${textPrimary}`}>{submissions.length}</div>
+                  </div>
+                </div>
+              </div>
+              <div className={`rounded-2xl border ${cardBorder} ${cardBg} p-4`}>
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${iconTile}`}>
+                    <Paperclip className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className={`text-xs uppercase tracking-wide ${textTertiary}`}>Вложений</div>
+                    <div className={`text-xl font-semibold ${textPrimary}`}>{attachmentCount}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {loading ? <div className={`mb-4 text-sm ${textSecondary}`}>{t("common.loading")}</div> : null}
+        {error ? (
+          <div className={`mb-4 rounded-2xl border p-3 text-sm ${errorBox}`}>
+            {error}
           </div>
         ) : null}
-      </div>
 
-      {loading ? <div className={`text-sm ${textSecondary}`}>{t("common.loading")}</div> : null}
-      {error ? (
-        <div className={`rounded-md border p-3 text-sm ${errorBox}`}>
-          {error}
+        <div className="mb-6 grid gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
+          {me?.role === "teacher" ? (
+            <div className={`rounded-2xl border ${cardBorder} ${cardBg} p-4 shadow-sm`}>
+              <div className={`mb-2 text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.studentRepoHint")}</div>
+              <div className={`mb-3 text-xs ${textSecondary}`}>
+                {selectedRepoStudent ? `Показан репозиторий: ${selectedRepoStudent.student_full_name}` : "Выберите студента для просмотра его репозитория."}
+              </div>
+              <select
+                value={selectedRepoStudentId}
+                onChange={(e) => setSelectedRepoStudentId(e.target.value)}
+                className={`w-full rounded-xl border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
+              >
+                <option value="">{t("repo.assignment.selectStudent")}</option>
+                {submissions.map((s) => (
+                  <option key={`repo-${s.student_id}`} value={s.student_id}>
+                    {s.student_full_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="hidden lg:block" />
+          )}
+
+          <div className={`rounded-2xl border ${cardBorder} ${cardBg} p-3 shadow-sm`}>
+            <div className="flex flex-wrap gap-2">
+              {me?.role !== "student" ? (
+                <>
+                  <button type="button" className={tabButtonClass("commits")} onClick={() => setActiveTab("commits")}>
+                    {t("repo.assignment.tabCommits")}
+                  </button>
+                  <button type="button" className={tabButtonClass("files")} onClick={() => setActiveTab("files")}>
+                    {t("repo.assignment.tabFiles")}
+                  </button>
+                </>
+              ) : null}
+              <button type="button" className={tabButtonClass("grading")} onClick={() => setActiveTab("grading")}>
+                {me?.role === "student" ? t("repo.assignment.myGrade") : t("repo.assignment.grading")}
+              </button>
+              {me?.role === "teacher" ? (
+                <button
+                  type="button"
+                  className={tabButtonClass("plagiarism")}
+                  onClick={() => setActiveTab("plagiarism")}
+                >
+                  {t("repo.assignment.tabPlagiarism")}
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
-      ) : null}
-
-      {me?.role === "teacher" ? (
-        <div className={`mb-4 rounded-xl border ${cardBorder} ${cardBg} p-4 shadow-md`}>
-          <div className={`mb-2 text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.studentRepoHint")}</div>
-          <select
-            value={selectedRepoStudentId}
-            onChange={(e) => setSelectedRepoStudentId(e.target.value)}
-            className={`w-full max-w-md rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
-          >
-            <option value="">{t("repo.assignment.selectStudent")}</option>
-            {submissions.map((s) => (
-              <option key={`repo-${s.student_id}`} value={s.student_id}>
-                {s.student_full_name}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        {me?.role !== "student" ? (
-          <>
-        <button type="button" className={tabButtonClass("commits")} onClick={() => setActiveTab("commits")}>
-          {t("repo.assignment.tabCommits")}
-        </button>
-        <button type="button" className={tabButtonClass("files")} onClick={() => setActiveTab("files")}>
-          {t("repo.assignment.tabFiles")}
-        </button>
-          </>
-        ) : null}
-        <button type="button" className={tabButtonClass("grading")} onClick={() => setActiveTab("grading")}>
-          {me?.role === "student" ? t("repo.assignment.myGrade") : t("repo.assignment.grading")}
-        </button>
-        {me?.role === "teacher" ? (
-          <button
-            type="button"
-            className={tabButtonClass("plagiarism")}
-            onClick={() => setActiveTab("plagiarism")}
-          >
-            {t("repo.assignment.tabPlagiarism")}
-          </button>
-        ) : null}
-      </div>
 
       {me?.role !== "student" && activeTab === "commits" ? (
-        <div className={`rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
+        <div className={sectionShell}>
           <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.commitsHistory")}</div>
           <div className="space-y-4">
             {commits.map((c) => (
@@ -587,7 +781,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
       ) : null}
 
       {me?.role !== "student" && activeTab === "files" ? (
-        <div className={`rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
+        <div className={sectionShell}>
           <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.filesTree")}</div>
           <div className="space-y-2">
             {sortedFiles.map((f) => (
@@ -623,7 +817,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
       ) : null}
 
       {me?.role === "teacher" && activeTab === "plagiarism" ? (
-        <div className={`rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
+        <div className={sectionShell}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className={`text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.plagiarismTitle")}</div>
             <div className="flex flex-wrap items-center gap-2">
@@ -880,8 +1074,27 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
       ) : null}
 
       {me?.role === "teacher" && activeTab === "grading" ? (
-        <div className={`rounded-xl border ${cardBorder} ${cardBg} p-5 shadow-md`}>
-          <div className={`mb-3 text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.gradeStudents")}</div>
+        <div className={sectionShell}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className={`text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.gradeStudents")}</div>
+              <div className={`mt-1 text-sm ${textSecondary}`}>{t("repo.assignment.gradingRosterHint")}</div>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className={`rounded-full border px-2.5 py-1 ${inputBg} ${textSecondary}`}>
+                {t("repo.assignment.gradingAll")}: {submissions.length}
+              </span>
+              <span className={`rounded-full border px-2.5 py-1 ${inputBg} ${textSecondary}`}>
+                {t("repo.assignment.submitted")}: {submittedCount}
+              </span>
+              <span className={`rounded-full border px-2.5 py-1 ${inputBg} ${textSecondary}`}>
+                {t("repo.assignment.gradingUngraded")}: {ungradedCount}
+              </span>
+              <span className={`rounded-full border px-2.5 py-1 ${inputBg} ${textSecondary}`}>
+                {t("repo.assignment.attachments")}: {attachmentCount}
+              </span>
+            </div>
+          </div>
           {submissionsLoading ? <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.loadingSubmissions")}</div> : null}
           {submissionsError ? (
             <div className={`mb-3 rounded-md border p-3 text-sm ${errorBox}`}>
@@ -889,124 +1102,354 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
             </div>
           ) : null}
 
-          <div className="space-y-3">
-            {submissions.map((s) => (
-              <div key={s.student_id} className={`rounded-md border ${cardBorder} ${cardBg} p-3`}>
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className={`text-sm font-semibold ${textPrimary}`}>{s.student_full_name}</div>
-                  <div
-                    className={`rounded px-2 py-0.5 text-xs ${
-                      s.status === "submitted" ? (isDarkTheme ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#22c55e]/10 text-[#16a34a]") : (isDarkTheme ? "bg-[#2a2a2a] text-[#888888]" : "bg-[#e5e7eb] text-[#737373]")
-                    }`}
-                  >
-                    {s.status === "submitted" ? t("repo.assignment.submitted") : t("repo.assignment.notSubmitted")}
-                  </div>
-                  <div className={`text-xs ${textTertiary}`}>
-                    {t("repo.assignment.lastCommit")} {s.last_commit_at ? formatDate(s.last_commit_at) : "—"}
-                  </div>
-                  <div className={`text-xs ${textTertiary}`}>
-                    {t("repo.assignment.submittedAt")} {s.submitted_at ? formatDate(s.submitted_at) : "—"}
-                  </div>
-                </div>
-
-                <div className={`mt-3 rounded-lg border ${cardBorder} ${cardBg} p-3`}>
-                  <div className={`mb-2 text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.teacherSubmissionTitle")}</div>
-                  {s.answer_text ? (
-                    <div className={`whitespace-pre-wrap text-sm ${textSecondary}`}>{s.answer_text}</div>
-                  ) : null}
-                  {s.repository_url ? (
-                    <a
-                      href={s.repository_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`mt-2 inline-flex text-sm ${breadcrumbText} ${breadcrumbHover}`}
-                    >
-                      {t("repo.assignment.repositoryLink")}
-                    </a>
-                  ) : null}
-                  {s.attachments.length > 0 ? (
-                    <div className="mt-3">
-                      <div className={`mb-2 text-xs font-semibold ${textTertiary}`}>{t("repo.assignment.attachments")}</div>
-                      <div className="flex flex-wrap gap-2">
-                        {s.attachments.map((attachment) => (
-                          <button
-                            key={attachment.id}
-                            type="button"
-                            onClick={() => onDownloadAttachment(s.student_id, attachment)}
-                            disabled={downloadingAttachmentId === attachment.id}
-                            className={`rounded-lg border ${inputBorder} px-3 py-2 text-left text-xs transition disabled:opacity-60 ${inputBg} ${hoverBg}`}
-                          >
-                            <span className={`block font-medium ${textPrimary}`}>
-                              {attachment.kind === "report" ? t("repo.assignment.report") : t("repo.assignment.attachment")}: {attachment.original_filename}
-                            </span>
-                            <span className={textTertiary}>
-                              {formatFileSize(attachment.file_size)} · {downloadingAttachmentId === attachment.id ? t("common.loading") : t("repo.assignment.download")}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                  {!s.answer_text && !s.repository_url && s.attachments.length === 0 ? (
-                    <div className={`text-sm ${textTertiary}`}>{t("repo.assignment.noSubmissionDetails")}</div>
-                  ) : null}
-                </div>
-
-                <div className={`mt-3 text-xs ${textTertiary}`}>{tp("repo.assignment.gradeRange", { max: course?.grade_max ?? 100 })}</div>
-                <div className="mt-1 grid gap-2 md:grid-cols-[140px_1fr_auto]">
-                  <input
-                    type="number"
-                    min={0}
-                    max={course?.grade_max ?? 100}
-                    step={1}
-                    value={gradeInputs[s.student_id] ?? ""}
-                    onChange={(e) =>
-                      setGradeInputs((prev) => ({
-                        ...prev,
-                        [s.student_id]: e.target.value,
-                      }))
-                    }
-                    placeholder={`0 — ${course?.grade_max ?? 100}`}
-                    className={`w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
-                  />
-                  <input
-                    type="text"
-                    value={commentInputs[s.student_id] ?? ""}
-                    onChange={(e) =>
-                      setCommentInputs((prev) => ({
-                        ...prev,
-                        [s.student_id]: e.target.value,
-                      }))
-                    }
-                    placeholder={t("repo.assignment.commentPlaceholder")}
-                    className={`w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => onSaveGrade(s.student_id)}
-                    disabled={savingGradeFor === s.student_id}
-                    className={`rounded-lg px-3 py-2 text-sm transition disabled:opacity-60 ${buttonPrimary}`}
-                  >
-                    {savingGradeFor === s.student_id ? t("repo.assignment.saving") : t("repo.assignment.save")}
-                  </button>
-                </div>
-
-                <div className={`mt-2 text-xs ${textTertiary}`}>
-                  {t("repo.assignment.originalGrade")} {s.grade ?? "—"} | {t("repo.assignment.penalty")} -{(s.penalty_points ?? 0).toFixed(1)} | {t("repo.assignment.finalGrade")}{" "}
-                  {s.final_grade !== null ? s.final_grade.toFixed(1) : "—"} | {t("repo.assignment.gradedAt")}{" "}
-                  {s.graded_at ? formatDate(s.graded_at) : "—"}
+          <div className="mt-4 grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+            <aside className={`rounded-2xl border ${cardBorder} ${softCardBg} p-4 shadow-sm xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-hidden`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className={`text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.gradingRosterTitle")}</div>
+                <div className={`text-xs ${textTertiary}`}>
+                  {tp("repo.assignment.gradingVisibleCount", { shown: filteredGradingSubmissions.length, total: submissions.length })}
                 </div>
               </div>
-            ))}
-            {!submissionsLoading && submissions.length === 0 ? (
-              <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.noStudentsInCourse")}</div>
-            ) : null}
+              <div className={`mt-1 text-xs ${textSecondary}`}>{t("repo.assignment.gradingRosterHint")}</div>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setGradingFilter("all")}
+                  className={`rounded-lg border px-2.5 py-2 text-xs font-medium transition ${gradingFilter === "all" ? tabActiveBg : tabInactiveBg}`}
+                >
+                  {t("repo.assignment.gradingAll")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGradingFilter("submitted")}
+                  className={`rounded-lg border px-2.5 py-2 text-xs font-medium transition ${gradingFilter === "submitted" ? tabActiveBg : tabInactiveBg}`}
+                >
+                  {t("repo.assignment.gradingSubmittedOnly")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGradingFilter("ungraded")}
+                  className={`rounded-lg border px-2.5 py-2 text-xs font-medium transition ${gradingFilter === "ungraded" ? tabActiveBg : tabInactiveBg}`}
+                >
+                  {t("repo.assignment.gradingUngraded")}
+                </button>
+              </div>
+              <input
+                type="search"
+                value={gradingSearch}
+                onChange={(e) => setGradingSearch(e.target.value)}
+                placeholder={t("repo.assignment.gradingSearchPlaceholder")}
+                className={`mt-3 w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
+              />
+              <div className={`mt-3 max-h-[calc(100vh-20rem)] space-y-2 overflow-auto pr-1`}>
+                {filteredGradingSubmissions.map((submission) => {
+                  const isSelected = submission.student_id === selectedGradingStudentId;
+                  const isUngraded = submission.status === "submitted" && submission.grade === null && submission.final_grade === null;
+                  return (
+                    <button
+                      key={submission.student_id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedGradingStudentId(submission.student_id);
+                        setSelectedRepoStudentId(submission.student_id);
+                      }}
+                      className={`w-full rounded-xl border p-3 text-left transition ${
+                        isSelected
+                          ? isDarkTheme
+                            ? "border-[#525252] bg-[#1f1f1f]"
+                            : "border-[#3b82f6] bg-[#eff6ff]"
+                          : `${cardBorder} ${cardBg} ${hoverBg}`
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className={`text-sm font-semibold ${textPrimary}`}>{submission.student_full_name}</div>
+                          <div className={`mt-1 text-xs ${textTertiary}`}>
+                            {t("repo.assignment.lastCommit")} {submission.last_commit_at ? formatDate(submission.last_commit_at) : "—"}
+                          </div>
+                        </div>
+                        <div
+                          className={`rounded-full px-2 py-0.5 text-[11px] ${
+                            submission.status === "submitted"
+                              ? isDarkTheme
+                                ? "bg-[#22c55e]/15 text-[#22c55e]"
+                                : "bg-[#22c55e]/10 text-[#16a34a]"
+                              : isDarkTheme
+                                ? "bg-[#2a2a2a] text-[#888888]"
+                                : "bg-[#e5e7eb] text-[#737373]"
+                          }`}
+                        >
+                          {submission.status === "submitted" ? t("repo.assignment.submitted") : t("repo.assignment.notSubmitted")}
+                        </div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                        <span className={`rounded-full border px-2 py-0.5 ${inputBg} ${textSecondary}`}>
+                          {t("repo.assignment.finalGrade")} {submission.final_grade !== null ? submission.final_grade.toFixed(1) : submission.grade ?? "—"}
+                        </span>
+                        <span className={`rounded-full border px-2 py-0.5 ${inputBg} ${textSecondary}`}>
+                          {t("repo.assignment.attachments")} {submission.attachments.length}
+                        </span>
+                        {isUngraded ? (
+                          <span className={`rounded-full border px-2 py-0.5 ${isDarkTheme ? "border-[#f59e0b]/20 bg-[#f59e0b]/10 text-[#f59e0b]" : "border-[#f59e0b]/20 bg-[#f59e0b]/10 text-[#d97706]"}`}>
+                            {t("repo.assignment.gradingUngraded")}
+                          </span>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+                {!submissionsLoading && filteredGradingSubmissions.length === 0 ? (
+                  <div className={`rounded-xl border border-dashed p-4 text-sm ${cardBorder} ${textSecondary}`}>
+                    {t("repo.assignment.gradingEmpty")}
+                  </div>
+                ) : null}
+              </div>
+            </aside>
+
+            <section className={`rounded-2xl border ${cardBorder} ${cardBg} p-4`}>
+              {selectedGradingStudent ? (
+                [selectedGradingStudent].map((s) => (
+                  <div key={s.student_id} className="space-y-4">
+                    <div className={`rounded-2xl border ${cardBorder} ${softCardBg} p-4`}>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className={`text-xl font-semibold ${textPrimary}`}>{s.student_full_name}</div>
+                          <div className={`mt-1 text-sm ${textSecondary}`}>
+                            {t("repo.assignment.lastCommit")} {s.last_commit_at ? formatDate(s.last_commit_at) : "—"} · {t("repo.assignment.submittedAt")}{" "}
+                            {s.submitted_at ? formatDate(s.submitted_at) : "—"}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs ${
+                              s.status === "submitted" ? (isDarkTheme ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#22c55e]/10 text-[#16a34a]") : (isDarkTheme ? "bg-[#2a2a2a] text-[#888888]" : "bg-[#e5e7eb] text-[#737373]")
+                            }`}
+                          >
+                            {s.status === "submitted" ? t("repo.assignment.submitted") : t("repo.assignment.notSubmitted")}
+                          </span>
+                          <span className={`rounded-full px-2.5 py-1 text-xs ${deadlineBadge}`}>
+                            {t("repo.assignment.finalGrade")} {s.final_grade !== null ? s.final_grade.toFixed(1) : s.grade ?? "—"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={`rounded-2xl border ${cardBorder} ${cardBg} p-4`}>
+                      <div className={`mb-2 text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.teacherSubmissionTitle")}</div>
+                      {s.answer_text ? (
+                        <div className={`whitespace-pre-wrap text-sm ${textSecondary}`}>{s.answer_text}</div>
+                      ) : null}
+                      {s.repository_url ? (
+                        <a
+                          href={s.repository_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`mt-2 inline-flex text-sm ${breadcrumbText} ${breadcrumbHover}`}
+                        >
+                          {t("repo.assignment.repositoryLink")}
+                        </a>
+                      ) : null}
+                      {s.attachments.length > 0 ? (
+                        <div className="mt-3">
+                          <div className={`mb-2 text-xs font-semibold ${textTertiary}`}>{t("repo.assignment.attachments")}</div>
+                          <div className="flex flex-wrap gap-2">
+                            {s.attachments.map((attachment) => (
+                              <button
+                                key={attachment.id}
+                                type="button"
+                                onClick={() => onDownloadAttachment(s.student_id, attachment)}
+                                disabled={downloadingAttachmentId === attachment.id}
+                                className={`rounded-lg border ${inputBorder} px-3 py-2 text-left text-xs transition disabled:opacity-60 ${inputBg} ${hoverBg}`}
+                              >
+                                <span className={`block font-medium ${textPrimary}`}>
+                                  {attachment.kind === "report" ? t("repo.assignment.report") : t("repo.assignment.attachment")}: {attachment.original_filename}
+                                </span>
+                                <span className={textTertiary}>
+                                  {formatFileSize(attachment.file_size)} · {downloadingAttachmentId === attachment.id ? t("common.loading") : t("repo.assignment.download")}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {!s.answer_text && !s.repository_url && s.attachments.length === 0 ? (
+                        <div className={`text-sm ${textTertiary}`}>{t("repo.assignment.noSubmissionDetails")}</div>
+                      ) : null}
+                    </div>
+
+                    {me?.role === "teacher" ? (
+                      <div className={`rounded-2xl border ${cardBorder} ${cardBg} p-4`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className={`text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.aiAssistantTitle")}</div>
+                          <button
+                            type="button"
+                            onClick={() => void onAiReview(s.student_id)}
+                            disabled={aiReviewLoadingFor === s.student_id}
+                            className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition disabled:opacity-60 ${
+                              isDarkTheme
+                                ? "border-[#525252] bg-[#1f1f1f] text-[#e6e6e6] hover:bg-[#262626]"
+                                : "border-[#d4d4d4] bg-white text-[#171717] hover:bg-[#f3f4f6]"
+                            }`}
+                          >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            {aiReviewLoadingFor === s.student_id ? t("repo.assignment.aiAnalyzing") : t("repo.assignment.aiAnalyze")}
+                          </button>
+                        </div>
+                        {aiReviewErrorFor[s.student_id] ? (
+                          <div className={`mt-2 rounded-md border p-2 text-xs ${errorBox}`}>
+                            {aiReviewErrorFor[s.student_id]}
+                          </div>
+                        ) : null}
+                        {aiReviews[s.student_id] ? (
+                          <div className="mt-3 space-y-3">
+                            <div className="flex flex-wrap gap-2">
+                              <span className={`rounded-full border px-2.5 py-0.5 text-[11px] ${inputBg} ${textSecondary}`}>
+                                {aiReviews[s.student_id].mode === "llm"
+                                  ? `${aiReviews[s.student_id].model}`
+                                  : t("repo.assignment.aiLocalFallback")}
+                              </span>
+                              <span className={`rounded-full border px-2.5 py-0.5 text-[11px] ${inputBg} ${textSecondary}`}>
+                                {tp("repo.assignment.aiScoreLabel", { score: aiReviews[s.student_id].overall_score.toFixed(1) })}
+                              </span>
+                              <span className={`rounded-full border px-2.5 py-0.5 text-[11px] ${inputBg} ${textSecondary}`}>
+                                {tp("repo.assignment.aiConfidenceLabel", { value: Math.round(aiReviews[s.student_id].confidence * 100) })}
+                              </span>
+                            </div>
+                            <div className={`text-sm leading-relaxed ${textSecondary}`}>{aiReviews[s.student_id].summary}</div>
+                            <div className="grid gap-2 md:grid-cols-2">
+                              <div className={`rounded-md border p-2 ${inputBg} ${inputBorder}`}>
+                                <div className={`mb-1 text-xs font-semibold ${textPrimary}`}>{t("repo.assignment.aiStrengths")}</div>
+                                <ul className={`space-y-1 text-xs ${textSecondary}`}>
+                                  {aiReviews[s.student_id].strengths.map((item) => (
+                                    <li key={item}>• {item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                              <div className={`rounded-md border p-2 ${inputBg} ${inputBorder}`}>
+                                <div className={`mb-1 text-xs font-semibold ${textPrimary}`}>{t("repo.assignment.aiConcerns")}</div>
+                                <ul className={`space-y-1 text-xs ${textSecondary}`}>
+                                  {aiReviews[s.student_id].concerns.map((item) => (
+                                    <li key={item}>• {item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                            <div className={`rounded-md border p-2 ${inputBg} ${inputBorder}`}>
+                              <div className={`mb-1 text-xs font-semibold ${textPrimary}`}>{t("repo.assignment.aiQuestions")}</div>
+                              <ul className={`space-y-1 text-xs ${textSecondary}`}>
+                                {aiReviews[s.student_id].questions.map((item) => (
+                                  <li key={item}>• {item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div className="grid gap-2 md:grid-cols-2">
+                              <div className={`rounded-md border p-2 ${inputBg} ${inputBorder}`}>
+                                <div className={`mb-1 text-xs font-semibold ${textPrimary}`}>{t("repo.assignment.aiPrReview")}</div>
+                                <ul className={`space-y-1 text-xs ${textSecondary}`}>
+                                  {aiReviews[s.student_id].pr_review.map((item) => (
+                                    <li key={item}>• {item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                              <div className={`rounded-md border p-2 ${inputBg} ${inputBorder}`}>
+                                <div className={`mb-1 text-xs font-semibold ${textPrimary}`}>{t("repo.assignment.aiReportReview")}</div>
+                                <ul className={`space-y-1 text-xs ${textSecondary}`}>
+                                  {aiReviews[s.student_id].report_review.map((item) => (
+                                    <li key={item}>• {item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                            <div className={`rounded-md border p-3 ${inputBg} ${inputBorder}`}>
+                              <div className={`mb-1 text-xs font-semibold ${textPrimary}`}>{t("repo.assignment.aiRecommendedComment")}</div>
+                              <div className={`whitespace-pre-wrap text-xs ${textSecondary}`}>{aiReviews[s.student_id].recommended_comment}</div>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => insertAiComment(s.student_id)}
+                                  className={`rounded-md border px-3 py-1.5 text-xs transition ${
+                                    isDarkTheme
+                                      ? "border-[#525252] bg-[#1f1f1f] text-[#e6e6e6] hover:bg-[#262626]"
+                                      : "border-[#d4d4d4] bg-white text-[#171717] hover:bg-[#f3f4f6]"
+                                  }`}
+                                >
+                                  {t("repo.assignment.aiInsertComment")}
+                                </button>
+                              </div>
+                            </div>
+                            <div className={`text-[11px] ${textTertiary}`}>
+                              {t("repo.assignment.aiRubricLabel")}:{" "}
+                              {aiReviews[s.student_id].rubric
+                                .map((item) => `${item.criterion} ${item.score.toFixed(1)}/${item.weight}`)
+                                .join(" · ")}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <div className={`rounded-2xl border ${cardBorder} ${softCardBg} p-4`}>
+                      <div className={`text-xs ${textTertiary}`}>{tp("repo.assignment.gradeRange", { max: course?.grade_max ?? 100 })}</div>
+                      <div className="mt-2 grid gap-2 md:grid-cols-[140px_1fr_auto]">
+                        <input
+                          type="number"
+                          min={0}
+                          max={course?.grade_max ?? 100}
+                          step={1}
+                          value={gradeInputs[s.student_id] ?? ""}
+                          onChange={(e) =>
+                            setGradeInputs((prev) => ({
+                              ...prev,
+                              [s.student_id]: e.target.value,
+                            }))
+                          }
+                          placeholder={`0 — ${course?.grade_max ?? 100}`}
+                          className={`w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
+                        />
+                        <input
+                          type="text"
+                          value={commentInputs[s.student_id] ?? ""}
+                          onChange={(e) =>
+                            setCommentInputs((prev) => ({
+                              ...prev,
+                              [s.student_id]: e.target.value,
+                            }))
+                          }
+                          placeholder={t("repo.assignment.commentPlaceholder")}
+                          className={`w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => onSaveGrade(s.student_id)}
+                          disabled={savingGradeFor === s.student_id}
+                          className={`rounded-lg px-3 py-2 text-sm transition disabled:opacity-60 ${buttonPrimary}`}
+                        >
+                          {savingGradeFor === s.student_id ? t("repo.assignment.saving") : t("repo.assignment.save")}
+                        </button>
+                      </div>
+                      <div className={`mt-2 text-xs ${textTertiary}`}>
+                        {t("repo.assignment.originalGrade")} {s.grade ?? "—"} | {t("repo.assignment.penalty")} -{(s.penalty_points ?? 0).toFixed(1)} | {t("repo.assignment.finalGrade")}{" "}
+                        {s.final_grade !== null ? s.final_grade.toFixed(1) : "—"} | {t("repo.assignment.gradedAt")}{" "}
+                        {s.graded_at ? formatDate(s.graded_at) : "—"}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className={`flex min-h-[320px] items-center justify-center rounded-2xl border border-dashed ${cardBorder} ${softCardBg} p-8 text-center`}>
+                  <div>
+                    <div className={`text-base font-semibold ${textPrimary}`}>{t("repo.assignment.gradingEmpty")}</div>
+                    <div className={`mt-1 text-sm ${textSecondary}`}>{t("repo.assignment.gradingEmptyHint")}</div>
+                  </div>
+                </div>
+              )}
+            </section>
           </div>
         </div>
       ) : null}
 
       {me?.role === "student" && activeTab === "grading" ? (
-        <div className={`rounded-xl border ${cardBorder} ${cardBg} p-4 shadow-md`}>
+        <div className={`${sectionShell} p-4`}>
           <div className={`mb-2 text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.myGrade")}</div>
           {myGradeLoading ? <div className={`text-sm ${textSecondary}`}>{t("common.loading")}</div> : null}
           {myGradeError ? (
@@ -1014,139 +1457,135 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
               {myGradeError}
             </div>
           ) : null}
-          <div className={`mb-4 rounded-lg border ${cardBorder} ${cardBg} p-4`}>
-            <div className={`text-base font-semibold ${textPrimary}`}>{t("repo.assignment.submissionTitle")}</div>
-            <div className={`mt-1 text-sm ${textSecondary}`}>{t("repo.assignment.submissionHint")}</div>
+          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className={`rounded-2xl border ${cardBorder} ${cardBg} p-4`}>
+              <div className={`text-base font-semibold ${textPrimary}`}>{t("repo.assignment.submissionTitle")}</div>
+              <div className={`mt-1 text-sm ${textSecondary}`}>{t("repo.assignment.submissionHint")}</div>
 
-            <label className={`mt-4 block text-xs font-semibold ${textTertiary}`}>
-              {t("repo.assignment.answerLabel")}
-            </label>
-            <textarea
-              value={submissionAnswer}
-              onChange={(e) => setSubmissionAnswer(e.target.value)}
-              rows={4}
-              placeholder={t("repo.assignment.answerPlaceholder")}
-              className={`mt-1 w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
-            />
-
-            <label className={`mt-3 block text-xs font-semibold ${textTertiary}`}>
-              {t("repo.assignment.repoUrlLabel")}
-            </label>
-            <input
-              type="url"
-              value={submissionRepoUrl}
-              onChange={(e) => setSubmissionRepoUrl(e.target.value)}
-              placeholder={t("repo.assignment.repoUrlPlaceholder")}
-              className={`mt-1 w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
-            />
-
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <label className={`block text-xs font-semibold ${textTertiary}`}>
-                {t("repo.assignment.reportFileLabel")}
-                <input
-                  type="file"
-                  onChange={(e) => setSubmissionReportFile(e.target.files?.[0] ?? null)}
-                  className={`mt-1 block w-full text-sm ${textSecondary}`}
-                />
-                {submissionReportFile ? (
-                  <span className={`mt-1 block text-xs ${textTertiary}`}>
-                    {submissionReportFile.name} · {formatFileSize(submissionReportFile.size)}
-                  </span>
-                ) : null}
+              <label className={`mt-4 block text-xs font-semibold ${textTertiary}`}>
+                {t("repo.assignment.answerLabel")}
               </label>
-              <label className={`block text-xs font-semibold ${textTertiary}`}>
-                {t("repo.assignment.extraFilesLabel")}
-                <input
-                  type="file"
-                  multiple
-                  onChange={(e) => setSubmissionFiles(Array.from(e.target.files ?? []))}
-                  className={`mt-1 block w-full text-sm ${textSecondary}`}
-                />
-                {submissionFiles.length > 0 ? (
-                  <span className={`mt-1 block text-xs ${textTertiary}`}>
-                    {submissionFiles.map((file) => file.name).join(", ")}
-                  </span>
-                ) : null}
+              <textarea
+                value={submissionAnswer}
+                onChange={(e) => setSubmissionAnswer(e.target.value)}
+                rows={4}
+                placeholder={t("repo.assignment.answerPlaceholder")}
+                className={`mt-1 w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
+              />
+
+              <label className={`mt-3 block text-xs font-semibold ${textTertiary}`}>
+                {t("repo.assignment.repoUrlLabel")}
               </label>
-            </div>
+              <input
+                type="url"
+                value={submissionRepoUrl}
+                onChange={(e) => setSubmissionRepoUrl(e.target.value)}
+                placeholder={t("repo.assignment.repoUrlPlaceholder")}
+                className={`mt-1 w-full rounded-lg border ${inputBorder} px-3 py-2 text-sm outline-none transition focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/30 ${inputBg} ${textPrimary}`}
+              />
 
-            {submissionSuccess ? (
-              <div className={`mt-3 rounded-md border p-3 text-sm ${successBox}`}>{submissionSuccess}</div>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={onSubmitWork}
-              disabled={submissionSaving}
-              className={`mt-4 rounded-lg px-4 py-2 text-sm transition disabled:opacity-60 ${buttonPrimary}`}
-            >
-              {submissionSaving ? t("repo.assignment.submittingWork") : t("repo.assignment.submitWork")}
-            </button>
-
-            {myGrade?.submitted_at ? (
-              <div className={`mt-3 text-xs ${textTertiary}`}>
-                {t("repo.assignment.submittedAt")} {formatDate(myGrade.submitted_at)}
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <label className={`block text-xs font-semibold ${textTertiary}`}>
+                  {t("repo.assignment.reportFileLabel")}
+                  <input
+                    type="file"
+                    onChange={(e) => setSubmissionReportFile(e.target.files?.[0] ?? null)}
+                    className={`mt-1 block w-full text-sm ${textSecondary}`}
+                  />
+                  {submissionReportFile ? (
+                    <span className={`mt-1 block text-xs ${textTertiary}`}>
+                      {submissionReportFile.name} · {formatFileSize(submissionReportFile.size)}
+                    </span>
+                  ) : null}
+                </label>
+                <label className={`block text-xs font-semibold ${textTertiary}`}>
+                  {t("repo.assignment.extraFilesLabel")}
+                  <input
+                    type="file"
+                    multiple
+                    onChange={(e) => setSubmissionFiles(Array.from(e.target.files ?? []))}
+                    className={`mt-1 block w-full text-sm ${textSecondary}`}
+                  />
+                  {submissionFiles.length > 0 ? (
+                    <span className={`mt-1 block text-xs ${textTertiary}`}>
+                      {submissionFiles.map((file) => file.name).join(", ")}
+                    </span>
+                  ) : null}
+                </label>
               </div>
-            ) : null}
-            {myGrade?.attachments && myGrade.attachments.length > 0 && me ? (
-              <div className="mt-3">
-                <div className={`mb-2 text-xs font-semibold ${textTertiary}`}>{t("repo.assignment.attachments")}</div>
-                <div className="flex flex-wrap gap-2">
-                  {myGrade.attachments.map((attachment) => (
-                    <button
-                      key={attachment.id}
-                      type="button"
-                      onClick={() => onDownloadAttachment(me.id, attachment)}
-                      disabled={downloadingAttachmentId === attachment.id}
-                      className={`rounded-lg border ${inputBorder} px-3 py-2 text-left text-xs transition disabled:opacity-60 ${inputBg} ${hoverBg}`}
-                    >
-                      <span className={`block font-medium ${textPrimary}`}>
-                        {attachment.kind === "report" ? t("repo.assignment.report") : t("repo.assignment.attachment")}: {attachment.original_filename}
-                      </span>
-                      <span className={textTertiary}>
-                        {formatFileSize(attachment.file_size)} · {downloadingAttachmentId === attachment.id ? t("common.loading") : t("repo.assignment.download")}
-                      </span>
-                    </button>
-                  ))}
+
+              {submissionSuccess ? (
+                <div className={`mt-3 rounded-md border p-3 text-sm ${successBox}`}>{submissionSuccess}</div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={onSubmitWork}
+                disabled={submissionSaving}
+                className={`mt-4 rounded-lg px-4 py-2 text-sm transition disabled:opacity-60 ${buttonPrimary}`}
+              >
+                {submissionSaving ? t("repo.assignment.submittingWork") : t("repo.assignment.submitWork")}
+              </button>
+
+              {myGrade?.submitted_at ? (
+                <div className={`mt-3 text-xs ${textTertiary}`}>
+                  {t("repo.assignment.submittedAt")} {formatDate(myGrade.submitted_at)}
                 </div>
-              </div>
-            ) : null}
-          </div>
-          {!myGradeLoading && !myGradeError && myGrade ? (
-            <div>
-              <div className="mb-2">
-                {myGrade.grade === null ? (
-                  <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.gradePendingHint")}</div>
-                ) : myGrade.weeks_late > 0 ? (
-                  <div className={`text-sm ${isDarkTheme ? "text-[#ef4444]" : "text-[#dc2626]"}`}>
-                    {tp("repo.assignment.weeksLate", {
-                      n: myGrade.weeks_late,
-                      max: myGrade.late_max_grade !== null ? myGrade.late_max_grade : 0,
-                    })}
+              ) : null}
+              {myGrade?.attachments && myGrade.attachments.length > 0 && me ? (
+                <div className="mt-3">
+                  <div className={`mb-2 text-xs font-semibold ${textTertiary}`}>{t("repo.assignment.attachments")}</div>
+                  <div className="flex flex-wrap gap-2">
+                    {myGrade.attachments.map((attachment) => (
+                      <button
+                        key={attachment.id}
+                        type="button"
+                        onClick={() => onDownloadAttachment(me.id, attachment)}
+                        disabled={downloadingAttachmentId === attachment.id}
+                        className={`rounded-lg border ${inputBorder} px-3 py-2 text-left text-xs transition disabled:opacity-60 ${inputBg} ${hoverBg}`}
+                      >
+                        <span className={`block font-medium ${textPrimary}`}>
+                          {attachment.kind === "report" ? t("repo.assignment.report") : t("repo.assignment.attachment")}: {attachment.original_filename}
+                        </span>
+                        <span className={textTertiary}>
+                          {formatFileSize(attachment.file_size)} · {downloadingAttachmentId === attachment.id ? t("common.loading") : t("repo.assignment.download")}
+                        </span>
+                      </button>
+                    ))}
                   </div>
-                ) : (
-                  <div className={`text-sm ${isDarkTheme ? "text-[#22c55e]" : "text-[#16a34a]"}`}>{t("repo.assignment.onTime")}</div>
-                )}
-              </div>
-              {myGrade.grade !== null ? (
-                <div className="text-base font-medium">
-                  {t("repo.assignment.myGrade")}: {myGrade.grade} / {myGrade.grade_max}
-                </div>
-              ) : (
-                <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.gradeNotSet")}</div>
-              )}
-              {myGrade.final_grade !== null ? (
-                <div className="mt-1 text-base font-semibold text-[#3b82f6]">
-                  {tp("repo.assignment.gradeWithPenalty", { grade: myGrade.final_grade.toFixed(1), max: myGrade.grade_max })}
-                </div>
-              ) : null}
-              {myGrade.comment ? (
-                <div className={`mt-2 rounded-md border ${cardBorder} ${cardBg} p-3 text-sm ${textSecondary}`}>
-                  {tp("repo.assignment.teacherComment", { comment: myGrade.comment })}
                 </div>
               ) : null}
             </div>
-          ) : null}
+
+            <div className={`rounded-2xl border ${cardBorder} ${cardBg} p-4`}>
+              {!myGradeLoading && !myGradeError && myGrade ? (
+                <div className="space-y-3">
+                  <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${isDarkTheme ? "bg-[#2a2a2a] text-[#888888]" : "bg-[#e5e7eb] text-[#737373]"}`}>
+                    {myGrade.grade === null ? t("repo.assignment.gradePendingHint") : myGrade.weeks_late > 0 ? tp("repo.assignment.weeksLate", { n: myGrade.weeks_late, max: myGrade.late_max_grade !== null ? myGrade.late_max_grade : 0 }) : t("repo.assignment.onTime")}
+                  </div>
+                  <div>
+                    {myGrade.grade !== null ? (
+                      <div className={`text-base font-medium ${textPrimary}`}>
+                        {t("repo.assignment.myGrade")}: {myGrade.grade} / {myGrade.grade_max}
+                      </div>
+                    ) : (
+                      <div className={`text-sm ${textSecondary}`}>{t("repo.assignment.gradeNotSet")}</div>
+                    )}
+                    {myGrade.final_grade !== null ? (
+                      <div className={`mt-1 text-base font-semibold ${isDarkTheme ? "text-[#22c55e]" : "text-[#16a34a]"}`}>
+                        {tp("repo.assignment.gradeWithPenalty", { grade: myGrade.final_grade.toFixed(1), max: myGrade.grade_max })}
+                      </div>
+                    ) : null}
+                  </div>
+                  {myGrade.comment ? (
+                    <div className={`rounded-xl border ${cardBorder} ${softCardBg} p-3 text-sm ${textSecondary}`}>
+                      {tp("repo.assignment.teacherComment", { comment: myGrade.comment })}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -1184,6 +1623,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
           </div>
         </div>
       ) : null}
+    </div>
     </div>
   );
 }

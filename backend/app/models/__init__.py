@@ -1,6 +1,7 @@
 from app.models.activity_log import ActivityLog, ActivityType
 from app.models.assignment import Assignment
 from app.models.assignment_file import AssignmentFile
+from app.models.ai_review_cache import AiReviewCache
 from app.models.base import Base
 from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
@@ -20,6 +21,7 @@ __all__ = [
     "CourseFile",
     "Assignment",
     "AssignmentFile",
+    "AiReviewCache",
     "Submission",
     "Notification",
     "Repository",

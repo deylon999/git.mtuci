@@ -26,6 +26,7 @@ from app.models import student_repository as _student_repository_model  # noqa: 
 from app.models import password_reset_token as _password_reset_token_model  # noqa: F401
 from app.models import git_auth as _git_auth_model  # noqa: F401
 from app.models import repo_settings as _repo_settings_model  # noqa: F401
+from app.models import ai_review_cache as _ai_review_cache_model  # noqa: F401
 
 
 config = context.config

@@ -5,11 +5,15 @@ import {
   ChevronDown,
   CircleDot,
   ExternalLink,
+  FileCode,
   FileText,
+  GitCommit,
   GitMerge,
   GitPullRequest,
   Loader2,
   MessageSquare,
+  Minus,
+  Plus,
   RotateCcw,
   Tag,
   XCircle,
@@ -224,6 +228,8 @@ interface ParsedDiffLine {
   kind: "meta" | "ctx" | "add" | "del";
   raw: string;
   position: number | null;
+  oldLine: number | null;
+  newLine: number | null;
 }
 
 interface ParsedDiffFile {
@@ -237,6 +243,8 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
   const out: ParsedDiffFile[] = [];
   let current: ParsedDiffFile | null = null;
   let position = 0;
+  let oldLine: number | null = null;
+  let newLine: number | null = null;
 
   const pushCurrent = () => {
     if (current && current.path) out.push(current);
@@ -248,33 +256,42 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
       const match = line.match(/ b\/(.+)$/);
       current = { path: match?.[1]?.trim() || "", lines: [] };
       position = 0;
+      oldLine = null;
+      newLine = null;
       continue;
     }
     if (!current) continue;
     if (line.startsWith("@@")) {
-      current.lines.push({ kind: "meta", raw: line, position: null });
+      const hunk = line.match(/^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/);
+      oldLine = hunk ? Number(hunk[1]) : null;
+      newLine = hunk ? Number(hunk[2]) : null;
+      current.lines.push({ kind: "meta", raw: line, position: null, oldLine: null, newLine: null });
       continue;
     }
     if (line.startsWith("--- ") || line.startsWith("+++ ") || line.startsWith("index ")) {
-      current.lines.push({ kind: "meta", raw: line, position: null });
+      current.lines.push({ kind: "meta", raw: line, position: null, oldLine: null, newLine: null });
       continue;
     }
     if (line.startsWith("+")) {
       position += 1;
-      current.lines.push({ kind: "add", raw: line, position });
+      current.lines.push({ kind: "add", raw: line, position, oldLine: null, newLine });
+      if (newLine != null) newLine += 1;
       continue;
     }
     if (line.startsWith("-")) {
       position += 1;
-      current.lines.push({ kind: "del", raw: line, position });
+      current.lines.push({ kind: "del", raw: line, position, oldLine, newLine: null });
+      if (oldLine != null) oldLine += 1;
       continue;
     }
     if (line.startsWith(" ")) {
       position += 1;
-      current.lines.push({ kind: "ctx", raw: line, position });
+      current.lines.push({ kind: "ctx", raw: line, position, oldLine, newLine });
+      if (oldLine != null) oldLine += 1;
+      if (newLine != null) newLine += 1;
       continue;
     }
-    current.lines.push({ kind: "meta", raw: line, position: null });
+    current.lines.push({ kind: "meta", raw: line, position: null, oldLine: null, newLine: null });
   }
   pushCurrent();
   return out;
@@ -479,6 +496,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
   } | null>(null);
   const [inlineBody, setInlineBody] = useState("");
   const [inlineLoading, setInlineLoading] = useState(false);
+  const [activePrTab, setActivePrTab] = useState<"overview" | "files">("overview");
   const base = summary?.default_branch ?? "main";
   const parsedDiffFiles = useMemo(() => parseUnifiedDiff(detail?.diff || ""), [detail?.diff]);
   const parsedDiffByPath = useMemo(() => {
@@ -547,6 +565,10 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     if (items.length === 0 || selectedPullNumber != null) return;
     setSelectedPullNumber(items[0].number);
   }, [items, selectedPullNumber]);
+
+  useEffect(() => {
+    setActivePrTab("overview");
+  }, [selectedPullNumber]);
 
   useEffect(() => {
     if (!selectedPullNumber || !api.getPullDetail) return;
@@ -879,7 +901,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
           hint={t("repo.section.noPrHint")}
         />
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-[380px_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 xl:grid-cols-[340px_minmax(0,1fr)]">
           <div className="border-r" style={{ borderColor: theme.border }}>
             <ul>
               {items.map((item) => (
@@ -893,7 +915,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
               ))}
             </ul>
           </div>
-          <div className="min-h-[320px] p-4 space-y-4">
+          <div className="min-h-[320px] space-y-0">
             {!selectedPullNumber ? (
               <p className="text-sm" style={{ color: theme.text3 }}>
                 {t("repo.section.selectPrPrompt")}
@@ -909,14 +931,22 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
               </p>
             ) : (
               <>
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <GitPullRequest className="h-4 w-4" style={{ color: theme.accent2 }} />
-                    <p className="text-sm font-semibold" style={{ color: theme.text }}>
-                      #{detail.pull.number} {detail.pull.title}
-                    </p>
+                <div className="border-b px-5 py-4" style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <GitPullRequest className="h-5 w-5" style={{ color: theme.accent2 }} />
+                        <h3 className="text-lg font-semibold leading-tight" style={{ color: theme.text }}>
+                          {detail.pull.title}
+                        </h3>
+                      </div>
+                      <p className="mt-1 text-sm" style={{ color: theme.text2 }}>
+                        #{detail.pull.number} opened by {detail.pull.author_name ?? detail.pull.author_login ?? t("repo.section.unknownUser")}
+                        {detail.pull.updated_at ? ` · ${formatRelativeTime(detail.pull.updated_at)}` : ""}
+                      </p>
+                    </div>
                     <span
-                      className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase"
+                      className="rounded-full px-3 py-1 text-xs font-semibold uppercase"
                       style={{
                         backgroundColor:
                           detail.pull.state === "open" ? `${theme.accent}22` : `${theme.bg4}`,
@@ -929,25 +959,87 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                           ? t("repo.section.stateClosed")
                           : detail.pull.state === "merged"
                             ? t("repo.section.stateMerged")
-                            : detail.pull.state}
+                          : detail.pull.state}
                     </span>
                   </div>
-                  <p className="text-xs font-mono" style={{ color: theme.text2 }}>
-                    {detail.pull.head_branch ?? "?"} → {detail.pull.base_branch ?? t("repo.settings.defaultBranchPlaceholder")}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ color: theme.text3 }}>
-                    <span>{detail.pull.commits_count ?? 0} {t("repo.sidebar.commitMany")}</span>
-                    <span>
-                      {t("repo.section.filesCount").replace(
-                        "{count}",
-                        String(detail.pull.changed_files_count ?? detail.files.length),
-                      )}
-                    </span>
-                    <span>
+
+                  <div className="mt-4 grid gap-2 md:grid-cols-4">
+                    <div className="rounded-lg border px-3 py-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+                      <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.text3 }}>Источник</div>
+                      <div className="mt-1 truncate font-mono text-xs" style={{ color: theme.text }}>{detail.pull.head_branch ?? "?"}</div>
+                    </div>
+                    <div className="rounded-lg border px-3 py-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+                      <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.text3 }}>Цель</div>
+                      <div className="mt-1 truncate font-mono text-xs" style={{ color: theme.text }}>
+                        {detail.pull.base_branch ?? t("repo.settings.defaultBranchPlaceholder")}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border px-3 py-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+                      <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.text3 }}>Коммиты</div>
+                      <div className="mt-1 text-xs font-semibold" style={{ color: theme.text }}>{detail.pull.commits_count ?? 0}</div>
+                    </div>
+                    <div className="rounded-lg border px-3 py-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+                      <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.text3 }}>Файлы</div>
+                      <div className="mt-1 text-xs font-semibold" style={{ color: theme.text }}>
+                        {t("repo.section.filesCount").replace(
+                          "{count}",
+                          String(detail.pull.changed_files_count ?? detail.files.length),
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                    {detail.pull.base_sha ? (
+                      <a
+                        href={`/repositories/${repoId}/commits/${encodeURIComponent(detail.pull.base_sha)}`}
+                        className="inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono"
+                        style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg }}
+                      >
+                        <GitCommit className="h-3 w-3" />
+                        base {detail.pull.base_sha.slice(0, 7)}
+                      </a>
+                    ) : null}
+                    {detail.pull.head_sha ? (
+                      <a
+                        href={`/repositories/${repoId}/commits/${encodeURIComponent(detail.pull.head_sha)}`}
+                        className="inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono"
+                        style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg }}
+                      >
+                        <GitCommit className="h-3 w-3" />
+                        head {detail.pull.head_sha.slice(0, 7)}
+                      </a>
+                    ) : null}
+                    <span style={{ color: theme.text3 }}>
                       {t("repo.section.reviewCommentsCount").replace("{count}", String(detail.pull.review_comments_count))}
                     </span>
                   </div>
+
+                  <div className="mt-4 flex gap-2 border-b-0">
+                    {[
+                      { id: "overview" as const, label: "Overview", icon: <MessageSquare className="h-3.5 w-3.5" /> },
+                      { id: "files" as const, label: `Files changed ${detail.files.length}`, icon: <FileCode className="h-3.5 w-3.5" /> },
+                    ].map((tabItem) => (
+                      <button
+                        key={tabItem.id}
+                        type="button"
+                        onClick={() => setActivePrTab(tabItem.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+                        style={{
+                          borderColor: activePrTab === tabItem.id ? theme.accent2 : theme.border,
+                          backgroundColor: activePrTab === tabItem.id ? `${theme.accent}18` : theme.bg,
+                          color: activePrTab === tabItem.id ? theme.accent2 : theme.text2,
+                        }}
+                      >
+                        {tabItem.icon}
+                        {tabItem.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {activePrTab === "overview" ? (
+                  <div className="space-y-4 p-5">
 
                 <div
                   className="rounded-lg border px-3 py-2 text-xs"
@@ -1246,8 +1338,11 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                     </button>
                   </div>
                 ) : null}
+                  </div>
+                ) : null}
 
-                <div className="space-y-3">
+                {activePrTab === "files" ? (
+                <div className="space-y-4 p-5">
                   {detail.files.map((file: StudentRepoPullFile) => {
                     const parsed =
                       parsedDiffByPath.get(file.filename) ||
@@ -1259,16 +1354,36 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                         style={{ borderColor: theme.border }}
                       >
                         <div
-                          className="px-3 py-2 text-xs flex items-center justify-between"
+                          className="px-4 py-3 text-xs flex flex-wrap items-center justify-between gap-3"
                           style={{ backgroundColor: theme.bg, color: theme.text2 }}
                         >
-                          <span className="font-mono">{file.filename}</span>
-                          <span>
-                            +{file.additions} / -{file.deletions}
-                          </span>
+                          <div className="min-w-0">
+                            <div className="font-mono font-semibold truncate" style={{ color: theme.text }}>{file.filename}</div>
+                            {file.previous_filename ? (
+                              <div className="mt-1 font-mono text-[10px]" style={{ color: theme.text3 }}>
+                                renamed from {file.previous_filename}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-2 font-mono">
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5"
+                              style={{ backgroundColor: `${theme.success}16`, color: theme.success }}
+                            >
+                              <Plus className="h-3 w-3" />
+                              {file.additions}
+                            </span>
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5"
+                              style={{ backgroundColor: `${theme.danger}14`, color: theme.danger }}
+                            >
+                              <Minus className="h-3 w-3" />
+                              {file.deletions}
+                            </span>
+                          </div>
                         </div>
                         {parsed ? (
-                          <div className="max-h-[360px] overflow-auto">
+                          <div className="max-h-[640px] overflow-auto">
                             {parsed.lines.map((line, idx) => {
                               const key = `${parsed.path}::${line.position ?? "none"}::${idx}`;
                               const thread = line.position != null ? threadMap.get(`${parsed.path}::${line.position}`) : null;
@@ -1277,19 +1392,40 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                               return (
                                 <div key={key} className="border-t" style={{ borderColor: theme.border }}>
                                   <div
-                                    className="grid grid-cols-[56px_minmax(0,1fr)_auto] gap-2 px-2 py-1.5 text-[11px] font-mono"
+                                    className="grid grid-cols-[48px_48px_minmax(0,1fr)_auto] text-[11px] font-mono"
                                     style={{
                                       backgroundColor:
                                         line.kind === "add"
                                           ? `${theme.success}14`
                                           : line.kind === "del"
                                             ? `${theme.danger}12`
-                                            : "transparent",
+                                            : line.kind === "meta"
+                                              ? theme.bg
+                                              : "transparent",
                                       color: line.kind === "meta" ? theme.text3 : theme.text2,
                                     }}
                                   >
-                                    <span>{line.position ?? ""}</span>
-                                    <span className="whitespace-pre-wrap break-all">{line.raw}</span>
+                                    <span className="select-none border-r px-2 py-1 text-right" style={{ borderColor: theme.border, color: theme.text3 }}>
+                                      {line.oldLine ?? ""}
+                                    </span>
+                                    <span className="select-none border-r px-2 py-1 text-right" style={{ borderColor: theme.border, color: theme.text3 }}>
+                                      {line.newLine ?? ""}
+                                    </span>
+                                    <span
+                                      className="whitespace-pre-wrap break-all px-3 py-1"
+                                      style={{
+                                        color:
+                                          line.kind === "add"
+                                            ? theme.success
+                                            : line.kind === "del"
+                                              ? theme.danger
+                                              : line.kind === "meta"
+                                                ? theme.accent2
+                                                : theme.text2,
+                                      }}
+                                    >
+                                      {line.raw || " "}
+                                    </span>
                                     {line.position != null && api.createPullReview ? (
                                       <button
                                         type="button"
@@ -1301,7 +1437,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                                           });
                                           setInlineBody("");
                                         }}
-                                        className="rounded border px-1.5 py-0.5 text-[10px]"
+                                        className="m-1 rounded border px-1.5 py-0.5 text-[10px]"
                                         style={{ borderColor: theme.border, color: theme.text3 }}
                                       >
                                         {thread
@@ -1376,6 +1512,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                     );
                   })}
                 </div>
+                ) : null}
               </>
             )}
           </div>

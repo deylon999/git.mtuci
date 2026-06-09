@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -157,6 +157,34 @@ class PlagiarismCompareRead(BaseModel):
     common_features: list[str]
     lines1: list[PlagiarismLineCompareRead]
     lines2: list[PlagiarismLineCompareRead]
+
+
+class AiReviewRubricItemRead(BaseModel):
+    criterion: str
+    weight: float
+    score: float
+    evidence: str
+
+
+class AiReviewRead(BaseModel):
+    student_id: UUID
+    student_full_name: str
+    assignment_id: UUID
+    generated_at: datetime
+    mode: Literal["llm", "local_rules", "local_fallback"]
+    model: str
+    provider_error: str | None = None
+    overall_score: float
+    confidence: float
+    summary: str
+    strengths: list[str] = Field(default_factory=list)
+    concerns: list[str] = Field(default_factory=list)
+    questions: list[str] = Field(default_factory=list)
+    pr_review: list[str] = Field(default_factory=list)
+    report_review: list[str] = Field(default_factory=list)
+    recommended_comment: str
+    rubric: list[AiReviewRubricItemRead] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)
 
 
 class GiteaRepoFileRead(BaseModel):

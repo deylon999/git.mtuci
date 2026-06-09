@@ -43,6 +43,7 @@ from app.schemas.assignment import (
     MyGradeRead,
     AssignmentRead,
     AssignmentSubmissionStatusRead,
+    AiReviewRead,
     PlagiarismCompareRead,
     PlagiarismCompareRequest,
     PlagiarismCheckRead,
@@ -73,6 +74,7 @@ from app.services.gitea_service import (
     list_repo_commits,
 )
 from app.services.plagiarism_service import check_assignment_plagiarism, compare_students_plagiarism
+from app.services.ai_review_service import build_assignment_ai_review
 from app.services.assignment_stats_service import get_assignment_stats
 from app.services.course_roster_service import (
     enroll_group_to_course,
@@ -1609,6 +1611,52 @@ async def check_plagiarism_endpoint(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
 
     return PlagiarismCheckRead.model_validate(result)
+
+
+@router.post(
+    "/courses/{course_id}/assignments/{assignment_id}/ai-review",
+    response_model=AiReviewRead,
+)
+async def ai_review_assignment_endpoint(
+    course_id: UUID,
+    assignment_id: UUID,
+    student_id: UUID = Query(...),
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role not in {UserRole.teacher, UserRole.laborant, UserRole.admin}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Staff access only")
+    await ensure_assignment_read(current_user, session)
+    await ensure_permission(current_user, session, "repo_view_students")
+
+    course = await _get_course_or_404(session, course_id=course_id)
+    if current_user.role in {UserRole.teacher, UserRole.laborant}:
+        await _ensure_staff_course_access(
+            session=session,
+            course=course,
+            current_user=current_user,
+            course_id=course_id,
+        )
+    assignment = await _get_assignment_or_404(
+        session,
+        course_id=course_id,
+        assignment_id=assignment_id,
+    )
+    await _ensure_student_enrolled(session=session, course_id=course_id, student_id=student_id)
+
+    try:
+        result = await build_assignment_ai_review(
+            session,
+            course=course,
+            assignment=assignment,
+            student_id=student_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+
+    return AiReviewRead.model_validate(result)
 
 
 @router.get(

@@ -38,7 +38,7 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
   const [courses, setCourses] = useState<StudentMergedCourse[]>([]);
   const [lkWarning, setLkWarning] = useState<string | null>(null);
   const [groupName, setGroupName] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabKey>("active");
+  const [tab, setTab] = useState<TabKey>("all");
   const [assignments, setAssignments] = useState<Awaited<ReturnType<typeof getStudentAssignmentsDeduped>>>([]);
   const [lkRefreshing, setLkRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,9 +138,9 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
   const doneCount = useMemo(() => courses.filter(isDone).length, [courses]);
 
   const tabs: { id: TabKey; label: string }[] = [
+    { id: "all", label: tp("student.courses.tabAll", { n: courses.length }) },
     { id: "active", label: tp("student.courses.tabActive", { n: Math.max(0, courses.length - doneCount) }) },
     { id: "done", label: tp("student.courses.tabDone", { n: doneCount }) },
-    { id: "all", label: tp("student.courses.tabAll", { n: courses.length }) },
   ];
 
   const warningText =

@@ -105,5 +105,19 @@ class Settings(BaseModel):
     UPLOAD_DIR: str = Field(default_factory=lambda: os.getenv("UPLOAD_DIR", str(BASE_DIR / "uploads")))
     RATE_LIMIT_RPM: int = Field(default_factory=lambda: int(os.getenv("RATE_LIMIT_RPM", "180")))
 
+    # AI review assistant
+    OPENAI_API_KEY: str = Field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    OPENAI_BASE_URL: str = Field(default_factory=lambda: os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"))
+    OPENAI_MODEL: str = Field(default_factory=lambda: os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
+    AI_REVIEW_CACHE_TTL_SECONDS: int = Field(
+        default_factory=lambda: int(os.getenv("AI_REVIEW_CACHE_TTL_SECONDS", "900"))
+    )
+    AI_REVIEW_MODEL_KEEP_ALIVE_SECONDS: int = Field(
+        default_factory=lambda: int(os.getenv("AI_REVIEW_MODEL_KEEP_ALIVE_SECONDS", "1800"))
+    )
+    AI_REVIEW_TIMEOUT_SECONDS: int = Field(
+        default_factory=lambda: int(os.getenv("AI_REVIEW_TIMEOUT_SECONDS", "45"))
+    )
+
 settings = Settings()
 

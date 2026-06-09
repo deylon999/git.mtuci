@@ -1,4 +1,43 @@
 services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: mtuci-ollama
+    restart: unless-stopped
+    gpus: all
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    healthcheck:
+      test: ["CMD-SHELL", "OLLAMA_HOST=127.0.0.1:11434 ollama list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  ollama-model:
+    image: ollama/ollama:latest
+    container_name: mtuci-ollama-model
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5:7b-instruct
+    volumes:
+      - ollama_data:/root/.ollama
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        MODEL="$${OLLAMA_MODEL:-qwen2.5:7b-instruct}"
+        echo "[ollama-model] pulling $$MODEL"
+        ollama pull "$$MODEL"
+        echo "[ollama-model] ready"
+
   api:
     build:
       context: ./backend
@@ -10,13 +49,31 @@ services:
         condition: service_healthy
       gitea-bootstrap:
         condition: service_completed_successfully
-    env_file:
-      - ./backend/.env
+      ollama-model:
+        condition: service_completed_successfully
     environment:
       - PYTHONPATH=/app
       - PYTHONIOENCODING=utf-8
       - LANG=ru_RU.UTF-8
+      - POSTGRES_USER=mtuci
+      - POSTGRES_PASSWORD=mtuci
+      - POSTGRES_DB=mtuci_app
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - JWT_SECRET_KEY=dev-secret-key-63d3de08-f361-4b2c-be30-f097f498d8f7
+      - MTUCI_CREDENTIALS_SECRET=dev-mtuci-credentials-secret-2026
+      - GITEA_URL=http://gitea:3000
+      - GITEA_PUBLIC_URL=http://localhost:3000
+      - GITEA_ADMIN_USERNAME=gitea_admin
+      - GITEA_ADMIN_PASSWORD=admin12345
+      - ADMIN_EMAIL=admin@mtuci.local
+      - ADMIN_PASSWORD=admin123
       - FRONTEND_HEALTH_URL=http://frontend:3001
+      - OPENAI_BASE_URL=http://ollama:11434/v1
+      - OPENAI_MODEL=qwen2.5:7b-instruct
+      - AI_REVIEW_CACHE_TTL_SECONDS=900
+      - AI_REVIEW_MODEL_KEEP_ALIVE_SECONDS=1800
+      - AI_REVIEW_TIMEOUT_SECONDS=600
     ports:
       - "8000:8000"
     volumes:
@@ -179,4 +236,5 @@ services:
 volumes:
   postgres_data:
   gitea_data:
+  ollama_data:
 

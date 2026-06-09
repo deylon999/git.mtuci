@@ -358,6 +358,34 @@ export interface PlagiarismCompareResult {
   lines2: { line: string; status: "exact" | "similar" | "different" }[];
 }
 
+export interface AiReviewRubricItem {
+  criterion: string;
+  weight: number;
+  score: number;
+  evidence: string;
+}
+
+export interface AiReviewResult {
+  student_id: string;
+  student_full_name: string;
+  assignment_id: string;
+  generated_at: string;
+  mode: "llm" | "local_rules" | "local_fallback";
+  model: string;
+  provider_error: string | null;
+  overall_score: number;
+  confidence: number;
+  summary: string;
+  strengths: string[];
+  concerns: string[];
+  questions: string[];
+  pr_review: string[];
+  report_review: string[];
+  recommended_comment: string;
+  rubric: AiReviewRubricItem[];
+  metrics: Record<string, unknown>;
+}
+
 export interface FileContent {
   filepath: string;
   content: string;

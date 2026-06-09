@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { buildDefaultPenaltyPeriods, type PenaltyPeriod } from "../../utils/penaltyDefaults";
-import { AlertCircle, FileText, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, Download, FileText, Plus, Trash2 } from "lucide-react";
 import {
   createAssignment,
   deleteAssignment,
@@ -237,16 +237,42 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
       <h1 className="text-2xl font-semibold mb-4" style={{ color: theme.text }}>
         {detail?.title ?? t("teacher.coursePage.courseFallback")}
       </h1>
-      <TeacherTabs
-        theme={theme}
-        tabs={tabs.map((tabItem) => ({
-          key: tabItem.key,
-          label: tabItem.label,
-          badge: tabItem.badge,
-        }))}
-        active={tab}
-        onChange={setTab}
-      />
+      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <TeacherTabs
+          theme={theme}
+          tabs={tabs.map((tabItem) => ({
+            key: tabItem.key,
+            label: tabItem.label,
+            badge: tabItem.badge,
+          }))}
+          active={tab}
+          onChange={setTab}
+        />
+        <div className="flex flex-wrap gap-2">
+          <TeacherBtn
+            type="button"
+            theme={theme}
+            variant="default"
+            onClick={() => void exportCourseGradesCsv(courseId)}
+          >
+            <Download className="h-3.5 w-3.5" />
+            {t("teacher.courseView.exportGradesCsv")}
+          </TeacherBtn>
+          <TeacherBtn
+            type="button"
+            theme={theme}
+            variant="success"
+            onClick={() => {
+              setTab("assignments");
+              setPenaltyPeriods(buildDefaultPenaltyPeriods(gradeCap));
+              setShowCreateForm((v) => (tab === "assignments" ? !v : true));
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t("teacher.courseView.addAssignment")}
+          </TeacherBtn>
+        </div>
+      </div>
 
       {error ? (
         <p className="text-sm rounded-xl border px-4 py-3" style={{ color: theme.danger, borderColor: theme.border }}>
@@ -339,20 +365,6 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
 
       {tab === "assignments" ? (
         <>
-          <div className="flex justify-end">
-            <TeacherBtn
-              type="button"
-              theme={theme}
-              variant="success"
-              onClick={() => {
-                setPenaltyPeriods(buildDefaultPenaltyPeriods(gradeCap));
-                setShowCreateForm((v) => !v);
-              }}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {t("teacher.courseView.addAssignment")}
-            </TeacherBtn>
-          </div>
           {showCreateForm ? (
             <form
               onSubmit={onCreateAssignment}
@@ -629,16 +641,6 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
 
       {tab === "students" && detail ? (
         <>
-          <div className="flex flex-wrap gap-2 justify-end">
-            <button
-              type="button"
-              onClick={() => void exportCourseGradesCsv(courseId)}
-              className="rounded-lg border px-3 py-1.5 text-xs"
-              style={{ borderColor: theme.border, color: theme.text2 }}
-            >
-              {t("teacher.courseView.exportGradesCsv")}
-            </button>
-          </div>
           <CourseRosterPanel courseId={courseId} isDarkTheme={isDarkTheme} />
           <div className="rounded-xl border overflow-x-auto" style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}>
             <table className="w-full text-sm min-w-[640px]">

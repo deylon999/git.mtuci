@@ -22,12 +22,15 @@ const PermissionsContext = createContext<PermissionsContextValue | null>(null);
 
 export function PermissionsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuthUser();
+  const currentUserId = user?.id ?? null;
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [loadedForUserId, setLoadedForUserId] = useState<string | null>(null);
 
   const refreshPermissions = useCallback(async () => {
     if (!user) {
       setPermissions(new Set());
+      setLoadedForUserId(null);
       setLoading(false);
       return;
     }
@@ -35,9 +38,11 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     try {
       const perms = await getMyPermissions();
       setPermissions(new Set(perms));
+      setLoadedForUserId(user.id);
     } catch (error) {
       console.error("Failed to load permissions:", error);
       setPermissions(new Set());
+      setLoadedForUserId(user.id);
     } finally {
       setLoading(false);
     }
@@ -60,12 +65,12 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       permissions,
-      loading,
+      loading: Boolean(currentUserId) && (loading || loadedForUserId !== currentUserId),
       hasPermission,
       hasAnyPermission,
       refreshPermissions,
     }),
-    [permissions, loading, hasPermission, hasAnyPermission, refreshPermissions],
+    [permissions, loading, loadedForUserId, currentUserId, hasPermission, hasAnyPermission, refreshPermissions],
   );
 
   return (
