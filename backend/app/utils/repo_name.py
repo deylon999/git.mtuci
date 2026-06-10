@@ -75,18 +75,17 @@ def build_student_assignment_repo_name(
     student_login: str,
 ) -> str:
     """
-    Globally unique, student-friendly repo name: course-assignment-login.
-    Falls back to a short assignment id suffix if segments collapse to empty.
+    Globally unique, student-friendly repo name: course-assignment-login-id.
+    The assignment id suffix keeps repo names stable and collision-free even
+    when teachers reuse the same assignment title across multiple courses or
+    recreate assignments with the same name.
     """
     course_part = slugify_repo_segment(course_title, 18) or "course"
     assign_part = slugify_repo_segment(assignment_title, 28) or "assignment"
     student_part = slugify_repo_segment(student_login, 40) or "student"
     short_id = str(assignment_id).replace("-", "")[:6]
 
-    if assign_part in ("assignment", "course") or not slugify_repo_segment(assignment_title, 4):
-        assign_part = f"{assign_part}-{short_id}"
-
-    name = f"{course_part}-{assign_part}-{student_part}"
+    name = f"{course_part}-{assign_part}-{student_part}-{short_id}"
     name = re.sub(r"-{2,}", "-", name).strip("-")
     if len(name) > _MAX_REPO_NAME_LEN:
         name = name[:_MAX_REPO_NAME_LEN].rstrip("-")
