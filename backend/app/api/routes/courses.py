@@ -240,11 +240,11 @@ def _submission_status_read(
 
 
 def _submission_upload_dir(*, course_id: UUID, assignment_id: UUID, student_id: UUID) -> FsPath:
-    return FsPath(settings.UPLOAD_DIR) / "submissions" / str(course_id) / str(assignment_id) / str(student_id)
+    return path_within(settings.UPLOAD_DIR, "submissions", str(course_id), str(assignment_id), str(student_id))
 
 
 def _course_upload_dir(*, course_id: UUID) -> FsPath:
-    return FsPath(settings.UPLOAD_DIR) / "courses" / str(course_id)
+    return path_within(settings.UPLOAD_DIR, "courses", str(course_id))
 
 
 async def _store_submission_upload(

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from uuid import UUID
 from datetime import datetime, timezone
 
@@ -234,7 +233,7 @@ async def upload_release_asset(
     release = await session.get(RepositoryRelease, release_id)
     if not release or release.repository_id != repository_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release not found")
-    base = Path("backend/uploads/releases") / str(repository_id) / str(release_id)
+    base = path_within("backend/uploads/releases", str(repository_id), str(release_id))
     base.mkdir(parents=True, exist_ok=True)
     filename = safe_upload_filename(file.filename)
     target = path_within(base, filename)
