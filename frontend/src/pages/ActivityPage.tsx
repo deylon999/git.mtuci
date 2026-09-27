@@ -18,6 +18,18 @@ interface ActivityPageProps {
   isDarkTheme?: boolean;
 }
 
+// Repo URLs can arrive from WebSocket payloads; allow only http(s) links so a
+// crafted value like "javascript:..." can never end up in an href.
+const toSafeExternalUrl = (value: string | null | undefined): string | undefined => {
+  if (!value) return undefined;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const getColors = (isDark: boolean) => {
   const ui = getAdminPageTheme(isDark);
   const c = ui.colors;
@@ -305,7 +317,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               // Add new repo to the list
               const newRepo: HotRepoStat = {
                 name: data.repo_name,
-                url: data.repo_url || `#`,
+                url: toSafeExternalUrl(data.repo_url) ?? "",
                 events: 1,
                 language: null
               };
@@ -835,7 +847,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               hotRepos.slice(0, 5).map((repo, i) => (
                 <a 
                   key={i} 
-                  href={repo.url} 
+                  href={toSafeExternalUrl(repo.url)}
                   target="_blank" 
                   rel="noopener noreferrer"
                   style={{

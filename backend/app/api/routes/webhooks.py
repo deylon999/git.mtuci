@@ -127,9 +127,7 @@ def _parse_gitea_timestamp(value: str | None) -> datetime | None:
 def verify_webhook_signature(payload: bytes, signature: Optional[str]) -> bool:
     """Verify Gitea webhook signature using HMAC-SHA256."""
     logger = logging.getLogger(__name__)
-    logger.warning(f"WEBHOOK_SECRET loaded: '{WEBHOOK_SECRET}'")
-    logger.warning(f"Signature received: '{signature}'")
-    
+
     if not WEBHOOK_SECRET or not signature:
         logger.warning("Skipping verification - secret or signature missing")
         return True  # Skip verification if secret not configured
@@ -147,8 +145,8 @@ def verify_webhook_signature(payload: bytes, signature: Optional[str]) -> bool:
     else:
         match = hmac.compare_digest(expected, signature)
     
-    logger.warning(f"Expected signature: '{expected_full}' or '{expected}'")
-    logger.warning(f"Match: {match}")
+    if not match:
+        logger.warning("Webhook signature mismatch")
     
     return match
 

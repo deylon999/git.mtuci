@@ -27,6 +27,7 @@ from app.schemas.release import (
 from app.services.gitea_service import list_repo_commits_page
 from app.services.repo_access_service import ensure_min_repo_role
 from app.services.repository_access_service import ensure_repository_accessible
+from app.utils.upload_paths import path_within, safe_upload_filename
 
 router = APIRouter(prefix="/repositories/{repository_id}", tags=["releases"])
 _release_publish_tasks: dict[str, asyncio.Task] = {}
@@ -235,12 +236,13 @@ async def upload_release_asset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release not found")
     base = Path("backend/uploads/releases") / str(repository_id) / str(release_id)
     base.mkdir(parents=True, exist_ok=True)
-    target = base / file.filename
+    filename = safe_upload_filename(file.filename)
+    target = path_within(base, filename)
     raw = await file.read()
     target.write_bytes(raw)
     asset = ReleaseAsset(
         release_id=release_id,
-        filename=file.filename,
+        filename=filename,
         content_type=file.content_type or "application/octet-stream",
         size_bytes=len(raw),
         storage_path=str(target.as_posix()),
@@ -248,7 +250,7 @@ async def upload_release_asset(
     )
     session.add(asset)
     await session.commit()
-    return {"status": "ok", "filename": file.filename, "size_bytes": len(raw)}
+    return {"status": "ok", "filename": filename, "size_bytes": len(raw)}
 
 
 @router.get("/registries", response_model=list[RegistryIntegrationRead])

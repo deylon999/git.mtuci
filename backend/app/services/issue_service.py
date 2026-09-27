@@ -35,7 +35,8 @@ from app.services.gitea_service import commit_exists, get_pull_request
 from app.utils.gitea_user import resolve_gitea_username
 
 
-_ISSUE_REF_RE = re.compile(r"(?:(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+))?#(?P<number>\d+)")
+# Bounded owner/repo lengths keep matching linear on long runs without "/" (Gitea caps names at 100 chars).
+_ISSUE_REF_RE = re.compile(r"(?:(?P<owner>[A-Za-z0-9_.-]{1,100})/(?P<repo>[A-Za-z0-9_.-]{1,100}))?#(?P<number>\d+)")
 _COMMIT_REF_RE = re.compile(r"\b([0-9a-f]{7,40})\b", re.IGNORECASE)
 
 

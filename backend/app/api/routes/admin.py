@@ -4,6 +4,7 @@ import string
 import asyncio
 import csv
 import io
+import logging
 import subprocess
 import gzip
 import shutil
@@ -799,8 +800,9 @@ async def import_users_csv(
             session.add(new_user)
             imported_count += 1
             
-        except Exception as e:
-            errors.append(f"Row {row_num}: {str(e)}")
+        except Exception:
+            logging.getLogger(__name__).exception("User CSV import failed on row %s", row_num)
+            errors.append(f"Row {row_num}: failed to import user")
     
     await session.commit()
     

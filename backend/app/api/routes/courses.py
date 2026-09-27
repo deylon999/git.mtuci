@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 import math
 import os
-import re
 from pathlib import Path as FsPath
 from typing import List, Optional
 from uuid import UUID, uuid4
@@ -86,6 +85,7 @@ from app.services.student_repository_service import (
     get_student_repo_name,
     resolve_assignment_repo_owner_and_name,
 )
+from app.utils.upload_paths import path_within, safe_upload_filename
 
 router = APIRouter(tags=["courses"])
 
@@ -156,13 +156,6 @@ _MAX_SUBMISSION_FILE_BYTES = 50 * 1024 * 1024
 _MAX_SUBMISSION_FILES = 10
 _MAX_COURSE_FILE_BYTES = 50 * 1024 * 1024
 _MAX_COURSE_FILES = 10
-_FILENAME_SAFE_RE = re.compile(r"[^0-9A-Za-zА-Яа-яЁё._ -]+")
-
-
-def _safe_upload_filename(filename: str | None) -> str:
-    raw = (filename or "attachment").strip().replace("\\", "_").replace("/", "_")
-    cleaned = _FILENAME_SAFE_RE.sub("_", raw).strip(" ._")
-    return cleaned[:160] or "attachment"
 
 
 def _parse_attachment_datetime(value: object) -> datetime:
@@ -265,9 +258,9 @@ async def _store_submission_upload(
 ) -> dict:
     target_dir = _submission_upload_dir(course_id=course_id, assignment_id=assignment_id, student_id=student_id)
     target_dir.mkdir(parents=True, exist_ok=True)
-    original_filename = _safe_upload_filename(upload.filename)
+    original_filename = safe_upload_filename(upload.filename)
     stored_filename = f"{uuid4().hex}_{original_filename}"
-    storage_path = target_dir / stored_filename
+    storage_path = path_within(target_dir, stored_filename)
 
     size = 0
     try:
@@ -304,9 +297,9 @@ async def _store_submission_upload(
 async def _store_course_upload(upload: UploadFile, *, course_id: UUID) -> dict:
     target_dir = _course_upload_dir(course_id=course_id)
     target_dir.mkdir(parents=True, exist_ok=True)
-    original_filename = _safe_upload_filename(upload.filename)
+    original_filename = safe_upload_filename(upload.filename)
     stored_filename = f"{uuid4().hex}_{original_filename}"
-    storage_path = target_dir / stored_filename
+    storage_path = path_within(target_dir, stored_filename)
 
     size = 0
     try:
