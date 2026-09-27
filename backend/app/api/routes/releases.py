@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import glob
+import re
 from uuid import UUID
 from datetime import datetime, timezone
 
@@ -47,35 +49,56 @@ def _mask_token(token: str) -> str:
     return f"{token[:3]}***{token[-3:]}"
 
 
-def _is_semver_like(value: str) -> bool:
-    import re
+_HTTP_ENDPOINT_RE = re.compile(r"https?://[A-Za-z0-9][A-Za-z0-9.-]*(?::\d{1,5})?(?:/[A-Za-z0-9._~%@+-]*)*")
+_DOCKER_ENDPOINT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]*(?::\d{1,5})?(?:/[a-z0-9][a-z0-9._-]*)*/?")
 
-    return bool(re.match(r"^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z\.-]+)?$", value))
+
+def _is_semver_like(value: str) -> bool:
+    return bool(re.fullmatch(r"v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z\.-]+)?", value))
+
+
+def _registry_endpoint_error(registry_type: str, endpoint: str) -> str | None:
+    if registry_type == "docker":
+        if not _DOCKER_ENDPOINT_RE.fullmatch(endpoint):
+            return "docker endpoint must be a registry host like registry.example.com[:port][/namespace]"
+    elif not _HTTP_ENDPOINT_RE.fullmatch(endpoint):
+        return f"{registry_type} endpoint must be an http(s) URL"
+    return None
 
 
 def _validate_registry_publish(
     *,
     registry_type: str,
+    endpoint: str,
     package_name: str,
     version: str,
 ) -> list[str]:
-    import re
-
     errors: list[str] = []
     if not _is_semver_like(version):
         errors.append("version must be semver-like (e.g. 1.2.3 or v1.2.3)")
     if registry_type == "npm":
-        if not re.match(r"^(@[a-z0-9][a-z0-9\-_\.]*/)?[a-z0-9][a-z0-9\-_\.]*$", package_name):
+        if not re.fullmatch(r"(@[a-z0-9][a-z0-9\-_\.]*/)?[a-z0-9][a-z0-9\-_\.]*", package_name):
             errors.append("npm package_name is invalid")
     elif registry_type == "pypi":
-        if not re.match(r"^[a-z0-9][a-z0-9\-_\.]*$", package_name):
+        if not re.fullmatch(r"[a-z0-9][a-z0-9\-_\.]*", package_name):
             errors.append("pypi package_name is invalid")
     elif registry_type == "docker":
-        if not re.match(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$", package_name):
+        if not re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*", package_name):
             errors.append("docker image name is invalid")
     else:
         errors.append("unsupported registry type")
+    endpoint_error = _registry_endpoint_error(registry_type, endpoint)
+    if endpoint_error:
+        errors.append(endpoint_error)
     return errors
+
+
+def _publish_argv(*, registry_type: str, endpoint: str, package_name: str, version: str) -> list[str]:
+    if registry_type == "npm":
+        return ["npm", "publish", "--registry", endpoint, "--tag", version]
+    if registry_type == "pypi":
+        return ["twine", "upload", "--repository-url", endpoint, "dist/*"]
+    return ["docker", "push", f"{endpoint.rstrip('/')}/{package_name}:{version}"]
 
 
 async def _run_publish_job(job_id: UUID) -> None:
@@ -86,10 +109,30 @@ async def _run_publish_job(job_id: UUID) -> None:
         job.state = "running"
         job.started_at = datetime.now(timezone.utc)
         await session.commit()
-        cmd = f"{job.command_line} 2>&1"
         try:
-            proc = await asyncio.create_subprocess_shell(
-                cmd,
+            # Rebuild argv from validated fields; never execute the stored command_line through a shell.
+            reg = await session.get(RepositoryRegistryIntegration, job.registry_integration_id)
+            if not reg:
+                raise RuntimeError("Registry integration not found")
+            errors = _validate_registry_publish(
+                registry_type=reg.registry_type,
+                endpoint=reg.endpoint,
+                package_name=job.package_name,
+                version=job.version,
+            )
+            if errors:
+                raise ValueError("; ".join(errors))
+            argv = _publish_argv(
+                registry_type=reg.registry_type,
+                endpoint=reg.endpoint,
+                package_name=job.package_name,
+                version=job.version,
+            )
+            if reg.registry_type == "pypi":
+                # Without a shell nothing expands dist/* for us.
+                argv = argv[:-1] + (sorted(glob.glob("dist/*")) or ["dist/*"])
+            proc = await asyncio.create_subprocess_exec(
+                *argv,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
@@ -275,10 +318,14 @@ async def create_registry(
     current_user: User = Depends(get_current_user),
 ) -> RegistryIntegrationRead:
     await _repo_guard(session, repository_id, current_user, RepoAccessRole.admin)
+    endpoint = body.endpoint.strip()
+    endpoint_error = _registry_endpoint_error(body.registry_type, endpoint)
+    if endpoint_error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=endpoint_error)
     entity = RepositoryRegistryIntegration(
         repository_id=repository_id,
         registry_type=body.registry_type,
-        endpoint=body.endpoint.strip(),
+        endpoint=endpoint,
         namespace=body.namespace.strip(),
         token_masked=_mask_token(body.token.strip()),
         token_secret=body.token.strip(),
@@ -309,15 +356,19 @@ async def publish_release(
         version = version[1:]
     errors = _validate_registry_publish(
         registry_type=reg.registry_type,
+        endpoint=reg.endpoint,
         package_name=body.package_name.strip(),
         version=version,
     )
-    if reg.registry_type == "npm":
-        cmd = f"npm publish --registry {reg.endpoint} --tag {version}"
-    elif reg.registry_type == "pypi":
-        cmd = f"twine upload --repository-url {reg.endpoint} dist/*"
-    else:
-        cmd = f"docker push {reg.endpoint.rstrip('/')}/{body.package_name}:{version}"
+    # Preview only: the job runner rebuilds argv itself and runs it without a shell.
+    cmd = " ".join(
+        _publish_argv(
+            registry_type=reg.registry_type,
+            endpoint=reg.endpoint,
+            package_name=body.package_name.strip(),
+            version=version,
+        )
+    )
     if len(errors) == 0 and not body.dry_run:
         job = ReleasePublishJob(
             repository_id=repository_id,
