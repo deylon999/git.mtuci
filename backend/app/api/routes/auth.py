@@ -174,38 +174,6 @@ async def register_student_mtuci(
     return UserRead.model_validate(user)
 
 
-@router.post(
-    "/register-teacher",
-    response_model=UserRead,
-    status_code=status.HTTP_201_CREATED,
-)
-async def register_teacher(
-    payload: AuthRegisterRequest,
-    session: AsyncSession = Depends(get_session),
-):
-    # Только для разработки и тестирования: без проверки прав.
-    existing = await session.execute(select(User).where(User.email == str(payload.email)))
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
-        )
-
-    password_hash = bcrypt.hashpw(payload.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-    user = User(
-        email=str(payload.email),
-        password_hash=password_hash,
-        full_name=payload.full_name,
-        role=UserRole.teacher,
-    )
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-
-    return UserRead.model_validate(user)
-
-
 @router.post("/login", response_model=TokenResponse)
 async def login(
     payload: AuthLoginRequest,

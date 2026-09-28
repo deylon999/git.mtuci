@@ -183,6 +183,21 @@ def _check_target_not_admin(target_user: User) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot perform this action on admin users")
 
 
+# Roles a non-admin holder of user_edit/user_delete may act on and hand out.
+_NON_ADMIN_MANAGEABLE_ROLES = frozenset({UserRole.student, UserRole.laborant})
+
+
+def _check_can_manage_user(current_user: User, target_user: User, *, new_role: UserRole | None = None) -> None:
+    """Keep non-admins away from staff accounts and from granting staff/admin roles."""
+    _check_target_not_admin(target_user)
+    if current_user.role == UserRole.admin:
+        return
+    if target_user.role not in _NON_ADMIN_MANAGEABLE_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can manage staff accounts")
+    if new_role is not None and new_role not in _NON_ADMIN_MANAGEABLE_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can assign this role")
+
+
 def _generate_password(length: int = 12) -> str:
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
@@ -770,7 +785,10 @@ async def import_users_csv(
             if role_str not in valid_roles:
                 errors.append(f"Row {row_num}: Invalid role '{role_str}'. Valid roles: {', '.join(valid_roles)}")
                 continue
-            
+            if current_user.role != UserRole.admin and UserRole(role_str) not in _NON_ADMIN_MANAGEABLE_ROLES:
+                errors.append(f"Row {row_num}: Only admins can import users with role '{role_str}'")
+                continue
+
             # Check if user already exists
             existing = await session.execute(
                 select(User).where(User.email == email)
@@ -828,7 +846,7 @@ async def admin_patch_user(
     target_user = result.scalar_one_or_none()
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    _check_target_not_admin(target_user)
+    _check_can_manage_user(current_user, target_user, new_role=payload.role)
 
     user = await update_user_role_and_block(
         session,
@@ -858,7 +876,7 @@ async def admin_approve_user(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    _check_target_not_admin(user)
+    _check_can_manage_user(current_user, user)
 
     user.is_pending = False
     await session.commit()
@@ -895,7 +913,7 @@ async def admin_reject_user(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    _check_target_not_admin(user)
+    _check_can_manage_user(current_user, user)
 
     if not user.is_pending:
         raise HTTPException(
@@ -936,7 +954,7 @@ async def admin_delete_user(
     target_user = result.scalar_one_or_none()
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    _check_target_not_admin(target_user)
+    _check_can_manage_user(current_user, target_user)
 
     user_email = target_user.email
 
@@ -973,7 +991,7 @@ async def admin_reset_password(
     target_user = result.scalar_one_or_none()
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    _check_target_not_admin(target_user)
+    _check_can_manage_user(current_user, target_user)
 
     if payload and payload.new_password:
         new_password = payload.new_password
