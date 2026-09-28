@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.activity_log import ActivityLog, ActivityType
 from app.models.assignment import Assignment
 from app.models.course import Course
+from app.models.repo_access import RepoAccessRole
 from app.models.repository import Repository, RepositoryType
 from app.models.student_repository import StudentRepository
 from app.models.submission import Submission
@@ -1492,20 +1493,31 @@ async def _ensure_repo_not_blocked_for_write(
     *,
     student_id: UUID,
     repo_item_id: str,
+    min_role: RepoAccessRole = RepoAccessRole.read,
 ) -> None:
+    """Reject writes to blocked repos and, on someone else's repo, below `min_role`.
+
+    Gitea calls go out with admin credentials, so Gitea itself never enforces the
+    collaborator's role — this is the only check.
+    """
+    from app.services.repo_access_service import ensure_min_repo_role
+
     try:
         item_uuid = UUID(repo_item_id)
     except ValueError:
         return
-    repo_row = await session.execute(
-        select(Repository).where(
-            Repository.id == item_uuid,
-            Repository.owner_id == student_id,
-        )
-    )
-    personal_repo = repo_row.scalar_one_or_none()
-    if personal_repo:
-        raise_if_repository_blocked(personal_repo)
+    repo_row = await session.execute(select(Repository).where(Repository.id == item_uuid))
+    repo = repo_row.scalar_one_or_none()
+    if not repo:
+        # Assignment repos: resolve_student_repo_gitea_target only resolves the student's own.
+        return
+    raise_if_repository_blocked(repo)
+    if repo.owner_id == student_id:
+        return
+    student = await session.get(User, student_id)
+    if not student:
+        raise ValueError("User not found")
+    await ensure_min_repo_role(session, user=student, repo=repo, min_role=min_role)
 
 
 def _summarize_review_states_for_policy(reviews: list[dict]) -> tuple[int, bool, set[str]]:
@@ -2133,6 +2145,7 @@ async def merge_student_repository_pull(
         session,
         student_id=student_id,
         repo_item_id=repo_item_id,
+        min_role=RepoAccessRole.admin if force_merge else RepoAccessRole.write,
     )
     await _enforce_branch_policy_for_pull_merge(
         session,
@@ -2232,6 +2245,7 @@ async def retry_student_repository_pull_check(
         session,
         student_id=student_id,
         repo_item_id=repo_item_id,
+        min_role=RepoAccessRole.write,
     )
     bundle = await get_student_repository_pull_detail_bundle(
         session,
@@ -2575,20 +2589,12 @@ async def create_student_repository_file(
     if not cleaned or ".." in cleaned.split("/"):
         raise ValueError("Invalid filepath")
 
-    # Disallow writing to blocked personal repositories (view-only allowed).
-    try:
-        item_uuid = UUID(repo_item_id)
-        repo_row = await session.execute(
-            select(Repository).where(
-                Repository.id == item_uuid,
-                Repository.owner_id == student_id,
-            )
-        )
-        personal_repo = repo_row.scalar_one_or_none()
-        if personal_repo:
-            raise_if_repository_blocked(personal_repo)
-    except ValueError:
-        pass
+    await _ensure_repo_not_blocked_for_write(
+        session,
+        student_id=student_id,
+        repo_item_id=repo_item_id,
+        min_role=RepoAccessRole.write,
+    )
 
     target = await resolve_student_repo_gitea_target(
         session,

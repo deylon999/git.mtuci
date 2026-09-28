@@ -13,22 +13,12 @@ import {
 import type { TodayStats, HotRepoStat, TopUserStat, HourlyActivity, ActivityItem } from "../api/types";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getAdminPageTheme, getAdminNativeSelectProps } from "../layout/adminPageTheme";
+import { getToken } from "../api/client";
+import { toSafeExternalUrl } from "../utils/safeUrl";
 
 interface ActivityPageProps {
   isDarkTheme?: boolean;
 }
-
-// Repo URLs can arrive from WebSocket payloads; allow only http(s) links so a
-// crafted value like "javascript:..." can never end up in an href.
-const toSafeExternalUrl = (value: string | null | undefined): string | undefined => {
-  if (!value) return undefined;
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : undefined;
-  } catch {
-    return undefined;
-  }
-};
 
 const getColors = (isDark: boolean) => {
   const ui = getAdminPageTheme(isDark);
@@ -278,7 +268,10 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
 
   // WebSocket connection
   useEffect(() => {
-    const wsUrl = `ws://localhost:8000/ws/activity`;
+    // Same origin as the page (Vite / nginx proxy /ws); the backend requires an admin token.
+    const token = getToken();
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${proto}//${window.location.host}/ws/activity${token ? `?token=${encodeURIComponent(token)}` : ""}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 

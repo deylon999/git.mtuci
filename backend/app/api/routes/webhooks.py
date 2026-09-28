@@ -128,10 +128,14 @@ def verify_webhook_signature(payload: bytes, signature: Optional[str]) -> bool:
     """Verify Gitea webhook signature using HMAC-SHA256."""
     logger = logging.getLogger(__name__)
 
-    if not WEBHOOK_SECRET or not signature:
-        logger.warning("Skipping verification - secret or signature missing")
-        return True  # Skip verification if secret not configured
-    
+    # Fail closed: an unsigned webhook could forge events such as repository deletion.
+    if not WEBHOOK_SECRET:
+        logger.error("GITEA_WEBHOOK_SECRET is not configured; rejecting webhook")
+        return False
+    if not signature:
+        logger.warning("Webhook rejected: missing signature")
+        return False
+
     expected = hmac.new(
         WEBHOOK_SECRET.encode(),
         payload,

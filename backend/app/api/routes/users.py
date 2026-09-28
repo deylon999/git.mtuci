@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_session
-from app.core.security import get_current_user, hash_password, verify_password
+from app.core.security import get_current_user, get_current_user_allow_pending, hash_password, verify_password
 from app.core.permissions import require_permission
 from app.models.user import UserRole
 from app.schemas.user import ChangePasswordRequest, StudentUserRead, UpdateAvatarDisplayModeRequest, UserRead
@@ -87,7 +87,7 @@ async def update_avatar_display_mode(
 
 @router.get("/me/settings", response_model=UserSettingsRead)
 async def get_my_settings(
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user_allow_pending),
 ) -> UserSettingsRead:
     return read_user_settings(current_user)
 
@@ -95,7 +95,7 @@ async def get_my_settings(
 @router.patch("/me/settings", response_model=UserSettingsRead)
 async def patch_my_settings(
     payload: UserSettingsUpdate,
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user_allow_pending),
     session: AsyncSession = Depends(get_session),
 ) -> UserSettingsRead:
     try:

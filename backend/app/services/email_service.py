@@ -12,12 +12,12 @@ logger = logging.getLogger(__name__)
 def send_reset_email(email: str, token: str) -> None:
     reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
 
-    # Always log the link for debugging/testing purposes
-    logger.info(f"Password reset link for {email}: {reset_link}")
-    print(f"[PASSWORD RESET] Link for {email}: {reset_link}", flush=True)
-
+    # The link is a login credential: never log it when it can be emailed. Without SMTP
+    # (local dev) the log is the only way to use it, so print it there with a warning.
     if not settings.SMTP_HOST:
-        logger.warning("SMTP_HOST not configured, skipping email send")
+        logger.warning(
+            "SMTP_HOST not configured; password reset link for %s (dev only): %s", email, reset_link
+        )
         return
 
     msg = EmailMessage()

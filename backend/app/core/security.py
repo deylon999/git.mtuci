@@ -60,42 +60,9 @@ def decode_access_token(token: str) -> dict[str, Any]:
     return jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    session: AsyncSession = Depends(get_session),
-):
-    from app.models.user import User  # noqa: F401
-    from app.services.user_service import get_user_by_id
+async def _user_from_token(token: str, session: AsyncSession):
+    from app.services.user_service import get_user_by_id  # import внутри, чтобы снизить циклы
 
-    try:
-        payload = decode_access_token(token)
-        sub = payload.get("sub")
-        if not sub:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token",
-            )
-        user_id = UUID(str(sub))
-    except (JWTError, ValueError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-        )
-
-    user = await get_user_by_id(session, user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    if getattr(user, "is_blocked", False):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is blocked")
-    return user
-
-
-async def get_current_user_from_token(
-    token: str,
-    session: AsyncSession,
-):
-    from app.models.user import User  # import внутри, чтобы снизить циклы
-    from app.services.user_service import get_user_by_id
     try:
         payload = decode_access_token(token)
         sub = payload.get("sub")
@@ -113,5 +80,37 @@ async def get_current_user_from_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     if getattr(user, "is_blocked", False):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is blocked")
+    return user
+
+
+def _reject_pending_student(user) -> None:
+    # Self-registered students wait for admin approval; until then only /auth/me and
+    # UI settings stay reachable (the frontend shows its pending screen).
+    if user.role == UserRole.student and getattr(user, "is_pending", False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is pending approval")
+
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    session: AsyncSession = Depends(get_session),
+):
+    user = await _user_from_token(token, session)
+    _reject_pending_student(user)
+    return user
+
+
+async def get_current_user_allow_pending(
+    token: str = Depends(oauth2_scheme),
+    session: AsyncSession = Depends(get_session),
+):
+    return await _user_from_token(token, session)
+
+
+async def get_current_user_from_token(
+    token: str,
+    session: AsyncSession,
+):
+    user = await _user_from_token(token, session)
+    _reject_pending_student(user)
     return user
 

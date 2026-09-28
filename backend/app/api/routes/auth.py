@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.credential_crypto import encrypt_secret
 from app.core.database import get_session
-from app.core.security import create_access_token, get_current_user, verify_password
+from app.core.security import create_access_token, get_current_user, get_current_user_allow_pending, verify_password
 from app.models.user import User, UserRole
 from app.models.system_log import LogLevel, LogSource
 from app.schemas.auth import (
@@ -165,7 +165,7 @@ async def register_student_mtuci(
         student_id=student_id,
         mtuci_login=payload.mtuci_login if payload.mtuci_login else None,
         mtuci_password=encrypt_secret(payload.mtuci_password) if payload.mtuci_password else None,
-        is_pending=False,  # Авто-аппрув через ЛК МТУСИ
+        is_pending=mtuci_info is None,  # Авто-аппрув только если ЛК МТУСИ подтвердил данные
     )
     session.add(user)
     await session.commit()
@@ -265,7 +265,7 @@ async def login(
 
 
 @router.get("/me", response_model=UserRead)
-async def me(current_user=Depends(get_current_user)):
+async def me(current_user=Depends(get_current_user_allow_pending)):
     payload = UserRead.model_validate(current_user)
     return payload.model_copy(update={"can_switch_student_mode": _can_switch_student_mode(current_user)})
 

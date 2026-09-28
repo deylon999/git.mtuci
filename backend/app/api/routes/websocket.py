@@ -12,6 +12,7 @@ _WS_CLOSE_POLICY = 1008
 
 from app.core.database import SessionLocal
 from app.core.security import get_current_user_from_token
+from app.models.user import UserRole
 from app.services.notification_realtime import notification_manager, push_notifications_updated
 from app.services.notification_service import sync_user_notifications
 
@@ -46,11 +47,24 @@ manager = ConnectionManager()
 
 
 @router.websocket("/activity")
-async def activity_websocket(websocket: WebSocket):
+async def activity_websocket(websocket: WebSocket, token: str | None = Query(None)):
     """
-    WebSocket endpoint for real-time activity updates.
-    Broadcasts new activity events to all connected clients.
+    WebSocket endpoint for real-time activity updates (admin activity page).
+    Broadcasts every user's activity, so only admins may subscribe.
     """
+    if not token:
+        await websocket.close(code=_WS_CLOSE_POLICY, reason="Missing token")
+        return
+    async with SessionLocal() as session:
+        try:
+            user = await get_current_user_from_token(token, session)
+        except Exception:
+            await websocket.close(code=_WS_CLOSE_POLICY, reason="Invalid token")
+            return
+    if user.role != UserRole.admin:
+        await websocket.close(code=_WS_CLOSE_POLICY, reason="Admin only")
+        return
+
     await manager.connect(websocket)
     try:
         # Send initial connection message
@@ -100,19 +114,6 @@ async def broadcast_stats_update():
     await manager.broadcast({
         "type": "stats_updated"
     })
-
-
-@router.get("/test-broadcast")
-async def test_broadcast():
-    """Test endpoint to verify WebSocket broadcasting works."""
-    await broadcast_new_activity(
-        activity_type="commit",
-        user_name="test_user",
-        repo_name="test_repo",
-        message="Test message",
-        timestamp="2024-01-01T00:00:00"
-    )
-    return {"status": "broadcast sent"}
 
 
 @router.get("/connections")

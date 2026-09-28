@@ -42,6 +42,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import { toSafeExternalUrl } from "../utils/safeUrl";
 
 type ViewState = {
   file: RepoFile | null;
@@ -1241,7 +1242,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
                       ) : null}
                       {s.repository_url ? (
                         <a
-                          href={s.repository_url}
+                          href={toSafeExternalUrl(s.repository_url)}
                           target="_blank"
                           rel="noreferrer"
                           className={`mt-2 inline-flex text-sm ${breadcrumbText} ${breadcrumbHover}`}

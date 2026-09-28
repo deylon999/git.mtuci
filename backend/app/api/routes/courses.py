@@ -3,6 +3,7 @@ import math
 import os
 from pathlib import Path as FsPath
 from typing import List, Optional
+from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -237,6 +238,20 @@ def _submission_status_read(
         submitted_at=submitted_at,
         graded_at=submission.graded_at if submission else None,
     )
+
+
+def _clean_submission_repository_url(value: str | None) -> str | None:
+    # Rendered as a link on the teacher's page: only http(s), never javascript: etc.
+    cleaned = (value or "").strip()
+    if not cleaned:
+        return None
+    parsed = urlparse(cleaned)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or len(cleaned) > 500:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Repository link must be an http(s) URL up to 500 characters",
+        )
+    return cleaned
 
 
 def _submission_upload_dir(*, course_id: UUID, assignment_id: UUID, student_id: UUID) -> FsPath:
@@ -1207,7 +1222,7 @@ async def submit_assignment_endpoint(
     )
 
     cleaned_answer = (answer_text or "").strip() or None
-    cleaned_repo_url = (repository_url or "").strip() or None
+    cleaned_repo_url = _clean_submission_repository_url(repository_url)
     uploads: list[tuple[UploadFile, str]] = []
     if report_file and report_file.filename:
         uploads.append((report_file, "report"))
