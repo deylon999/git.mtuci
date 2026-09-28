@@ -96,7 +96,8 @@ services:
       - POSTGRES_PASSWORD=mtuci
       - POSTGRES_DB=mtuci_app
     ports:
-      - "5432:5432"
+      # Host-only: local alembic/tools reach it via localhost, the outside world does not.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro

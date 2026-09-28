@@ -72,7 +72,7 @@ docker compose up --build
 
 Первый запуск занимает 2–3 минуты (инициализация Gitea и миграции БД).
 
-Для production-контура используйте override:
+Для production-контура используйте override (обязательные переменные — в разделе [Безопасность](#безопасность-продакшен)):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
@@ -365,7 +365,19 @@ docker compose restart api
 - Не коммитьте `backend/.env` в репозиторий  
 
 В репозитории есть шаблон production-override: [docker-compose.prod.yml](docker-compose.prod.yml).
-Он убирает дефолтные пароли и требует секреты/учётки через переменные окружения.
+Он заменяет дефолтные пароли из `docker-compose.yml` и не даст запуститься, пока не заданы секреты/учётки.
+
+Значения берутся из **корневого `.env`** (рядом с `docker-compose.yml`) или из окружения shell — не из `backend/.env`:
+
+```
+POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB,
+GITEA_ADMIN_USERNAME, GITEA_ADMIN_PASSWORD, GITEA_ADMIN_EMAIL,
+GITEA_PUBLIC_URL, GITEA_WEBHOOK_ALLOWED_HOST_LIST, GITEA_WEBHOOK_SECRET,
+JWT_SECRET_KEY, MTUCI_CREDENTIALS_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD
+```
+
+- Если в `backend/.env` задан `DATABASE_URL`, он важнее `POSTGRES_*` — пропишите в нём те же учётные данные или удалите его.
+- Postgres публикуется только на `127.0.0.1:5432`; снаружи сервера БД недоступна.
 
 ---
 
