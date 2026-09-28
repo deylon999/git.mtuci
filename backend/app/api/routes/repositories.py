@@ -535,7 +535,7 @@ async def import_github_repository(
 
 
 @router.get("/all", response_model=list[RepositoryRead])
-@require_permission("repo_view")
+@require_permission("repo_view_students")
 async def list_all_repositories(
     repo_type: RepositoryType | None = Query(None, description="Filter by repository type"),
     language: str | None = Query(None, description="Filter by programming language"),
@@ -594,7 +594,7 @@ async def list_all_repositories(
 
 
 @router.get("/stats", response_model=dict)
-@require_permission("repo_view")
+@require_permission("repo_view_students")
 async def get_repository_stats(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),

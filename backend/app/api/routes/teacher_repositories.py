@@ -11,7 +11,7 @@ from app.core.security import get_current_user
 from app.core.permission_checks import ensure_repo_content_access
 from app.models.repository import Repository
 from app.models.student_repository import StudentRepository
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.student_dashboard import (
     StudentRepoBranchesRead,
     StudentRepoCommitDiffRead,
@@ -69,7 +69,17 @@ from app.services.student_dashboard_service import (
     update_student_repository_issue,
 )
 
-router = APIRouter(prefix="/teacher/repositories", tags=["teacher-repositories"])
+async def _require_staff(current_user: User = Depends(get_current_user)) -> None:
+    # Students browse repos via /students/me/repositories, which is scoped to their own access.
+    if current_user.role == UserRole.student:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Staff access only")
+
+
+router = APIRouter(
+    prefix="/teacher/repositories",
+    tags=["teacher-repositories"],
+    dependencies=[Depends(_require_staff)],
+)
 
 
 async def _resolve_repo_owner_id(session: AsyncSession, repo_item_id: str) -> UUID:

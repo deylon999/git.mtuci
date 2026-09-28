@@ -47,11 +47,10 @@ async def ensure_repo_content_access(
     *,
     target_student_id: UUID | None = None,
 ) -> None:
-    """View repository list/content. Cross-user student repos need repo_view_students."""
+    """View repository list/content. Someone else's repos need repo_view_students (admins exempt)."""
     await ensure_permission(user, session, "repo_view")
-    if target_student_id is not None and target_student_id != user.id:
-        if user.role in {UserRole.teacher, UserRole.laborant}:
-            await ensure_permission(user, session, "repo_view_students")
+    if target_student_id is not None and target_student_id != user.id and user.role != UserRole.admin:
+        await ensure_permission(user, session, "repo_view_students")
 
 
 async def ensure_assignment_read(
