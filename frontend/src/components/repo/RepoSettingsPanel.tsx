@@ -53,6 +53,7 @@ import {
   listRepositoryReleases,
   publishRepositoryRelease,
   retryReleasePublishJob,
+  downloadReleaseAsset,
   uploadReleaseAsset,
   type ReleasePublishJob,
   type PublishReleaseResult,
@@ -891,7 +892,18 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                     <div className="mt-2 space-y-1">
                       {r.assets.map((a) => (
                         <div key={a.id} className="text-[11px]" style={{ color: theme.text3 }}>
-                          {a.filename} ({a.size_bytes} {t("repo.settings.bytes")})
+                          <button
+                            type="button"
+                            className="underline"
+                            onClick={() =>
+                              void downloadReleaseAsset(repoId!, r.id, a).catch((e) =>
+                                toast.error(e instanceof Error ? e.message : String(e)),
+                              )
+                            }
+                          >
+                            {a.filename}
+                          </button>{" "}
+                          ({a.size_bytes} {t("repo.settings.bytes")})
                         </div>
                       ))}
                     </div>

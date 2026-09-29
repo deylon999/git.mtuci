@@ -64,7 +64,7 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
       return;
     }
     let cancelled = false;
-    async function load() {
+    const load = async () => {
       setLoading(true);
       setError(null);
       try {
@@ -109,7 +109,7 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }
+    };
     void load();
     return () => {
       cancelled = true;

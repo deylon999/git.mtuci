@@ -20,29 +20,57 @@ const getColors = (isDarkTheme: boolean) => ({
   switchActive: "#2563eb",
 });
 
+type SystemSettings = {
+  registrationOpen: boolean;
+  requireEmailVerification: boolean;
+  autoApproveUsers: boolean;
+  maintenanceMode: boolean;
+  maxUsers: number;
+  sessionTimeout: number;
+};
+
+type NotificationSettings = {
+  newUsers: boolean;
+  systemErrors: boolean;
+  securityAlerts: boolean;
+  dailyReports: boolean;
+};
+
+const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
+  registrationOpen: true,
+  requireEmailVerification: true,
+  autoApproveUsers: false,
+  maintenanceMode: false,
+  maxUsers: 1000,
+  sessionTimeout: 24,
+};
+
+const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  newUsers: true,
+  systemErrors: true,
+  securityAlerts: true,
+  dailyReports: false,
+};
+
+// Corrupted or older saved JSON falls back to (or is completed by) the defaults.
+function loadSaved<T extends object>(key: string, defaults: T): T {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
+  } catch {
+    return defaults;
+  }
+}
+
 export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettingsPageProps) {
   const { t } = useUserPreferences();
-  const [systemSettings, setSystemSettings] = useState(() => {
-    const saved = localStorage.getItem("adminSystemSettings");
-    return saved ? JSON.parse(saved) : {
-      registrationOpen: true,
-      requireEmailVerification: true,
-      autoApproveUsers: false,
-      maintenanceMode: false,
-      maxUsers: 1000,
-      sessionTimeout: 24,
-    };
-  });
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>(() =>
+    loadSaved("adminSystemSettings", DEFAULT_SYSTEM_SETTINGS),
+  );
 
-  const [notificationSettings, setNotificationSettings] = useState(() => {
-    const saved = localStorage.getItem("adminNotificationSettings");
-    return saved ? JSON.parse(saved) : {
-      newUsers: true,
-      systemErrors: true,
-      securityAlerts: true,
-      dailyReports: false,
-    };
-  });
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(() =>
+    loadSaved("adminNotificationSettings", DEFAULT_NOTIFICATION_SETTINGS),
+  );
 
   useEffect(() => {
     localStorage.setItem("adminSystemSettings", JSON.stringify(systemSettings));

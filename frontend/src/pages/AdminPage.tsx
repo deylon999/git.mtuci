@@ -448,8 +448,8 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   const prevNew = countNewInRange(twoWeeksAgo, oneWeekAgo, () => true);
   const currentActive = countNewInRange(oneWeekAgo, now, isActiveUser);
   const prevActive = countNewInRange(twoWeeksAgo, oneWeekAgo, isActiveUser);
-  const currentPending = countNewInRange(oneWeekAgo, now, (u) => u.is_pending);
-  const prevPending = countNewInRange(twoWeeksAgo, oneWeekAgo, (u) => u.is_pending);
+  const currentPending = countNewInRange(oneWeekAgo, now, (u) => Boolean(u.is_pending));
+  const prevPending = countNewInRange(twoWeeksAgo, oneWeekAgo, (u) => Boolean(u.is_pending));
   const currentBlocked = countNewInRange(oneWeekAgo, now, (u) => u.is_blocked);
   const prevBlocked = countNewInRange(twoWeeksAgo, oneWeekAgo, (u) => u.is_blocked);
 

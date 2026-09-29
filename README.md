@@ -372,12 +372,13 @@ docker compose restart api
 ```
 POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB,
 GITEA_ADMIN_USERNAME, GITEA_ADMIN_PASSWORD, GITEA_ADMIN_EMAIL,
-GITEA_PUBLIC_URL, GITEA_WEBHOOK_ALLOWED_HOST_LIST, GITEA_WEBHOOK_SECRET,
+GITEA_PUBLIC_URL, GITEA_DOMAIN, GITEA_WEBHOOK_ALLOWED_HOST_LIST, GITEA_WEBHOOK_SECRET,
 JWT_SECRET_KEY, MTUCI_CREDENTIALS_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD
 ```
 
 - Если в `backend/.env` задан `DATABASE_URL`, он важнее `POSTGRES_*` — пропишите в нём те же учётные данные или удалите его.
 - Postgres публикуется только на `127.0.0.1:5432`; снаружи сервера БД недоступна.
+- `GITEA_DOMAIN` — хост Gitea без схемы и порта (например `git.mtuci.ru`), попадает в SSH-ссылки для clone.
 
 ---
 

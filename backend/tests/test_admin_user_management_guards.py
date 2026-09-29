@@ -38,6 +38,9 @@ class _Result:
         # No custom RolePermission rows: role defaults apply.
         return []
 
+    def first(self):
+        return self._target
+
 
 class _Session:
     def __init__(self, target: User | None):

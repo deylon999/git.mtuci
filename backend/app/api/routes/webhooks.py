@@ -32,6 +32,7 @@ from app.services.activity_service import (
 )
 from app.services.notification_service import create_pr_comment_notification
 from app.services.logging_service import log_event_background
+from app.services.user_service import get_user_by_email
 from app.core.security import get_current_user
 from app.api.routes.websocket import broadcast_new_activity, broadcast_stats_update
 
@@ -268,12 +269,9 @@ async def handle_push_event(body: bytes, session: AsyncSession, logger: logging.
     user_id = None
     logger.info(f"Webhook received from pusher_email: {pusher_email}")
     if pusher_email:
-        result = await session.execute(
-            select(User.id).where(User.email == pusher_email)
-        )
-        user_row = result.scalar_one_or_none()
-        if user_row:
-            user_id = user_row
+        pusher = await get_user_by_email(session, pusher_email)
+        if pusher:
+            user_id = pusher.id
             logger.info(f"Found user_id: {user_id} for email: {pusher_email}")
         else:
             logger.warning(f"No user found for email: {pusher_email}")

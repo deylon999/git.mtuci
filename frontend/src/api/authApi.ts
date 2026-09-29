@@ -103,10 +103,12 @@ export async function getMe(opts?: { force?: boolean }): Promise<UserRead> {
 }
 
 export async function changeMyPassword(oldPassword: string, newPassword: string): Promise<void> {
-  await apiRequest<void>("/users/me/password", {
+  // A password change revokes every existing token; the response carries this session's replacement.
+  const data = await apiRequest<TokenResponse>("/users/me/password", {
     method: "PATCH",
     body: { old_password: oldPassword, new_password: newPassword },
   });
+  setToken(data.access_token);
   invalidateMeCache();
 }
 

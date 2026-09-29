@@ -461,7 +461,7 @@ export default function RepoFileBrowser({
     if (readme.path === readmePath && readmeContent != null) return;
 
     let cancelled = false;
-    async function loadReadme() {
+    const loadReadme = async () => {
       setReadmeLoading(true);
       try {
         const res = await api.getFileContent(repoId, readme.path, branch);
@@ -477,7 +477,7 @@ export default function RepoFileBrowser({
       } finally {
         if (!cancelled) setReadmeLoading(false);
       }
-    }
+    };
     void loadReadme();
     return () => {
       cancelled = true;

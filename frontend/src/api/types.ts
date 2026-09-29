@@ -164,6 +164,7 @@ export interface ServiceStatus {
 export interface BackupInfo {
   last_backup: string | null;
   next_backup: string | null;
+  last_backup_size_mb: number | null;
 }
 
 export interface FacultyCommitsStat {

@@ -1,15 +1,34 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password, verify_password
 from app.models.user import User, UserRole
 
 
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
 async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
-    result = await session.execute(select(User).where(User.email == email))
-    return result.scalar_one_or_none()
+    """Case-insensitive lookup (new emails are stored lowercased).
+
+    Legacy rows may differ only by case; prefer the exact spelling, then the oldest account.
+    """
+    result = await session.execute(
+        select(User)
+        .where(func.lower(User.email) == normalize_email(email))
+        .order_by((User.email == email.strip()).desc(), User.created_at)
+        .limit(1)
+    )
+    return result.scalars().first()
+
+
+def set_user_password(user: User, new_password: str) -> None:
+    """Change the password and invalidate every JWT issued before (see User.token_version)."""
+    user.password_hash = hash_password(new_password)
+    user.token_version = (user.token_version or 0) + 1
 
 
 async def get_user_by_id(session: AsyncSession, user_id) -> User | None:
@@ -32,21 +51,17 @@ async def authenticate_user(session: AsyncSession, email: str, password: str) ->
 
 
 async def get_next_student_id(session: AsyncSession) -> str:
-    """Generate next student ID like '1', '2', '3', etc. Uses max+1 logic."""
-    from sqlalchemy import func, cast, BigInteger
-    from sqlalchemy.sql import select
+    """Next free numeric student ID ('1', '2', ...).
 
-    # Admins and CSV imports may store IDs like "БВТ2201-12": casting those to a number
-    # fails the whole query, so only purely numeric IDs (that fit a bigint) take part.
-    result = await session.execute(
-        select(func.max(cast(User.student_id, BigInteger)))
-        .select_from(User)
-        .where(User.student_id.regexp_match(r"^[0-9]{1,18}$"))
-    )
-    max_id = result.scalar()
-    
-    next_id = (max_id or 0) + 1
-    return str(next_id)
+    A DB sequence (migration 0046) gives concurrent registrations distinct values; admins
+    can still assign numeric IDs by hand, so values that are already taken are skipped.
+    """
+    for _ in range(1000):
+        candidate = str(await session.scalar(text("SELECT nextval('student_id_seq')")))
+        taken = await session.scalar(select(User.id).where(User.student_id == candidate).limit(1))
+        if taken is None:
+            return candidate
+    raise RuntimeError("Could not allocate a free student ID")
 
 
 async def register_user(session: AsyncSession, *, email: str, password: str, full_name: str, auto_student_id: bool = True) -> User:
@@ -59,7 +74,7 @@ async def register_user(session: AsyncSession, *, email: str, password: str, ful
         student_id = await get_next_student_id(session)
 
     user = User(
-        email=email,
+        email=normalize_email(email),
         password_hash=hash_password(password),
         full_name=full_name,
         role=UserRole.student,
@@ -141,7 +156,7 @@ async def reset_user_password(session: AsyncSession, *, user_id, new_password: s
     if not user:
         raise ValueError("User not found")
 
-    user.password_hash = hash_password(new_password)
+    set_user_password(user, new_password)
     session.add(user)
     await session.commit()
 

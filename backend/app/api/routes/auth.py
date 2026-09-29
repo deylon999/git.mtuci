@@ -3,7 +3,6 @@ import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 import bcrypt
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.credential_crypto import encrypt_secret
@@ -24,7 +23,7 @@ from app.schemas.user import UserRead
 from pydantic import BaseModel
 from app.services.password_reset_service import request_password_reset, reset_password_by_token
 from app.services.mtuci_service import fetch_student_info, MTUCIAuthError, MTUCIServiceError
-from app.services.user_service import get_next_student_id
+from app.services.user_service import get_next_student_id, get_user_by_email, normalize_email
 from app.services.activity_service import log_login
 from app.services.logging_service import log_info, log_warning, log_event_background
 
@@ -71,8 +70,7 @@ async def register(
 ):
     _ensure_password_confirmation(payload.password, payload.confirm_password)
     # Проверяем уникальность email.
-    existing = await session.execute(select(User).where(User.email == str(payload.email)))
-    if existing.scalar_one_or_none():
+    if await get_user_by_email(session, str(payload.email)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered",
@@ -85,7 +83,7 @@ async def register(
     student_id = await get_next_student_id(session)
 
     user = User(
-        email=str(payload.email),
+        email=normalize_email(str(payload.email)),
         password_hash=password_hash,
         full_name=payload.full_name,
         role=UserRole.student,
@@ -114,8 +112,7 @@ async def register_student_mtuci(
     """
     # Check email uniqueness
     _ensure_password_confirmation(payload.password, payload.confirm_password)
-    existing = await session.execute(select(User).where(User.email == str(payload.email)))
-    if existing.scalar_one_or_none():
+    if await get_user_by_email(session, str(payload.email)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered",
@@ -157,7 +154,7 @@ async def register_student_mtuci(
     student_id = await get_next_student_id(session)
 
     user = User(
-        email=str(payload.email),
+        email=normalize_email(str(payload.email)),
         password_hash=password_hash,
         full_name=full_name,
         role=UserRole.student,
@@ -182,8 +179,7 @@ async def login(
 ):
     ip_address = get_client_ip(request)
     
-    user = await session.execute(select(User).where(User.email == str(payload.email)))
-    user_obj = user.scalar_one_or_none()
+    user_obj = await get_user_by_email(session, str(payload.email))
     if not user_obj:
         # Log failed login attempt in background
         asyncio.create_task(log_event_background(
@@ -259,6 +255,7 @@ async def login(
     # Если remember_me=True, токен живет 30 дней, иначе 1 день
     access_token = create_access_token(
         str(user_obj.id),
+        extra_claims={"tv": user_obj.token_version or 0},
         expires_days=30 if payload.remember_me else 1
     )
     return TokenResponse(access_token=access_token)

@@ -575,7 +575,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     let cancelled = false;
     setCheckLogOpenId(null);
     setCheckLogText("");
-    async function loadDetail() {
+    const loadDetail = async () => {
       setDetailLoading(true);
       try {
         const res = await api.getPullDetail!(repoId, selectedPullNumber);
@@ -585,7 +585,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
       } finally {
         if (!cancelled) setDetailLoading(false);
       }
-    }
+    };
     void loadDetail();
     return () => {
       cancelled = true;
@@ -1568,7 +1568,7 @@ function WikiPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
   useEffect(() => {
     if (!activeSlug) return;
     let cancelled = false;
-    async function load() {
+    const load = async () => {
       setLoadingPage(true);
       try {
         const res = await api.getWikiContent(repoId, activeSlug);
@@ -1584,7 +1584,7 @@ function WikiPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
       } finally {
         if (!cancelled) setLoadingPage(false);
       }
-    }
+    };
     void load();
     return () => {
       cancelled = true;

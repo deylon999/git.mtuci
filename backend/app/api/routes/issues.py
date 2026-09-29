@@ -56,14 +56,25 @@ async def _require_repo_access(
     await ensure_min_repo_role(db, user=user, repo=repo, min_role=min_role)
 
 
-async def _issue_for_comment_or_404(service: IssueService, comment_id: UUID):
+async def _comment_and_issue_or_404(service: IssueService, comment_id: UUID):
     comment = await service.get_comment(comment_id)
     if not comment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
     issue = await service.get_issue(comment.issue_id)
     if not issue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    return comment, issue
+
+
+async def _issue_for_comment_or_404(service: IssueService, comment_id: UUID):
+    _comment, issue = await _comment_and_issue_or_404(service, comment_id)
     return issue
+
+
+async def _require_comment_edit_rights(db: AsyncSession, *, user: User, comment, issue) -> None:
+    # Authors edit/delete their own comments; anyone else needs repo admin (owner / teacher).
+    min_role = RepoAccessRole.read if comment.author_id == user.id else RepoAccessRole.admin
+    await _require_repo_access(db, user=user, repository_id=issue.repository_id, min_role=min_role)
 
 
 def _issue_user_response(user: object) -> IssueUserResponse:
@@ -404,8 +415,8 @@ async def update_comment(
     current_user: User = Depends(get_current_user),
 ):
     service = IssueService(db)
-    issue = await _issue_for_comment_or_404(service, comment_id)
-    await _require_repo_access(db, user=current_user, repository_id=issue.repository_id, min_role=RepoAccessRole.write)
+    comment, issue = await _comment_and_issue_or_404(service, comment_id)
+    await _require_comment_edit_rights(db, user=current_user, comment=comment, issue=issue)
     updated = await service.update_comment(comment_id, data)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
@@ -419,8 +430,8 @@ async def delete_comment(
     current_user: User = Depends(get_current_user),
 ):
     service = IssueService(db)
-    issue = await _issue_for_comment_or_404(service, comment_id)
-    await _require_repo_access(db, user=current_user, repository_id=issue.repository_id, min_role=RepoAccessRole.write)
+    comment, issue = await _comment_and_issue_or_404(service, comment_id)
+    await _require_comment_edit_rights(db, user=current_user, comment=comment, issue=issue)
     ok = await service.delete_comment(comment_id)
     if not ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")

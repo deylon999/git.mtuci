@@ -61,32 +61,27 @@ def test_review_and_issue_comment_routes_are_distinct() -> None:
         assert _route_owner("/comments/{comment_id}", method).endswith("routes.issues")
 
 
-# --- 13. Next student ID ignores non-numeric IDs ----------------------------------
+# --- 13 / 7. Student IDs come from a DB sequence and skip taken values -------------
 
-def test_next_student_id_query_skips_non_numeric_ids() -> None:
-    from sqlalchemy.dialects import postgresql
-
+def test_next_student_id_uses_sequence_and_skips_taken_ids() -> None:
     from app.services.user_service import get_next_student_id
 
-    seen: list[str] = []
-
     class _Session:
-        def __init__(self, value):
-            self.value = value
+        def __init__(self, sequence, taken):
+            self.sequence = iter(sequence)
+            self.taken = taken
+            self.last = None
 
-        async def execute(self, stmt):
-            seen.append(str(stmt.compile(dialect=postgresql.dialect())))
-            value = self.value
+        async def scalar(self, stmt):
+            if "nextval" in str(stmt):
+                self.last = next(self.sequence)
+                return self.last
+            # "SELECT users.id WHERE student_id = <candidate>"
+            return uuid4() if str(self.last) in self.taken else None
 
-            class _R:
-                def scalar(self):
-                    return value
-
-            return _R()
-
-    assert asyncio.run(get_next_student_id(_Session(41))) == "42"
-    assert asyncio.run(get_next_student_id(_Session(None))) == "1"
-    assert "~" in seen[0] and "BIGINT" in seen[0]
+    assert asyncio.run(get_next_student_id(_Session([7], taken=set()))) == "7"
+    # Admin already assigned "8" and "9" by hand: the generator moves past them.
+    assert asyncio.run(get_next_student_id(_Session([8, 9, 10], taken={"8", "9"}))) == "10"
 
 
 # --- 14. Rate limit is per user behind a shared proxy IP --------------------------
@@ -178,6 +173,12 @@ def test_password_reset_email_is_sent_from_worker_thread(monkeypatch) -> None:
 
     class _Result:
         def scalar_one_or_none(self):
+            return user
+
+        def scalars(self):
+            return self
+
+        def first(self):
             return user
 
     class _Session:

@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 from uuid import UUID
@@ -8,16 +9,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_session
-from app.core.security import get_current_user, get_current_user_allow_pending, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    decode_access_token,
+    get_current_user,
+    get_current_user_allow_pending,
+    oauth2_scheme,
+    verify_password,
+)
 from app.core.permissions import require_permission
 from app.models.user import UserRole
+from app.schemas.auth import TokenResponse
 from app.schemas.user import ChangePasswordRequest, StudentUserRead, UpdateAvatarDisplayModeRequest, UserRead
 from app.schemas.user_settings import UserSettingsRead, UserSettingsUpdate
 from app.services.user_settings_service import (
     apply_user_settings_update,
     read_user_settings,
 )
-from app.services.user_service import get_user_by_id, get_users_by_role
+from app.services.user_service import get_user_by_id, get_users_by_role, set_user_password
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -108,12 +117,13 @@ async def patch_my_settings(
     return read_user_settings(current_user)
 
 
-@router.patch("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+@router.patch("/me/password", response_model=TokenResponse)
 async def change_my_password(
     payload: ChangePasswordRequest,
+    token: str = Depends(oauth2_scheme),
     current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> TokenResponse:
     if not verify_password(payload.old_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -125,9 +135,19 @@ async def change_my_password(
             detail="New password must be different from old password",
         )
 
-    current_user.password_hash = hash_password(payload.new_password)
+    # Bumps token_version: every other session is logged out. This one gets a fresh
+    # token with the same expiry so the user stays signed in here.
+    set_user_password(current_user, payload.new_password)
     session.add(current_user)
     await session.commit()
+    expires_at = datetime.fromtimestamp(decode_access_token(token)["exp"], tz=timezone.utc)
+    return TokenResponse(
+        access_token=create_access_token(
+            str(current_user.id),
+            extra_claims={"tv": current_user.token_version},
+            expires_at=expires_at,
+        )
+    )
 
 
 @router.get("/students", response_model=list[StudentUserRead])

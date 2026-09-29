@@ -110,7 +110,7 @@ export const MarkdownWithLinks: React.FC<MarkdownWithLinksProps> = ({
     const matches: Array<{ index: number; length: number; node: React.ReactNode }> = [];
 
     // Find all issue references
-    let match;
+    let match: RegExpExecArray | null;
     while ((match = issueRegex.exec(text)) !== null) {
       matches.push({
         index: match.index,
@@ -130,9 +130,8 @@ export const MarkdownWithLinks: React.FC<MarkdownWithLinksProps> = ({
     // Find all commit references
     while ((match = commitRegex.exec(text)) !== null) {
       // Avoid matching inside issue references
-      const isInsideIssue = matches.some(
-        (m) => match.index >= m.index && match.index < m.index + m.length
-      );
+      const at = match.index;
+      const isInsideIssue = matches.some((m) => at >= m.index && at < m.index + m.length);
       if (!isInsideIssue) {
         matches.push({
           index: match.index,
@@ -201,9 +200,9 @@ export const MarkdownWithLinks: React.FC<MarkdownWithLinksProps> = ({
     >
       <ReactMarkdown
         components={{
-          code({ node, inline, className, children, ...props }) {
+          code({ node, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '');
-            if (!inline && match) {
+            if (match) {
               const codeText = String(children).replace(/\n$/, '');
               if (syntaxHighlighter && syntaxStyle) {
                 const Highlighter = syntaxHighlighter;

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, String, ForeignKey, JSON
+from sqlalchemy import Boolean, DateTime, Integer, String, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import Enum as SAEnum
@@ -66,3 +66,5 @@ class User(Base):
         default=None,
     )
     preferences: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Bumped on every password change/reset; JWTs carry it as "tv", so older tokens stop working.
+    token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

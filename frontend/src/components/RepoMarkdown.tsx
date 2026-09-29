@@ -152,7 +152,7 @@ export default function RepoMarkdown({ content, theme }: RepoMarkdownProps) {
                   customStyle={{ margin: 0, background: "transparent", padding: 0 }}
                   PreTag="div"
                 >
-                  {children}
+                  {String(children).replace(/\n$/, "")}
                 </SyntaxHighlighter>
               );
             }

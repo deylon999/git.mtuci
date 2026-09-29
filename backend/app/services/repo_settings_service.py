@@ -31,6 +31,7 @@ from app.services.gitea_service import (
     create_gitea_repo_webhook,
     delete_gitea_deploy_key,
     delete_gitea_repo_webhook,
+    test_gitea_repo_webhook,
     upsert_gitea_branch_protection,
 )
 from app.services.repo_access_service import ensure_can_manage_repo_access
@@ -339,18 +340,40 @@ async def create_webhook(
     return _hook_read(row)
 
 
+async def _gitea_hook_target(session: AsyncSession, *, repo: Repository) -> tuple[str, str] | None:
+    if not repo.owner_id:
+        return None
+    owner_user = await session.get(User, repo.owner_id)
+    repo_name = (repo.gitea_repo_name or repo.name or "").strip()
+    if not owner_user or not repo_name:
+        return None
+    owner = await resolve_repo_owner(primary_owner=resolve_gitea_username(owner_user), repo_name=repo_name)
+    return owner, repo_name
+
+
 async def test_webhook_delivery(session: AsyncSession, *, repo: Repository, webhook_id: UUID) -> RepoWebhookRead:
     row = await session.get(RepositoryWebhook, webhook_id)
     if not row or row.repository_id != repo.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
-    row.last_delivery_status = "test_ok"
-    row.last_delivery_at = datetime.now(timezone.utc)
-    row.updated_at = datetime.now(timezone.utc)
+    target = await _gitea_hook_target(session, repo=repo) if row.gitea_hook_id is not None else None
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Webhook is not registered in Gitea")
+    # Gitea sends the event itself (subject to its webhook ALLOWED_HOST_LIST); it only
+    # confirms the delivery was queued, so that is the status we can honestly record.
+    try:
+        await test_gitea_repo_webhook(owner=target[0], repo=target[1], hook_id=row.gitea_hook_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Gitea could not queue the test delivery") from exc
+    now = datetime.now(timezone.utc)
+    row.last_delivery_status = "test_queued"
+    row.last_delivery_at = now
+    row.updated_at = now
     await session.flush()
     return _hook_read(row)
 
 
 async def redeliver_webhook(session: AsyncSession, *, repo: Repository, webhook_id: UUID) -> RepoWebhookRead:
+    # Gitea's API has no replay of past deliveries; send a fresh test event instead.
     return await test_webhook_delivery(session, repo=repo, webhook_id=webhook_id)
 
 
@@ -358,14 +381,10 @@ async def delete_webhook(session: AsyncSession, *, repo: Repository, webhook_id:
     row = await session.get(RepositoryWebhook, webhook_id)
     if not row or row.repository_id != repo.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
-    if row.gitea_hook_id is not None and repo.owner_id:
-        owner_user = await session.get(User, repo.owner_id)
-        if owner_user:
-            owner = resolve_gitea_username(owner_user)
-            repo_name = (repo.gitea_repo_name or repo.name or "").strip()
-            if repo_name:
-                gitea_owner = await resolve_repo_owner(primary_owner=owner, repo_name=repo_name)
-                await delete_gitea_repo_webhook(owner=gitea_owner, repo=repo_name, hook_id=row.gitea_hook_id)
+    if row.gitea_hook_id is not None:
+        target = await _gitea_hook_target(session, repo=repo)
+        if target:
+            await delete_gitea_repo_webhook(owner=target[0], repo=target[1], hook_id=row.gitea_hook_id)
     await session.delete(row)
 
 

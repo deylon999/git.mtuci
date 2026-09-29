@@ -45,8 +45,16 @@ def verify_password(password: str, password_hash: str) -> bool:
     )
 
 
-def create_access_token(subject: str, *, extra_claims: dict[str, Any] | None = None, expires_days: int | None = None) -> str:
-    if expires_days:
+def create_access_token(
+    subject: str,
+    *,
+    extra_claims: dict[str, Any] | None = None,
+    expires_days: int | None = None,
+    expires_at: datetime | None = None,
+) -> str:
+    if expires_at:
+        expire = expires_at
+    elif expires_days:
         expire = datetime.now(timezone.utc) + timedelta(days=expires_days)
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -78,6 +86,9 @@ async def _user_from_token(token: str, session: AsyncSession):
     user = await get_user_by_id(session, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    # Tokens without "tv" predate token versioning and count as version 0.
+    if int(payload.get("tv") or 0) != (getattr(user, "token_version", None) or 0):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired, please log in again")
     if getattr(user, "is_blocked", False):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is blocked")
     return user

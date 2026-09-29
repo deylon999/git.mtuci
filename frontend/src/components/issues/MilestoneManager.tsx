@@ -229,7 +229,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
               onChange={(e) =>
                 setFormData({ ...formData, due_date: e.target.value ? new Date(e.target.value).toISOString() : undefined })
               }
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
               sx={issueFieldSx(theme, { mb: 2 })}
             />
             <Box sx={{ display: 'flex', gap: 1 }}>

@@ -9,6 +9,7 @@ import {
   Send,
   XCircle,
 } from "lucide-react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import {
   getIssueByNumber,
@@ -45,7 +46,7 @@ function formatDateTime(date: string) {
   });
 }
 
-function timelineEventLabel(t: (key: string, fallback?: string) => string, event: IssueTimelineEvent) {
+function timelineEventLabel(t: TFunction, event: IssueTimelineEvent) {
   if (event.type === "created") return t("repo.issues.timelineEvents.created", "Created");
   if (event.type === "comment") return t("repo.issues.timelineEvents.comment", "Comment");
   if (event.type === "closed") return t("repo.issues.timelineEvents.closed", "Closed");

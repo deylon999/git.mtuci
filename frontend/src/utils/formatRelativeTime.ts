@@ -5,7 +5,7 @@ function localeTag(locale: Locale): string {
   return locale === "en" ? "en-US" : "ru-RU";
 }
 
-export function formatRelativeTime(iso: string, now = new Date(), locale = getI18nLocale()): string {
+export function formatRelativeTime(iso: string | Date, now = new Date(), locale = getI18nLocale()): string {
   const date = new Date(iso);
   const diffMs = now.getTime() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);

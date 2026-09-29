@@ -75,35 +75,14 @@ def test_issues_enforce_repo_role_read_vs_write(monkeypatch) -> None:
         app.dependency_overrides.clear()
 
 
-def test_reviews_enforce_write_role(monkeypatch) -> None:
-    import app.api.routes.reviews as reviews_route
-
-    current_user = _user()
-    repo_id = uuid4()
-    repo = type("Repo", (), {"id": repo_id, "owner_id": uuid4(), "is_blocked": False})()
-
-    app.dependency_overrides[get_current_user] = lambda: current_user
-
-    async def _session_override():
-        yield _DummySession(repo)
-
-    app.dependency_overrides[get_session] = _session_override
-
-    async def _deny_write(session, *, user, repo, min_role):
-        if min_role == RepoAccessRole.write:
-            raise HTTPException(status_code=403, detail="write denied")
-
-    monkeypatch.setattr(reviews_route, "ensure_min_repo_role", _deny_write)
-
-    try:
-        client = TestClient(app)
-        resp = client.post(
-            f"/pull-requests/{repo_id}/reviews",
-            json={"state": "commented", "body": "Looks good"},
-        )
-        assert resp.status_code == 403
-    finally:
-        app.dependency_overrides.clear()
+def test_legacy_unscoped_review_routes_are_removed() -> None:
+    # /pull-requests/{id}/... checked access against the PR id as if it were a repository id;
+    # the scoped /repositories/{id}/pulls/{n}/... routes replace them (see test below).
+    client = TestClient(app)
+    some_id = uuid4()
+    for path in (f"/pull-requests/{some_id}/reviews", f"/pull-requests/{some_id}/threads"):
+        assert client.post(path, json={}).status_code == 404
+        assert client.get(path).status_code == 404
 
 
 def test_reviews_scoped_enforce_write_role(monkeypatch) -> None:

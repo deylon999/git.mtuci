@@ -151,29 +151,6 @@ async def get_threads_scoped(
     )
 
 
-@router.post("/pull-requests/{pull_request_id}/reviews", response_model=PullRequestReviewResponse, status_code=status.HTTP_201_CREATED)
-async def create_review(
-    pull_request_id: UUID,
-    data: PullRequestReviewCreate,
-    db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-):
-    await _require_repo_access(db, user=current_user, repository_id=pull_request_id, min_role=RepoAccessRole.write)
-    service = ReviewService(db)
-    return await service.create_review(pull_request_id, current_user.id, data)
-
-
-@router.get("/pull-requests/{pull_request_id}/reviews", response_model=list[PullRequestReviewResponse])
-async def get_reviews(
-    pull_request_id: UUID,
-    db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-):
-    await _require_repo_access(db, user=current_user, repository_id=pull_request_id, min_role=RepoAccessRole.read)
-    service = ReviewService(db)
-    return await service.get_reviews(pull_request_id)
-
-
 @router.get("/reviews/{review_id}", response_model=PullRequestReviewResponse)
 async def get_review(
     review_id: UUID,
@@ -194,30 +171,6 @@ async def get_review(
 
 
 # Threads
-@router.post("/pull-requests/{pull_request_id}/threads", response_model=ReviewThreadResponse, status_code=status.HTTP_201_CREATED)
-async def create_thread(
-    pull_request_id: UUID,
-    data: ReviewThreadCreate,
-    db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-):
-    await _require_repo_access(db, user=current_user, repository_id=pull_request_id, min_role=RepoAccessRole.write)
-    service = ReviewService(db)
-    return await service.create_thread(pull_request_id, data)
-
-
-@router.get("/pull-requests/{pull_request_id}/threads", response_model=list[ReviewThreadResponse])
-async def get_threads(
-    pull_request_id: UUID,
-    resolved: bool | None = None,
-    db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-):
-    await _require_repo_access(db, user=current_user, repository_id=pull_request_id, min_role=RepoAccessRole.read)
-    service = ReviewService(db)
-    return await service.get_threads(pull_request_id, resolved)
-
-
 @router.get("/threads/{thread_id}", response_model=ReviewThreadResponse)
 async def get_thread(
     thread_id: UUID,
@@ -320,12 +273,13 @@ async def update_comment(
     current_user: User = Depends(get_current_user),
 ):
     service = ReviewService(db)
-    _comment, thread = await _comment_with_thread_or_404(service, comment_id)
+    comment, thread = await _comment_with_thread_or_404(service, comment_id)
+    # Authors edit/delete their own comments; anyone else needs repo admin (owner / teacher).
     await _require_repo_access(
         db,
         user=current_user,
         repository_id=(thread.repository_id or thread.pull_request_id),
-        min_role=RepoAccessRole.write,
+        min_role=RepoAccessRole.read if comment.author_id == current_user.id else RepoAccessRole.admin,
     )
     updated = await service.update_comment(comment_id, data)
     if not updated:
@@ -340,12 +294,13 @@ async def delete_comment(
     current_user: User = Depends(get_current_user),
 ):
     service = ReviewService(db)
-    _comment, thread = await _comment_with_thread_or_404(service, comment_id)
+    comment, thread = await _comment_with_thread_or_404(service, comment_id)
+    # Authors edit/delete their own comments; anyone else needs repo admin (owner / teacher).
     await _require_repo_access(
         db,
         user=current_user,
         repository_id=(thread.repository_id or thread.pull_request_id),
-        min_role=RepoAccessRole.write,
+        min_role=RepoAccessRole.read if comment.author_id == current_user.id else RepoAccessRole.admin,
     )
     ok = await service.delete_comment(comment_id)
     if not ok:

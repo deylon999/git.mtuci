@@ -3,13 +3,16 @@ from __future__ import annotations
 import asyncio
 import glob
 import re
-from uuid import UUID
+from pathlib import Path
+from uuid import UUID, uuid4
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import SessionLocal, get_session
 from app.core.security import get_current_user
 from app.models.release import ReleaseAsset, ReleasePublishJob, RepositoryRegistryIntegration, RepositoryRelease
@@ -32,6 +35,10 @@ from app.utils.upload_paths import path_within, safe_upload_filename
 
 router = APIRouter(prefix="/repositories/{repository_id}", tags=["releases"])
 _release_publish_tasks: dict[str, asyncio.Task] = {}
+
+# Matches nginx client_max_body_size (frontend/nginx.conf).
+_MAX_RELEASE_ASSET_BYTES = 100 * 1024 * 1024
+_LEGACY_RELEASES_DIR = Path("backend/uploads/releases")
 
 
 async def _repo_guard(session: AsyncSession, repository_id: UUID, user: User, role: RepoAccessRole) -> Repository:
@@ -276,23 +283,71 @@ async def upload_release_asset(
     release = await session.get(RepositoryRelease, release_id)
     if not release or release.repository_id != repository_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release not found")
-    base = path_within("backend/uploads/releases", str(repository_id), str(release_id))
+    base = path_within(settings.UPLOAD_DIR, "releases", str(repository_id), str(release_id))
     base.mkdir(parents=True, exist_ok=True)
     filename = safe_upload_filename(file.filename)
-    target = path_within(base, filename)
-    raw = await file.read()
-    target.write_bytes(raw)
-    asset = ReleaseAsset(
-        release_id=release_id,
-        filename=filename,
-        content_type=file.content_type or "application/octet-stream",
-        size_bytes=len(raw),
-        storage_path=str(target.as_posix()),
-        uploaded_by=current_user.id,
+    # Unique on disk: two uploads of "app.zip" must not overwrite each other's file.
+    target = path_within(base, f"{uuid4().hex}_{filename}")
+    size = 0
+    try:
+        # Stream to disk instead of reading the whole upload into memory.
+        with target.open("wb") as out:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > _MAX_RELEASE_ASSET_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail="Release asset is too large",
+                    )
+                out.write(chunk)
+        session.add(
+            ReleaseAsset(
+                release_id=release_id,
+                filename=filename,
+                content_type=file.content_type or "application/octet-stream",
+                size_bytes=size,
+                storage_path=str(target),
+                uploaded_by=current_user.id,
+            )
+        )
+        await session.commit()
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+    return {"status": "ok", "filename": filename, "size_bytes": size}
+
+
+def _release_asset_path(asset: ReleaseAsset) -> Path:
+    path = Path(asset.storage_path).resolve()
+    # Assets uploaded before the move to UPLOAD_DIR live under the old cwd-relative folder.
+    for root in (Path(settings.UPLOAD_DIR) / "releases", _LEGACY_RELEASES_DIR):
+        try:
+            path.relative_to(root.resolve())
+        except ValueError:
+            continue
+        if path.is_file():
+            return path
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release asset not found")
+
+
+@router.get("/releases/{release_id}/assets/{asset_id}")
+async def download_release_asset(
+    repository_id: UUID,
+    release_id: UUID,
+    asset_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> FileResponse:
+    await _repo_guard(session, repository_id, current_user, RepoAccessRole.read)
+    release = await session.get(RepositoryRelease, release_id)
+    asset = await session.get(ReleaseAsset, asset_id)
+    if not release or release.repository_id != repository_id or not asset or asset.release_id != release_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release asset not found")
+    return FileResponse(
+        _release_asset_path(asset),
+        media_type=asset.content_type or "application/octet-stream",
+        filename=asset.filename,
     )
-    session.add(asset)
-    await session.commit()
-    return {"status": "ok", "filename": filename, "size_bytes": len(raw)}
 
 
 @router.get("/registries", response_model=list[RegistryIntegrationRead])

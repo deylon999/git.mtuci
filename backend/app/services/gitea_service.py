@@ -427,6 +427,19 @@ async def delete_gitea_repo_webhook(*, owner: str, repo: str, hook_id: int) -> N
         raise RuntimeError(f"Gitea webhook delete failed: {resp.status_code} {resp.text[:300]}")
 
 
+async def test_gitea_repo_webhook(*, owner: str, repo: str, hook_id: int) -> None:
+    """Ask Gitea to send a test push event to the hook; Gitea delivers it asynchronously."""
+    base_url = settings.GITEA_URL.rstrip("/")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await _gitea_request(
+            client,
+            "POST",
+            f"{base_url}/api/v1/repos/{gitea_owner_path(owner)}/{quote(repo, safe='')}/hooks/{hook_id}/tests",
+        )
+    if resp.status_code not in (200, 204):
+        raise RuntimeError(f"Gitea webhook test failed: {resp.status_code} {resp.text[:300]}")
+
+
 async def create_gitea_deploy_key(
     *,
     owner: str,

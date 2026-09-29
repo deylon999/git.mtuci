@@ -279,6 +279,11 @@ def _course_upload_dir(*, course_id: UUID) -> FsPath:
     return path_within(settings.UPLOAD_DIR, "courses", str(course_id))
 
 
+def _remove_stored_files(paths) -> None:
+    for path in paths:
+        FsPath(path).unlink(missing_ok=True)
+
+
 async def _store_submission_upload(
     upload: UploadFile,
     *,
@@ -925,50 +930,48 @@ async def create_assignment_endpoint(
     if start_dt > deadline_dt:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Start date cannot be after deadline")
 
-    # Process uploaded files
-    file_infos = []
-    import os
     import shutil
-    from pathlib import Path
-    
-    UPLOAD_DIR = Path("/app/uploads/assignments")
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    
-    for file in files:
-        if file.filename:
-            file_id = str(uuid4())
-            ext = Path(file.filename).suffix
-            storage_name = f"{file_id}{ext}"
-            storage_path = UPLOAD_DIR / storage_name
-            
-            # Save file
-            with open(storage_path, "wb") as f:
-                shutil.copyfileobj(file.file, f)
-            
-            file_infos.append({
-                "original_filename": file.filename,
-                "storage_path": str(storage_path),
-                "content_type": file.content_type,
-                "file_size": os.path.getsize(storage_path),
-            })
 
+    # Files are written only after the permission check and removed again if the
+    # assignment is not created, so rejected or failed requests leave nothing on disk.
+    upload_dir = FsPath(settings.UPLOAD_DIR) / "assignments"
+    written: list[FsPath] = []
     try:
         teacher_id = await _resolve_teacher_id_for_course_actor(
             session=session,
             current_user=current_user,
             course_id=course_id,
         )
-        assignment = await create_assignment(
-            session,
-            teacher_id=teacher_id,
-            course_id=course_id,
-            title=title,
-            description=description,
-            start_date=start_dt,
-            deadline=deadline_dt,
-            late_penalty_periods=penalty_periods,
-            files=file_infos if file_infos else None,
-        )
+        file_infos: list[dict] = []
+        try:
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            for file in files:
+                if not file.filename:
+                    continue
+                storage_path = path_within(upload_dir, f"{uuid4()}{FsPath(file.filename).suffix}")
+                written.append(storage_path)
+                with open(storage_path, "wb") as f:
+                    shutil.copyfileobj(file.file, f)
+                file_infos.append({
+                    "original_filename": file.filename,
+                    "storage_path": str(storage_path),
+                    "content_type": file.content_type,
+                    "file_size": os.path.getsize(storage_path),
+                })
+            assignment = await create_assignment(
+                session,
+                teacher_id=teacher_id,
+                course_id=course_id,
+                title=title,
+                description=description,
+                start_date=start_dt,
+                deadline=deadline_dt,
+                late_penalty_periods=penalty_periods,
+                files=file_infos if file_infos else None,
+            )
+        except BaseException:
+            _remove_stored_files(written)
+            raise
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ValueError as e:
@@ -1278,33 +1281,39 @@ async def submit_assignment_endpoint(
             detail=f"Too many stored files. Maximum is {_MAX_SUBMISSION_FILES}.",
         )
 
-    new_attachments = [
-        await _store_submission_upload(
-            upload,
-            course_id=course_id,
-            assignment_id=assignment_id,
-            student_id=current_user.id,
-            kind=kind,
-            uploaded_at=now,
+    new_attachments: list[dict] = []
+    try:
+        for upload, kind in uploads:
+            new_attachments.append(
+                await _store_submission_upload(
+                    upload,
+                    course_id=course_id,
+                    assignment_id=assignment_id,
+                    student_id=current_user.id,
+                    kind=kind,
+                    uploaded_at=now,
+                )
+            )
+
+        submission.answer_text = cleaned_answer
+        submission.repository_url = cleaned_repo_url
+        submission.attachments = existing_attachments + new_attachments
+        submission.submitted_at = now
+        session.add(submission)
+        await session.flush()
+
+        await notify_submission_created(
+            session,
+            student=current_user,
+            assignment=assignment,
+            course=course,
+            submission=submission,
         )
-        for upload, kind in uploads
-    ]
-
-    submission.answer_text = cleaned_answer
-    submission.repository_url = cleaned_repo_url
-    submission.attachments = existing_attachments + new_attachments
-    submission.submitted_at = now
-    session.add(submission)
-    await session.flush()
-
-    await notify_submission_created(
-        session,
-        student=current_user,
-        assignment=assignment,
-        course=course,
-        submission=submission,
-    )
-    await session.commit()
+        await session.commit()
+    except BaseException:
+        # Nothing was saved in the DB, so files already written would be orphaned.
+        _remove_stored_files(a["storage_path"] for a in new_attachments)
+        raise
     await session.refresh(submission)
 
     return MyGradeRead(

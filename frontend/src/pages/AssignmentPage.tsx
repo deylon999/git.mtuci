@@ -234,7 +234,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     if (!courseId || !assignmentId) return;
     let cancelled = false;
 
-    async function load() {
+    const load = async () => {
       setLoading(true);
       setError(null);
       try {
@@ -259,7 +259,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }
+    };
 
     load();
     return () => {
@@ -279,7 +279,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     if (me.role === "teacher" && !selectedRepoStudentId) return;
     let cancelled = false;
 
-    async function loadRepoData() {
+    const loadRepoData = async () => {
       try {
         const [commitsRes, filesRes] = await Promise.all([
           getCommits(courseId, assignmentId, me.role === "teacher" ? selectedRepoStudentId : undefined),
@@ -291,7 +291,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : t("repo.errors.loadFailed"));
       }
-    }
+    };
 
     loadRepoData();
     return () => {
@@ -303,7 +303,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     if (!courseId || !assignmentId || me?.role !== "teacher") return;
     let cancelled = false;
 
-    async function loadSubmissions() {
+    const loadSubmissions = async () => {
       setSubmissionsLoading(true);
       setSubmissionsError(null);
       try {
@@ -325,7 +325,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
       } finally {
         if (!cancelled) setSubmissionsLoading(false);
       }
-    }
+    };
 
     loadSubmissions();
     return () => {
@@ -337,7 +337,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     if (!courseId || !assignmentId || me?.role !== "student") return;
     let cancelled = false;
 
-    async function loadMyGrade() {
+    const loadMyGrade = async () => {
       setMyGradeLoading(true);
       setMyGradeError(null);
       try {
@@ -351,7 +351,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
       } finally {
         if (!cancelled) setMyGradeLoading(false);
       }
-    }
+    };
 
     loadMyGrade();
     return () => {

@@ -236,7 +236,7 @@ function csvCell(value: string | number | null | undefined): string {
   return s;
 }
 
-function downloadCsv(filename: string, rows: string[][]): void {
+function downloadCsv(filename: string, rows: (string | number)[][]): void {
   const body = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
   const blob = new Blob(["\uFEFF", body], { type: "text/csv;charset=utf-8" });
   const url = window.URL.createObjectURL(blob);
@@ -253,7 +253,7 @@ function downloadCsv(filename: string, rows: string[][]): void {
 export async function exportAdminReportsCSV(): Promise<void> {
   const data = await getAdminReportsOverview();
   const date = new Date().toISOString().slice(0, 10);
-  const rows: string[][] = [
+  const rows: (string | number)[][] = [
     ["metric", "value"],
     ["total_users", data.total_users],
     ["pending_users", data.pending_users],

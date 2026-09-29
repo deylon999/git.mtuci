@@ -25,6 +25,8 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
   const { t, tp, language } = useUserPreferences();
   const dateLocale = language === "en" ? "en-US" : "ru-RU";
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
+  const diskPercent = metrics?.disk_percent ?? 0;
+  const diskHigh = diskPercent > 80;
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus | null>(null);
   const [backups, setBackups] = useState<Awaited<ReturnType<typeof getBackups>> | null>(null);
   const [incidents, setIncidents] = useState<Array<{ level: string; message: string; created_at: string }>>([]);
@@ -336,7 +338,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
           {/* Disk */}
           <div style={{
             backgroundColor: ac.card,
-            border: metrics?.disk_percent > 80 ? `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.warning}60` : `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`,
+            border: diskHigh ? `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.warning}60` : `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`,
             borderRadius: "10px", padding: "14px 16px",
             display: "flex", alignItems: "center", gap: "12px",
             boxShadow: isDarkTheme ? 'none' : theme.shadow
@@ -361,9 +363,9 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               display: "inline-flex", alignItems: "center",
               borderRadius: "6px", padding: "2px 7px",
               fontSize: "10px", fontWeight: "500", whiteSpace: "nowrap",
-              ...getBadgeStyle(metrics?.disk_percent > 80 ? theme.warning : theme.success)
+              ...getBadgeStyle(diskHigh ? theme.warning : theme.success)
             }}>
-              {metrics?.disk_percent > 80 ? "!" : "OK"}
+              {diskHigh ? "!" : "OK"}
             </span>
           </div>
         </div>
@@ -422,7 +424,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                   <div style={{
                     height: "100%", borderRadius: "3px", transition: "width 0.3s",
                     width: `${metrics?.disk_percent || 0}%`,
-                    backgroundColor: metrics?.disk_percent > 80 ? theme.warning : theme.accent2,
+                    backgroundColor: diskHigh ? theme.warning : theme.accent2,
                     opacity: 0.9
                   }} />
                 </div>
@@ -487,7 +489,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
                 <span style={{ color: theme.text2 }}>{t("admin.monitoring.diskFree")}</span>
-                <span style={{ fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px", color: metrics?.disk_percent > 80 ? theme.warning : theme.text }}>
+                <span style={{ fontWeight: "500", fontFamily: "'Courier New', monospace", fontSize: "11px", color: diskHigh ? theme.warning : theme.text }}>
                   {metrics?.disk_total_gb != null && metrics?.disk_used_gb != null
                     ? `${(metrics.disk_total_gb - metrics.disk_used_gb).toFixed(1)} ${t("admin.monitoring.gb")}`
                     : EMPTY}
@@ -776,12 +778,12 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               <span style={{ fontSize: "10px", color: theme.text2, fontWeight: "400" }}>{t("admin.monitoring.last24h")}</span>
             </div>
             <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
-              {metrics?.disk_percent > 80 && (
+              {diskHigh && (
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
                   <div style={{ width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0, marginTop: "3px", backgroundColor: theme.warning }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: "12px", color: theme.text, lineHeight: 1.4 }}>
-{tp("admin.monitoring.diskAlert", { n: metrics.disk_percent.toFixed(0) })}
+{tp("admin.monitoring.diskAlert", { n: diskPercent.toFixed(0) })}
                     </div>
                     <div style={{ fontSize: "10px", color: theme.text3, marginTop: "2px" }}>{t("admin.monitoring.active")}</div>
                   </div>

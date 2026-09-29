@@ -14,7 +14,7 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-type ApiMethod = "GET" | "POST" | "DELETE" | "PATCH";
+type ApiMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
 
 async function parseJson<T>(res: Response): Promise<T> {
   const text = await res.text();

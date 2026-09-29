@@ -59,6 +59,8 @@ from app.schemas.user import (
 from app.services.user_service import (
     delete_user_by_id,
     get_all_users,
+    get_user_by_email,
+    normalize_email,
     reset_user_password,
     update_user_role_and_block,
 )
@@ -770,7 +772,7 @@ async def import_users_csv(
     
     for row_num, row in enumerate(reader, start=2):  # Start from 2 (header is row 1)
         try:
-            email = row.get('email', '').strip()
+            email = normalize_email(row.get('email') or '')
             full_name = row.get('full_name', '').strip()
             role_str = row.get('role', '').strip().lower()
             group_name = row.get('group_name', '').strip() or None
@@ -790,10 +792,7 @@ async def import_users_csv(
                 continue
 
             # Check if user already exists
-            existing = await session.execute(
-                select(User).where(User.email == email)
-            )
-            if existing.scalar_one_or_none():
+            if await get_user_by_email(session, email):
                 errors.append(f"Row {row_num}: User with email '{email}' already exists")
                 continue
             

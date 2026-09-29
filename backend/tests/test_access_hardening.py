@@ -52,6 +52,9 @@ class _Result:
     def all(self):
         return []
 
+    def first(self):
+        return self._value
+
 
 class _Session:
     def __init__(self, value=None, users: dict | None = None):
@@ -61,6 +64,10 @@ class _Session:
 
     async def execute(self, stmt):
         return _Result(self.value)
+
+    async def scalar(self, stmt):
+        # nextval('student_id_seq') -> 1; "is this student_id taken?" -> no.
+        return 1 if "nextval" in str(stmt) else None
 
     async def get(self, model, key):
         return self.users.get(key)

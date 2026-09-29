@@ -23,7 +23,6 @@ class ReleaseAssetRead(BaseModel):
     filename: str
     content_type: str
     size_bytes: int
-    storage_path: str
     uploaded_at: datetime
 
 

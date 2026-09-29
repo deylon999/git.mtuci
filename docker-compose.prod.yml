@@ -16,6 +16,9 @@ services:
       GITEA__admin__DEFAULT_ADMIN_PASSWORD: ${GITEA_ADMIN_PASSWORD:?set in .env}
       GITEA__admin__DEFAULT_ADMIN_EMAIL: ${GITEA_ADMIN_EMAIL:?set in .env}
       GITEA__server__ROOT_URL: ${GITEA_PUBLIC_URL:?set in .env}
+      # Host shown in clone links (SSH clone URLs use SSH_DOMAIN); the base file says localhost.
+      GITEA__server__DOMAIN: ${GITEA_DOMAIN:?set in .env}
+      GITEA__server__SSH_DOMAIN: ${GITEA_DOMAIN:?set in .env}
       # Do not use wildcard in production.
       GITEA__webhook__ALLOWED_HOST_LIST: ${GITEA_WEBHOOK_ALLOWED_HOST_LIST:?set in .env}
 

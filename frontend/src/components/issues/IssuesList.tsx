@@ -440,7 +440,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
               onChange={(e) => setFormData({ ...formData, milestone_id: e.target.value || undefined })}
               label={t("repo.issues.form.milestone", "Milestone")}
               sx={issueFieldSx(theme)}
-              MenuProps={{ PaperProps: { sx: issueMenuPaperSx(theme) } }}
+              MenuProps={{ slotProps: { paper: { sx: issueMenuPaperSx(theme) } } }}
             >
               <MenuItem value="">
                 <em>{t("common.none", "None")}</em>

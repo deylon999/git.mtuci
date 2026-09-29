@@ -55,7 +55,7 @@ from app.models.issue import Issue, IssueLabel, IssueMilestone, IssueComment, Is
 from app.models.review import PullRequestReview, ReviewThread, ReviewComment
 from app.models.search import SavedSearch
 from app.models.release import RepositoryRelease, ReleaseAsset, RepositoryRegistryIntegration
-from sqlalchemy import select
+from app.services.user_service import get_user_by_email, normalize_email
 
 
 @asynccontextmanager
@@ -151,28 +151,26 @@ async def create_super_admin_if_missing() -> None:
 
     try:
         async with SessionLocal() as session:
-            result = await session.execute(select(User).where(User.email == admin_email))
-            existing = result.scalar_one_or_none()
+            existing = await get_user_by_email(session, admin_email)
+            if existing:
+                # Only bootstrap a missing account. Re-promoting/unblocking an existing one on
+                # every restart would undo a deliberate block and would hand admin rights to
+                # whoever registered this email after the original account was deleted.
+                if existing.role != UserRole.admin or existing.is_blocked:
+                    print(f"[startup] ADMIN_EMAIL {admin_email} exists but is not an active admin; left unchanged")
+                return
 
-            if not existing:
-                existing = User(
-                    email=admin_email,
+            session.add(
+                User(
+                    email=normalize_email(admin_email),
                     password_hash=hash_password(admin_password),
                     full_name="Super Admin",
                     role=UserRole.admin,
                     is_blocked=False,
                     is_pending=False,
                 )
-                session.add(existing)
-                await session.commit()
-                await session.refresh(existing)
-            else:
-                # На случай, если пользователь уже существует, гарантируем права супер-админа.
-                existing.role = UserRole.admin
-                existing.is_blocked = False
-                existing.is_pending = False
-                session.add(existing)
-                await session.commit()
+            )
+            await session.commit()
     except Exception as e:
         # Не валим старт сервиса из-за проблем с созданием админа.
         print(f"[startup] Failed to create super admin: {e}")

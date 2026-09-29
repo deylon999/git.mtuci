@@ -1,11 +1,10 @@
-import { apiRequest } from "./client";
+import { API_URL, apiRequest, getToken } from "./client";
 
 export interface ReleaseAsset {
   id: string;
   filename: string;
   content_type: string;
   size_bytes: number;
-  storage_path: string;
   uploaded_at: string;
 }
 
@@ -96,11 +95,11 @@ export async function uploadReleaseAsset(
   const onProgress = opts?.onProgress;
   if (onProgress) {
     await new Promise<void>((resolve, reject) => {
-      const token = localStorage.getItem("access_token");
+      const token = getToken();
       const form = new FormData();
       form.append("file", file);
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", `/api/repositories/${repositoryId}/releases/${releaseId}/assets`);
+      xhr.open("POST", `${API_URL}/repositories/${repositoryId}/releases/${releaseId}/assets`);
       if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
       xhr.upload.onprogress = (ev) => {
         if (!ev.lengthComputable) return;
@@ -119,10 +118,10 @@ export async function uploadReleaseAsset(
     });
     return;
   }
-  const token = localStorage.getItem("access_token");
+  const token = getToken();
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(`/api/repositories/${repositoryId}/releases/${releaseId}/assets`, {
+  const res = await fetch(`${API_URL}/repositories/${repositoryId}/releases/${releaseId}/assets`, {
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     body: form,
@@ -130,6 +129,27 @@ export async function uploadReleaseAsset(
   if (!res.ok) {
     throw new Error(`Upload failed (${res.status})`);
   }
+}
+
+export async function downloadReleaseAsset(
+  repositoryId: string,
+  releaseId: string,
+  asset: ReleaseAsset,
+): Promise<void> {
+  const token = getToken();
+  const res = await fetch(
+    `${API_URL}/repositories/${repositoryId}/releases/${releaseId}/assets/${encodeURIComponent(asset.id)}`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : undefined },
+  );
+  if (!res.ok) throw new Error(`Download failed (${res.status})`);
+  const url = window.URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = asset.filename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
 }
 
 export function listRepositoryRegistries(repositoryId: string): Promise<RegistryIntegration[]> {

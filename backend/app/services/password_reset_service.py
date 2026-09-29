@@ -8,10 +8,10 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import hash_password
 from app.models.password_reset_token import PasswordResetToken
 from app.models.user import User
 from app.services.email_service import send_reset_email
+from app.services.user_service import get_user_by_email, set_user_password
 
 
 def _hash_token(token: str) -> str:
@@ -19,8 +19,7 @@ def _hash_token(token: str) -> str:
 
 
 async def request_password_reset(session: AsyncSession, *, email: str) -> None:
-    user_result = await session.execute(select(User).where(User.email == email))
-    user = user_result.scalar_one_or_none()
+    user = await get_user_by_email(session, email)
     if not user:
         return
 
@@ -63,7 +62,7 @@ async def reset_password_by_token(session: AsyncSession, *, token: str, new_pass
     if not user:
         return False
 
-    user.password_hash = hash_password(new_password)
+    set_user_password(user, new_password)
     await session.execute(delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id))
     await session.commit()
     return True

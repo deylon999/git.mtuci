@@ -3,6 +3,7 @@ Middleware for automatic HTTP request logging.
 Logs all requests, especially 4xx/5xx errors, with timing information.
 """
 
+import logging
 import time
 from typing import Callable
 from uuid import UUID
@@ -16,6 +17,8 @@ from app.core.security import decode_access_token
 from app.models.system_log import LogLevel, LogSource
 from app.services.logging_service import log_event_background
 from app.services.system_log_display import resolve_log_display_user
+
+logger = logging.getLogger(__name__)
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
@@ -46,15 +49,6 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             except (JWTError, ValueError, TypeError):
                 pass
 
-        if user_id:
-            async with SessionLocal() as session:
-                user_email, user_full_name = await resolve_log_display_user(
-                    session,
-                    user_id=user_id,
-                    user_email=user_email,
-                    user_full_name=user_full_name,
-                )
-
         response = await call_next(request)
 
         duration_ms = (time.time() - start_time) * 1000
@@ -76,6 +70,20 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             return response
 
         message = f"{request.method} {path} - {status_code} ({duration_ms:.0f}ms)"
+
+        # Look the user up only for requests that are actually logged (most GETs return above),
+        # and never let a failed lookup turn an already finished response into an error.
+        if user_id:
+            try:
+                async with SessionLocal() as session:
+                    user_email, user_full_name = await resolve_log_display_user(
+                        session,
+                        user_id=user_id,
+                        user_email=user_email,
+                        user_full_name=user_full_name,
+                    )
+            except Exception as exc:
+                logger.warning("Could not resolve user %s for request log: %s", user_id, exc)
 
         # Await write so user fields are not lost (create_task was unreliable here).
         await log_event_background(

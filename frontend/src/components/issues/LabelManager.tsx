@@ -251,7 +251,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
                 label={formData.name || t('repo.issues.labels.preview', 'Preview')}
                 sx={{
                   backgroundColor: formData.color,
-                  color: parseInt(formData.color.slice(1), 16) > 0xffffff / 2 ? '#000' : '#fff',
+                  color: parseInt((formData.color ?? '').slice(1), 16) > 0xffffff / 2 ? '#000' : '#fff',
                 }}
               />
               <Box sx={{ flexGrow: 1 }} />
@@ -298,7 +298,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
                   </Box>
                 }
                 secondary={label.description}
-                secondaryTypographyProps={{ sx: { color: theme.text2 } }}
+                slotProps={{ secondary: { sx: { color: theme.text2 } } }}
               />
               <ListItemSecondaryAction>
                 <IconButton edge="end" onClick={() => startEdit(label)} sx={{ mr: 1, color: theme.text2 }}>

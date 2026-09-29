@@ -917,7 +917,7 @@ export function TeacherTableBody({
   );
 }
 
-export function TeacherTh({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function TeacherTh({ children, className = "" }: { children?: ReactNode; className?: string }) {
   return <th className={`px-3 py-2 font-medium whitespace-nowrap ${className}`}>{children}</th>;
 }
 
