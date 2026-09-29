@@ -95,10 +95,11 @@ app.add_middleware(MetricsMiddleware)
 app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.RATE_LIMIT_RPM)
 app.add_middleware(TracingMiddleware)
 
-# Mount uploads directory for serving avatar images
-uploads_dir = Path(settings.UPLOAD_DIR)
-uploads_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+# Only avatars are public. Submissions and course files live in the same UPLOAD_DIR but are
+# served by permission-checked endpoints, so the whole directory must not be mounted.
+avatars_dir = Path(settings.UPLOAD_DIR) / "avatars"
+avatars_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads/avatars", StaticFiles(directory=avatars_dir), name="avatars")
 
 app.include_router(auth_router)
 app.include_router(admin_router)

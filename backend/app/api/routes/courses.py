@@ -146,11 +146,28 @@ def _max_grade_for_weeks_late(periods: list[dict], weeks_late: int) -> float:
             continue
         if weeks > 0:
             normalized.append((weeks, max_grade))
+    if not normalized:
+        # No tiers configured: students are shown no penalty rules, so none applies.
+        return float("inf")
     normalized.sort(key=lambda x: x[0])
     for max_weeks, max_grade in normalized:
         if weeks_late <= max_weeks:
             return max_grade
     return 0.0
+
+
+def _late_max_grade(periods: list[dict], weeks_late: int) -> float | None:
+    """Grade cap for API responses: None when late work is not capped (inf is not JSON)."""
+    cap = _max_grade_for_weeks_late(periods, weeks_late)
+    return None if cap == float("inf") else cap
+
+
+def _weeks_late(submitted_at: datetime, deadline: datetime) -> int:
+    """Started weeks past the deadline: one minute late is week 1, 7 days + 1 hour is week 2."""
+    late_seconds = (_as_utc(submitted_at) - _as_utc(deadline)).total_seconds()
+    if late_seconds <= 0:
+        return 0
+    return math.ceil(late_seconds / (7 * 24 * 3600))
 
 
 _MAX_SUBMISSION_FILE_BYTES = 50 * 1024 * 1024
@@ -227,7 +244,7 @@ def _submission_status_read(
         penalty_points=submission.penalty_points if submission else 0.0,
         weeks_late=submission.weeks_late if submission else 0,
         late_max_grade=(
-            _max_grade_for_weeks_late(assignment.late_penalty_periods, submission.weeks_late)
+            _late_max_grade(assignment.late_penalty_periods, submission.weeks_late)
             if submission and submission.weeks_late > 0
             else None
         ),
@@ -1295,7 +1312,7 @@ async def submit_assignment_endpoint(
         final_grade=submission.final_grade,
         penalty_points=submission.penalty_points,
         weeks_late=submission.weeks_late,
-        late_max_grade=_max_grade_for_weeks_late(assignment.late_penalty_periods, submission.weeks_late)
+        late_max_grade=_late_max_grade(assignment.late_penalty_periods, submission.weeks_late)
         if submission.weeks_late > 0
         else None,
         comment=submission.comment,
@@ -1440,10 +1457,7 @@ async def grade_submission_endpoint(
         submission=submission,
         last_commit_at=last_commit_at,
     )
-    weeks_late = 0
-    if submitted_at_for_grade and submitted_at_for_grade > assignment.deadline:
-        days_late = (submitted_at_for_grade - assignment.deadline).days
-        weeks_late = max(0, math.ceil(days_late / 7))
+    weeks_late = _weeks_late(submitted_at_for_grade, assignment.deadline) if submitted_at_for_grade else 0
     cap_max_grade = _max_grade_for_weeks_late(assignment.late_penalty_periods, weeks_late)
     final_grade = float(payload.grade) if cap_max_grade == float("inf") else min(float(payload.grade), cap_max_grade)
     penalty_points = max(0.0, float(payload.grade) - final_grade)
@@ -1526,7 +1540,7 @@ async def get_my_grade_endpoint(
         final_grade=submission.final_grade,
         penalty_points=submission.penalty_points,
         weeks_late=submission.weeks_late,
-        late_max_grade=_max_grade_for_weeks_late(assignment.late_penalty_periods, submission.weeks_late)
+        late_max_grade=_late_max_grade(assignment.late_penalty_periods, submission.weeks_late)
         if submission.weeks_late > 0
         else None,
         comment=submission.comment,

@@ -311,7 +311,8 @@ async def get_comments(
     return await service.get_comments(thread_id)
 
 
-@router.patch("/comments/{comment_id}", response_model=ReviewCommentResponse)
+# Not /comments/{id}: issues.py owns that path and is registered first.
+@router.patch("/review-comments/{comment_id}", response_model=ReviewCommentResponse)
 async def update_comment(
     comment_id: UUID,
     data: ReviewCommentUpdate,
@@ -332,7 +333,7 @@ async def update_comment(
     return updated
 
 
-@router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/review-comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_comment(
     comment_id: UUID,
     db: AsyncSession = Depends(get_session),

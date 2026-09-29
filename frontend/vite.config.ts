@@ -50,6 +50,10 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           ws: true,
         },
+        "/uploads/avatars": {
+          target: proxyTarget,
+          changeOrigin: true,
+        },
       },
     },
   };

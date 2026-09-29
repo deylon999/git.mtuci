@@ -54,8 +54,8 @@ async def upload_avatar(
     with open(file_path, "wb") as f:
         f.write(contents)
     
-    # Update user avatar_url with full URL
-    current_user.avatar_url = f"{settings.FRONTEND_URL.replace('3001', '8000')}/uploads/avatars/{filename}"
+    # Site-relative: served from the frontend origin (nginx / Vite proxy /uploads/avatars/).
+    current_user.avatar_url = f"/uploads/avatars/{filename}"
     
     # Update display mode if valid
     from app.models.user import AvatarDisplayMode

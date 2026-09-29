@@ -33,14 +33,15 @@ async def authenticate_user(session: AsyncSession, email: str, password: str) ->
 
 async def get_next_student_id(session: AsyncSession) -> str:
     """Generate next student ID like '1', '2', '3', etc. Uses max+1 logic."""
-    from sqlalchemy import func, cast, Integer
+    from sqlalchemy import func, cast, BigInteger
     from sqlalchemy.sql import select
-    
-    # Find max student_id as integer
+
+    # Admins and CSV imports may store IDs like "БВТ2201-12": casting those to a number
+    # fails the whole query, so only purely numeric IDs (that fit a bigint) take part.
     result = await session.execute(
-        select(func.max(cast(User.student_id, Integer)))
+        select(func.max(cast(User.student_id, BigInteger)))
         .select_from(User)
-        .where(User.student_id.isnot(None))
+        .where(User.student_id.regexp_match(r"^[0-9]{1,18}$"))
     )
     max_id = result.scalar()
     

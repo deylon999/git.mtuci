@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -415,7 +416,8 @@ async def _maybe_send_teacher_daily_digest(
         f"Без проверки >{STALE_REVIEW_HOURS} ч: {stale_count}",
         f"Просроченных сдач (студенты): {missed_count}",
     ]
-    send_notification_email(
+    await asyncio.to_thread(
+        send_notification_email,
         user.email,
         subject="MTUCI — ежедневный дайджест",
         title="Сводка за день",

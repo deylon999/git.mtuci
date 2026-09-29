@@ -74,8 +74,11 @@ services:
       - AI_REVIEW_CACHE_TTL_SECONDS=900
       - AI_REVIEW_MODEL_KEEP_ALIVE_SECONDS=1800
       - AI_REVIEW_TIMEOUT_SECONDS=600
+      # Real client IP from nginx's X-Forwarded-For (nginx overwrites it, see frontend/nginx.conf).
+      - FORWARDED_ALLOW_IPS=*
     ports:
-      - "8000:8000"
+      # Host-only: browsers go through nginx (/api, /ws); a public port would let clients forge X-Forwarded-For.
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app
       - ./backups:/backups

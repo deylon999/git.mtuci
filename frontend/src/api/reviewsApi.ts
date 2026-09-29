@@ -93,7 +93,7 @@ export const getThreadComments = (threadId: string) =>
   api.get<ReviewComment[]>(`/threads/${threadId}/comments`);
 
 export const updateThreadComment = (commentId: string, data: UpdateCommentRequest) =>
-  api.patch<ReviewComment>(`/comments/${commentId}`, data);
+  api.patch<ReviewComment>(`/review-comments/${commentId}`, data);
 
 export const deleteThreadComment = (commentId: string) =>
-  api.delete(`/comments/${commentId}`);
+  api.delete(`/review-comments/${commentId}`);

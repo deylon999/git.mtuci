@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -36,7 +37,8 @@ async def request_password_reset(session: AsyncSession, *, email: str) -> None:
     session.add(token_row)
     await session.commit()
 
-    send_reset_email(user.email, raw_token)
+    # smtplib is blocking; keep it off the event loop.
+    await asyncio.to_thread(send_reset_email, user.email, raw_token)
 
 
 async def reset_password_by_token(session: AsyncSession, *, token: str, new_password: str) -> bool:

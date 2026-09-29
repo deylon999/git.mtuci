@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -111,7 +112,8 @@ async def deliver_notification(
     if prefs.email and user.email:
         link = href or "/"
         full_href = link if link.startswith("http") else None
-        send_notification_email(
+        await asyncio.to_thread(
+            send_notification_email,
             user.email,
             subject=email_subject or title,
             title=title,
