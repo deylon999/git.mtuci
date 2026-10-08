@@ -43,7 +43,7 @@ export function clearToken() {
 
 type ApiMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
 
-/** Error thrown for non-2xx responses; the message keeps the "<status> <detail>" format callers already parse. */
+/** Error thrown for non-2xx responses. `message` is the server detail (user-facing), `status` the HTTP code. */
 export class ApiError extends Error {
   readonly status: number;
 
@@ -128,7 +128,8 @@ export async function apiRequest<T>(
     } catch {
       // ignore parse errors
     }
-    const msg = detail ? `${res.status} ${detail}` : `${res.status} ${res.statusText}`;
+    // The message is shown to users as is, so it carries only the reason; the status lives in ApiError.status.
+    const msg = detail || res.statusText || `HTTP ${res.status}`;
     throw new ApiError(res.status, msg);
   }
 

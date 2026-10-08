@@ -39,26 +39,26 @@ describe("apiRequest", () => {
     const err = await apiRequest("/x").catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as InstanceType<typeof ApiError>).status).toBe(403);
-    expect((err as Error).message).toBe("403 User is blocked");
+    expect((err as Error).message).toBe("User is blocked");
     expect(isSessionRejectedError(err)).toBe(true);
   });
 
   it("formats FastAPI validation errors", async () => {
     mockFetch(422, { detail: [{ loc: ["body", "email"], msg: "invalid", type: "value_error" }] });
-    await expect(apiRequest("/x")).rejects.toThrow("422 body.email: invalid");
+    await expect(apiRequest("/x")).rejects.toThrow("body.email: invalid");
   });
 
   it("drops the token when an authenticated request gets 401", async () => {
     setToken("expired");
     mockFetch(401, { detail: "Session expired, please log in again" });
-    await expect(apiRequest("/x")).rejects.toThrow("401 Session expired");
+    await expect(apiRequest("/x")).rejects.toThrow("Session expired");
     expect(store.has("token")).toBe(false);
   });
 
   it("keeps the token on 403", async () => {
     setToken("valid");
     mockFetch(403, { detail: "Permission denied" });
-    await expect(apiRequest("/x")).rejects.toThrow("403");
+    await expect(apiRequest("/x")).rejects.toThrow("Permission denied");
     expect(store.get("token")).toBe("valid");
   });
 
