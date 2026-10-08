@@ -8,7 +8,8 @@ vi.stubGlobal("localStorage", {
   removeItem: (k: string) => void store.delete(k),
 });
 
-const { ApiError, apiRequest, isSessionRejectedError, setToken } = await import("./client");
+const { ApiError, apiRequest, clearToken, getSessionGeneration, isSessionRejectedError, onSessionCleared, setToken } =
+  await import("./client");
 
 function mockFetch(status: number, body: unknown) {
   const fetchMock = vi.fn(async () => new Response(body == null ? null : JSON.stringify(body), { status }));
@@ -65,5 +66,23 @@ describe("apiRequest", () => {
     mockFetch(500, { detail: "boom" });
     expect(isSessionRejectedError(await apiRequest("/x").catch((e: unknown) => e))).toBe(false);
     expect(isSessionRejectedError(new TypeError("Failed to fetch"))).toBe(false);
+  });
+});
+
+describe("session cleanup", () => {
+  it("runs registered cache resets and bumps the generation on clearToken", () => {
+    let resets = 0;
+    onSessionCleared(() => {
+      resets += 1;
+    });
+    onSessionCleared(() => {
+      throw new Error("broken cache reset must not block logout");
+    });
+    const before = getSessionGeneration();
+    setToken("t");
+    clearToken();
+    expect(resets).toBe(1);
+    expect(getSessionGeneration()).toBe(before + 1);
+    expect(store.has("token")).toBe(false);
   });
 });

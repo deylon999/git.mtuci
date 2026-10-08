@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { apiRequest, getSessionGeneration, onSessionCleared } from "./client";
 
 export interface NotificationSettings {
   email: boolean;
@@ -26,6 +26,8 @@ export function invalidateUserSettingsCache(): void {
   settingsInflight = null;
 }
 
+onSessionCleared(invalidateUserSettingsCache);
+
 export function seedUserSettingsCache(data: UserSettings): void {
   settingsCache = { savedAt: Date.now(), data };
   settingsInflight = null;
@@ -39,9 +41,10 @@ export function getUserSettings(): Promise<UserSettings> {
   if (settingsInflight) {
     return settingsInflight;
   }
+  const generation = getSessionGeneration();
   settingsInflight = apiRequest<UserSettings>("/users/me/settings")
     .then((data) => {
-      settingsCache = { savedAt: Date.now(), data };
+      if (generation === getSessionGeneration()) settingsCache = { savedAt: Date.now(), data };
       return data;
     })
     .finally(() => {

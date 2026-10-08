@@ -13,8 +13,32 @@ export function setToken(token: string) {
   localStorage.setItem(TOKEN_KEY, token);
 }
 
+const sessionCleanups = new Set<() => void>();
+let sessionGeneration = 0;
+
+/**
+ * Register a reset for per-user client caches. Runs whenever the session ends (logout, expiry, a new sign-in),
+ * so the next account never sees the previous one's courses, profile, settings or notifications.
+ */
+export function onSessionCleared(cleanup: () => void): void {
+  sessionCleanups.add(cleanup);
+}
+
+/** Bumped on every session change; a cache write from a request started under an older session must be dropped. */
+export function getSessionGeneration(): number {
+  return sessionGeneration;
+}
+
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+  sessionGeneration += 1;
+  for (const cleanup of sessionCleanups) {
+    try {
+      cleanup();
+    } catch {
+      // a broken cache reset must not block signing out
+    }
+  }
 }
 
 type ApiMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";

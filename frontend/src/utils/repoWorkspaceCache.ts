@@ -1,3 +1,4 @@
+import { onSessionCleared } from "../api/client";
 import type { StudentRepoSummary } from "../api/studentDashboardApi";
 import type { StudentRepoMeta } from "../hooks/useStudentRepoWorkspace";
 
@@ -7,6 +8,7 @@ export interface CachedRepoWorkspace {
 }
 
 const cache = new Map<string, CachedRepoWorkspace>();
+onSessionCleared(() => cache.clear());
 
 export function getCachedRepoWorkspace(repoId: string): CachedRepoWorkspace | undefined {
   return cache.get(repoId);

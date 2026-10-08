@@ -1,4 +1,4 @@
-import { isSessionRejectedError } from "./client";
+import { isSessionRejectedError, onSessionCleared } from "./client";
 import { seedMeCache } from "./authApi";
 import { seedNotificationsCache } from "./notificationsApi";
 import { seedSystemInfoCache } from "./systemApi";
@@ -54,6 +54,8 @@ export function resetStudentShellBootstrap(): void {
   bootstrapResolved = false;
   bootstrapSkipped = false;
 }
+
+onSessionCleared(resetStudentShellBootstrap);
 
 export function markStudentShellBootstrapSkipped(): void {
   bootstrapSkipped = true;

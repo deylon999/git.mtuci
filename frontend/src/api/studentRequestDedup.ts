@@ -1,3 +1,4 @@
+import { getSessionGeneration, onSessionCleared } from "./client";
 import { hydrateStudentAppShell } from "./studentAppBootstrap";
 import {
   getStudentAssignments,
@@ -38,9 +39,10 @@ export function getStudentMergedCoursesDeduped(refresh = false): Promise<Student
   if (!refresh && mergedInflight) {
     return mergedInflight;
   }
+  const generation = getSessionGeneration();
   mergedInflight = getStudentMergedCourses(refresh)
     .then((data) => {
-      mergedMemCache = { savedAt: Date.now(), data };
+      if (generation === getSessionGeneration()) mergedMemCache = { savedAt: Date.now(), data };
       return data;
     })
     .finally(() => {
@@ -68,10 +70,14 @@ export function getStudentProfileBundleDeduped(feedLimit = 8): Promise<StudentPr
     return Promise.resolve(profileBundleMem.data);
   }
   if (!profileBundleInflight) {
+    const generation = getSessionGeneration();
     profileBundleInflight = getStudentProfileBundle(feedLimit)
       .then((data) => {
-        hydrateStudentAppShell(data);
-        profileBundleMem = { savedAt: Date.now(), data };
+        // Drop a bundle that belongs to a session that ended while the request was in flight.
+        if (generation === getSessionGeneration()) {
+          hydrateStudentAppShell(data);
+          profileBundleMem = { savedAt: Date.now(), data };
+        }
         return data;
       })
       .finally(() => {
@@ -109,10 +115,13 @@ export function getStudentDashboardBundleDeduped(
   if (dashboardBundleInflight) {
     return dashboardBundleInflight;
   }
+  const generation = getSessionGeneration();
   dashboardBundleInflight = getStudentDashboardBundle(recentLimit, feedLimit)
     .then((data) => {
-      hydrateStudentAppShell(data);
-      dashboardBundleMem = { savedAt: Date.now(), data };
+      if (generation === getSessionGeneration()) {
+        hydrateStudentAppShell(data);
+        dashboardBundleMem = { savedAt: Date.now(), data };
+      }
       return data;
     })
     .finally(() => {
@@ -142,3 +151,13 @@ export function getStudentGroupRankingDeduped(): Promise<StudentGroupRanking> {
   }
   return groupRankingInflight;
 }
+
+onSessionCleared(() => {
+  assignmentsInflight = null;
+  mergedInflight = null;
+  mergedMemCache = null;
+  invalidateStudentProfileBundleDedup();
+  invalidateStudentDashboardBundleCache();
+  gradesInflight = null;
+  groupRankingInflight = null;
+});

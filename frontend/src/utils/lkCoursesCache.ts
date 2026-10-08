@@ -1,3 +1,4 @@
+import { onSessionCleared } from "../api/client";
 import type { StudentMergedCoursesResponse } from "../api/studentDashboardApi";
 
 const STORAGE_KEY = "mtuci:student-merged-courses:v1";
@@ -39,3 +40,6 @@ export function clearLkCoursesCache(): void {
     /* ignore */
   }
 }
+
+// sessionStorage outlives a logout in the same tab: never show the previous student's courses to the next one.
+onSessionCleared(clearLkCoursesCache);

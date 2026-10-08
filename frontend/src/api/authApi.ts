@@ -1,4 +1,4 @@
-import { apiRequest, clearToken, setToken } from "./client";
+import { apiRequest, clearToken, getSessionGeneration, onSessionCleared, setToken } from "./client";
 import type { TokenResponse, UserRead } from "./types";
 
 const ME_CACHE_TTL_MS = 15_000;
@@ -11,6 +11,8 @@ export function invalidateMeCache() {
   meCacheTs = 0;
   meInFlight = null;
 }
+
+onSessionCleared(invalidateMeCache);
 
 /** Seed from dashboard/profile bundle — avoids a separate GET /auth/me on student shell pages. */
 export function seedMeCache(user: UserRead): void {
@@ -90,10 +92,14 @@ export async function getMe(opts?: { force?: boolean }): Promise<UserRead> {
     return meInFlight;
   }
 
+  const generation = getSessionGeneration();
   meInFlight = apiRequest<UserRead>("/auth/me")
     .then((data) => {
-      meCache = data;
-      meCacheTs = Date.now();
+      // A response for the previous session (logout / account switch meanwhile) must not become "me".
+      if (generation === getSessionGeneration()) {
+        meCache = data;
+        meCacheTs = Date.now();
+      }
       return data;
     })
     .finally(() => {

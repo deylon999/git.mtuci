@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { apiRequest, getSessionGeneration, onSessionCleared } from "./client";
 import type { Notification } from "./types";
 
 let notificationsInflight: Promise<Notification[]> | null = null;
@@ -9,6 +9,8 @@ export function invalidateNotificationsCache(): void {
   notificationsCache = null;
   notificationsInflight = null;
 }
+
+onSessionCleared(invalidateNotificationsCache);
 
 export function seedNotificationsCache(data: Notification[]): void {
   notificationsCache = { savedAt: Date.now(), data };
@@ -32,9 +34,10 @@ export async function getNotifications(opts?: { limit?: number; offset?: number;
   if (notificationsInflight) {
     return notificationsInflight;
   }
+  const generation = getSessionGeneration();
   notificationsInflight = apiRequest<Notification[]>("/notifications")
     .then((data) => {
-      notificationsCache = { savedAt: Date.now(), data };
+      if (generation === getSessionGeneration()) notificationsCache = { savedAt: Date.now(), data };
       return data;
     })
     .finally(() => {
