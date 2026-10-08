@@ -48,7 +48,9 @@ export default function GradeSubmissionModal({
   if (!open || !target) return null;
 
   async function handleAccept() {
-    const parsed = Number(grade.trim());
+    // Number("") is 0, so an empty field must be rejected explicitly instead of saving a zero grade.
+    const gradeRaw = grade.trim();
+    const parsed = gradeRaw ? Number(gradeRaw) : NaN;
     if (!Number.isInteger(parsed) || parsed < 0 || parsed > target!.gradeMax) {
       setError(tp("teacher.gradeModal.gradeRangeError", { max: target!.gradeMax }));
       return;

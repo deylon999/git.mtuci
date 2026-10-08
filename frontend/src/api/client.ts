@@ -16,6 +16,25 @@ export function clearToken() {
 
 type ApiMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
 
+/** Error thrown for non-2xx responses; the message keeps the "<status> <detail>" format callers already parse. */
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+/**
+ * True when GET /auth/me rejected the session (invalid/expired token -> 401, blocked user -> 403).
+ * Network failures and 5xx errors return false so a transient outage does not log the user out.
+ */
+export function isSessionRejectedError(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 401 || err.status === 403);
+}
+
 async function parseJson<T>(res: Response): Promise<T> {
   const text = await res.text();
   if (!text) return undefined as T;
@@ -71,7 +90,7 @@ export async function apiRequest<T>(
       // ignore parse errors
     }
     const msg = detail ? `${res.status} ${detail}` : `${res.status} ${res.statusText}`;
-    throw new Error(msg);
+    throw new ApiError(res.status, msg);
   }
 
   return parseJson<T>(res);

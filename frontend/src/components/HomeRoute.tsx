@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { clearToken, getToken } from "../api/client";
+import { clearToken, getToken, isSessionRejectedError } from "../api/client";
 import { getMe } from "../api/authApi";
 import { getDefaultRouteForRole } from "../utils/defaultRoute";
 import HomePage from "../pages/HomePage";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+import AuthCheckFailed from "./AuthCheckFailed";
 
 type Props = {
   isDarkTheme?: boolean;
@@ -13,6 +14,7 @@ type Props = {
 export default function HomeRoute({ isDarkTheme = false }: Props) {
   const { t } = useUserPreferences();
   const [role, setRole] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (!getToken()) {
@@ -24,9 +26,13 @@ export default function HomeRoute({ isDarkTheme = false }: Props) {
       .then((me) => {
         if (!cancelled) setRole(me.role);
       })
-      .catch(() => {
-        clearToken();
-        if (!cancelled) setRole("guest");
+      .catch((err) => {
+        if (isSessionRejectedError(err)) {
+          clearToken();
+          if (!cancelled) setRole("guest");
+        } else if (!cancelled) {
+          setFailed(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -37,6 +43,7 @@ export default function HomeRoute({ isDarkTheme = false }: Props) {
     return <Navigate to="/login" replace />;
   }
 
+  if (failed) return <AuthCheckFailed />;
   if (role === null) {
     return <div className="text-sm text-slate-500">{t("common.loading")}</div>;
   }

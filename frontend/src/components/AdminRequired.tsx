@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
-import { getToken, clearToken } from "../api/client";
+import { getToken, clearToken, isSessionRejectedError } from "../api/client";
 import { getMe } from "../api/authApi";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+import AuthCheckFailed from "./AuthCheckFailed";
 
 export default function AdminRequired() {
   const { t } = useUserPreferences();
   const token = getToken();
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,10 +26,14 @@ export default function AdminRequired() {
         if (!cancelled) {
           setIsAdmin(me.role === "admin");
         }
-      } catch {
-        // Token протух/пользователь заблокирован.
-        clearToken();
-        if (!cancelled) setIsAdmin(false);
+      } catch (err) {
+        if (isSessionRejectedError(err)) {
+          // Token протух/пользователь заблокирован.
+          clearToken();
+          if (!cancelled) setIsAdmin(false);
+        } else if (!cancelled) {
+          setFailed(true);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -41,6 +47,7 @@ export default function AdminRequired() {
 
   if (!token) return <Navigate to="/login" replace />;
   if (loading) return <div className="text-sm text-slate-500">{t("common.loading")}</div>;
+  if (failed) return <AuthCheckFailed />;
   if (!isAdmin) return <Navigate to="/courses" replace />;
 
   return <Outlet />;

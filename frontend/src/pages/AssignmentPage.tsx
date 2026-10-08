@@ -401,7 +401,8 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     if (!courseId || !assignmentId) return;
     const gradeRaw = (gradeInputs[studentId] ?? "").trim();
     const commentRaw = commentInputs[studentId] ?? "";
-    const parsed = Number(gradeRaw);
+    // Number("") is 0, so an empty field must be rejected explicitly instead of saving a zero grade.
+    const parsed = gradeRaw ? Number(gradeRaw) : NaN;
     const gradeMax = course?.grade_max ?? 100;
     if (!Number.isInteger(parsed) || parsed < 0 || parsed > gradeMax) {
       setSubmissionsError(tp("repo.assignment.gradeIntError", { max: gradeMax }));
