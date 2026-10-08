@@ -19,6 +19,8 @@ function safeReturnPath(state: unknown): string | null {
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const registeredState = location.state as { registered?: boolean; email?: string } | null;
+  const justRegistered = Boolean(registeredState?.registered);
   const { t } = useUserPreferences();
   const { refreshUser } = useAuthUser();
 
@@ -28,7 +30,7 @@ export default function LoginPage() {
     return saved ? saved === "dark" : false;
   });
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => registeredState?.email ?? "");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -137,6 +139,12 @@ export default function LoginPage() {
               </Link>
             </div>
           </div>
+
+          {justRegistered && !error ? (
+            <div className="rounded-lg border p-3 text-sm transition-colors" style={{ backgroundColor: `${theme.success}10`, borderColor: `${theme.success}30`, color: theme.success }}>
+              {t("auth.login.registeredNotice")}
+            </div>
+          ) : null}
 
           {error ? (
             <div className="rounded-lg border p-3 text-sm transition-colors" style={{ backgroundColor: `${theme.danger}10`, borderColor: `${theme.danger}30`, color: theme.danger }}>{error}</div>

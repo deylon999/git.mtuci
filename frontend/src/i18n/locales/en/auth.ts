@@ -7,6 +7,7 @@ export const authEn = {
       backToLogin: "Back to login",
     },
     login: {
+      registeredNotice: "Your account has been created. Sign in with your email and password. If the account needs approval, access opens once an administrator approves it.",
       title: "Sign in",
       subtitle: "Sign in to view courses and assignments.",
       email: "Email",
@@ -19,6 +20,7 @@ export const authEn = {
       error: "Sign in failed",
     },
     register: {
+      mtuciCredentialsRequired: "Enter your MTUCI account login and password, or untick this option.",
       title: "Register",
       pageTitle: "Create account",
       pageSubtitle: "Create a teacher or student account (student by default).",

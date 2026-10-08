@@ -71,12 +71,17 @@ export default function RegisterPage() {
         setError(t("auth.register.passwordMismatch"));
         return;
       }
-      if (useMtuci && mtuciLogin && mtuciPassword) {
-        await registerStudentMtuci(email, password, confirmPassword, fullName, undefined, mtuciLogin, mtuciPassword);
+      if (useMtuci && (!mtuciLogin.trim() || !mtuciPassword)) {
+        // Previously fell through to a plain registration without the MTUCI link the user asked for.
+        setError(t("auth.register.mtuciCredentialsRequired"));
+        return;
+      }
+      if (useMtuci) {
+        await registerStudentMtuci(email, password, confirmPassword, fullName, undefined, mtuciLogin.trim(), mtuciPassword);
       } else {
         await register(email, password, confirmPassword, fullName, groupName);
       }
-      navigate("/login", { replace: true });
+      navigate("/login", { replace: true, state: { registered: true, email } });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("auth.register.error"));
     } finally {
