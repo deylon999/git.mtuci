@@ -200,6 +200,7 @@ export const repoPagesEn = {
     exclude: "Remove",
   },
   section: {
+    actionFailed: "The action failed",
     stateOpen: "open",
     stateClosed: "closed",
     stateMerged: "merged",

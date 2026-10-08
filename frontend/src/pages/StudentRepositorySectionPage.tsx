@@ -15,15 +15,14 @@ import {
   Minus,
   Plus,
   RotateCcw,
-  Tag,
   XCircle,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import RepoSettingsPanel from "../components/repo/RepoSettingsPanel";
 import RepoStateTabs from "../components/repo/RepoStateTabs";
 import { useStudentRepoWorkspaceContext } from "../context/StudentRepoWorkspaceContext";
 import RepoMarkdown from "../components/RepoMarkdown";
 import {
-  type StudentRepoIssue,
   type StudentRepoPull,
   type StudentRepoPullCheckItem,
   type StudentRepoPullDetailBundle,
@@ -80,70 +79,6 @@ function EmptyState({
         {hint}
       </p>
     </div>
-  );
-}
-
-function IssueRow({ theme, item }: { theme: ThemeColors; item: StudentRepoIssue }) {
-  const { t } = useUserPreferences();
-  const open = item.state === "open";
-  const stateLabel = open
-    ? t("repo.section.stateOpen")
-    : item.state === "closed"
-      ? t("repo.section.stateClosed")
-      : item.state;
-  return (
-    <li
-      className="flex gap-3 px-4 py-3.5 border-t transition-colors"
-      style={{ borderColor: theme.border }}
-    >
-      <CircleDot
-        className="h-4 w-4 shrink-0 mt-0.5"
-        style={{ color: open ? theme.success : theme.text3 }}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-mono tabular-nums" style={{ color: theme.text3 }}>
-            #{item.number}
-          </span>
-          <span
-            className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase"
-            style={{
-              backgroundColor: open ? `${theme.success}22` : theme.bg4,
-              color: open ? theme.success : theme.text3,
-            }}
-          >
-            {stateLabel}
-          </span>
-        </div>
-        <p className="text-sm font-medium mt-0.5" style={{ color: theme.text }}>
-          {item.title}
-        </p>
-        <p className="text-xs mt-1.5 flex flex-wrap gap-x-2 gap-y-1" style={{ color: theme.text3 }}>
-          {item.author_name ? <span>{item.author_name}</span> : null}
-          {item.updated_at ? <span>{t("repo.section.updated").replace("{time}", formatRelativeTime(item.updated_at))}</span> : null}
-          {item.comments_count > 0 ? (
-            <span className="inline-flex items-center gap-1">
-              <MessageSquare className="h-3 w-3" />
-              {item.comments_count}
-            </span>
-          ) : null}
-        </p>
-        {item.labels.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {item.labels.map((lb) => (
-              <span
-                key={lb}
-                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                style={{ backgroundColor: theme.bg4, color: theme.accent2 }}
-              >
-                <Tag className="h-2.5 w-2.5" />
-                {lb}
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    </li>
   );
 }
 
@@ -297,165 +232,6 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
   return out;
 }
 
-function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
-  const { t } = useUserPreferences();
-  const api = useRepoApi();
-  const [state, setState] = useState("open");
-  const [query, setQuery] = useState("");
-  const [createTitle, setCreateTitle] = useState("");
-  const [createBody, setCreateBody] = useState("");
-  const [page, setPage] = useState(1);
-  const [items, setItems] = useState<StudentRepoIssue[]>([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setPage(1);
-  }, [state, repoId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      try {
-        const res = await api.getIssues(repoId, state, page, query || undefined);
-        if (cancelled) return;
-        setItems((prev) => (page === 1 ? res.issues : [...prev, ...res.issues]));
-        setHasMore(res.has_more);
-      } catch {
-        if (!cancelled) setItems([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [repoId, state, page, query, api]);
-
-  return (
-    <PanelCard theme={theme}>
-      <div
-        className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b"
-        style={{ borderColor: theme.border }}
-      >
-        <h2 className="text-sm font-semibold" style={{ color: theme.text }}>
-          {t("repo.section.issuesTitle")}
-        </h2>
-        <div className="flex items-center gap-2">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("repo.section.issuesSearchPlaceholder")}
-            className="rounded border px-2 py-1 text-xs"
-            style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
-          />
-          <RepoStateTabs theme={theme} value={state} onChange={setState} />
-        </div>
-      </div>
-      {api.createIssue ? (
-        <div className="px-4 py-3 border-b space-y-2" style={{ borderColor: theme.border }}>
-          <input
-            value={createTitle}
-            onChange={(e) => setCreateTitle(e.target.value)}
-            placeholder={t("repo.section.issuesCreateTitlePlaceholder")}
-            className="w-full rounded border px-2 py-1.5 text-xs"
-            style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
-          />
-          <textarea
-            value={createBody}
-            onChange={(e) => setCreateBody(e.target.value)}
-            rows={2}
-            placeholder={t("repo.section.issuesCreateDescriptionPlaceholder")}
-            className="w-full rounded border px-2 py-1.5 text-xs"
-            style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
-          />
-          <button
-            type="button"
-            onClick={() => {
-              void (async () => {
-                if (!createTitle.trim() || !api.createIssue) return;
-                await api.createIssue(repoId, { title: createTitle.trim(), body: createBody.trim() || undefined });
-                setCreateTitle("");
-                setCreateBody("");
-                setPage(1);
-                const res = await api.getIssues(repoId, state, 1, query || undefined);
-                setItems(res.issues);
-                setHasMore(res.has_more);
-              })();
-            }}
-            className="rounded border px-2 py-1 text-xs"
-            style={{ borderColor: theme.border, color: theme.text2, backgroundColor: theme.bg4 }}
-          >
-            {t("repo.section.createIssue")}
-          </button>
-        </div>
-      ) : null}
-      {loading && page === 1 ? (
-        <div className="flex justify-center py-14 gap-2 text-sm" style={{ color: theme.text2 }}>
-          <Loader2 className="h-5 w-5 animate-spin" />
-          {t("repo.section.loadingShort")}
-        </div>
-      ) : items.length === 0 ? (
-        <EmptyState
-          theme={theme}
-          icon={<CircleDot className="h-6 w-6" />}
-          title={t("repo.section.noIssuesTitle")}
-          hint={t("repo.section.noIssuesHint")}
-        />
-      ) : (
-        <ul>
-          {items.map((item) => (
-            <div key={`${item.number}-${item.updated_at}`} className="border-t" style={{ borderColor: theme.border }}>
-              <IssueRow theme={theme} item={item} />
-              <div className="px-4 pb-3 flex gap-2">
-                {api.reactIssue ? (
-                  <button
-                    type="button"
-                    onClick={() => void api.reactIssue?.(repoId, item.number, "heart")}
-                    className="rounded border px-2 py-0.5 text-[10px]"
-                    style={{ borderColor: theme.border, color: theme.text3 }}
-                  >
-                    {t("repo.section.react")}
-                  </button>
-                ) : null}
-                {api.patchIssue && item.state !== "closed" ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void (async () => {
-                        await api.patchIssue?.(repoId, item.number, { state: "closed" });
-                        setItems((prev) => prev.map((x) => (x.number === item.number ? { ...x, state: "closed" } : x)));
-                      })();
-                    }}
-                    className="rounded border px-2 py-0.5 text-[10px]"
-                    style={{ borderColor: theme.border, color: theme.text3 }}
-                  >
-                    {t("repo.section.closeIssue")}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ))}
-        </ul>
-      )}
-      {hasMore && !loading ? (
-        <div className="p-4 border-t text-center" style={{ borderColor: theme.border }}>
-          <button
-            type="button"
-            onClick={() => setPage((p) => p + 1)}
-            className="text-sm font-medium hover:underline"
-            style={{ color: theme.accent2 }}
-          >
-            {t("repo.section.loadMore")}
-          </button>
-        </div>
-      ) : null}
-    </PanelCard>
-  );
-}
-
 function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
   const { t } = useUserPreferences();
   const { summary } = useStudentRepoWorkspaceContext();
@@ -466,6 +242,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
   const [items, setItems] = useState<StudentRepoPull[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [listReloadToken, setListReloadToken] = useState(0);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
@@ -544,6 +321,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     async function load() {
       setLoading(true);
       try {
+        void listReloadToken; // dependency only: bumped to force a reload of the current page
         const res = await api.getPulls(repoId, state, page);
         if (!cancelled) {
           setItems((prev) => (page === 1 ? res.pulls : [...prev, ...res.pulls]));
@@ -559,7 +337,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [repoId, state, page, api]);
+  }, [repoId, state, page, api, listReloadToken]);
 
   useEffect(() => {
     if (items.length === 0 || selectedPullNumber != null) return;
@@ -646,6 +424,11 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     return { bg: `${theme.bg4}`, fg: theme.text3 };
   };
 
+  // PR actions previously had try/finally only: a failed request was an unhandled rejection with no feedback.
+  const reportActionError = (err: unknown) => {
+    toast.error(err instanceof Error ? err.message : t("repo.section.actionFailed"));
+  };
+
   const submitReview = async (event: "comment" | "approve" | "request_changes") => {
     if (!selectedPullNumber || !api.createPullReview) return;
     setReviewLoading(true);
@@ -656,6 +439,8 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
       });
       setReviewBody("");
       await refreshDetail();
+    } catch (err) {
+      reportActionError(err);
     } finally {
       setReviewLoading(false);
     }
@@ -668,6 +453,8 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
       await api.createPullComment(repoId, selectedPullNumber, { body: discussionBody.trim() });
       setDiscussionBody("");
       await refreshDetail();
+    } catch (err) {
+      reportActionError(err);
     } finally {
       setDiscussionLoading(false);
     }
@@ -691,6 +478,8 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
       setInlineBody("");
       setInlineTarget(null);
       await refreshDetail();
+    } catch (err) {
+      reportActionError(err);
     } finally {
       setInlineLoading(false);
     }
@@ -702,8 +491,12 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     try {
       await api.mergePull(repoId, selectedPullNumber, { method: mergeMethod });
       await refreshDetail();
-      setPage(1);
       setChecksHint(null);
+      // Reload the list even when already on page 1 (setPage(1) alone was a no-op there, so the merged PR stayed "open").
+      setPage(1);
+      setListReloadToken((n) => n + 1);
+    } catch (err) {
+      reportActionError(err);
     } finally {
       setMergeLoading(false);
     }
@@ -737,6 +530,8 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
       // Quick follow-up refreshes to visualize queued -> running transitions.
       window.setTimeout(() => void refreshDetail(), 1500);
       window.setTimeout(() => void refreshDetail(), 4500);
+    } catch (err) {
+      reportActionError(err);
     } finally {
       setRetryCheckId(null);
     }
@@ -879,8 +674,10 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                     setCreateOpen(false);
                     setTitle("");
                     setBody("");
-                  } catch {
-                    // ignore, list will refresh on next load
+                    setSelectedPullNumber(pr.number);
+                  } catch (err) {
+                    // Keep the form open with the user's text and say why it failed (was silently ignored).
+                    reportActionError(err);
                   } finally {
                     setCreateLoading(false);
                   }
@@ -1680,7 +1477,7 @@ export default function StudentRepositorySectionPage({
   const theme = getTheme(isDarkTheme);
   const { repoId, meta, summary } = useStudentRepoWorkspaceContext();
 
-  if (section === "issues") return <IssuesPanel theme={theme} repoId={repoId} />;
+  // "issues" is served by IssuesPage (app-native issues); this page only renders the Gitea-backed sections.
   if (section === "pulls") return <PullsPanel theme={theme} repoId={repoId} />;
   if (section === "wiki") return <WikiPanel theme={theme} repoId={repoId} />;
   if (section === "settings") return <RepoSettingsPanel theme={theme} meta={meta} summary={summary} />;

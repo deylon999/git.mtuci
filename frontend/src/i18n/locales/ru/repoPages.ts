@@ -200,6 +200,7 @@ export const repoPagesRu = {
     exclude: "Исключить",
   },
   section: {
+    actionFailed: "Не удалось выполнить действие",
     stateOpen: "открыт",
     stateClosed: "закрыт",
     stateMerged: "смержен",
