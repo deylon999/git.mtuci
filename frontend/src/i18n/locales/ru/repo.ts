@@ -385,6 +385,7 @@ export const repoRu = {
     statBlocked: "Заблокированных",
     filterAllTypes: "Все типы",
     filterAllStatuses: "Все статусы",
+    filterAllLanguages: "Все языки",
     filterActive: "Активные",
     filterBlocked: "Заблокированные",
     searchPlaceholder: "Поиск по наз...",

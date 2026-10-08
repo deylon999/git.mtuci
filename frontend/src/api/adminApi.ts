@@ -179,6 +179,8 @@ export interface AdminRepositoriesQuery {
   repo_type?: "public" | "private" | "course";
   language?: string;
   is_blocked?: boolean;
+  /** Matches repository name, Gitea name or owner name/email. */
+  q?: string;
 }
 
 export interface AdminForkEvent {
@@ -299,8 +301,13 @@ function adminRepositoriesPath(query: AdminRepositoriesQuery): string {
   if (query.repo_type) params.set("repo_type", query.repo_type);
   if (query.language) params.set("language", query.language);
   if (query.is_blocked != null) params.set("is_blocked", String(query.is_blocked));
+  if (query.q?.trim()) params.set("q", query.q.trim());
   const qs = params.toString();
   return `/admin/repositories${qs ? `?${qs}` : ""}`;
+}
+
+export async function getAdminRepositoryLanguages(): Promise<string[]> {
+  return apiRequest<string[]>("/admin/repositories/languages");
 }
 
 export async function getAdminRepositories(

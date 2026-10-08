@@ -1368,6 +1368,7 @@ async def admin_list_repositories(
     repo_type: Optional[RepositoryType] = None,
     language: Optional[str] = None,
     is_blocked: Optional[bool] = None,
+    q: Optional[str] = Query(default=None, max_length=200),
     skip: int = 0,
     limit: int = 20,
     current_user: User = Depends(get_current_user),
@@ -1375,9 +1376,20 @@ async def admin_list_repositories(
 ) -> List[RepositoryRead]:
     """Get all repositories with optional filters and pagination (admin only).
 
+    `q` matches the repository name, its Gitea name or the owner's name/email (case-insensitive).
     The number of repositories matching the filters (ignoring skip/limit) is returned in X-Total-Count.
     """
     filters = []
+    if q and q.strip():
+        pattern = f"%{q.strip()}%"
+        filters.append(
+            or_(
+                Repository.name.ilike(pattern),
+                Repository.gitea_repo_name.ilike(pattern),
+                User.full_name.ilike(pattern),
+                User.email.ilike(pattern),
+            )
+        )
     if repo_type:
         filters.append(Repository.repo_type == repo_type)
     if language:
@@ -1385,7 +1397,14 @@ async def admin_list_repositories(
     if is_blocked is not None:
         filters.append(Repository.is_blocked == is_blocked)
 
-    total = (await session.execute(select(func.count(Repository.id)).where(*filters))).scalar() or 0
+    total = (
+        await session.execute(
+            select(func.count(Repository.id))
+            .select_from(Repository)
+            .outerjoin(User, Repository.owner_id == User.id)
+            .where(*filters)
+        )
+    ).scalar() or 0
     response.headers["X-Total-Count"] = str(total)
 
     query = (
@@ -1460,6 +1479,19 @@ async def admin_fork_events(
         offset=offset,
         event_type=event_type,
     )
+
+
+@router.get("/repositories/languages", response_model=List[str])
+@require_permission("repo_view")
+async def admin_list_repository_languages(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> List[str]:
+    """Distinct repository languages, for the admin list language filter."""
+    result = await session.execute(
+        select(Repository.language).where(Repository.language.is_not(None)).distinct().order_by(Repository.language)
+    )
+    return [lang for lang in result.scalars().all() if lang]
 
 
 @router.post("/repositories/{repository_id}/toggle-block", response_model=RepositoryRead)

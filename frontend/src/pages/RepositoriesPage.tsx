@@ -1,3 +1,4 @@
+import { useDebounce } from "../hooks/useLogs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -22,6 +23,7 @@ import {
   deleteAdminRepository,
   getAdminRepositories,
   getAdminRepositoriesPage,
+  getAdminRepositoryLanguages,
   toggleAdminRepositoryBlock,
   type AdminRepository,
 } from "../api/adminApi";
@@ -299,7 +301,10 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
 
   // Filter states
   const [typeFilter, setTypeFilter] = useState<string>("");
-  const [languageFilter] = useState<string>("");
+  const [languageFilter, setLanguageFilter] = useState<string>("");
+  const [languages, setLanguages] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebounce(searchQuery, 300);
   const [blockedFilter, setBlockedFilter] = useState<string>("");
   const [limit, setLimit] = useState(20);
   const [offset, setOffset] = useState(0);
@@ -341,6 +346,12 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
       });
   }, []);
 
+  useEffect(() => {
+    void getAdminRepositoryLanguages()
+      .then(setLanguages)
+      .catch(() => setLanguages([]));
+  }, []);
+
   // Fetch stats
   useEffect(() => {
     fetchStats();
@@ -356,6 +367,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
         repo_type: (typeFilter || undefined) as AdminRepository["repo_type"] | undefined,
         language: languageFilter || undefined,
         is_blocked: blockedFilter === "true" ? true : blockedFilter === "false" ? false : undefined,
+        q: debouncedSearch,
       });
       setRepositories(page.items);
       // Filtered total from the API. The old estimate (overview stats || page length) ignored filters and fell back
@@ -366,7 +378,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
     } finally {
       setLoading(false);
     }
-  }, [offset, limit, typeFilter, languageFilter, blockedFilter, t]);
+  }, [offset, limit, typeFilter, languageFilter, blockedFilter, debouncedSearch, t]);
 
   // Fetch repositories when filters change
   useEffect(() => {
@@ -472,6 +484,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
         repo_type: (typeFilter || undefined) as AdminRepository["repo_type"] | undefined,
         language: languageFilter || undefined,
         is_blocked: blockedFilter === "true" ? true : blockedFilter === "false" ? false : undefined,
+        q: debouncedSearch,
       });
       downloadRepositoriesCsv(repos, {
         name: t("repo.repositories.colRepository"),
@@ -636,6 +649,11 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
               <Search className={`absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 ${tableHeaderText}`} />
               <input
                 type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setOffset(0);
+                }}
                 placeholder={t("repo.repositories.searchPlaceholder")}
                 className={`w-64 pl-10 pr-4 py-2 ${filterInputBg} rounded-lg text-sm ${inputText} ${inputPlaceholder} focus:outline-none focus:border-[#484f58] transition-colors`}
               />
@@ -645,14 +663,35 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
                 label={t("repo.repositories.filterAllTypes")}
                 value={typeFilter}
                 options={typeOptions}
-                onChange={setTypeFilter}
+                onChange={(value) => {
+                  setTypeFilter(value);
+                  setOffset(0);
+                }}
                 isDarkTheme={isDarkTheme}
               />
+              {languages.length > 0 ? (
+                <Dropdown
+                  label={t("repo.repositories.filterAllLanguages")}
+                  value={languageFilter}
+                  options={[
+                    { value: "", label: t("repo.repositories.filterAllLanguages") },
+                    ...languages.map((lang) => ({ value: lang, label: lang })),
+                  ]}
+                  onChange={(value) => {
+                    setLanguageFilter(value);
+                    setOffset(0);
+                  }}
+                  isDarkTheme={isDarkTheme}
+                />
+              ) : null}
               <Dropdown
                 label={t("repo.repositories.filterAllStatuses")}
                 value={blockedFilter}
                 options={blockedOptions}
-                onChange={setBlockedFilter}
+                onChange={(value) => {
+                  setBlockedFilter(value);
+                  setOffset(0);
+                }}
                 isDarkTheme={isDarkTheme}
               />
             </div>

@@ -385,6 +385,7 @@ export const repoEn = {
     statBlocked: "Blocked",
     filterAllTypes: "All types",
     filterAllStatuses: "All statuses",
+    filterAllLanguages: "All languages",
     filterActive: "Active",
     filterBlocked: "Blocked",
     searchPlaceholder: "Search by name…",
