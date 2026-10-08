@@ -197,7 +197,12 @@ export default function GitAuthPanel({ isDarkTheme = false }: { isDarkTheme?: bo
                       type="button"
                       disabled={busy}
                       title={t("gitAuthPanel.reissueHint")}
-                      onClick={() => void rotateMyGitToken(token.id, {}).then((r) => setNewToken(r.token)).then(load)}
+                      onClick={() =>
+                        void rotateMyGitToken(token.id, {})
+                          .then((r) => setNewToken(r.token))
+                          .then(load)
+                          .catch((e) => setError(e instanceof Error ? e.message : t("common.error")))
+                      }
                       style={{ ...secondaryButtonStyle, opacity: busy ? 0.6 : 1 }}
                     >
                       {t("gitAuthPanel.reissue")}
@@ -206,7 +211,11 @@ export default function GitAuthPanel({ isDarkTheme = false }: { isDarkTheme?: bo
                       type="button"
                       disabled={busy}
                       title={t("gitAuthPanel.disableHint")}
-                      onClick={() => void revokeMyGitToken(token.id).then(load)}
+                      onClick={() =>
+                        void revokeMyGitToken(token.id)
+                          .then(load)
+                          .catch((e) => setError(e instanceof Error ? e.message : t("common.error")))
+                      }
                       style={{ ...secondaryButtonStyle, opacity: busy ? 0.6 : 1 }}
                     >
                       {t("gitAuthPanel.disable")}

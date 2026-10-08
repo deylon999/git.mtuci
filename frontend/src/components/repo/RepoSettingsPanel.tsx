@@ -159,6 +159,8 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
   const [publishDryRunByRelease, setPublishDryRunByRelease] = useState<Record<string, boolean>>({});
   const [publishResultByRelease, setPublishResultByRelease] = useState<Record<string, PublishReleaseResult | null>>({});
   const [publishJobsByRelease, setPublishJobsByRelease] = useState<Record<string, ReleasePublishJob[]>>({});
+  // Bumped after publish/retry to restart job polling, which otherwise stops once no job is queued or running.
+  const [jobsPollToken, setJobsPollToken] = useState(0);
   const initial = useMemo(
     () => ({
       name: meta?.name ?? "",
@@ -259,26 +261,33 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
   useEffect(() => {
     if (!repoId || section !== "releases" || releases.length === 0) return;
     let cancelled = false;
+    let timer: number | undefined;
+    // Poll only while some publish job is still queued/running: fetching every release every 3s forever
+    // put constant load on the API for a page that is usually idle.
     const tick = async () => {
+      let active = false;
       try {
         const pairs = await Promise.all(
           releases.map(async (r) => [r.id, await listReleasePublishJobs(repoId, r.id)] as const),
         );
         if (cancelled) return;
         const next: Record<string, ReleasePublishJob[]> = {};
-        for (const [rid, jobs] of pairs) next[rid] = jobs;
+        for (const [rid, jobs] of pairs) {
+          next[rid] = jobs;
+          if (jobs.some((job) => job.state === "queued" || job.state === "running")) active = true;
+        }
         setPublishJobsByRelease(next);
       } catch {
-        // ignore
+        active = true; // transient failure: try again on the next tick
       }
+      if (!cancelled && active) timer = window.setTimeout(() => void tick(), 3000);
     };
     void tick();
-    const timer = window.setInterval(() => void tick(), 3000);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
     };
-  }, [repoId, section, releases]);
+  }, [repoId, section, releases, jobsPollToken]);
 
   const copyClone = async () => {
     if (!cloneUrl) return;
@@ -660,8 +669,8 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                   <div key={w.id} className="text-xs flex items-center justify-between" style={{ color: theme.text2 }}>
                     <span>{w.url}</span>
                     <span className="space-x-2">
-                      <button type="button" onClick={() => void testWebhook(repoId!, w.id).then((x) => setWebhooks((arr) => arr.map((i) => (i.id === x.id ? x : i))))}>{t("repo.settings.test")}</button>
-                      <button type="button" onClick={() => void redeliverWebhook(repoId!, w.id).then((x) => setWebhooks((arr) => arr.map((i) => (i.id === x.id ? x : i))))}>{t("repo.settings.redeliver")}</button>
+                      <button type="button" onClick={() => void testWebhook(repoId!, w.id).then((x) => setWebhooks((arr) => arr.map((i) => (i.id === x.id ? x : i)))).catch((e) => toast.error(e instanceof Error ? e.message : t("repo.settings.saveFailed")))}>{t("repo.settings.test")}</button>
+                      <button type="button" onClick={() => void redeliverWebhook(repoId!, w.id).then((x) => setWebhooks((arr) => arr.map((i) => (i.id === x.id ? x : i)))).catch((e) => toast.error(e instanceof Error ? e.message : t("repo.settings.saveFailed")))}>{t("repo.settings.redeliver")}</button>
                       <button type="button" onClick={() => void deleteWebhook(repoId!, w.id).then(() => setWebhooks((arr) => arr.filter((i) => i.id !== w.id)))}>{t("repo.settings.delete")}</button>
                     </span>
                   </div>
@@ -1027,6 +1036,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                                 });
                                 setPublishResultByRelease((prev) => ({ ...prev, [r.id]: result }));
                                 if (result.ok) toast.success(result.dry_run ? t("repo.settings.dryRunPassed") : t("repo.settings.publishQueued"));
+                                if (result.job_id) setJobsPollToken((n) => n + 1);
                                 else toast.error(t("repo.settings.publishValidationFailed"));
                               } catch (e) {
                                 toast.error(e instanceof Error ? e.message : t("repo.settings.publishFailed"));
@@ -1075,6 +1085,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                                         try {
                                           await retryReleasePublishJob(repoId, job.id);
                                           toast.success(t("repo.settings.retryQueued"));
+                                          setJobsPollToken((n) => n + 1);
                                         } catch (e) {
                                           toast.error(e instanceof Error ? e.message : t("repo.settings.retryFailed"));
                                         }

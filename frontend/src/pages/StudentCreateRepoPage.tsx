@@ -108,7 +108,7 @@ export default function StudentCreateRepoPage({ isDarkTheme = false }: StudentCr
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => void navigator.clipboard.writeText(createdClone)}
+            onClick={() => void navigator.clipboard.writeText(createdClone).catch(() => undefined)}
             className="rounded-lg border px-3 py-1.5 text-xs"
             style={{ borderColor: theme.border, color: theme.text2 }}
           >
