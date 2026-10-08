@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Shield,
   Briefcase,
@@ -174,7 +174,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
   const hasChanges = JSON.stringify(categories) !== JSON.stringify(initialCategories);
 
   // Load audit logs
-  const loadAuditLogs = async () => {
+  const loadAuditLogs = useCallback(async () => {
     setAuditLoading(true);
     try {
       const logs = await getAuditLogs(selectedRole, 20);
@@ -184,13 +184,8 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
     } finally {
       setAuditLoading(false);
     }
-  };
+  }, [selectedRole]);
 
-  useEffect(() => {
-    if (showAuditLogs && currentRole?.id === "admin") {
-      loadAuditLogs();
-    }
-  }, [showAuditLogs, selectedRole]);
 
   // Load roles on mount
   useEffect(() => {
@@ -243,6 +238,12 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
   }, [selectedRole]);
 
   const currentRole = roles.find((r) => r.id === selectedRole);
+
+  useEffect(() => {
+    if (showAuditLogs && currentRole?.id === "admin") {
+      void loadAuditLogs();
+    }
+  }, [showAuditLogs, currentRole?.id, loadAuditLogs]);
 
   // Update permissions when role changes
   const handleRoleChange = (role: RoleType) => {

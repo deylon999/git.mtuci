@@ -113,7 +113,7 @@ function buildKpiView(stats: Awaited<ReturnType<typeof getStudentDashboardBundle
 export function useStudentDashboardCore(): StudentDashboardCore {
   const [state, setState] = useState<StudentDashboardCore>(initial);
   const [reloadToken, setReloadToken] = useState(0);
-  const navCounts = useStudentNavCountsOptional();
+  const setSidebarCounts = useStudentNavCountsOptional()?.setSidebarCounts;
   const { user } = useAuthUser();
 
   const refetch = useCallback(() => {
@@ -140,7 +140,7 @@ export function useStudentDashboardCore(): StudentDashboardCore {
 
         if (cancelled) return;
 
-        navCounts?.setSidebarCounts(bundle.stats.sidebar);
+        setSidebarCounts?.(bundle.stats.sidebar);
 
         const now = new Date();
         const deadlines = mapDeadlines(bundle.stats.deadlines, now);
@@ -176,7 +176,7 @@ export function useStudentDashboardCore(): StudentDashboardCore {
     return () => {
       cancelled = true;
     };
-  }, [navCounts?.setSidebarCounts, reloadToken, refetch, user]);
+  }, [setSidebarCounts, reloadToken, refetch, user]);
 
   return { ...state, refetch };
 }

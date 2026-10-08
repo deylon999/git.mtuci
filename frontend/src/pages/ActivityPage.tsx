@@ -356,7 +356,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
     } finally {
       setLoading(false);
     }
-  }, [pageSize, pageOffset, searchQuery, eventTypeFilter, userFilter, dateRange, getDateRange]);
+  }, [pageSize, pageOffset, searchQuery, eventTypeFilter, userFilter, getDateRange]);
 
   const handleExportCsv = async () => {
     setExporting(true);

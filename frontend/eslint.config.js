@@ -18,8 +18,8 @@ export default tseslint.config(
     rules: {
       // Breaking these is always a bug.
       "react-hooks/rules-of-hooks": "error",
-      // Often intentional (refs, stable setters); review each case instead of auto-fixing.
-      "react-hooks/exhaustive-deps": "warn",
+      // Intentional exceptions carry an eslint-disable comment explaining why.
+      "react-hooks/exhaustive-deps": "error",
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-vars": [
         "error",

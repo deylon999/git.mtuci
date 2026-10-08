@@ -59,6 +59,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       if (requestId === requestIdRef.current) setLoading(false);
     }
     // currentRole is a dependency so a role change reloads the permission set.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- currentRole is a deliberate reload trigger
   }, [currentUserId, currentRole]);
 
   useEffect(() => {

@@ -176,7 +176,6 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
     setName(initial.name);
     setDescription(initial.description);
     setVisibility(initial.visibility);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial.name, initial.description, initial.visibility]);
 
   const syncMetaFromList = async () => {

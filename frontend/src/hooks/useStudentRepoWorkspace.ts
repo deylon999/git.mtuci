@@ -56,6 +56,8 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
     setSummary(cachedEntry?.summary ?? null);
     setError(null);
     setLoading(!metaFromPartial(initialMeta)?.name && !cachedEntry?.meta);
+    // Reset only when the repo (or the seeded meta it came with) changes, not on every new initialMeta object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoId, initialMeta?.name]);
 
   useEffect(() => {

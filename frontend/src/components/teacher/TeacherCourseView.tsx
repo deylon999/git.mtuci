@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { buildDefaultPenaltyPeriods, type PenaltyPeriod } from "../../utils/penaltyDefaults";
 import { AlertCircle, Download, FileText, Plus, Trash2 } from "lucide-react";
@@ -89,7 +89,8 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
   const [createLoading, setCreateLoading] = useState(false);
   const [downloadingCourseFileId, setDownloadingCourseFileId] = useState<string | null>(null);
 
-  const dateMin = useMemo(() => localDatetimeMin(), [showCreateForm]);
+  // Recomputed while the form is open so the minimum never lags behind the current minute.
+  const dateMin = showCreateForm ? localDatetimeMin() : "";
   const gradeCap = detail?.grade_max ?? 10;
 
   const load = useCallback(async () => {

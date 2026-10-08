@@ -494,6 +494,8 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
   useEffect(() => {
     if (authLoading || !me) return;
     void loadRoleData();
+    // Keyed on identity/role: /auth/me revalidation returns a fresh `me` object that must not refetch everything.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, me?.id, me?.role]);
 
   function onAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Clock, Loader2, User, AlertCircle, RefreshCw } from "lucide-react";
 import { useAuthUser } from "../context/AuthUserContext";
@@ -31,6 +31,17 @@ interface StudentCoursesPageProps {
   isDarkTheme?: boolean;
 }
 
+function isDone(course: StudentMergedCourse): boolean {
+  if (course.assignments_total > 0) {
+    return course.assignments_graded >= course.assignments_total;
+  }
+  return false;
+}
+
+function isActive(course: StudentMergedCourse): boolean {
+  return !isDone(course);
+}
+
 export default function StudentCoursesPage({ isDarkTheme = false }: StudentCoursesPageProps) {
   const theme = getTheme(isDarkTheme);
   const { t, tp, language } = useUserPreferences();
@@ -46,7 +57,7 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
   const searchQuery = (searchParams.get("q") ?? "").trim().toLowerCase();
   const { user } = useAuthUser();
 
-  const loadCourses = async (refreshLk: boolean) => {
+  const loadCourses = useCallback(async (refreshLk: boolean) => {
     if (refreshLk) {
       clearLkCoursesCache();
       invalidateStudentMergedCoursesMemCache();
@@ -84,7 +95,7 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
       setLoading(false);
       setLkRefreshing(false);
     }
-  };
+  }, [t, user?.group_name]);
 
   useEffect(() => {
     if (user?.group_name) setGroupName(user.group_name);
@@ -98,7 +109,7 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
       setLoading(false);
     }
     void loadCourses(false);
-  }, [user?.id]);
+  }, [user?.id, loadCourses]);
 
   const courseStats = useMemo(() => {
     const map = new Map<string, { total: number; graded: number; overdue: number }>();
@@ -112,15 +123,6 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
     }
     return map;
   }, [assignments]);
-
-  const isDone = (course: StudentMergedCourse) => {
-    if (course.assignments_total > 0) {
-      return course.assignments_graded >= course.assignments_total;
-    }
-    return false;
-  };
-
-  const isActive = (course: StudentMergedCourse) => !isDone(course);
 
   const filtered = useMemo(() => {
     let list = courses;

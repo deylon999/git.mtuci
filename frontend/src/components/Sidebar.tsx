@@ -232,10 +232,11 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   const { mode, canSwitchLaborantMode } = useRoleMode();
   const theme = getTheme(isDarkTheme);
 
+  const refreshSidebarCounts = studentNav?.refreshSidebarCounts;
   useEffect(() => {
     if (userRole !== "student") return;
-    void studentNav?.refreshSidebarCounts();
-  }, [userRole, studentNav?.refreshSidebarCounts]);
+    void refreshSidebarCounts?.();
+  }, [userRole, refreshSidebarCounts]);
 
   useEffect(() => {
     if (userRole !== "teacher" && userRole !== "laborant") return;

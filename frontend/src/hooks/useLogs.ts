@@ -141,7 +141,8 @@ export function useLogsData(filters?: LogsFilters, pagination?: LogsPagination) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Memoize filters and pagination to prevent infinite re-renders
+  // Memoize filters and pagination by their fields (callers pass fresh objects every render) to prevent refetch loops.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on fields on purpose
   const memoizedFilters = useMemo(() => filters, [
     filters?.level,
     filters?.source,
@@ -150,6 +151,7 @@ export function useLogsData(filters?: LogsFilters, pagination?: LogsPagination) 
     filters?.date_to,
     filters?.sort,
   ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on fields on purpose
   const memoizedPagination = useMemo(() => pagination, [pagination?.limit, pagination?.offset]);
 
   const fetchLogs = useCallback(async () => {

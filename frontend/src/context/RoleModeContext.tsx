@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuthUser } from "./AuthUserContext";
 
 type RoleMode = "laborant" | "student";
@@ -35,17 +35,23 @@ export function RoleModeProvider({ children }: { children: ReactNode }) {
     }
   }, [user, canSwitchLaborantMode, mode]);
 
-  const setMode = (next: RoleMode) => {
-    const value = canSwitchLaborantMode ? next : "laborant";
-    setModeState(value);
-    localStorage.setItem(STORAGE_KEY, value);
-  };
+  const setMode = useCallback(
+    (next: RoleMode) => {
+      const value = canSwitchLaborantMode ? next : "laborant";
+      setModeState(value);
+      localStorage.setItem(STORAGE_KEY, value);
+    },
+    [canSwitchLaborantMode],
+  );
 
-  const toggleMode = () => setMode(mode === "laborant" ? "student" : "laborant");
+  const toggleMode = useCallback(
+    () => setMode(mode === "laborant" ? "student" : "laborant"),
+    [mode, setMode],
+  );
 
   const value = useMemo(
     () => ({ canSwitchLaborantMode, mode, setMode, toggleMode }),
-    [canSwitchLaborantMode, mode],
+    [canSwitchLaborantMode, mode, setMode, toggleMode],
   );
 
   return <RoleModeContext.Provider value={value}>{children}</RoleModeContext.Provider>;

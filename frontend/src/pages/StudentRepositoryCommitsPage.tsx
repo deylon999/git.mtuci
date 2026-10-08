@@ -52,7 +52,9 @@ export default function StudentRepositoryCommitsPage({ isDarkTheme = false }: St
     return () => {
       cancelled = true;
     };
-  }, [repoId]);
+    // `branch` only names the fallback entry; reloading the branch list on every branch switch is not wanted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoId, api]);
 
   useEffect(() => {
     if (!repoId) return;
