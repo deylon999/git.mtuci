@@ -155,6 +155,12 @@ function AppShell({
   const mainPaddingY = !isAuthPage && isTeacherLike ? "py-4" : "py-6";
 
   const returnTo = `${location.pathname}${location.search}`;
+
+  // Mobile sidebar drawer: closed on every navigation so tapping a menu link reveals the page.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
   useEffect(() => {
     const onExpired = () => {
       clearUser();
@@ -204,12 +210,20 @@ function AppShell({
     <StudentNavCountsProvider>
     <AppErrorBoundary isDarkTheme={isDarkTheme}>
     <div className={`h-screen flex flex-col`} style={{ color: theme.text, backgroundColor: theme.bg }}>
-      {!isAuthPage && <Header isDarkTheme={isDarkTheme} onToggleTheme={toggleTheme} />}
+      {!isAuthPage && (
+        <Header
+          isDarkTheme={isDarkTheme}
+          onToggleTheme={toggleTheme}
+          onToggleNav={() => setMobileNavOpen((open) => !open)}
+        />
+      )}
       <div
         className="flex flex-1 min-h-0 overflow-hidden"
         style={isAuthPage || isTeacherLike ? undefined : { height: "calc(100vh - 56px)" }}
       >
-        {!isAuthPage ? <Sidebar isDarkTheme={isDarkTheme} /> : null}
+        {!isAuthPage ? (
+          <Sidebar isDarkTheme={isDarkTheme} mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
+        ) : null}
         <div className="flex flex-1 flex-col min-h-0">
           <main
             className={`flex-1 overflow-y-auto min-w-0 ${

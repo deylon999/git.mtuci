@@ -6,9 +6,10 @@ import StudentHeader from "./StudentHeader";
 interface HeaderProps {
   isDarkTheme?: boolean;
   onToggleTheme?: () => void;
+  onToggleNav?: () => void;
 }
 
-export default function Header({ isDarkTheme = false, onToggleTheme }: HeaderProps) {
+export default function Header({ isDarkTheme = false, onToggleTheme, onToggleNav }: HeaderProps) {
   const { user, loading } = useAuthUser();
 
   if (loading) {
@@ -18,8 +19,8 @@ export default function Header({ isDarkTheme = false, onToggleTheme }: HeaderPro
   const userRole = (user?.role ?? null) as UserRole | null;
 
   if (userRole === "admin") {
-    return <AdminHeader isDarkTheme={isDarkTheme} onToggleTheme={onToggleTheme} />;
+    return <AdminHeader isDarkTheme={isDarkTheme} onToggleTheme={onToggleTheme} onToggleNav={onToggleNav} />;
   }
 
-  return <StudentHeader isDarkTheme={isDarkTheme} onToggleTheme={onToggleTheme} />;
+  return <StudentHeader isDarkTheme={isDarkTheme} onToggleTheme={onToggleTheme} onToggleNav={onToggleNav} />;
 }

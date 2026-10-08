@@ -232,9 +232,19 @@ function buildStudentMenu(): MenuSection[] {
 
 interface SidebarProps {
   isDarkTheme?: boolean;
+  /** Narrow screens: the sidebar is hidden and shown as a drawer while this is true. */
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
-export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
+// Desktop: static 260px column. Phones/tablets (< md): hidden, or a fixed drawer over the page when opened.
+function sidebarClass(mobileOpen: boolean): string {
+  return `w-[260px] flex-shrink-0 h-full border-r overflow-y-auto md:static md:block md:shadow-none ${
+    mobileOpen ? "fixed inset-y-0 left-0 z-50 block shadow-xl" : "hidden"
+  }`;
+}
+
+export default function Sidebar({ isDarkTheme = true, mobileOpen = false, onMobileClose }: SidebarProps) {
   const location = useLocation();
   const { user } = useAuthUser();
   const { hasPermission, hasAnyPermission, loading: permissionsLoading } = usePermissions();
@@ -431,7 +441,7 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
   // While loading, show nothing or student menu to avoid flashing admin menu
   if (userRole === null || permissionsLoading) {
     return (
-      <aside className={`w-[260px] flex-shrink-0 h-full border-r`} style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
+      <aside className={sidebarClass(mobileOpen)} style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
         <div className={`p-4 text-sm`} style={{ color: theme.text2 }}>{t("common.loading")}</div>
       </aside>
     );
@@ -439,8 +449,12 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
 
 
   return (
+    <>
+    {mobileOpen ? (
+      <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={onMobileClose} aria-hidden="true" />
+    ) : null}
     <aside
-      className="w-[260px] flex-shrink-0 h-full border-r"
+      className={sidebarClass(mobileOpen)}
       style={{ backgroundColor: theme.bg, borderColor: theme.border }}
     >
       <nav className={isTeacherLike ? "p-4" : "p-4"}>
@@ -544,5 +558,6 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
         ))}
       </nav>
     </aside>
+    </>
   );
 }

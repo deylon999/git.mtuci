@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, User, Moon, Sun, Search, Plus } from "lucide-react";
+import { ChevronDown, LogOut, User, Moon, Sun, Search, Plus, Menu } from "lucide-react";
 import { clearToken } from "../api/client";
 import { useAuthUser } from "../context/AuthUserContext";
 import { getTheme } from "../theme";
@@ -29,9 +29,11 @@ function roleLabel(role: UserRole | null, t: (key: string) => string): string {
 interface StudentHeaderProps {
   isDarkTheme?: boolean;
   onToggleTheme?: () => void;
+  /** Opens the sidebar drawer on narrow screens. */
+  onToggleNav?: () => void;
 }
 
-export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: StudentHeaderProps) {
+export default function StudentHeader({ isDarkTheme = false, onToggleTheme, onToggleNav }: StudentHeaderProps) {
   const navigate = useNavigate();
   const { t } = useUserPreferences();
   const { user, clearUser, refreshUser } = useAuthUser();
@@ -122,6 +124,17 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme }: St
     >
       <div className={pageGutterClass}>
         <div className="flex items-center justify-between h-14 gap-2">
+          {onToggleNav ? (
+            <button
+              type="button"
+              onClick={onToggleNav}
+              aria-label={t("common.openMenu")}
+              className="md:hidden -ml-1 rounded-lg p-2"
+              style={{ color: theme.text }}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          ) : null}
           <Link to={homeHref} className="flex items-center gap-2 group">
             <img
               src="/logo_mtuci.png"

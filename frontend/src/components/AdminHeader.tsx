@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, ChevronDown, LogOut, User, Shield, Activity, Moon, Sun, Users, FolderGit2, FileText, Loader2 } from "lucide-react";
+import { Search, ChevronDown, LogOut, User, Shield, Activity, Moon, Sun, Users, FolderGit2, FileText, Loader2, Menu } from "lucide-react";
 import { clearToken } from "../api/client";
 import { useAuthUser } from "../context/AuthUserContext";
 import { getLogs, getServiceStatus, locateLogInAdminLogs } from "../api/adminApi";
@@ -145,9 +145,11 @@ function StatusIndicator({ status, label, isDarkTheme = true }: { status: "onlin
 interface AdminHeaderProps {
   isDarkTheme?: boolean;
   onToggleTheme?: () => void;
+  /** Opens the sidebar drawer on narrow screens. */
+  onToggleNav?: () => void;
 }
 
-export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: AdminHeaderProps) {
+export default function AdminHeader({ isDarkTheme = false, onToggleTheme, onToggleNav }: AdminHeaderProps) {
   const navigate = useNavigate();
   const { t, tp, language } = useUserPreferences();
   const { user, clearUser, refreshUser } = useAuthUser();
@@ -544,6 +546,17 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
       <div className="mx-auto max-w-[1400px] px-4">
         {/* Main header row */}
         <div className="flex items-center justify-between h-14 gap-2">
+          {onToggleNav ? (
+            <button
+              type="button"
+              onClick={onToggleNav}
+              aria-label={t("common.openMenu")}
+              className="md:hidden -ml-1 rounded-lg p-2"
+              style={{ color: theme.text }}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          ) : null}
           {/* Left: Logo */}
           <Link to="/admin" className="flex items-center gap-3 group">
             <div className="flex items-center justify-center w-8 h-8 font-bold text-lg transition-colors" style={{ color: theme.text }}>
