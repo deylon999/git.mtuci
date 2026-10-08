@@ -39,6 +39,7 @@ from app.schemas.student_dashboard import (
     StudentRepoWikiContentRead,
     StudentRepoWikiPagesRead,
     StudentRepoReactionBody,
+    StudentRepositoryItemRead,
 )
 from app.services.gitea_service import GiteaAuthError
 from app.services.repository_access_service import RepositoryBlockedError
@@ -58,6 +59,7 @@ from app.services.student_dashboard_service import (
     get_student_repository_pull_check_log,
     get_student_repository_pulls,
     get_student_repository_summary,
+    get_student_repositories,
     get_student_repository_wiki_content,
     get_student_repository_wiki_pages,
     list_student_repository_files,
@@ -111,6 +113,31 @@ def _http_from_exc(exc: Exception) -> HTTPException:
     if isinstance(exc, ValueError):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+
+@router.get("/{repo_item_id}", response_model=StudentRepositoryItemRead)
+async def teacher_repo_item(
+    repo_item_id: str,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentRepositoryItemRead:
+    """Repository card (name, Gitea path, clone URL, course link) for staff opening any repository in the app."""
+    owner_id = await _resolve_repo_owner_id(session, repo_item_id)
+    await ensure_repo_content_access(current_user, session, target_student_id=owner_id)
+    owner = await session.get(User, owner_id)
+    try:
+        data = await get_student_repositories(
+            session,
+            student_id=owner_id,
+            gitea_login=owner.mtuci_login if owner else None,
+            gitea_mode="lite",
+        )
+    except Exception as exc:
+        raise _http_from_exc(exc)
+    for item in data.repositories:
+        if item.id == repo_item_id:
+            return item
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found")
 
 
 @router.get("/{repo_item_id}/summary", response_model=StudentRepoSummaryRead)

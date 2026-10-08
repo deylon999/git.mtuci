@@ -1,4 +1,5 @@
 import { apiRequest } from "./client";
+import type { StudentRepositoryItem } from "./studentDashboardApi";
 
 function repoQuery(params: Record<string, string | undefined>) {
   const qs = new URLSearchParams();
@@ -242,6 +243,11 @@ export interface TeacherRepoWikiPage {
   title: string;
   slug: string;
   subtitle: string | null;
+}
+
+/** Repository card for staff: lets teachers/admins open any repository in the app, not only their own. */
+export function getTeacherRepoItem(repoId: string): Promise<StudentRepositoryItem> {
+  return apiRequest<StudentRepositoryItem>(`/teacher/repositories/${repoId}`);
 }
 
 export function getTeacherRepoSummary(repoId: string, branch?: string): Promise<TeacherRepoSummary> {

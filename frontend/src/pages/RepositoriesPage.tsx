@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useDebounce } from "../hooks/useLogs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -775,7 +776,13 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
                           {getInitials(repo.owner_full_name)}
                         </div>
                         <div>
-                          <p className={`font-medium text-sm ${inputText}`}>{repo.name}</p>
+                          {/* Staff can browse any repository in the app (code, commits, PRs), not only on Gitea. */}
+                          <Link
+                            to={`/repositories/${repo.id}/code`}
+                            className={`font-medium text-sm hover:underline ${inputText}`}
+                          >
+                            {repo.name}
+                          </Link>
                           <p className={`text-xs ${tableHeaderText}`}>{repo.gitea_repo_name || repo.name}</p>
                         </div>
                       </div>

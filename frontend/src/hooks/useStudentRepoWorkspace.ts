@@ -5,7 +5,10 @@ import {
   getStudentRepoSummary,
   getStudentRepositories,
   type StudentRepoSummary,
+  type StudentRepositoryItem,
 } from "../api/studentDashboardApi";
+import { getTeacherRepoItem, getTeacherRepoSummary } from "../api/teacherRepositoriesApi";
+import { useAuthUser } from "../context/AuthUserContext";
 import { getCachedRepoWorkspace, setCachedRepoWorkspace } from "../utils/repoWorkspaceCache";
 import { tr } from "../utils/i18nLabels";
 
@@ -21,6 +24,27 @@ export interface StudentRepoMeta {
   courseId?: string | null;
   assignmentId?: string | null;
   assignmentLabel?: string | null;
+}
+
+function metaFromItem(repo: StudentRepositoryItem): StudentRepoMeta {
+  return {
+    name: repo.name,
+    giteaPath: repo.gitea_path,
+    giteaWebUrl: repo.gitea_web_url,
+    cloneUrl: repo.clone_url,
+    description: repo.description,
+    language: repo.language,
+    visibility: repo.visibility,
+    source: repo.source,
+    courseId: repo.course_id ?? null,
+    assignmentId: repo.assignment_id ?? null,
+    assignmentLabel: repo.assignment_label ?? null,
+  };
+}
+
+/** Same rule as StudentRepositoryLayout's RepoApiProvider: staff use /teacher/repositories (any repo they may see). */
+function isStaffRole(role: string | undefined): boolean {
+  return role === "teacher" || role === "laborant" || role === "admin";
 }
 
 function metaFromPartial(initial?: Partial<StudentRepoMeta> | null): StudentRepoMeta | null {
@@ -42,6 +66,8 @@ function metaFromPartial(initial?: Partial<StudentRepoMeta> | null): StudentRepo
 
 export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?: Partial<StudentRepoMeta> | null) {
   const navigate = useNavigate();
+  const { user } = useAuthUser();
+  const staff = isStaffRole(user?.role);
   const cached = repoId ? getCachedRepoWorkspace(repoId) : undefined;
   const [meta, setMeta] = useState<StudentRepoMeta | null>(
     () => metaFromPartial(initialMeta) ?? cached?.meta ?? null,
@@ -73,28 +99,20 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
       try {
         let nextMeta = metaFromPartial(initialMeta) ?? getCachedRepoWorkspace(repoId)?.meta ?? null;
         if (!nextMeta?.name) {
-          const list = await getStudentRepositories("lite");
-          const repo = list.repositories.find((r) => r.id === repoId);
-          if (!repo) {
-            navigate("/repositories", { replace: true });
-            return;
+          if (staff) {
+            nextMeta = metaFromItem(await getTeacherRepoItem(repoId));
+          } else {
+            const list = await getStudentRepositories("lite");
+            const repo = list.repositories.find((r) => r.id === repoId);
+            if (!repo) {
+              navigate("/repositories", { replace: true });
+              return;
+            }
+            nextMeta = metaFromItem(repo);
           }
-          nextMeta = {
-            name: repo.name,
-            giteaPath: repo.gitea_path,
-            giteaWebUrl: repo.gitea_web_url,
-            cloneUrl: repo.clone_url,
-            description: repo.description,
-            language: repo.language,
-            visibility: repo.visibility,
-            source: repo.source,
-            courseId: repo.course_id ?? null,
-            assignmentId: repo.assignment_id ?? null,
-            assignmentLabel: repo.assignment_label ?? null,
-          };
         }
         if (!cancelled) setMeta(nextMeta);
-        const summaryRes = await getStudentRepoSummary(repoId);
+        const summaryRes = staff ? await getTeacherRepoSummary(repoId) : await getStudentRepoSummary(repoId);
         if (!cancelled) {
           setSummary(summaryRes);
           if (nextMeta) {
@@ -117,7 +135,7 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
     return () => {
       cancelled = true;
     };
-  }, [repoId, navigate, initialMeta]);
+  }, [repoId, navigate, initialMeta, staff]);
 
   return { meta, setMeta, summary, setSummary, loading, error };
 }
