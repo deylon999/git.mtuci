@@ -304,7 +304,6 @@ function AppShell({
                       <Route path="/users" element={<UsersPage isDarkTheme={isDarkTheme} />} />
                     </Route>
                     <Route element={<RequirePermission permission="repo_view" />}>
-                      <Route path="/repositories" element={<RepositoriesRoute isDarkTheme={isDarkTheme} />} />
                       <Route path="/admin/forks" element={<ForksPage isDarkTheme={isDarkTheme} />} />
                     </Route>
                     <Route element={<RequirePermission permission="settings_view" />}>

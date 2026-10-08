@@ -8,6 +8,7 @@ export const teacherEn = {
     createFailed: "Failed to create",
     gradeSaveFailed: "Failed to save grade",
     exportFailed: "Failed to export",
+    deleteFailed: "Failed to delete",
   },
   courseCard: {
     statAssignments: "Assignments",

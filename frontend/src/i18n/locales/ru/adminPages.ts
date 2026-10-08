@@ -162,7 +162,7 @@ export const adminPagesRu = {
     studentsCount: "Студентов: {n}",
     maxGrade: "Макс. оценка: {n}",
     deleteCourseTitle: "Удалить курс",
-    gradeMaxError: "Максимальная оценка должна быть целым числом от 0 до 50.",
+    gradeMaxError: "Максимальная оценка должна быть целым числом от 1 до 50.",
     deleteConfirm: "Удалить курс? Будут удалены все задания и зачисления.",
     emptyList: "Курсов пока нет — создайте первый.",
     createError: "Не удалось создать курс",

@@ -163,7 +163,7 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
         max_grade: Math.min(gradeCap, Math.max(0, p.max_grade)),
       }));
     if (periods.length === 0) {
-      periods.push({ weeks: 1, max_grade: Math.min(4, gradeCap) });
+      periods.push(buildDefaultPenaltyPeriods(gradeCap)[0]);
     }
 
     setCreateLoading(true);
@@ -193,7 +193,12 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
 
   async function onDeleteAssignment(assignmentId: string) {
     if (!confirm(t("teacher.courseView.confirmDeleteAssignment"))) return;
-    await deleteAssignment(courseId, assignmentId);
+    try {
+      await deleteAssignment(courseId, assignmentId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : t("teacher.errors.deleteFailed"));
+      return;
+    }
     await load();
   }
 

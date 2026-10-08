@@ -8,6 +8,7 @@ export const teacherRu = {
     createFailed: "Не удалось создать",
     gradeSaveFailed: "Не удалось сохранить оценку",
     exportFailed: "Не удалось экспортировать",
+    deleteFailed: "Не удалось удалить",
   },
   courseCard: {
     statAssignments: "Заданий",

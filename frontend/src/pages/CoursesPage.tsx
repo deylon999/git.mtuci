@@ -151,7 +151,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
     setCreateLoading(true);
     setCreateError(null);
     try {
-      if (!Number.isInteger(createGradeMax) || createGradeMax < 0 || createGradeMax > 50) {
+      if (!Number.isInteger(createGradeMax) || createGradeMax < 1 || createGradeMax > 50) {
         setCreateError(t("admin.courses.gradeMaxError"));
         return;
       }
@@ -344,7 +344,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
                 </div>
                 <input
                   type="range"
-                  min={0}
+                  min={1}
                   max={50}
                   step={1}
                   value={createGradeMax}
@@ -354,7 +354,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
                   required
                 />
                 <div className="mt-2 flex justify-between text-[10px] tabular-nums" style={{ color: theme.text3 }}>
-                  <span>0</span>
+                  <span>1</span>
                   <span>10</span>
                   <span>20</span>
                   <span>30</span>

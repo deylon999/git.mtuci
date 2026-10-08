@@ -103,7 +103,8 @@ export function groupDeadlinesByPeriod(
     if (d.getTime() < today.getTime()) buckets.overdue.push(item);
     else if (d.getTime() === today.getTime()) buckets.today.push(item);
     else if (d.getTime() === tomorrow.getTime()) buckets.tomorrow.push(item);
-    else if (item.deadline <= weekEnd) buckets.week.push(item);
+    // Compare calendar days: a deadline on day +7 belongs to the week regardless of its time of day.
+    else if (d.getTime() <= weekEnd.getTime()) buckets.week.push(item);
     else buckets.later.push(item);
   }
 
@@ -125,7 +126,7 @@ export function formatDeadlineRemaining(deadline: Date, now = new Date(), locale
   }
   const hours = Math.floor(diffMs / (60 * 60 * 1000));
   if (hours < 24) {
-    if (hours <= 1) return translate(locale, "student.deadline.remainingUnderHour");
+    if (hours < 1) return translate(locale, "student.deadline.remainingUnderHour");
     return translateWithParams(locale, "student.deadline.remainingHours", { n: hours });
   }
   const days = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
