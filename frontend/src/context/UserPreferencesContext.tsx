@@ -108,6 +108,9 @@ export function UserPreferencesProvider({ children, setIsDarkTheme }: ProviderPr
     const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
     return resolveLocale(stored ?? undefined);
   });
+  // Keep the module-level locale (used by date/deadline helpers outside React) in sync before children render;
+  // doing it only in an effect made the first render after a language change use the previous language.
+  setI18nLocale(language);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [notifications, setNotifications] = useState<NotificationSettings>(defaultNotifications);
   const hydratedRef = useRef(false);

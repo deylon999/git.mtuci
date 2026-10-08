@@ -1,3 +1,4 @@
+import { currentLocaleTag } from "../utils/dates";
 import { useEffect, useState, useCallback, useMemo, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -460,10 +461,10 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
     .slice(0, 8);
 
   const statCards = [
-    { title: t("admin.dashboard.cardTotal"), value: stats.total.toLocaleString(), icon: Users, trendDelta: weekDelta(currentNew, prevNew) },
-    { title: t("admin.dashboard.cardActive"), value: stats.active.toLocaleString(), icon: GitBranch, trendDelta: weekDelta(currentActive, prevActive) },
-    { title: t("admin.dashboard.cardPending"), value: stats.pending.toLocaleString(), icon: TrendingUp, trendDelta: weekDelta(currentPending, prevPending) },
-    { title: t("admin.dashboard.cardBlocked"), value: stats.blocked.toLocaleString(), icon: Clock, trendDelta: weekDelta(currentBlocked, prevBlocked) },
+    { title: t("admin.dashboard.cardTotal"), value: stats.total.toLocaleString(currentLocaleTag()), icon: Users, trendDelta: weekDelta(currentNew, prevNew) },
+    { title: t("admin.dashboard.cardActive"), value: stats.active.toLocaleString(currentLocaleTag()), icon: GitBranch, trendDelta: weekDelta(currentActive, prevActive) },
+    { title: t("admin.dashboard.cardPending"), value: stats.pending.toLocaleString(currentLocaleTag()), icon: TrendingUp, trendDelta: weekDelta(currentPending, prevPending) },
+    { title: t("admin.dashboard.cardBlocked"), value: stats.blocked.toLocaleString(currentLocaleTag()), icon: Clock, trendDelta: weekDelta(currentBlocked, prevBlocked) },
   ];
 
   const theme = getTheme(isDarkTheme);

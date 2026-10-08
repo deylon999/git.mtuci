@@ -1,3 +1,4 @@
+import { currentLocaleTag } from "../utils/dates";
 import { useState, useEffect, useRef, memo } from "react";
 import { useLocation } from "react-router-dom";
 import { Search, Download, Trash2, FileX } from "lucide-react";
@@ -238,7 +239,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
 
   const formatTime = (isoString: string) => {
     const date = new Date(isoString);
-    return date.toLocaleTimeString("ru-RU", {
+    return date.toLocaleTimeString(currentLocaleTag(), {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
@@ -248,7 +249,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
 
   const formatFullDate = (isoString: string) => {
     const date = new Date(isoString);
-    return date.toLocaleString("ru-RU", {
+    return date.toLocaleString(currentLocaleTag(), {
       year: "numeric",
       month: "long",
       day: "numeric",

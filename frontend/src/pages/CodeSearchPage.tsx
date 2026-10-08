@@ -1,3 +1,4 @@
+import { currentLocaleTag } from "../utils/dates";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -64,7 +65,7 @@ function formatDate(value?: string | null): string {
   if (diffMs < hour) return `${Math.max(1, Math.floor(diffMs / minute))} мин назад`;
   if (diffMs < day) return `${Math.floor(diffMs / hour)} ч назад`;
   if (diffMs < day * 7) return `${Math.floor(diffMs / day)} дн назад`;
-  return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+  return date.toLocaleDateString(currentLocaleTag(), { day: "numeric", month: "short" });
 }
 
 function languageColor(language?: string | null): string {

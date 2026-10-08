@@ -1,3 +1,4 @@
+import { currentLocaleTag } from "../utils/dates";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -134,7 +135,7 @@ function formatDate(value?: string | null): string {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" });
+  return date.toLocaleDateString(currentLocaleTag(), { day: "numeric", month: "short", year: "numeric" });
 }
 
 function formatRelative(value?: string | null): string {
@@ -250,7 +251,7 @@ function addDays(date: Date, days: number): Date {
 function formatGraphDate(key: string): string {
   const date = new Date(`${key}T00:00:00`);
   if (Number.isNaN(date.getTime())) return key;
-  return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" });
+  return date.toLocaleDateString(currentLocaleTag(), { day: "numeric", month: "short", year: "numeric" });
 }
 
 function buildCommitWeeks(events: CommitGraphEvent[]): CommitGraphDay[][] {

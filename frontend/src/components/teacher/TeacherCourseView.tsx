@@ -1,3 +1,4 @@
+import { currentLocaleTag } from "../../utils/dates";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { buildDefaultPenaltyPeriods, type PenaltyPeriod } from "../../utils/penaltyDefaults";
@@ -582,7 +583,7 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
                       </Link>
                       <p className="text-xs mt-0.5" style={{ color: theme.text3 }}>
                         {tp("teacher.courseView.deadlineLine", {
-                          date: new Date(a.deadline).toLocaleString("ru-RU"),
+                          date: new Date(a.deadline).toLocaleString(currentLocaleTag()),
                         })}
                       </p>
                       {a.late_penalty_periods.length > 0 ? (

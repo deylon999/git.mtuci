@@ -1,3 +1,4 @@
+import { currentLocaleTag } from "../../utils/dates";
 import { useCallback, useEffect, useState } from "react";
 import { Mail, Shield, Trash2, UserPlus, Users } from "lucide-react";
 import toast from "react-hot-toast";
@@ -498,7 +499,7 @@ export function RepoAccessPanel({ theme, repoId, readOnly = false }: RepoAccessP
                   {audit.map((row) => (
                     <tr key={row.id} className="border-t" style={{ borderColor: theme.border }}>
                       <td className="px-3 py-2 whitespace-nowrap" style={{ color: theme.text3 }}>
-                        {new Date(row.created_at).toLocaleString()}
+                        {new Date(row.created_at).toLocaleString(currentLocaleTag())}
                       </td>
                       <td className="px-3 py-2" style={{ color: theme.text2 }}>
                         {auditActionLabel(row.action, t)}

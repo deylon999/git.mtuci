@@ -1,3 +1,4 @@
+import { currentLocaleTag } from "../../utils/dates";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Copy,
@@ -882,7 +883,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                         <p className="text-sm font-semibold" style={{ color: theme.text }}>{r.name}</p>
                         <p className="text-[11px] font-mono" style={{ color: theme.text3 }}>{r.tag_name} · {r.target_commitish}</p>
                       </div>
-                      <span className="text-[10px]" style={{ color: theme.text3 }}>{new Date(r.created_at).toLocaleString()}</span>
+                      <span className="text-[10px]" style={{ color: theme.text3 }}>{new Date(r.created_at).toLocaleString(currentLocaleTag())}</span>
                     </div>
                     <pre className="mt-2 whitespace-pre-wrap text-xs" style={{ color: theme.text2 }}>{r.body || t("repo.settings.noNotes")}</pre>
                     <div className="mt-2 space-y-1">

@@ -1,3 +1,4 @@
+import { currentLocaleTag } from "../utils/dates";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -62,7 +63,7 @@ function formatDate(value: string | null | undefined) {
   if (!value) return "";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString();
+  return d.toLocaleString(currentLocaleTag());
 }
 
 function getInitials(fullName: string) {
@@ -888,7 +889,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
                   {t("repo.assignment.suspiciousPairs")} · {plagiarismSourceLabel(plagiarismSource)}
                 </div>
                 <div className={`text-xs ${textTertiary}`}>
-                  {new Date(plagiarismPairs.checked_at).toLocaleString()}
+                  {new Date(plagiarismPairs.checked_at).toLocaleString(currentLocaleTag())}
                 </div>
               </div>
               {plagiarismPairs.pairs.length === 0 ? (

@@ -1,3 +1,4 @@
+import { currentLocaleTag } from "../utils/dates";
 import { useEffect, useState } from "react";
 import {
   createMyGitToken,
@@ -103,7 +104,7 @@ export default function GitAuthPanel({ isDarkTheme = false }: { isDarkTheme?: bo
     if (!iso) return t("gitAuthPanel.neverUsed");
     const dt = new Date(iso);
     if (Number.isNaN(dt.getTime())) return "—";
-    return dt.toLocaleString();
+    return dt.toLocaleString(currentLocaleTag());
   };
 
   return (

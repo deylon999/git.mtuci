@@ -1,3 +1,4 @@
+import { currentLocaleTag } from "../utils/dates";
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Download,
@@ -371,7 +372,7 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
           : "active",
         repos: u.repositories_count ?? 0,
         lastLogin: u.last_login
-          ? new Date(u.last_login).toLocaleDateString()
+          ? new Date(u.last_login).toLocaleDateString(currentLocaleTag())
           : "—",
         initials: u.full_name
           .split(" ")
@@ -407,7 +408,7 @@ useEffect(() => {
             : "active",
           repos: u.repositories_count ?? 0,
           lastLogin: u.last_login
-            ? new Date(u.last_login).toLocaleString("ru-RU", {
+            ? new Date(u.last_login).toLocaleString(currentLocaleTag(), {
                 day: "2-digit",
                 month: "2-digit",
                 year: "numeric",

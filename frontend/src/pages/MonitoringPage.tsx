@@ -1,3 +1,4 @@
+import { currentLocaleTag } from "../utils/dates";
 import { useState, useEffect } from "react";
 import { RefreshCw, HardDrive, Database, Server, GitBranch } from "lucide-react";
 import { getSystemMetrics, getServiceStatus, getBackups, getLogs, createBackup, restartAPI } from "../api/adminApi";
@@ -614,7 +615,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 <div style={{ backgroundColor: isDarkTheme ? theme.bgCard : "#d4d4d4", borderRadius: "8px", padding: "8px 10px", boxShadow: theme.shadowSm }}>
                   <div style={{ fontSize: "10px", color: isDarkTheme ? theme.text2 : "#525252", marginBottom: "2px" }}>{t("admin.monitoring.total")}</div>
                   <div style={{ fontSize: "18px", fontWeight: "600", color: isDarkTheme ? theme.text : "#171717" }}>
-                    {metrics?.requests_total_hour?.toLocaleString() || 0}
+                    {metrics?.requests_total_hour?.toLocaleString(currentLocaleTag()) || 0}
                   </div>
                 </div>
                 <div style={{ backgroundColor: isDarkTheme ? theme.bgCard : "#d4d4d4", borderRadius: "8px", padding: "8px 10px", boxShadow: theme.shadowSm }}>
