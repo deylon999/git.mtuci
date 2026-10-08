@@ -56,21 +56,6 @@ interface RepoFileBrowserProps {
 
 const README_NAMES = ["readme.md", "readme.markdown", "readme", "readme.txt"];
 
-const LANG_COLORS: Record<string, string> = {
-  python: "#3572A5",
-  javascript: "#f1e05a",
-  typescript: "#3178c6",
-  java: "#b07219",
-  go: "#00ADD8",
-  rust: "#dea584",
-};
-
-function formatBytes(size: number | null): string {
-  if (size == null) return "—";
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function isBinaryLikePath(filepath: string): boolean {
   const ext = filepath.split(".").pop()?.toLowerCase() ?? "";
@@ -166,8 +151,8 @@ export default function RepoFileBrowser({
   giteaPath,
   giteaWebUrl,
   cloneUrl,
-  repoDescription,
-  repoLanguage,
+  repoDescription: _repoDescription,
+  repoLanguage: _repoLanguage,
   embedded = false,
   externalSummary,
   externalSummaryLoading,
@@ -267,9 +252,6 @@ export default function RepoFileBrowser({
   const isDirectoryView = !!currentPath && !selectedFile;
   const isFileView = !!selectedFile;
 
-  const langColor = repoLanguage
-    ? LANG_COLORS[repoLanguage.toLowerCase()] ?? theme.text2
-    : theme.text2;
 
   const filteredEntries = useMemo(() => {
     const q = localFilter.trim().toLowerCase();

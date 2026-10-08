@@ -66,7 +66,6 @@ const AdminNotificationsPage = lazy(() => import("./pages/AdminNotificationsPage
 
 const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 
-const ADMIN_PATHS = ["/admin", "/users", "/roles", "/admin/forks", "/admin/activity", "/admin/monitoring", "/admin/settings", "/repositories", "/logs", "/dashboard"];
 
 function PendingApprovalScreen({
   isDarkTheme,

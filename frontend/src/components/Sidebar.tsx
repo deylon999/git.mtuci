@@ -12,7 +12,6 @@ import {
   Settings,
   AlertCircle,
   BookOpen,
-  FolderPlus,
   ClipboardList,
   ClipboardCheck,
   GraduationCap,

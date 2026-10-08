@@ -5,7 +5,6 @@ import {
   User,
   UserPlus,
   Microscope,
-  Check,
   RotateCcw,
   Save,
   GitBranch,

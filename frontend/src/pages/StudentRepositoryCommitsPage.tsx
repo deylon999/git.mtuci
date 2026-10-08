@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { GitCommit, Loader2 } from "lucide-react";
 import { useRepoApi } from "../context/RepoApiContext";
 import { useStudentRepoWorkspaceContext } from "../context/StudentRepoWorkspaceContext";
@@ -14,7 +14,7 @@ interface StudentRepositoryCommitsPageProps {
 export default function StudentRepositoryCommitsPage({ isDarkTheme = false }: StudentRepositoryCommitsPageProps) {
   const theme = getTheme(isDarkTheme);
   const { repoId, summary, error: workspaceError } = useStudentRepoWorkspaceContext();
-  const { t, tp, language } = useUserPreferences();
+  const { t, language } = useUserPreferences();
   const api = useRepoApi();
 
   const [branch, setBranch] = useState(summary?.default_branch ?? "main");

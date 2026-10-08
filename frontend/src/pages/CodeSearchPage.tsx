@@ -4,11 +4,8 @@ import {
   BookOpen,
   CalendarCheck,
   ChevronRight,
-  Clock,
-  FileText,
   GitCommit,
   GitFork,
-  GraduationCap,
   Search,
   Users,
 } from "lucide-react";

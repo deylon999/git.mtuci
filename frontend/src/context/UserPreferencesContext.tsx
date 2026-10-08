@@ -102,7 +102,7 @@ function applySettingsToState(
   }));
 }
 
-export function UserPreferencesProvider({ children, isDarkTheme, setIsDarkTheme }: ProviderProps) {
+export function UserPreferencesProvider({ children, setIsDarkTheme }: ProviderProps) {
   const { pathname } = useLocation();
   const [language, setLanguageState] = useState<Locale>(() => {
     const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);

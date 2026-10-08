@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
-import { login, getMe } from "../api/authApi";
+import { login } from "../api/authApi";
 import { useAuthUser } from "../context/AuthUserContext";
 import { getDefaultRouteForRole } from "../utils/defaultRoute";
 import { getTheme } from "../theme";

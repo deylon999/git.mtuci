@@ -3,7 +3,6 @@ import { GitCommit, GitFork } from "lucide-react";
 import { getTeacherActivity, type TeacherActivityItem } from "../../api/teacherDashboardApi";
 import {
   TeacherActivityRow,
-  TeacherAvatar,
   TeacherBadge,
   TeacherChartBars,
   TeacherEmptyState,

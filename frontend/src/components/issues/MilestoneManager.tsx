@@ -15,7 +15,6 @@ import {
   Typography,
   Alert,
   Chip,
-  LinearProgress,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';

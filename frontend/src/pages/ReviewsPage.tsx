@@ -8,7 +8,7 @@ interface ReviewsPageProps {
   isDarkTheme?: boolean;
 }
 
-export const ReviewsPage: React.FC<ReviewsPageProps> = ({ isDarkTheme }) => {
+export const ReviewsPage: React.FC<ReviewsPageProps> = () => {
   const { repoId, prNumber } = useParams<{ repoId: string; prNumber: string }>();
   const { t } = useTranslation();
 

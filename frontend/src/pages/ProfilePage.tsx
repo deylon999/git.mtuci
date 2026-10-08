@@ -303,7 +303,6 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
   const [commitEvents, setCommitEvents] = useState<CommitGraphEvent[]>([]);
   const [commitGraphTotal, setCommitGraphTotal] = useState(0);
   const [teacherDepartment, setTeacherDepartment] = useState<string | null>(null);
-  const [teacherAverageGrade, setTeacherAverageGrade] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<ProfileTab>("repos");
 
   const [oldPassword, setOldPassword] = useState("");
@@ -440,7 +439,6 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
           }),
         ]);
         setTeacherDepartment(dash?.department ?? null);
-        setTeacherAverageGrade(studentsSummary?.average_grade ?? null);
         setCourseRows((dash?.courses ?? []).slice(0, 4).map(mapTeacherCourse));
         setRepos(ownRepos.slice(0, 6).map(mapRepository));
         setStats({

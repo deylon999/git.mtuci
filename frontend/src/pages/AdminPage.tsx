@@ -11,7 +11,6 @@ import {
   Plus,
   Info,
   AlertOctagon,
-  GitCommit,
   RotateCcw,
   Database,
   CheckCircle2,

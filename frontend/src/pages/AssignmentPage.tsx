@@ -109,11 +109,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   const modalBg = isDarkTheme ? "bg-[#0f0f10]" : "bg-[#f9fafb]";
   const avatarBg = isDarkTheme ? "bg-[#2a2a2a] text-[#e6e6e6]" : "bg-[#2563eb]/10 text-[#2563eb]";
   const gaugeBg = isDarkTheme ? "#30363d" : "#e5e7eb";
-  const similarityHigh = isDarkTheme ? "bg-[#ef4444]/15 text-[#ef4444]" : "bg-[#ef4444]/10 text-[#dc2626]";
-  const similarityMedium = isDarkTheme ? "bg-[#f59e0b]/15 text-[#f59e0b]" : "bg-[#f59e0b]/10 text-[#d97706]";
-  const similarityLow = isDarkTheme ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#22c55e]/10 text-[#16a34a]";
   const sectionShell = `rounded-2xl border ${cardBorder} ${elevatedCardBg} p-5 shadow-sm`;
-  const compactPanel = `rounded-2xl border ${cardBorder} ${softCardBg} p-4`;
   const iconTile = isDarkTheme ? "bg-[#2a2a2a] text-[#e6e6e6]" : "bg-[#2563eb]/10 text-[#2563eb]";
   const { courseId, assignmentId } = useParams();
 
@@ -192,10 +188,6 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   );
   const submittedCount = useMemo(
     () => submissions.filter((s) => s.status === "submitted").length,
-    [submissions],
-  );
-  const gradedCount = useMemo(
-    () => submissions.filter((s) => s.grade !== null || s.final_grade !== null).length,
     [submissions],
   );
   const ungradedCount = useMemo(

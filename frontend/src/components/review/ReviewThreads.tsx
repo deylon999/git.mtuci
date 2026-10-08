@@ -4,7 +4,6 @@ import {
   Paper,
   Typography,
   Button,
-  IconButton,
   TextField,
   Collapse,
   Chip,
@@ -13,7 +12,6 @@ import {
 import {
   CheckCircle as ResolveIcon,
   Undo as UnresolveIcon,
-  Comment as CommentIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';

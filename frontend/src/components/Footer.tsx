@@ -1,4 +1,4 @@
-import { Github, GitBranch, AlertCircle, BookOpen } from "lucide-react";
+import { GitBranch } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import {

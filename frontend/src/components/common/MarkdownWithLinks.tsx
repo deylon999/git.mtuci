@@ -200,7 +200,7 @@ export const MarkdownWithLinks: React.FC<MarkdownWithLinksProps> = ({
     >
       <ReactMarkdown
         components={{
-          code({ node, className, children, ...props }) {
+          code({ node: _node, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '');
             if (match) {
               const codeText = String(children).replace(/\n$/, '');

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { RefreshCw, Clock, AlertTriangle, CheckCircle, XCircle, Activity, HardDrive, Database, Server, Zap, TrendingUp, GitBranch } from "lucide-react";
+import { RefreshCw, HardDrive, Database, Server, GitBranch } from "lucide-react";
 import { getSystemMetrics, getServiceStatus, getBackups, getLogs, createBackup, restartAPI } from "../api/adminApi";
 import type { ServiceStatus, SystemMetrics, TableSizeEntry } from "../api/types";
 import { getTheme } from "../theme";
@@ -32,7 +32,6 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
   const [incidents, setIncidents] = useState<Array<{ level: string; message: string; created_at: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<string>("");
   const [secondsSinceUpdate, setSecondsSinceUpdate] = useState(0);
   const [showRestartModal, setShowRestartModal] = useState(false);
   const [restartLoading, setRestartLoading] = useState(false);
@@ -53,7 +52,6 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
       setBackups(backupsData);
       setIncidents([...(errorLogs?.logs || []), ...(warningLogs?.logs || [])].slice(0, 10));
       setFetchError(!metricsData && !statusData);
-      setLastUpdate(new Date().toLocaleTimeString(dateLocale));
       setSecondsSinceUpdate(0);
     } catch (error) {
       console.error("Failed to fetch monitoring data:", error);

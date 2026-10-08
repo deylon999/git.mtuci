@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Search,
@@ -25,7 +25,6 @@ import {
   type AdminRepository,
 } from "../api/adminApi";
 import { getSystemInfo } from "../api/systemApi";
-import { useAuthUser } from "../context/AuthUserContext";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getGiteaPublicBase, resolveRepoLinks } from "../utils/giteaLinks";
 import { getAdminPageTheme } from "../layout/adminPageTheme";
@@ -182,26 +181,6 @@ function getInitials(fullName: string | null): string {
   return fullName.slice(0, 2).toUpperCase();
 }
 
-function formatDate(
-  dateStr: string,
-  t: (key: string) => string,
-  tp: (key: string, params?: Record<string, string | number | null | undefined>) => string,
-  dateLocale: string,
-): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return t("repo.repositories.justNow");
-  if (diffMins < 60) return tp("repo.repositories.minutesAgo", { n: diffMins });
-  if (diffHours < 24) return tp("repo.repositories.hoursAgo", { n: diffHours });
-  if (diffDays === 1) return t("repo.repositories.yesterday");
-  if (diffDays < 7) return tp("repo.repositories.daysAgo", { n: diffDays });
-  return date.toLocaleDateString(dateLocale);
-}
 
 const FLOATING_MENU_Z_BACKDROP = 200;
 const FLOATING_MENU_Z_PANEL = 201;
@@ -308,9 +287,7 @@ interface RepositoriesPageProps {
 }
 
 export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPageProps) {
-  const { t, tp, language } = useUserPreferences();
-  const { user } = useAuthUser();
-  const dateLocale = language === "en" ? "en-US" : "ru-RU";
+  const { t, tp } = useUserPreferences();
   const [giteaBase, setGiteaBase] = useState(getGiteaPublicBase);
   // Data states
   const [repositories, setRepositories] = useState<Repository[]>([]);
@@ -321,7 +298,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
 
   // Filter states
   const [typeFilter, setTypeFilter] = useState<string>("");
-  const [languageFilter, setLanguageFilter] = useState<string>("");
+  const [languageFilter] = useState<string>("");
   const [blockedFilter, setBlockedFilter] = useState<string>("");
   const [limit, setLimit] = useState(20);
   const [offset, setOffset] = useState(0);
@@ -595,8 +572,6 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
   const headerActionHover = ui.cardHover;
   const filterInputBg = ui.inputBg;
   const cardBgLight = ui.inputBg.split(" ")[0];
-  const textPrimary = ui.textPrimary;
-  const textSecondary = ui.textSecondary;
   const textTertiary = ui.textTertiary;
   const inputBg = filterInputBg;
   const inputText = ui.tableNameText;
@@ -607,7 +582,6 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
   const tableBorder = ui.tableBorder;
   const btnBg = `${ui.tableBg} border ${isDarkTheme ? "border-[#30363d]" : "border-slate-200"} ${ui.tableRowHover}`;
   const btnText = ui.tableCellText;
-  const btnTextHover = isDarkTheme ? "hover:text-[#ccd0d4]" : "hover:text-slate-900";
   const actionBtnHover = ui.actionBtnHover;
   const actionBtnColor = ui.actionBtnColor;
   const menuItemText = ui.tableNameText;

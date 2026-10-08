@@ -651,7 +651,7 @@ export function TeacherActivityRow({
 
 export function TeacherCourseMiniRow({
   theme,
-  courseId,
+  courseId: _courseId,
   title,
   meta,
   pendingCount,
