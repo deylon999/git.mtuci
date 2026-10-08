@@ -129,6 +129,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
     sort,
     setSort,
     getFilters,
+    resetFilters,
   } = useLogsFilters();
 
   const { limit, setLimit, page, setPage, getPagination, resetPagination } = useLogsPagination(10);
@@ -298,6 +299,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
   };
 
   const totalPages = Math.ceil(total / limit);
+  const hasActiveFilters = Boolean(level || source || search) || timeFilter !== "today" || sort !== "desc";
 
   const ui = getAdminPageTheme(isDarkTheme);
   const c = ui.colors;
@@ -361,15 +363,15 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
         </div>
 
         {/* Toolbar */}
-        <div className={`flex items-center gap-3 p-4 rounded-xl border ${cardBg}`}>
-          <div className={`flex items-center gap-2 flex-1 px-3 py-2 rounded-lg border ${inputBg}`}>
+        <div className={`flex flex-wrap items-center gap-3 p-4 rounded-xl border ${cardBg}`}>
+          <div className={`flex items-center gap-2 flex-1 min-w-[200px] px-3 py-2 rounded-lg border ${inputBg}`}>
             <Search className={`h-4 w-4 shrink-0 ${ui.tableHeaderText}`} />
             <input
               ref={searchInputRef}
               type="text"
               placeholder={t("admin.logs.searchPlaceholder")}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleFilterChange(() => setSearch(e.target.value))}
               className={`bg-transparent border-none outline-none text-sm flex-1 ${ui.tableNameText} ${isDarkTheme ? "placeholder-[#6e7681]" : "placeholder-slate-400"}`}
             />
           </div>
@@ -396,10 +398,10 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
             <option value="auth" style={adminSelect.optionStyle}>{t("admin.logs.sourceAuth")}</option>
             <option value="repositories" style={adminSelect.optionStyle}>{t("admin.logs.sourceRepositories")}</option>
             <option value="webhooks" style={adminSelect.optionStyle}>{t("admin.logs.sourceWebhooks")}</option>
-            <option value="admin" style={adminSelect.optionStyle}>admin</option>
-            <option value="gitea" style={adminSelect.optionStyle}>gitea</option>
-            <option value="permissions" style={adminSelect.optionStyle}>permissions</option>
-            <option value="courses" style={adminSelect.optionStyle}>courses</option>
+            <option value="admin" style={adminSelect.optionStyle}>{t("admin.logs.sourceAdmin")}</option>
+            <option value="gitea" style={adminSelect.optionStyle}>{t("admin.logs.sourceGitea")}</option>
+            <option value="permissions" style={adminSelect.optionStyle}>{t("admin.logs.sourcePermissions")}</option>
+            <option value="courses" style={adminSelect.optionStyle}>{t("admin.logs.sourceCourses")}</option>
           </select>
           <select
             value={timeFilter}
@@ -422,6 +424,15 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
             <option value="desc" style={adminSelect.optionStyle}>{t("admin.logs.sortNewFirst")}</option>
             <option value="asc" style={adminSelect.optionStyle}>{t("admin.logs.sortOldFirst")}</option>
           </select>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={() => handleFilterChange(resetFilters)}
+              className={`text-sm underline-offset-2 hover:underline ${ui.tableCellText}`}
+            >
+              {t("admin.logs.resetFilters")}
+            </button>
+          ) : null}
         </div>
 
         {/* Table */}

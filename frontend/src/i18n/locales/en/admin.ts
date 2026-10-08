@@ -138,6 +138,11 @@ export const adminEn = {
     sourceWebhooks: "webhooks",
     allLevels: "All levels",
     allSources: "All sources",
+    sourceAdmin: "admin",
+    sourceGitea: "Gitea",
+    sourcePermissions: "permissions",
+    sourceCourses: "courses",
+    resetFilters: "Reset filters",
   },
   monitoring: {
     title: "Monitoring",

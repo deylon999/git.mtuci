@@ -2,7 +2,7 @@ export const studentRu = {
   plural: {
     deadlines: { one: "дедлайн", few: "дедлайна", many: "дедлайнов", other: "дедлайнов" },
     days: { one: "день", few: "дня", many: "дней", other: "дней" },
-    commits: { one: "commit", few: "commitа", many: "commits", other: "commits" },
+    commits: { one: "коммит", few: "коммита", many: "коммитов", other: "коммитов" },
     repos: { one: "репозиторий", few: "репозитория", many: "репозиториев", other: "репозиториев" },
     forks: { one: "форк", few: "форка", many: "форков", other: "форков" },
     courses: { one: "курс", few: "курса", many: "курсов", other: "курсов" },

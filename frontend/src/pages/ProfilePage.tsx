@@ -723,6 +723,7 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
 
       {isModalOpen ? (
         <AvatarUploadModal
+          isDarkTheme={isDarkTheme}
           file={selectedFile}
           onClose={() => {
             setIsModalOpen(false);

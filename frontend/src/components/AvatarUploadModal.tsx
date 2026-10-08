@@ -7,6 +7,7 @@ interface AvatarUploadModalProps {
   onClose: () => void;
   onConfirm: (file: File, cropData: { x: number; y: number; zoom: number }) => void;
   isUploading: boolean;
+  isDarkTheme?: boolean;
 }
 
 // Helper function to crop image using canvas
@@ -86,6 +87,7 @@ export default function AvatarUploadModal({
   onClose,
   onConfirm,
   isUploading,
+  isDarkTheme = false,
 }: AvatarUploadModalProps) {
   const { t } = useUserPreferences();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -144,16 +146,17 @@ export default function AvatarUploadModal({
   if (!file) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-        <h2 className="mb-4 text-xl font-semibold text-gray-900">{t("avatar.title")}</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
+      {/* p-4 on phones: the 320px crop area plus padding must fit a 375px screen. */}
+      <div className={`w-full max-w-md rounded-xl p-4 shadow-xl sm:p-6 ${isDarkTheme ? "bg-[#1e1e1e]" : "bg-white"}`}>
+        <h2 className={`mb-4 text-xl font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"}`}>{t("avatar.title")}</h2>
 
-        <p className="mb-4 text-sm text-gray-600 text-center">{t("avatar.hint")}</p>
+        <p className={`mb-4 text-sm text-center ${isDarkTheme ? "text-gray-400" : "text-gray-600"}`}>{t("avatar.hint")}</p>
 
         {/* Interactive Cropper */}
         <div className="mb-6">
           {previewUrl ? (
-            <AvatarCropper imageUrl={previewUrl} onCropChange={setCropData} />
+            <AvatarCropper imageUrl={previewUrl} onCropChange={setCropData} isDarkTheme={isDarkTheme} />
           ) : (
             <div className="flex h-64 items-center justify-center text-gray-400">
               <span className="text-sm">{t("avatar.uploading")}</span>
@@ -166,7 +169,11 @@ export default function AvatarUploadModal({
           <button
             onClick={handleClose}
             disabled={isUploading || isProcessing}
-            className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
+            className={`flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition disabled:opacity-60 ${
+              isDarkTheme
+                ? "border-[#3d3d3d] bg-[#2d2d2d] text-gray-200 hover:bg-[#3d3d3d]"
+                : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            }`}
           >
             {t("common.cancel")}
           </button>

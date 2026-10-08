@@ -138,6 +138,11 @@ export const adminRu = {
     sourceWebhooks: "вебхуки",
     allLevels: "Все уровни",
     allSources: "Все источники",
+    sourceAdmin: "администрирование",
+    sourceGitea: "Gitea",
+    sourcePermissions: "права доступа",
+    sourceCourses: "курсы",
+    resetFilters: "Сбросить фильтры",
   },
   monitoring: {
     title: "Мониторинг",
