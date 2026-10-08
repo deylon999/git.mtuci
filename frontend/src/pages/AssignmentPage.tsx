@@ -608,11 +608,11 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
             <div>
               <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${cardBorder} ${cardBg} ${textSecondary}`}>
                 <BookOpen className="h-3.5 w-3.5" />
-                {isReviewerRole(me?.role) ? "Панель преподавателя" : "Панель студента"}
+                {isReviewerRole(me?.role) ? t("repo.assignment.panelReviewer") : t("repo.assignment.panelStudent")}
               </div>
               <h1 className={`mt-4 text-3xl font-semibold leading-tight sm:text-4xl ${textPrimary}`}>{headerTitle}</h1>
               <p className={`mt-3 max-w-3xl text-sm leading-6 ${textSecondary}`}>
-                {assignment?.description || "Страница задания, сдач, проверок и аналитики собрана в одном месте."}
+                {assignment?.description || t("repo.assignment.pageDescriptionFallback")}
               </p>
 
               <div className="mt-5 flex flex-wrap gap-2">
@@ -680,7 +680,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
                     <Users className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className={`text-xs uppercase tracking-wide ${textTertiary}`}>Сдачи</div>
+                    <div className={`text-xs uppercase tracking-wide ${textTertiary}`}>{t("repo.assignment.statSubmissions")}</div>
                     <div className={`text-xl font-semibold ${textPrimary}`}>{submissions.length}</div>
                   </div>
                 </div>
@@ -691,7 +691,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
                     <Paperclip className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className={`text-xs uppercase tracking-wide ${textTertiary}`}>Вложений</div>
+                    <div className={`text-xs uppercase tracking-wide ${textTertiary}`}>{t("repo.assignment.statAttachments")}</div>
                     <div className={`text-xl font-semibold ${textPrimary}`}>{attachmentCount}</div>
                   </div>
                 </div>
@@ -712,7 +712,9 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
             <div className={`rounded-2xl border ${cardBorder} ${cardBg} p-4 shadow-sm`}>
               <div className={`mb-2 text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.studentRepoHint")}</div>
               <div className={`mb-3 text-xs ${textSecondary}`}>
-                {selectedRepoStudent ? `Показан репозиторий: ${selectedRepoStudent.student_full_name}` : "Выберите студента для просмотра его репозитория."}
+                {selectedRepoStudent
+                  ? tp("repo.assignment.showingRepoOf", { name: selectedRepoStudent.student_full_name })
+                  : t("repo.assignment.selectStudentForRepo")}
               </div>
               <select
                 value={selectedRepoStudentId}

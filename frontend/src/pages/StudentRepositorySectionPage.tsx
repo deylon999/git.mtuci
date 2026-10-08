@@ -773,21 +773,21 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
 
                   <div className="mt-4 grid gap-2 md:grid-cols-4">
                     <div className="rounded-lg border px-3 py-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
-                      <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.text3 }}>Источник</div>
+                      <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.text3 }}>{t("repo.section.prSource")}</div>
                       <div className="mt-1 truncate font-mono text-xs" style={{ color: theme.text }}>{detail.pull.head_branch ?? "?"}</div>
                     </div>
                     <div className="rounded-lg border px-3 py-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
-                      <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.text3 }}>Цель</div>
+                      <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.text3 }}>{t("repo.section.prTarget")}</div>
                       <div className="mt-1 truncate font-mono text-xs" style={{ color: theme.text }}>
                         {detail.pull.base_branch ?? t("repo.settings.defaultBranchPlaceholder")}
                       </div>
                     </div>
                     <div className="rounded-lg border px-3 py-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
-                      <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.text3 }}>Коммиты</div>
+                      <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.text3 }}>{t("repo.section.prCommits")}</div>
                       <div className="mt-1 text-xs font-semibold" style={{ color: theme.text }}>{detail.pull.commits_count ?? 0}</div>
                     </div>
                     <div className="rounded-lg border px-3 py-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
-                      <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.text3 }}>Файлы</div>
+                      <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.text3 }}>{t("repo.section.prFiles")}</div>
                       <div className="mt-1 text-xs font-semibold" style={{ color: theme.text }}>
                         {t("repo.section.filesCount").replace(
                           "{count}",
