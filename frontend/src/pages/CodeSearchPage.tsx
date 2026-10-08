@@ -13,6 +13,9 @@ import {
 import toast from "react-hot-toast";
 import { globalSearch, type SearchHit } from "../api/searchApi";
 import { useAuthUser } from "../context/AuthUserContext";
+import { useUserPreferences } from "../context/UserPreferencesContext";
+import { pluralWord } from "../i18n/plural";
+import { formatRelativeTime } from "../utils/formatRelativeTime";
 
 interface Props {
   isDarkTheme?: boolean;
@@ -20,7 +23,6 @@ interface Props {
 
 type SearchTab = "all" | "repositories" | "courses" | "assignments" | "students";
 
-const SUGGESTIONS = ["lab", "Базы данных", "Алгоритмы", "Python", "ИСТ"];
 
 const LANGUAGE_COLORS: Record<string, string> = {
   python: "#3572A5",
@@ -53,37 +55,14 @@ function initials(name: string): string {
   return parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
 }
 
-function formatDate(value?: string | null): string {
-  if (!value) return "недавно";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "недавно";
-  const diffMs = Date.now() - date.getTime();
-  const minute = 60 * 1000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-  if (diffMs < minute) return "только что";
-  if (diffMs < hour) return `${Math.max(1, Math.floor(diffMs / minute))} мин назад`;
-  if (diffMs < day) return `${Math.floor(diffMs / hour)} ч назад`;
-  if (diffMs < day * 7) return `${Math.floor(diffMs / day)} дн назад`;
-  return date.toLocaleDateString(currentLocaleTag(), { day: "numeric", month: "short" });
-}
-
 function languageColor(language?: string | null): string {
   if (!language) return "#6b7280";
   return LANGUAGE_COLORS[language.toLowerCase()] ?? "#60a5fa";
 }
 
-function pluralResults(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${count} результат`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} результата`;
-  return `${count} результатов`;
-}
-
 function getCourseAbbr(title: string): string {
   const words = title.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "К";
+  if (words.length === 0) return "·";
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return words.slice(0, 2).map((word) => word[0]?.toUpperCase()).join("");
 }
@@ -91,6 +70,10 @@ function getCourseAbbr(title: string): string {
 export default function CodeSearchPage({ isDarkTheme = true }: Props) {
   const navigate = useNavigate();
   const { user } = useAuthUser();
+  const { t, tp, language } = useUserPreferences();
+  const suggestions = ["Python", t("globalSearch.suggestionDatabases"), t("globalSearch.suggestionAlgorithms"), "lab"];
+  const formatWhen = (value?: string | null) => (value ? formatRelativeTime(value) : "—");
+  const counted = (n: number, key: string) => `${n} ${pluralWord(language, `globalSearch.${key}`, n)}`;
   const [params, setParams] = useSearchParams();
   const qFromUrl = params.get("q") ?? "";
   const [query, setQuery] = useState(qFromUrl);
@@ -135,7 +118,7 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
       })
       .catch((error) => {
         if (cancelled) return;
-        toast.error(error instanceof Error ? error.message : "Ошибка поиска");
+        toast.error(error instanceof Error ? error.message : t("globalSearch.failed"));
         setHits([]);
         setElapsedMs(null);
       })
@@ -146,7 +129,7 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [qFromUrl]);
+  }, [qFromUrl, t]);
 
   const grouped = useMemo(() => {
     const repositories = hits.filter((hit) => hit.type === "repository");
@@ -197,7 +180,7 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
             className="search-hero-input"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Поиск по курсам, заданиям и репозиториям..."
+            placeholder={t("globalSearch.placeholder")}
             autoFocus
           />
         </form>
@@ -205,10 +188,10 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
         {currentQuery ? (
           <div className="search-meta">
             <div className="search-query-info">
-              Результаты по запросу <strong>"{currentQuery}"</strong>
+              {tp("globalSearch.resultsFor", { query: currentQuery })}
             </div>
             <div className="search-total">
-              {loading ? "поиск..." : pluralResults(total)}
+              {loading ? t("globalSearch.searching") : counted(total, "results")}
               {elapsedMs != null && !loading ? ` · ${elapsedMs} ms` : ""}
             </div>
           </div>
@@ -220,10 +203,10 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
           <div className="no-query-icon">
             <Search />
           </div>
-          <h3>Начните поиск</h3>
-          <p>Найдите свои репозитории, курсы, задания или студентов из вашей группы.</p>
+          <h3>{t("globalSearch.emptyTitle")}</h3>
+          <p>{t("globalSearch.emptyHint")}</p>
           <div className="suggestions">
-            {SUGGESTIONS.map((suggestion) => (
+            {suggestions.map((suggestion) => (
               <button key={suggestion} className="suggestion-chip" type="button" onClick={() => applyQuery(suggestion)}>
                 {suggestion}
               </button>
@@ -232,23 +215,23 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
         </section>
       ) : (
         <>
-          <nav className="filter-tabs" aria-label="Фильтры поиска">
-            <TabButton activeTab={activeTab} count={total} label="Все" tab="all" onSelect={setActiveTab} />
-            <TabButton activeTab={activeTab} count={counts.repositories} label="Репозитории" tab="repositories" onSelect={setActiveTab} />
-            <TabButton activeTab={activeTab} count={counts.courses} label="Курсы" tab="courses" onSelect={setActiveTab} />
-            <TabButton activeTab={activeTab} count={counts.assignments} label="Задания" tab="assignments" onSelect={setActiveTab} />
-            <TabButton activeTab={activeTab} count={counts.students} label="Студенты" tab="students" onSelect={setActiveTab} />
+          <nav className="filter-tabs" aria-label={t("globalSearch.filtersLabel")}>
+            <TabButton activeTab={activeTab} count={total} label={t("globalSearch.tabAll")} tab="all" onSelect={setActiveTab} />
+            <TabButton activeTab={activeTab} count={counts.repositories} label={t("globalSearch.tabRepositories")} tab="repositories" onSelect={setActiveTab} />
+            <TabButton activeTab={activeTab} count={counts.courses} label={t("globalSearch.tabCourses")} tab="courses" onSelect={setActiveTab} />
+            <TabButton activeTab={activeTab} count={counts.assignments} label={t("globalSearch.tabAssignments")} tab="assignments" onSelect={setActiveTab} />
+            <TabButton activeTab={activeTab} count={counts.students} label={t("globalSearch.tabStudents")} tab="students" onSelect={setActiveTab} />
           </nav>
 
           {loading ? (
             <div className="empty-section">
               <Search />
-              <p>Ищем совпадения...</p>
+              <p>{t("globalSearch.loadingResults")}</p>
             </div>
           ) : total === 0 ? (
             <div className="empty-section">
               <Search />
-              <p>Ничего не найдено по запросу "{currentQuery}"</p>
+              <p>{tp("globalSearch.nothingFound", { query: currentQuery })}</p>
             </div>
           ) : (
             <div id="results-content">
@@ -257,15 +240,15 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
                   <SectionHeader
                     count={grouped.repositories.length}
                     icon={<GitFork />}
-                    label="Репозитории"
-                    moreLabel={activeTab === "all" && grouped.repositories.length > 3 ? "Все репозитории" : undefined}
+                    label={t("globalSearch.tabRepositories")}
+                    moreLabel={activeTab === "all" && grouped.repositories.length > 3 ? t("globalSearch.allRepositories") : undefined}
                     onMore={() => setActiveTab("repositories")}
                   />
                   <div className="result-list">
                     {(activeTab === "all" ? grouped.repositories.slice(0, 3) : grouped.repositories).map((hit) => {
                       const displayName = hit.display_name || hit.title;
                       const isMine = ownerLogin ? displayName.toLowerCase().startsWith(`${ownerLogin.toLowerCase()}/`) : false;
-                      const updated = formatDate(hit.repo_pushed_at || hit.repo_updated_at);
+                      const updated = formatWhen(hit.repo_pushed_at || hit.repo_updated_at);
                       return (
                         <button key={`repo-${hit.id}`} className="result-card" type="button" onClick={() => openHit(hit)}>
                           <div className="result-icon repo-icon">
@@ -275,9 +258,9 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
                             <div className="result-title">
                               {highlightText(displayName, currentQuery)}
                               <span className={`tag ${hit.repo_visibility === "public" ? "tag-green" : "tag-gray"}`}>
-                                {hit.repo_visibility === "public" ? "Public" : "Private"}
+                                {hit.repo_visibility === "public" ? t("repo.visibility.public") : t("repo.visibility.private")}
                               </span>
-                              {isMine ? <span className="tag tag-blue">Мой</span> : null}
+                              {isMine ? <span className="tag tag-blue">{t("globalSearch.mine")}</span> : null}
                             </div>
                             {hit.repo_description || hit.subtitle ? (
                               <div className="result-sub">{highlightText(hit.repo_description || hit.subtitle || "", currentQuery)}</div>
@@ -291,20 +274,20 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
                               ) : null}
                               <span>
                                 <GitCommit />
-                                {hit.repo_commits_count ?? 0} коммитов
+                                {counted(hit.repo_commits_count ?? 0, "commits")}
                               </span>
                               {(hit.repo_forks_count ?? 0) > 0 ? (
                                 <span>
                                   <GitFork />
-                                  {hit.repo_forks_count} форков
+                                  {counted(hit.repo_forks_count ?? 0, "forks")}
                                 </span>
                               ) : null}
-                              <span>обновлён {updated}</span>
+                              <span>{tp("globalSearch.updated", { time: updated })}</span>
                             </div>
                           </div>
                           <div className="result-right">
                             <div className="result-time">{updated}</div>
-                            <span className="open-btn">Открыть</span>
+                            <span className="open-btn">{t("globalSearch.open")}</span>
                           </div>
                         </button>
                       );
@@ -315,10 +298,9 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
 
               {(activeTab === "all" || activeTab === "courses") && grouped.courses.length > 0 ? (
                 <section className="results-section">
-                  <SectionHeader count={grouped.courses.length} icon={<BookOpen />} label="Курсы" />
+                  <SectionHeader count={grouped.courses.length} icon={<BookOpen />} label={t("globalSearch.tabCourses")} />
                   <div className="course-result">
                     {grouped.courses.map((hit) => {
-                      const progress = hit.course_status === "archived" ? 100 : hit.course_nearest_deadline ? 60 : 35;
                       return (
                         <button key={`course-${hit.id}`} className="course-card" type="button" onClick={() => openHit(hit)}>
                           <div className="course-card-top">
@@ -330,18 +312,17 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
                           </div>
                           <div className="course-tags">
                             <span className={`tag ${hit.course_status === "archived" ? "tag-gray" : "tag-green"}`}>
-                              {hit.course_status === "archived" ? "Архив" : "Активный"}
+                              {hit.course_status === "archived" ? t("globalSearch.courseArchived") : t("globalSearch.courseActive")}
                             </span>
-                            <span className="tag tag-gray">{hit.course_assignments_count ?? 0} заданий</span>
-                            <span className="tag tag-gray">{hit.course_students_count ?? 0} студентов</span>
-                            {hit.course_nearest_deadline ? <span className="tag tag-yellow">до {formatDate(hit.course_nearest_deadline)}</span> : null}
-                          </div>
-                          <div className="course-prog-label">
-                            <span>Прогресс</span>
-                            <span>{progress}%</span>
-                          </div>
-                          <div className="prog-bar">
-                            <div className="prog-fill" style={{ width: `${progress}%` }} />
+                            <span className="tag tag-gray">{counted(hit.course_assignments_count ?? 0, "assignments")}</span>
+                            <span className="tag tag-gray">{counted(hit.course_students_count ?? 0, "students")}</span>
+                            {hit.course_nearest_deadline ? (
+                              <span className="tag tag-yellow">
+                                {tp("globalSearch.nearestDeadline", {
+                                  date: new Date(hit.course_nearest_deadline).toLocaleDateString(currentLocaleTag(), { day: "numeric", month: "short" }),
+                                })}
+                              </span>
+                            ) : null}
                           </div>
                         </button>
                       );
@@ -352,7 +333,7 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
 
               {(activeTab === "all" || activeTab === "assignments") && grouped.assignments.length > 0 ? (
                 <section className="results-section">
-                  <SectionHeader count={grouped.assignments.length} icon={<CalendarCheck />} label="Задания" />
+                  <SectionHeader count={grouped.assignments.length} icon={<CalendarCheck />} label={t("globalSearch.tabAssignments")} />
                   <div className="result-list">
                     {grouped.assignments.map((hit) => (
                       <button key={`assignment-${hit.id}`} className="assign-card" type="button" onClick={() => openHit(hit)}>
@@ -361,12 +342,7 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
                         </div>
                         <div className="assign-body">
                           <div className="assign-name">{highlightText(hit.title, currentQuery)}</div>
-                          <div className="assign-course">{hit.subtitle || "Задание"}</div>
-                          <span className="tag tag-blue">В процессе</span>
-                        </div>
-                        <div className="assign-right">
-                          <div className="assign-score">—</div>
-                          <div className="assign-score-label">баллов</div>
+                          <div className="assign-course">{hit.subtitle || t("globalSearch.assignmentFallback")}</div>
                         </div>
                       </button>
                     ))}
@@ -376,7 +352,7 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
 
               {(activeTab === "all" || activeTab === "students") && grouped.students.length > 0 ? (
                 <section className="results-section">
-                  <SectionHeader count={grouped.students.length} icon={<Users />} label="Студенты" />
+                  <SectionHeader count={grouped.students.length} icon={<Users />} label={t("globalSearch.tabStudents")} />
                   <div className="student-result">
                     {grouped.students.map((hit, index) => {
                       const avatarColor = ["#3ecf8e", "#4f8ef7", "#a78bfa", "#f55f57", "#f5c842", "#fb923c"][index % 6];
@@ -387,8 +363,8 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
                           </div>
                           <div className="student-info">
                             <div className="student-name">{highlightText(hit.title, currentQuery)}</div>
-                            <div className="student-login">{hit.display_name || "student"}</div>
-                            <div className="student-meta">{hit.subtitle || user?.group_name || "Группа"}</div>
+                            {hit.display_name ? <div className="student-login">{hit.display_name}</div> : null}
+                            {hit.subtitle ? <div className="student-meta">{hit.subtitle}</div> : null}
                           </div>
                         </button>
                       );
@@ -400,7 +376,7 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
               {activeTab !== "all" && counts[activeTab] === 0 ? (
                 <div className="empty-section">
                   <Search />
-                  <p>Ничего не найдено в этой категории</p>
+                  <p>{t("globalSearch.nothingInCategory")}</p>
                 </div>
               ) : null}
             </div>
