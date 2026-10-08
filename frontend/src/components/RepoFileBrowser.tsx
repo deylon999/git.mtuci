@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   ChevronRight,
@@ -335,11 +335,18 @@ export default function RepoFileBrowser({
     };
   }, [repoSearchQuery, branch, repoId]);
 
+  // Monotonic ids so a slow response for a previous branch/path/file never overwrites the current view.
+  const dirRequestRef = useRef(0);
+  const fileRequestRef = useRef(0);
+  const summaryRequestRef = useRef(0);
+
   const refreshDirectory = useCallback(async () => {
+    const requestId = ++dirRequestRef.current;
     setDirLoading(true);
     setDirError(null);
     try {
       const list = await api.getFiles(repoId, currentPath, branch);
+      if (requestId !== dirRequestRef.current) return;
       setEntries(
         [...list].sort((a, b) => {
           if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
@@ -347,26 +354,31 @@ export default function RepoFileBrowser({
         }),
       );
     } catch (e) {
+      if (requestId !== dirRequestRef.current) return;
       setEntries([]);
       setDirError(e instanceof Error ? e.message : t("repo.browser.loadFilesFailed"));
     } finally {
-      setDirLoading(false);
+      if (requestId === dirRequestRef.current) setDirLoading(false);
     }
   }, [repoId, currentPath, branch, t, sortLocale]);
 
   useEffect(() => {
+    // `branch` starts as "main" until the real default branch is known; fetching before that
+    // fails (or shows the wrong tree) for repositories whose default branch is e.g. "master".
+    if (branchLoading) return;
     void refreshDirectory();
-  }, [refreshDirectory]);
+  }, [refreshDirectory, branchLoading]);
 
   const loadSummary = useCallback(async () => {
+    const requestId = ++summaryRequestRef.current;
     setSummaryLoading(true);
     try {
       const data = await api.getSummary(repoId, branch);
-      setSummary(data);
+      if (requestId === summaryRequestRef.current) setSummary(data);
     } catch {
-      setSummary(null);
+      if (requestId === summaryRequestRef.current) setSummary(null);
     } finally {
-      setSummaryLoading(false);
+      if (requestId === summaryRequestRef.current) setSummaryLoading(false);
     }
   }, [repoId, branch]);
 
@@ -376,10 +388,13 @@ export default function RepoFileBrowser({
       setSummaryLoading(externalSummaryLoading ?? false);
       return;
     }
+    if (branchLoading) return;
     void loadSummary();
-  }, [embedded, loadSummary, externalSummary, externalSummaryLoading]);
+  }, [embedded, loadSummary, externalSummary, externalSummaryLoading, branchLoading]);
 
   const onBranchChange = (next: string) => {
+    fileRequestRef.current += 1; // discard a file response still in flight
+    setFileLoading(false);
     setBranch(next);
     setCompareHead(next);
     setCurrentPath("");
@@ -400,6 +415,8 @@ export default function RepoFileBrowser({
   };
 
   const openDirectory = (path: string) => {
+    fileRequestRef.current += 1; // discard a file response still in flight
+    setFileLoading(false);
     setSelectedFile(null);
     setFileContent(null);
     setFileError(null);
@@ -425,16 +442,19 @@ export default function RepoFileBrowser({
     setFileBlameOpen(false);
     setFileBlameError(null);
     setFileBlameChunks([]);
+    const requestId = ++fileRequestRef.current;
     setFileLoading(true);
     setFileError(null);
     setFileContent(null);
     try {
       const res = await api.getFileContent(repoId, filepath, branch);
-      setFileContent(res.content);
+      if (requestId === fileRequestRef.current) setFileContent(res.content);
     } catch (e) {
-      setFileError(e instanceof Error ? e.message : t("repo.browser.openFileFailed"));
+      if (requestId === fileRequestRef.current) {
+        setFileError(e instanceof Error ? e.message : t("repo.browser.openFileFailed"));
+      }
     } finally {
-      setFileLoading(false);
+      if (requestId === fileRequestRef.current) setFileLoading(false);
     }
   };
 
