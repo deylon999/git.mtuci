@@ -146,9 +146,9 @@ export default function AvatarUploadModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-        <h2 className="mb-4 text-xl font-semibold text-gray-900">{t("core.avatar.title")}</h2>
+        <h2 className="mb-4 text-xl font-semibold text-gray-900">{t("avatar.title")}</h2>
 
-        <p className="mb-4 text-sm text-gray-600 text-center">{t("core.avatar.hint")}</p>
+        <p className="mb-4 text-sm text-gray-600 text-center">{t("avatar.hint")}</p>
 
         {/* Interactive Cropper */}
         <div className="mb-6">
@@ -156,7 +156,7 @@ export default function AvatarUploadModal({
             <AvatarCropper imageUrl={previewUrl} onCropChange={setCropData} />
           ) : (
             <div className="flex h-64 items-center justify-center text-gray-400">
-              <span className="text-sm">{t("core.avatar.uploading")}</span>
+              <span className="text-sm">{t("avatar.uploading")}</span>
             </div>
           )}
         </div>
@@ -176,9 +176,9 @@ export default function AvatarUploadModal({
             className="flex-1 rounded-lg bg-[#372579] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#2a1c5e] disabled:opacity-60"
           >
             {isProcessing
-              ? t("core.avatar.processing")
+              ? t("avatar.processing")
               : isUploading
-                ? t("core.avatar.uploading")
+                ? t("avatar.uploading")
                 : t("common.save")}
           </button>
         </div>

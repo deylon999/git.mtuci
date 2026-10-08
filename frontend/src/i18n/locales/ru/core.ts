@@ -8,6 +8,7 @@ export const coreRu = {
   },
   common: {
     loading: "Загрузка…",
+    loadError: "Не удалось загрузить данные",
     goTo: "Перейти",
     russian: "Русский",
     english: "English",

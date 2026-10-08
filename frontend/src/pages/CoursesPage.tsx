@@ -166,7 +166,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
       setCourses((prev) => [created, ...prev]);
       resetCreateForm();
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : t("courses.createError"));
+      setCreateError(err instanceof Error ? err.message : t("admin.courses.createError"));
     } finally {
       setCreateLoading(false);
     }
@@ -182,7 +182,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
       await deleteCourse(courseId);
       setCourses((prev) => prev.filter((c) => c.id !== courseId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("courses.deleteError"));
+      setError(err instanceof Error ? err.message : t("admin.courses.deleteError"));
     } finally {
       setDeletingCourseId(null);
     }

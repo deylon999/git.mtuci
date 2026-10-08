@@ -132,7 +132,7 @@ export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = tr
           {/* Draggable image - visible fully with natural dimensions */}
           <img
             src={imageUrl}
-            alt={t("profile.cropPreview")}
+            alt={t("admin.profile.cropPreview")}
             className="max-w-none max-h-none pointer-events-none"
             style={{
               transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
@@ -178,7 +178,7 @@ export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = tr
       {/* Controls */}
       <div className="w-full max-w-xs space-y-3">
         <div className="flex items-center gap-3">
-          <span className={`text-xs ${textSecondary}`}>{t("core.avatar.scale")}</span>
+          <span className={`text-xs ${textSecondary}`}>{t("avatar.scale")}</span>
           <input
             type="range"
             min="0.1"
@@ -192,7 +192,7 @@ export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = tr
         </div>
         
         <p className={`text-xs ${textSecondary} text-center`}>
-          {t("core.avatar.cropHint")}
+          {t("avatar.cropHint")}
         </p>
       </div>
     </div>

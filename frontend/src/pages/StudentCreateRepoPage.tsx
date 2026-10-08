@@ -205,7 +205,7 @@ export default function StudentCreateRepoPage({ isDarkTheme = false }: StudentCr
         {templatesLoading ? (
           <p className="text-xs flex items-center gap-2" style={{ color: theme.text2 }}>
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            {t("student.repos.createPage.loadingTemplates")}
+            {t("repo.create.loadingTemplates")}
           </p>
         ) : null}
         {templates ? (

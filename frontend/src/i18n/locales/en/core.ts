@@ -8,7 +8,7 @@ export const coreEn = {
   },
   common: {
     loading: "Loading…",
-    loadError: "Failed",
+    loadError: "Failed to load data",
     goTo: "Open",
     russian: "Русский",
     english: "English",
