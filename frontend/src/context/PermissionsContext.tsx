@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -23,30 +24,42 @@ const PermissionsContext = createContext<PermissionsContextValue | null>(null);
 export function PermissionsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuthUser();
   const currentUserId = user?.id ?? null;
+  // Key on identity + role rather than the user object: /auth/me returns a fresh object on every revalidation.
+  const currentRole = user?.role ?? null;
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [loadedForUserId, setLoadedForUserId] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const loadedForUserIdRef = useRef(loadedForUserId);
+  loadedForUserIdRef.current = loadedForUserId;
 
   const refreshPermissions = useCallback(async () => {
-    if (!user) {
+    const requestId = ++requestIdRef.current;
+    if (!currentUserId) {
       setPermissions(new Set());
       setLoadedForUserId(null);
       setLoading(false);
       return;
     }
-    setLoading(true);
+    // No setLoading(true) here: the exposed `loading` already stays true until permissions are loaded for
+    // the current user id, and re-fetches for the same user must not unmount RequirePermission subtrees.
     try {
       const perms = await getMyPermissions();
+      // A slower response for a previous user/role must not overwrite the current permission set.
+      if (requestId !== requestIdRef.current) return;
       setPermissions(new Set(perms));
-      setLoadedForUserId(user.id);
+      setLoadedForUserId(currentUserId);
     } catch (error) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to load permissions:", error);
-      setPermissions(new Set());
-      setLoadedForUserId(user.id);
+      // Keep already loaded permissions of this user on a transient failure instead of locking them out.
+      if (loadedForUserIdRef.current !== currentUserId) setPermissions(new Set());
+      setLoadedForUserId(currentUserId);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [user]);
+    // currentRole is a dependency so a role change reloads the permission set.
+  }, [currentUserId, currentRole]);
 
   useEffect(() => {
     void refreshPermissions();

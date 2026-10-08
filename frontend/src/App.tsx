@@ -19,6 +19,7 @@ import { RoleModeProvider, useRoleMode } from "./context/RoleModeContext";
 import StudentShellBootstrapRunner from "./components/StudentShellBootstrapRunner";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 import PageLoadingFallback from "./components/PageLoadingFallback";
+import AuthCheckFailed from "./components/AuthCheckFailed";
 import { getTheme } from "./theme";
 import { pageGutterClass } from "./layout/pageLayout";
 import StudentRepositoryLayout from "./layouts/StudentRepositoryLayout";
@@ -147,7 +148,7 @@ function AppShell({
   const location = useLocation();
   const isAuthPage = AUTH_PATHS.includes(location.pathname);
   const { persistTheme } = useUserPreferences();
-  const { user, loading, clearUser } = useAuthUser();
+  const { user, loading, failed: authFailed, clearUser } = useAuthUser();
   const { mode, canSwitchLaborantMode } = useRoleMode();
   const effectiveRole =
     user?.role === "laborant" && canSwitchLaborantMode && mode === "student" ? "student" : user?.role;
@@ -162,6 +163,10 @@ function AppShell({
 
   if (!isAuthPage && loading && !user) {
     return <AuthLoadingScreen isDarkTheme={isDarkTheme} />;
+  }
+
+  if (!isAuthPage && !user && authFailed) {
+    return <AuthCheckFailed />;
   }
 
   if (!isAuthPage && isPendingStudent) {

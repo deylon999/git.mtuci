@@ -80,12 +80,13 @@ export function runStudentShellBootstrap(
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : "";
-        if (msg.startsWith("403 ") || msg.startsWith("401 ")) {
-          markStudentShellBootstrapSkipped();
-          return false;
+        if (!msg.startsWith("403 ") && !msg.startsWith("401 ")) {
+          console.error("Student shell bootstrap failed, falling back to per-widget requests:", err);
         }
-        bootstrapPromise = null;
-        throw err;
+        // Always release the waiters (auth user, notifications): otherwise a 5xx or network error
+        // leaves the app on the loading screen forever. They fall back to their own requests.
+        markStudentShellBootstrapSkipped();
+        return false;
       });
   }
   return bootstrapPromise;
