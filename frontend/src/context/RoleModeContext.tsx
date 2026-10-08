@@ -28,10 +28,12 @@ export function RoleModeProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    if (!canSwitchLaborantMode && mode !== "laborant") {
+    // Wait for the user: while it is still loading canSwitchLaborantMode is false, and resetting here
+    // would discard the "student" mode restored from localStorage on every page reload.
+    if (user && !canSwitchLaborantMode && mode !== "laborant") {
       setModeState("laborant");
     }
-  }, [canSwitchLaborantMode, mode]);
+  }, [user, canSwitchLaborantMode, mode]);
 
   const setMode = (next: RoleMode) => {
     const value = canSwitchLaborantMode ? next : "laborant";
