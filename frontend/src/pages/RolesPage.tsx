@@ -215,8 +215,6 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
           selectedRole === "teacher" ? getMe() : Promise.resolve(null),
         ]);
         
-        console.log("Loaded permissions for", selectedRole, permsData);
-        console.log("Loaded laborants:", laborantsData);
         
         // Load allow_assistant_grading from user data
         if (meData && meData.allow_assistant_grading !== undefined) {
@@ -293,8 +291,11 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
   };
 
   // Save permissions
+  const [saving, setSaving] = useState(false);
+
   const handleSave = async () => {
-    if (!currentRole) return;
+    if (!currentRole || saving) return;
+    setSaving(true);
     try {
       const permissionsData = categories.map((cat) => ({
         title: cat.title,
@@ -303,9 +304,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
           enabled: p.enabled,
         })),
       }));
-      console.log("Saving permissions for role:", currentRole.id, permissionsData);
-      const result = await saveRolePermissions(currentRole.id, permissionsData);
-      console.log("Save result:", result);
+      await saveRolePermissions(currentRole.id, permissionsData);
       // Update initial state to reflect saved changes
       setInitialCategories(categories);
       await refreshPermissions();
@@ -313,6 +312,8 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
     } catch (error) {
       console.error("Save error:", error);
       toast.error(t("admin.roles.permissionsSaveError"));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -469,8 +470,8 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                   {resetting ? t("admin.roles.resetting") : t("admin.roles.resetToDefaults")}
                 </button>
                 <button
-                  onClick={handleSave}
-                  disabled={permissionsLoading || !hasChanges}
+                  onClick={() => void handleSave()}
+                  disabled={permissionsLoading || !hasChanges || saving}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
                     hasChanges ? saveBtnActive : saveBtnInactive
                   }`}

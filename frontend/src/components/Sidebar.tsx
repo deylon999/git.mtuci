@@ -430,7 +430,6 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
 
   // While loading, show nothing or student menu to avoid flashing admin menu
   if (userRole === null || permissionsLoading) {
-    console.log("[Sidebar] Role is null, showing loading state");
     return (
       <aside className={`w-[260px] flex-shrink-0 h-full border-r`} style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
         <div className={`p-4 text-sm`} style={{ color: theme.text2 }}>{t("common.loading")}</div>
@@ -438,7 +437,6 @@ export default function Sidebar({ isDarkTheme = true }: SidebarProps) {
     );
   }
 
-  console.log("[Sidebar] Rendering menu for role:", userRole, "sections count:", menuSections.length);
 
   return (
     <aside
