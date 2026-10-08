@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Search,
@@ -21,6 +21,7 @@ import { API_URL } from "../api/client";
 import {
   deleteAdminRepository,
   getAdminRepositories,
+  getAdminRepositoriesPage,
   toggleAdminRepositoryBlock,
   type AdminRepository,
 } from "../api/adminApi";
@@ -345,10 +346,32 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
     fetchStats();
   }, []);
 
+  const fetchRepositories = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const page = await getAdminRepositoriesPage({
+        skip: offset,
+        limit,
+        repo_type: (typeFilter || undefined) as AdminRepository["repo_type"] | undefined,
+        language: languageFilter || undefined,
+        is_blocked: blockedFilter === "true" ? true : blockedFilter === "false" ? false : undefined,
+      });
+      setRepositories(page.items);
+      // Filtered total from the API. The old estimate (overview stats || page length) ignored filters and fell back
+      // to the page size whenever stats had not loaded yet, which hid every page after the first.
+      setTotalCount(page.total ?? offset + page.items.length);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("repo.repositories.loadError"));
+    } finally {
+      setLoading(false);
+    }
+  }, [offset, limit, typeFilter, languageFilter, blockedFilter, t]);
+
   // Fetch repositories when filters change
   useEffect(() => {
-    fetchRepositories();
-  }, [typeFilter, languageFilter, blockedFilter, limit, offset]);
+    void fetchRepositories();
+  }, [fetchRepositories]);
 
   const fetchStats = async () => {
     try {
@@ -364,26 +387,6 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
     }
   };
 
-  const fetchRepositories = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getAdminRepositories({
-        skip: offset,
-        limit,
-        repo_type: (typeFilter || undefined) as AdminRepository["repo_type"] | undefined,
-        language: languageFilter || undefined,
-        is_blocked: blockedFilter === "true" ? true : blockedFilter === "false" ? false : undefined,
-      });
-      setRepositories(data);
-      // Estimate total from stats for now
-      setTotalCount(stats?.total_repositories || data.length);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch repositories");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const toggleBlock = async (repoId: string) => {
     setTogglingId(repoId);

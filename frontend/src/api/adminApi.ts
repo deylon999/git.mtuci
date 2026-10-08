@@ -292,9 +292,7 @@ export async function getAdminForks(params?: {
   return apiRequest<AdminForkEventsResponse>(`/admin/forks${qs ? `?${qs}` : ""}`);
 }
 
-export async function getAdminRepositories(
-  query: AdminRepositoriesQuery = {},
-): Promise<AdminRepository[]> {
+function adminRepositoriesPath(query: AdminRepositoriesQuery): string {
   const params = new URLSearchParams();
   if (query.skip != null) params.set("skip", String(query.skip));
   if (query.limit != null) params.set("limit", String(query.limit));
@@ -302,7 +300,27 @@ export async function getAdminRepositories(
   if (query.language) params.set("language", query.language);
   if (query.is_blocked != null) params.set("is_blocked", String(query.is_blocked));
   const qs = params.toString();
-  return apiRequest<AdminRepository[]>(`/admin/repositories${qs ? `?${qs}` : ""}`);
+  return `/admin/repositories${qs ? `?${qs}` : ""}`;
+}
+
+export async function getAdminRepositories(
+  query: AdminRepositoriesQuery = {},
+): Promise<AdminRepository[]> {
+  return apiRequest<AdminRepository[]>(adminRepositoriesPath(query));
+}
+
+/** One page plus the number of repositories matching the filters (X-Total-Count; null on older backends). */
+export async function getAdminRepositoriesPage(
+  query: AdminRepositoriesQuery = {},
+): Promise<{ items: AdminRepository[]; total: number | null }> {
+  let total: number | null = null;
+  const items = await apiRequest<AdminRepository[]>(adminRepositoriesPath(query), {
+    onResponse: (res) => {
+      const raw = res.headers.get("X-Total-Count");
+      total = raw != null && raw !== "" && Number.isFinite(Number(raw)) ? Number(raw) : null;
+    },
+  });
+  return { items, total };
 }
 
 export async function deleteAdminRepository(repositoryId: string): Promise<void> {

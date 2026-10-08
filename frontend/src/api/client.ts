@@ -48,6 +48,8 @@ export async function apiRequest<T>(
     body?: unknown;
     auth?: boolean;
     headers?: Record<string, string>;
+    /** Called with the successful response, e.g. to read pagination headers such as X-Total-Count. */
+    onResponse?: (res: Response) => void;
   },
 ): Promise<T> {
   const method = opts?.method ?? "GET";
@@ -92,6 +94,8 @@ export async function apiRequest<T>(
     const msg = detail ? `${res.status} ${detail}` : `${res.status} ${res.statusText}`;
     throw new ApiError(res.status, msg);
   }
+
+  opts?.onResponse?.(res);
 
   return parseJson<T>(res);
 }

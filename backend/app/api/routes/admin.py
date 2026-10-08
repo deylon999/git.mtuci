@@ -1364,6 +1364,7 @@ async def admin_create_backup(
 @router.get("/repositories", response_model=List[RepositoryRead])
 @require_permission("repo_view")
 async def admin_list_repositories(
+    response: Response,
     repo_type: Optional[RepositoryType] = None,
     language: Optional[str] = None,
     is_blocked: Optional[bool] = None,
@@ -1372,17 +1373,29 @@ async def admin_list_repositories(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> List[RepositoryRead]:
-    """Get all repositories with optional filters and pagination (admin only)."""
-    query = select(Repository, User).outerjoin(User, Repository.owner_id == User.id)
+    """Get all repositories with optional filters and pagination (admin only).
 
+    The number of repositories matching the filters (ignoring skip/limit) is returned in X-Total-Count.
+    """
+    filters = []
     if repo_type:
-        query = query.where(Repository.repo_type == repo_type)
+        filters.append(Repository.repo_type == repo_type)
     if language:
-        query = query.where(Repository.language == language)
+        filters.append(Repository.language == language)
     if is_blocked is not None:
-        query = query.where(Repository.is_blocked == is_blocked)
+        filters.append(Repository.is_blocked == is_blocked)
 
-    query = query.order_by(Repository.created_at.desc()).offset(skip).limit(limit)
+    total = (await session.execute(select(func.count(Repository.id)).where(*filters))).scalar() or 0
+    response.headers["X-Total-Count"] = str(total)
+
+    query = (
+        select(Repository, User)
+        .outerjoin(User, Repository.owner_id == User.id)
+        .where(*filters)
+        .order_by(Repository.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
 
     result = await session.execute(query)
     repos_with_owners = result.all()
