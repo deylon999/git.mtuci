@@ -200,6 +200,9 @@ TODO.md
 # Local backlog (not for repo) — see DEFERRED.local.md
 DEFERRED.local.md
 
+# Local frontend MVP roadmap (Claude working plan)
+FRONTEND_MVP_ROADMAP.local.md
+
 # Misc
 *.pid
 *.seed
