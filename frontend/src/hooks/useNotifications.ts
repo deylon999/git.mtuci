@@ -33,13 +33,17 @@ export function useNotifications() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevUnreadRef = useRef(0);
+  // Read through refs so toggling push or navigating does not tear down the socket.
+  const pushEnabledRef = useRef(pushEnabled);
+  pushEnabledRef.current = pushEnabled;
+  const initialPathnameRef = useRef(pathname);
 
   const refresh = useCallback(async (opts?: { force?: boolean }) => {
     try {
       if (opts?.force) invalidateNotificationsCache();
       const data = await getNotifications();
       const unread = data.filter((n) => !n.read);
-      if (pushEnabled && unread.length > prevUnreadRef.current) {
+      if (pushEnabledRef.current && unread.length > prevUnreadRef.current) {
         const newest = unread[0];
         if (newest) {
           showBrowserNotification(newest.title, { body: newest.message, tag: newest.id });
@@ -51,10 +55,11 @@ export function useNotifications() {
       setNotifications([]);
       prevUnreadRef.current = 0;
     }
-  }, [pushEnabled]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
+    let started = false;
 
     const load = async () => {
       setLoading(true);
@@ -62,14 +67,9 @@ export function useNotifications() {
       if (!cancelled) setLoading(false);
     };
 
-    const start = () => {
-      void load();
-      connectWs();
-    };
-
     const connectWs = () => {
-      if (!getToken()) return;
-      if (wsRef.current?.readyState === WebSocket.OPEN) return;
+      if (cancelled || !getToken()) return;
+      if (wsRef.current) return;
 
       const ws = new WebSocket(getNotificationsWsUrl());
       wsRef.current = ws;
@@ -89,7 +89,8 @@ export function useNotifications() {
       };
 
       ws.onclose = () => {
-        wsRef.current = null;
+        // A late close event from an old socket must not drop the reference to the current one.
+        if (wsRef.current === ws) wsRef.current = null;
         if (!cancelled) {
           reconnectTimerRef.current = setTimeout(connectWs, 5000);
         }
@@ -109,7 +110,10 @@ export function useNotifications() {
     };
 
     const startWithFallback = () => {
-      start();
+      if (started) return;
+      started = true;
+      void load();
+      connectWs();
       fallback = setInterval(() => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
           void refresh();
@@ -117,7 +121,7 @@ export function useNotifications() {
       }, 120_000);
     };
 
-    if (isStudentBootstrapPath(pathname) && !isStudentShellBootstrapResolved()) {
+    if (isStudentBootstrapPath(initialPathnameRef.current) && !isStudentShellBootstrapResolved()) {
       const unsub = onStudentShellBootstrap(() => {
         if (!cancelled) startWithFallback();
       });
@@ -129,7 +133,7 @@ export function useNotifications() {
 
     startWithFallback();
     return cleanup;
-  }, [refresh, pathname]);
+  }, [refresh]);
 
   const markAsRead = useCallback(async (id: string) => {
     try {
