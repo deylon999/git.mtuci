@@ -43,7 +43,7 @@ export default function StudentForksPage({ isDarkTheme = false }: StudentForksPa
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();

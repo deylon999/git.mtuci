@@ -404,7 +404,7 @@ useEffect(() => {
     }
   };
     fetchUsers();
-  }, []);
+  }, [t]);
 
 
 

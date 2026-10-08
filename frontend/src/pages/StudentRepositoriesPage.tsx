@@ -133,7 +133,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load();

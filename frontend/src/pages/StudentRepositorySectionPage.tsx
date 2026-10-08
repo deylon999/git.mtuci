@@ -332,7 +332,7 @@ function IssuesPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) 
     return () => {
       cancelled = true;
     };
-  }, [repoId, state, page, query]);
+  }, [repoId, state, page, query, api]);
 
   return (
     <PanelCard theme={theme}>
@@ -537,7 +537,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [createOpen, repoId, base, isBlocked]);
+  }, [createOpen, repoId, base, isBlocked, api]);
 
   useEffect(() => {
     let cancelled = false;
@@ -559,7 +559,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [repoId, state, page]);
+  }, [repoId, state, page, api]);
 
   useEffect(() => {
     if (items.length === 0 || selectedPullNumber != null) return;
@@ -1563,7 +1563,7 @@ function WikiPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [repoId]);
+  }, [api, repoId]);
 
   useEffect(() => {
     if (!activeSlug) return;
@@ -1589,7 +1589,7 @@ function WikiPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [repoId, activeSlug]);
+  }, [repoId, activeSlug, api]);
 
   if (loadingList) {
     return (

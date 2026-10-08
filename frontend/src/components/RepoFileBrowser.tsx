@@ -289,7 +289,7 @@ export default function RepoFileBrowser({
     return () => {
       cancelled = true;
     };
-  }, [repoId]);
+  }, [api, repoId]);
 
   useEffect(() => {
     const q = repoSearchQuery.trim();
@@ -315,7 +315,7 @@ export default function RepoFileBrowser({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [repoSearchQuery, branch, repoId]);
+  }, [repoSearchQuery, branch, repoId, api]);
 
   // Monotonic ids so a slow response for a previous branch/path/file never overwrites the current view.
   const dirRequestRef = useRef(0);
@@ -342,7 +342,7 @@ export default function RepoFileBrowser({
     } finally {
       if (requestId === dirRequestRef.current) setDirLoading(false);
     }
-  }, [repoId, currentPath, branch, t, sortLocale]);
+  }, [api, repoId, currentPath, branch, sortLocale, t]);
 
   useEffect(() => {
     // `branch` starts as "main" until the real default branch is known; fetching before that
@@ -362,7 +362,7 @@ export default function RepoFileBrowser({
     } finally {
       if (requestId === summaryRequestRef.current) setSummaryLoading(false);
     }
-  }, [repoId, branch]);
+  }, [api, repoId, branch]);
 
   useEffect(() => {
     if (embedded) {

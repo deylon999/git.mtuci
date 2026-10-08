@@ -104,7 +104,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const isAdmin = me?.role === "admin" || authUser?.role === "admin";
   const canCreateCourse = isAdmin || (hasPermission("assignment_create") && me?.role === "teacher");

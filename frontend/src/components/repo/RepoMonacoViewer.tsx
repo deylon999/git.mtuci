@@ -172,7 +172,7 @@ export default function RepoMonacoViewer({
     } catch {
       setLintBar({ tone: "muted", label: t("repo.lint.linterUnavailable"), errors: 0, warnings: 0 });
     }
-  }, [repoId, filepath, content]);
+  }, [filepath, t, repoId, content]);
 
   const handleMount: OnMount = (editorInstance, monaco) => {
     editorRef.current = editorInstance;

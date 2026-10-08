@@ -164,7 +164,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   const headerTitle = useMemo(() => {
     if (!assignment) return t("repo.assignment.defaultTitle");
     return assignment.title;
-  }, [assignment]);
+  }, [assignment, t]);
 
   const selectedStudent1 = useMemo(
     () => submissions.find((s) => s.student_id === selectedStudent1Id) ?? null,
@@ -257,7 +257,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     return () => {
       cancelled = true;
     };
-  }, [courseId, assignmentId]);
+  }, [courseId, assignmentId, t]);
 
   useEffect(() => {
     if (me?.role === "student") {
@@ -289,7 +289,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     return () => {
       cancelled = true;
     };
-  }, [courseId, assignmentId, me, selectedRepoStudentId]);
+  }, [courseId, assignmentId, me, selectedRepoStudentId, t]);
 
   useEffect(() => {
     if (!courseId || !assignmentId || me?.role !== "teacher") return;
@@ -323,7 +323,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     return () => {
       cancelled = true;
     };
-  }, [courseId, assignmentId, me?.role]);
+  }, [courseId, assignmentId, me?.role, t]);
 
   useEffect(() => {
     if (!courseId || !assignmentId || me?.role !== "student") return;
@@ -349,7 +349,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     return () => {
       cancelled = true;
     };
-  }, [courseId, assignmentId, me?.role]);
+  }, [courseId, assignmentId, me?.role, t]);
 
   useEffect(() => {
     if (me?.role !== "teacher") return;

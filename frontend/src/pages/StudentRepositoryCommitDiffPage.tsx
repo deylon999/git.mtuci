@@ -36,7 +36,7 @@ export default function StudentRepositoryCommitDiffPage({ isDarkTheme = false }:
     return () => {
       cancelled = true;
     };
-  }, [repoId, sha, t]);
+  }, [api, repoId, sha, t]);
 
   return (
     <div className="flex flex-col gap-3">

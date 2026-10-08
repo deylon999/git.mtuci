@@ -52,7 +52,7 @@ export default function CreateRepositoryModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, t]);
 
   if (!isOpen) return null;
 

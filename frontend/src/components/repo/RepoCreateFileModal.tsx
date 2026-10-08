@@ -34,7 +34,7 @@ export default function RepoCreateFileModal({
       setMessage(t("repo.createFile.defaultMessage"));
       setError(null);
     }
-  }, [open, defaultPath]);
+  }, [open, defaultPath, t]);
 
   if (!open) return null;
 

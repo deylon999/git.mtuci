@@ -78,7 +78,7 @@ export default function StudentRepositoryCommitsPage({ isDarkTheme = false }: St
     return () => {
       cancelled = true;
     };
-  }, [repoId, branch, page, t]);
+  }, [repoId, branch, page, t, api]);
 
   return (
     <div

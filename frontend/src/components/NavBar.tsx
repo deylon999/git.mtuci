@@ -71,7 +71,7 @@ export default function NavBar({ isDarkTheme = false, onToggleTheme }: NavBarPro
       cancelled = true;
       window.removeEventListener('avatarUpdated', handleAvatarUpdate as EventListener);
     };
-  }, []);
+  }, [t]);
 
   function handleToggleTheme() {
     onToggleTheme?.();
