@@ -1,4 +1,5 @@
 import { translate, translateWithParams, type Locale } from "../i18n";
+import { getPluralForm } from "../i18n/plural";
 import { getI18nLocale } from "../i18n/runtime";
 import type { StudentDeadlineItem } from "./studentDeadlines";
 
@@ -131,10 +132,10 @@ export function formatDeadlineRemaining(deadline: Date, now = new Date(), locale
   }
   const days = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
   if (days === 1) return translate(locale, "student.deadline.remainingOneDay");
-  if (locale === "en" || days >= 5) {
-    return translateWithParams(locale, "student.deadline.remainingDaysMany", { n: days });
-  }
-  if (days < 5) return translateWithParams(locale, "student.deadline.remainingDaysFew", { n: days });
+  // Use the locale plural rules: "days >= 5" gave "осталось 21 дней" / "осталось 22 дней".
+  const form = getPluralForm(locale, days);
+  if (form === "one") return translateWithParams(locale, "student.deadline.remainingDaysOne", { n: days });
+  if (form === "few") return translateWithParams(locale, "student.deadline.remainingDaysFew", { n: days });
   return translateWithParams(locale, "student.deadline.remainingDaysMany", { n: days });
 }
 

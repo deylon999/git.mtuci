@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, ChevronDown, LogOut, User, Shield, Activity, Moon, Sun, Users, FolderGit2, FileText, Loader2 } from "lucide-react";
 import { clearToken } from "../api/client";
@@ -602,8 +602,11 @@ export default function AdminHeader({ isDarkTheme = false, onToggleTheme }: Admi
                   <img
                     src={avatarUrl}
                     alt=""
-                    className="h-7 w-7 rounded-full object-cover"
-                    style={{ border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}` }}
+                    className="h-7 w-7 rounded-full"
+                    style={{
+                      border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}`,
+                      objectFit: avatarDisplayMode as CSSProperties["objectFit"],
+                    }}
                   />
                 ) : (
                   <div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold" style={{ backgroundColor: theme.bg3, color: theme.text, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${theme.border}` }}>

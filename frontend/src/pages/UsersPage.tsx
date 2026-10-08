@@ -24,7 +24,6 @@ import {
   approveUser,
   rejectUser,
   deleteAdminUser,
-  resetAdminUserPassword,
   getGroups,
   exportUsersCSV,
   importUsersCSV,
@@ -34,7 +33,6 @@ import { usePermissions } from "../hooks/usePermissions";
 import { usePendingCount } from "../context/PendingCountContext";
 import type { AdminUserRead, UserRole, UserRead } from "../api/types";
 import AdminPageHeader from "../components/AdminPageHeader";
-import { getTheme } from "../theme";
 import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { tr } from "../utils/i18nLabels";
 import { useUserPreferences } from "../context/UserPreferencesContext";
@@ -100,7 +98,6 @@ interface UsersPageProps {
 
 export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
   const { t, tp, language } = useUserPreferences();
-  const theme = getTheme(isDarkTheme);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -473,8 +470,6 @@ useEffect(() => {
     );
   };
 
-  const totalPages = Math.ceil(totalUsers / itemsPerPage);
-
   // Reset selection when filters change
   useEffect(() => {
     setSelectedUsers([]);
@@ -588,13 +583,8 @@ useEffect(() => {
   };
 
   const ui = getAdminPageTheme(isDarkTheme);
-  const textPrimary = ui.textPrimary;
   const cardBg = ui.cardBg;
   const cardHover = ui.cardHover;
-  const textSecondary = ui.textSecondary;
-  const textTertiary = ui.textTertiary;
-  const dividerColor = isDarkTheme ? "divide-[#2d2d2d]" : "divide-slate-200";
-  const tableHover = ui.tableRowHover;
   const tableBg = ui.tableBg;
   const tableBorder = ui.tableBorder;
   const tableHeaderText = ui.tableHeaderText;
@@ -796,6 +786,11 @@ useEffect(() => {
         </div>
 
         {/* Users Table */}
+        {error && !loading && (
+          <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-500">
+            {error}
+          </div>
+        )}
         {loading && (
           <div className="flex justify-center py-10">
             <div className="h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -991,8 +986,16 @@ useEffect(() => {
             if (totalPages <= 5) {
               return Array.from({ length: totalPages }, (_, i) => i + 1);
             }
-            // For many pages, show: 1, 2, 3, ..., last
-            return [1, 2, 3, -1, totalPages]; // -1 represents ellipsis
+            // For many pages, show first, last and a window around the current page: 1 … 6 7 8 … 20.
+            // (Previously always [1, 2, 3, …, last], so pages 4..last-1 had no button and the current one was hidden.)
+            const pages: number[] = [1];
+            const from = Math.max(2, currentPage - 1);
+            const to = Math.min(totalPages - 1, currentPage + 1);
+            if (from > 2) pages.push(-1); // -1 represents ellipsis
+            for (let p = from; p <= to; p += 1) pages.push(p);
+            if (to < totalPages - 1) pages.push(-1);
+            pages.push(totalPages);
+            return pages;
           };
 
           const pageNumbers = getPageNumbers();

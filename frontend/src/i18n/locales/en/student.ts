@@ -45,6 +45,7 @@ export const studentEn = {
     remainingUnderHour: "less than an hour left",
     remainingHours: "{n} h left",
     remainingOneDay: "1 day left",
+    remainingDaysOne: "{n} days left",
     remainingDaysFew: "{n} days left",
     remainingDaysMany: "{n} days left",
     weekdays: { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" },

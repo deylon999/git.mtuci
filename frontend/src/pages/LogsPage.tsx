@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, memo } from "react";
 import { useLocation } from "react-router-dom";
-import { Search, Download, Trash2, ChevronLeft, ChevronRight, FileX } from "lucide-react";
+import { Search, Download, Trash2, FileX } from "lucide-react";
 import { useLogsFilters, useLogsPagination, useLogsData, useLogsStats, useDebounce } from "../hooks/useLogs";
 import { exportLogs, deleteOldLogs } from "../api/adminApi";
 import ConfirmModal from "../components/ConfirmModal";
@@ -129,18 +129,18 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
     sort,
     setSort,
     getFilters,
-    resetFilters,
   } = useLogsFilters();
 
   const { limit, setLimit, page, setPage, getPagination, resetPagination } = useLogsPagination(10);
 
   const debouncedSearch = useDebounce(search, 300);
 
-  const filters = getFilters();
+  // Query with the debounced search so typing does not fire a request per keystroke.
+  const filters = { ...getFilters(), search: debouncedSearch || undefined };
   const pagination = getPagination();
 
   const { logs, total, loading: logsLoading, error: logsError, refetch: refetchLogs } = useLogsData(filters, pagination);
-  const { stats, loading: statsLoading } = useLogsStats();
+  const { stats } = useLogsStats();
 
   useEffect(() => {
     if (handledLocationKeyRef.current === location.key) return;
@@ -303,7 +303,6 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
   const c = ui.colors;
   const cardBg = `${ui.tableBg} border ${ui.tableBorder}`;
   const inputBg = ui.inputBg;
-  const hoverBg = ui.tableRowHover;
   const adminSelect = getAdminNativeSelectProps(isDarkTheme);
   const adminSelectCompact = getAdminNativeSelectProps(isDarkTheme, "compact");
 

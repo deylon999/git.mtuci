@@ -45,6 +45,7 @@ export const studentRu = {
     remainingUnderHour: "осталось меньше часа",
     remainingHours: "осталось {n} ч.",
     remainingOneDay: "остался 1 день",
+    remainingDaysOne: "остался {n} день",
     remainingDaysFew: "осталось {n} дня",
     remainingDaysMany: "осталось {n} дней",
     weekdays: { mon: "Пн", tue: "Вт", wed: "Ср", thu: "Чт", fri: "Пт", sat: "Сб", sun: "Вс" },
