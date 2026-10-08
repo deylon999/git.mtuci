@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -17,7 +17,7 @@ import {
   Alert,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
-import { useTranslation } from 'react-i18next';
+import { useUserPreferences } from '../../context/UserPreferencesContext';
 import { getTheme } from '../../theme';
 import {
   getLabels,
@@ -58,7 +58,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
   onLabelsChange,
   isDarkTheme = false,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useUserPreferences();
   const theme = getTheme(isDarkTheme);
   const [labels, setLabels] = useState<IssueLabel[]>([]);
   const [loading, setLoading] = useState(false);
@@ -71,28 +71,28 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
     description: '',
   });
 
-  useEffect(() => {
-    if (open) {
-      loadLabels();
-    }
-  }, [open, repositoryId]);
-
-  const loadLabels = async () => {
+  const loadLabels = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const response = await getLabels(repositoryId);
       setLabels(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t('repo.issues.labels.loadFailed', 'Failed to load labels'));
+    } catch {
+      setError(t('repo.issues.labels.loadFailed'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [repositoryId, t]);
+
+  useEffect(() => {
+    if (open) {
+      void loadLabels();
+    }
+  }, [open, loadLabels]);
 
   const handleCreate = async () => {
     if (!formData.name.trim()) {
-      setError(t('repo.issues.labels.nameRequired', 'Label name is required'));
+      setError(t('repo.issues.labels.nameRequired'));
       return;
     }
 
@@ -104,8 +104,8 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
       setIsCreating(false);
       setFormData({ name: '', color: '#cccccc', description: '' });
       onLabelsChange?.();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t('repo.issues.labels.createFailed', 'Failed to create label'));
+    } catch {
+      setError(t('repo.issues.labels.createFailed'));
     } finally {
       setLoading(false);
     }
@@ -127,15 +127,15 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
       setEditingLabel(null);
       setFormData({ name: '', color: '#cccccc', description: '' });
       onLabelsChange?.();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t('repo.issues.labels.updateFailed', 'Failed to update label'));
+    } catch {
+      setError(t('repo.issues.labels.updateFailed'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (labelId: string) => {
-    if (!confirm(t('repo.issues.labels.deleteConfirm', 'Are you sure you want to delete this label?'))) return;
+    if (!confirm(t('repo.issues.labels.deleteConfirm'))) return;
 
     setLoading(true);
     setError(null);
@@ -143,8 +143,8 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
       await deleteLabel(labelId);
       await loadLabels();
       onLabelsChange?.();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t('repo.issues.labels.deleteFailed', 'Failed to delete label'));
+    } catch {
+      setError(t('repo.issues.labels.deleteFailed'));
     } finally {
       setLoading(false);
     }
@@ -184,7 +184,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
       }}
     >
       <DialogTitle sx={{ color: theme.text }}>
-        {t('repo.issues.labels.manage', 'Manage Labels')}
+        {t('repo.issues.labels.manage')}
       </DialogTitle>
       <DialogContent sx={issueDialogContentSx(theme)}>
         {error && (
@@ -196,11 +196,11 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
         {(isCreating || editingLabel) && (
           <Box sx={{ mb: 3, p: 2, border: '1px solid', borderColor: theme.border, borderRadius: 1, bgcolor: theme.bg }}>
             <Typography variant="subtitle2" sx={{ mb: 2 }}>
-              {editingLabel ? t('repo.issues.labels.edit', 'Edit Label') : t('repo.issues.labels.create', 'Create Label')}
+              {editingLabel ? t('repo.issues.labels.edit') : t('repo.issues.labels.create')}
             </Typography>
             <TextField
               fullWidth
-              label={t('repo.issues.labels.name', 'Name')}
+              label={t('repo.issues.labels.name')}
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               sx={issueFieldSx(theme, { mb: 2 })}
@@ -208,7 +208,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
             />
             <TextField
               fullWidth
-              label={t('repo.issues.labels.description', 'Description')}
+              label={t('repo.issues.labels.description')}
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               multiline
@@ -217,7 +217,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
             />
             <Box sx={{ mb: 2 }}>
               <Typography variant="body2" sx={{ mb: 1 }}>
-                {t('repo.issues.labels.color', 'Color')}
+                {t('repo.issues.labels.color')}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
                 {DEFAULT_COLORS.map((color) => (
@@ -239,7 +239,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
               </Box>
               <TextField
                 fullWidth
-                label={t('repo.issues.labels.customColor', 'Custom Color (hex)')}
+                label={t('repo.issues.labels.customColor')}
                 value={formData.color}
                 onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                 placeholder="#cccccc"
@@ -248,7 +248,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
             </Box>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
               <Chip
-                label={formData.name || t('repo.issues.labels.preview', 'Preview')}
+                label={formData.name || t('repo.issues.labels.preview')}
                 sx={{
                   backgroundColor: formData.color,
                   color: parseInt((formData.color ?? '').slice(1), 16) > 0xffffff / 2 ? '#000' : '#fff',
@@ -256,7 +256,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
               />
               <Box sx={{ flexGrow: 1 }} />
               <Button onClick={cancelEdit} disabled={loading} sx={issueTextButtonSx(theme)}>
-                {t('common.cancel', 'Cancel')}
+                {t('common.cancel')}
               </Button>
               <Button
                 variant="contained"
@@ -264,7 +264,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
                 disabled={loading || !formData.name.trim()}
                 sx={issuePrimaryButtonSx(theme)}
               >
-                {editingLabel ? t('common.save', 'Save') : t('common.create', 'Create')}
+                {editingLabel ? t('common.save') : t('common.create')}
               </Button>
             </Box>
           </Box>
@@ -277,7 +277,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
             variant="outlined"
             sx={{ ...issueOutlinedButtonSx(theme), mb: 2 }}
           >
-            {t('repo.issues.labels.new', 'New Label')}
+            {t('repo.issues.labels.new')}
           </Button>
         )}
 
@@ -312,14 +312,14 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
           ))}
           {labels.length === 0 && !loading && (
             <Typography variant="body2" sx={{ p: 2, textAlign: 'center', color: theme.text2 }}>
-              {t('repo.issues.labels.empty', 'No labels yet')}
+              {t('repo.issues.labels.empty')}
             </Typography>
           )}
         </List>
       </DialogContent>
       <DialogActions sx={{ borderTop: `1px solid ${theme.border}` }}>
         <Button onClick={onClose} sx={issueTextButtonSx(theme)}>
-          {t('common.close', 'Close')}
+          {t('common.close')}
         </Button>
       </DialogActions>
     </Dialog>

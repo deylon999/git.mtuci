@@ -32,6 +32,7 @@ export const coreRu = {
     none: "Нет",
     close: "Закрыть",
     comment: "Комментировать",
+    reply: "Ответить",
     confirm: "Подтвердить",
     actions: "Действия",
     status: "Статус",

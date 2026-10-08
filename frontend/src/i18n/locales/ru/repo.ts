@@ -531,7 +531,7 @@ export const repoRu = {
       resolved: "Решено",
       resolve: "Решить",
       unresolve: "Открыть заново",
-      comments: "комментариев",
+      commentCount: { one: "комментарий", few: "комментария", many: "комментариев", other: "комментариев" },
       replyPlaceholder: "Добавить ответ...",
       showResolved: "Показать решённые",
       hideResolved: "Скрыть решённые",

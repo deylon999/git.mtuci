@@ -531,7 +531,7 @@ export const repoEn = {
       resolved: "Resolved",
       resolve: "Resolve",
       unresolve: "Unresolve",
-      comments: "comments",
+      commentCount: { one: "comment", few: "comments", many: "comments", other: "comments" },
       replyPlaceholder: "Add a reply...",
       showResolved: "Show Resolved",
       hideResolved: "Hide Resolved",

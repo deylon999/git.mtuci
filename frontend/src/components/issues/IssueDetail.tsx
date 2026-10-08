@@ -9,8 +9,9 @@ import {
   Send,
   XCircle,
 } from "lucide-react";
-import type { TFunction } from "i18next";
-import { useTranslation } from "react-i18next";
+import type { Locale } from "../../i18n";
+import { localeTag } from "../../utils/dates";
+import { useUserPreferences } from "../../context/UserPreferencesContext";
 import {
   getIssueByNumber,
   updateIssue,
@@ -36,8 +37,8 @@ function readableLabelColor(color: string) {
   return Number.isFinite(value) && value > 0xffffff / 2 ? "#111827" : "#ffffff";
 }
 
-function formatDateTime(date: string) {
-  return new Date(date).toLocaleString(undefined, {
+function formatDateTime(date: string, locale: Locale) {
+  return new Date(date).toLocaleString(localeTag(locale), {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -46,25 +47,25 @@ function formatDateTime(date: string) {
   });
 }
 
-function timelineEventLabel(t: TFunction, event: IssueTimelineEvent) {
-  if (event.type === "created") return t("repo.issues.timelineEvents.created", "Created");
-  if (event.type === "comment") return t("repo.issues.timelineEvents.comment", "Comment");
-  if (event.type === "closed") return t("repo.issues.timelineEvents.closed", "Closed");
-  if (event.type === "reopened") return t("repo.issues.timelineEvents.reopened", "Reopened");
-  if (event.type === "assigned") return t("repo.issues.timelineEvents.assigned", "Assigned");
-  if (event.type === "unassigned") return t("repo.issues.timelineEvents.unassigned", "Unassigned");
-  if (event.reference_type === "issue_backlink") return t("repo.issues.timelineEvents.issueBacklink", "Referenced by issue");
-  if (event.reference_type === "pr_backlink") return t("repo.issues.timelineEvents.prBacklink", "Referenced by pull request");
-  if (event.reference_type === "commit_backlink") return t("repo.issues.timelineEvents.commitBacklink", "Referenced by commit");
-  if (event.reference_type === "issue") return t("repo.issues.timelineEvents.issueReference", "Issue reference");
-  if (event.reference_type === "pr") return t("repo.issues.timelineEvents.prReference", "Pull request reference");
-  if (event.reference_type === "commit") return t("repo.issues.timelineEvents.commitReference", "Commit reference");
+function timelineEventLabel(t: (key: string) => string, event: IssueTimelineEvent) {
+  if (event.type === "created") return t("repo.issues.timelineEvents.created");
+  if (event.type === "comment") return t("repo.issues.timelineEvents.comment");
+  if (event.type === "closed") return t("repo.issues.timelineEvents.closed");
+  if (event.type === "reopened") return t("repo.issues.timelineEvents.reopened");
+  if (event.type === "assigned") return t("repo.issues.timelineEvents.assigned");
+  if (event.type === "unassigned") return t("repo.issues.timelineEvents.unassigned");
+  if (event.reference_type === "issue_backlink") return t("repo.issues.timelineEvents.issueBacklink");
+  if (event.reference_type === "pr_backlink") return t("repo.issues.timelineEvents.prBacklink");
+  if (event.reference_type === "commit_backlink") return t("repo.issues.timelineEvents.commitBacklink");
+  if (event.reference_type === "issue") return t("repo.issues.timelineEvents.issueReference");
+  if (event.reference_type === "pr") return t("repo.issues.timelineEvents.prReference");
+  if (event.reference_type === "commit") return t("repo.issues.timelineEvents.commitReference");
   return event.type;
 }
 
 export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false }) => {
   const { repoId, number } = useParams<{ repoId: string; number: string }>();
-  const { t } = useTranslation();
+  const { t, language } = useUserPreferences();
   const theme = getTheme(isDarkTheme);
   const [issue, setIssue] = useState<Issue | null>(null);
   const [comments, setComments] = useState<IssueComment[]>([]);
@@ -85,8 +86,8 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
       setIssue(response.data);
       const timelineResp = await getIssueTimeline(repoId, issueNumber);
       setTimeline(timelineResp.data);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t("repo.issues.loadFailed", "Failed to load issues"));
+    } catch {
+      setError(t("repo.issues.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -124,8 +125,8 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
       const updateData: UpdateIssueRequest = { state: newState };
       await updateIssue(issue.id, updateData);
       await loadIssue();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t("repo.issues.updateFailed", "Failed to update issue"));
+    } catch {
+      setError(t("repo.issues.updateFailed"));
     }
   };
 
@@ -142,8 +143,8 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
         setTimeline(timelineResp.data);
       }
       setCommentText("");
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t("repo.issues.commentFailed", "Failed to add comment"));
+    } catch {
+      setError(t("repo.issues.commentFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -156,7 +157,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
         style={{ borderColor: theme.border, backgroundColor: theme.bg3, color: theme.text2 }}
       >
         <Loader2 className="h-5 w-5 animate-spin" />
-        {t("repo.issues.loading", "Loading issues...")}
+        {t("repo.issues.loading")}
       </div>
     );
   }
@@ -164,7 +165,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
   if (error || !issue) {
     return (
       <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: theme.border, backgroundColor: theme.bg3, color: theme.danger }}>
-        {error || t("repo.issues.notFound", "Issue not found")}
+        {error || t("repo.issues.notFound")}
       </div>
     );
   }
@@ -183,7 +184,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
                   style={{ borderColor: `${theme.success}55`, backgroundColor: `${theme.success}14`, color: theme.success }}
                 >
                   <CircleDot className="h-3 w-3" />
-                  {t("repo.issues.stateOpen", "Open")}
+                  {t("repo.issues.stateOpen")}
                 </span>
               ) : (
                 <span
@@ -191,7 +192,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
                   style={{ backgroundColor: theme.bg4, color: theme.text2 }}
                 >
                   <CheckCircle2 className="h-3 w-3" />
-                  {t("repo.issues.stateClosed", "Closed")}
+                  {t("repo.issues.stateClosed")}
                 </span>
               )}
               <span className="text-xs font-medium" style={{ color: theme.text3 }}>
@@ -219,7 +220,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
                   style={{ borderColor: theme.border, color: theme.text2 }}
                 >
                   <Flag className="h-3.5 w-3.5" />
-                  {t("repo.issues.form.milestone", "Milestone")}
+                  {t("repo.issues.form.milestone")}
                 </span>
               ) : null}
             </div>
@@ -236,7 +237,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
             }}
           >
             {issue.state === "open" ? <XCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-            {issue.state === "open" ? t("repo.issues.close", "Close") : t("repo.issues.reopen", "Reopen")}
+            {issue.state === "open" ? t("repo.issues.close") : t("repo.issues.reopen")}
           </button>
         </div>
 
@@ -247,7 +248,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
                 <MarkdownWithLinks content={issue.body} repositoryId={repoId} />
               ) : (
                 <p className="text-sm" style={{ color: theme.text2 }}>
-                  {t("repo.issues.noDescription", "No description provided.")}
+                  {t("repo.issues.noDescription")}
                 </p>
               )}
             </div>
@@ -256,7 +257,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-sm font-semibold" style={{ color: theme.text }}>
                   <MessageSquare className="h-4 w-4" />
-                  {t("repo.issues.comments", "Comments")} ({comments.length})
+                  {t("repo.issues.comments")} ({comments.length})
                 </h2>
               </div>
 
@@ -264,7 +265,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
                 {comments.map((comment) => (
                   <article key={comment.id} className="rounded-lg border" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
                     <div className="border-b px-4 py-2 text-xs" style={{ borderColor: theme.border, color: theme.text2 }}>
-                      {formatDateTime(comment.created_at)}
+                      {formatDateTime(comment.created_at, language)}
                     </div>
                     <div className="p-4">
                       <MarkdownWithLinks content={comment.body} repositoryId={repoId} />
@@ -277,7 +278,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
                 <textarea
                   value={commentText}
                   onChange={(event) => setCommentText(event.target.value)}
-                  placeholder={t("repo.issues.addComment", "Add a comment...")}
+                  placeholder={t("repo.issues.addComment")}
                   rows={4}
                   className="w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none"
                   style={{ borderColor: theme.inputBorder, backgroundColor: theme.inputBg, color: theme.text }}
@@ -291,7 +292,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
                     style={{ borderColor: `${theme.success}55`, backgroundColor: `${theme.success}14`, color: theme.success }}
                   >
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    {t("common.comment", "Comment")}
+                    {t("common.comment")}
                   </button>
                 </div>
               </div>
@@ -302,27 +303,27 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
             <div className="space-y-4">
               <div>
                 <p className="text-xs font-semibold uppercase" style={{ color: theme.text3 }}>
-                  {t("repo.issues.created", "Created")}
+                  {t("repo.issues.created")}
                 </p>
                 <p className="mt-1 text-sm" style={{ color: theme.text }}>
-                  {formatDateTime(issue.created_at)}
+                  {formatDateTime(issue.created_at, language)}
                 </p>
               </div>
 
               <div>
                 <p className="text-xs font-semibold uppercase" style={{ color: theme.text3 }}>
-                  {t("repo.issues.assignees", "Assignees")}
+                  {t("repo.issues.assignees")}
                 </p>
                 <p className="mt-1 text-sm" style={{ color: issue.assignees.length ? theme.text : theme.text2 }}>
                   {issue.assignees.length
                     ? issue.assignees.map((assignee) => assignee.login).join(", ")
-                    : t("repo.issues.noAssignees", "No assignees")}
+                    : t("repo.issues.noAssignees")}
                 </p>
               </div>
 
               <div>
                 <p className="text-xs font-semibold uppercase" style={{ color: theme.text3 }}>
-                  {t("repo.issues.timeline", "Timeline")}
+                  {t("repo.issues.timeline")}
                 </p>
                 <div className="mt-2 space-y-2">
                   {timeline.map((event) => (
@@ -331,12 +332,12 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
                         {timelineEventLabel(t, event)}
                       </p>
                       <p className="mt-0.5 text-[11px]" style={{ color: theme.text2 }}>
-                        {formatDateTime(event.created_at)}
+                        {formatDateTime(event.created_at, language)}
                       </p>
                       {event.reference_type && event.reference_value ? (
                         <p className="mt-1 text-xs" style={{ color: theme.text2 }}>
                           {event.reference_value}
-                          {event.target_exists === false ? ` ${t("repo.issues.notFoundSuffix", "(not found)")}` : ""}
+                          {event.target_exists === false ? ` ${t("repo.issues.notFoundSuffix")}` : ""}
                         </p>
                       ) : null}
                     </div>

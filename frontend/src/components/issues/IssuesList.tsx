@@ -25,7 +25,9 @@ import {
   Tags,
   XCircle,
 } from "lucide-react";
-import { useTranslation } from "react-i18next";
+import type { Locale } from "../../i18n";
+import { localeTag } from "../../utils/dates";
+import { useUserPreferences } from "../../context/UserPreferencesContext";
 import {
   getIssues,
   createIssue,
@@ -68,8 +70,8 @@ function readableLabelColor(color: string) {
   return Number.isFinite(value) && value > 0xffffff / 2 ? "#111827" : "#ffffff";
 }
 
-function formatIssueDate(date: string) {
-  return new Date(date).toLocaleDateString(undefined, {
+function formatIssueDate(date: string, locale: Locale) {
+  return new Date(date).toLocaleDateString(localeTag(locale), {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -77,7 +79,7 @@ function formatIssueDate(date: string) {
 }
 
 export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkTheme = false }) => {
-  const { t } = useTranslation();
+  const { t, language } = useUserPreferences();
   const theme = getTheme(isDarkTheme);
   const [issues, setIssues] = useState<IssueListItem[]>([]);
   const [labels, setLabels] = useState<IssueLabel[]>([]);
@@ -116,8 +118,8 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
       };
       const response = await getIssues(repositoryId, params);
       setIssues(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t("repo.issues.loadFailed", "Failed to load issues"));
+    } catch {
+      setError(t("repo.issues.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -150,7 +152,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
 
   const handleCreate = async () => {
     if (!formData.title.trim()) {
-      setError(t("repo.issues.titleRequired", "Issue title is required"));
+      setError(t("repo.issues.titleRequired"));
       return;
     }
 
@@ -167,8 +169,8 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
         assignee_ids: [],
         milestone_id: undefined,
       });
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t("repo.issues.createFailed", "Failed to create issue"));
+    } catch {
+      setError(t("repo.issues.createFailed"));
     } finally {
       setLoading(false);
     }
@@ -179,8 +181,8 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
       const updateData: UpdateIssueRequest = { state: newState };
       await updateIssue(issueId, updateData);
       await loadIssues();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t("repo.issues.updateFailed", "Failed to update issue"));
+    } catch {
+      setError(t("repo.issues.updateFailed"));
     }
   };
 
@@ -195,7 +197,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
       >
         <h2 className="flex items-center gap-2 text-sm font-semibold" style={{ color: theme.text }}>
           <CircleDot className="h-4 w-4" style={{ color: theme.success }} />
-          {t("repo.issues.title", "Issues")}
+          {t("repo.issues.title")}
           <span
             className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums"
             style={{ backgroundColor: theme.bg4, color: theme.text3 }}
@@ -212,7 +214,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
             style={{ borderColor: theme.border, backgroundColor: theme.bg4, color: theme.text }}
           >
             <Tags className="h-3.5 w-3.5" />
-            {t("repo.issues.labels.manage", "Labels")}
+            {t("repo.issues.labels.manage")}
           </button>
           <button
             type="button"
@@ -221,7 +223,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
             style={{ borderColor: theme.border, backgroundColor: theme.bg4, color: theme.text }}
           >
             <Flag className="h-3.5 w-3.5" />
-            {t("repo.issues.milestones.manage", "Milestones")}
+            {t("repo.issues.milestones.manage")}
           </button>
           <button
             type="button"
@@ -230,7 +232,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
             style={{ borderColor: `${theme.success}55`, backgroundColor: `${theme.success}14`, color: theme.success }}
           >
             <Plus className="h-3.5 w-3.5" />
-            {t("repo.issues.new", "New Issue")}
+            {t("repo.issues.new")}
           </button>
         </div>
       </div>
@@ -238,7 +240,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
       {error ? (
         <div className="border-b px-4 py-3 text-sm" style={{ borderColor: theme.border, color: theme.danger }}>
           <button type="button" onClick={() => setError(null)} className="float-right text-xs hover:underline">
-            {t("common.close", "Close")}
+            {t("common.close")}
           </button>
           {error}
         </div>
@@ -262,7 +264,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
                   color: active ? theme.text : theme.text2,
                 }}
               >
-                {t(tab.key, tab.value)}
+                {t(tab.key)}
                 <span style={{ color: active ? theme.text2 : theme.text3 }}>{counts[tab.value]}</span>
               </button>
             );
@@ -278,7 +280,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t("repo.issues.search", "Search issues by title or description")}
+              placeholder={t("repo.issues.search")}
               className="min-w-0 flex-1 bg-transparent text-sm outline-none"
               style={{ color: theme.text }}
             />
@@ -291,16 +293,16 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-14 text-sm" style={{ color: theme.text2 }}>
             <Loader2 className="h-5 w-5 animate-spin" />
-            {t("repo.issues.loading", "Loading issues...")}
+            {t("repo.issues.loading")}
           </div>
         ) : issues.length === 0 ? (
           <div className="px-4 py-16 text-center">
             <CircleDot className="mx-auto h-8 w-8" style={{ color: theme.text3 }} />
             <p className="mt-3 text-sm font-medium" style={{ color: theme.text }}>
-              {t("repo.issues.empty", "No issues found")}
+              {t("repo.issues.empty")}
             </p>
             <p className="mt-1 text-xs" style={{ color: theme.text2 }}>
-              {t("repo.issues.emptyHint", "Try another filter or create a new issue.")}
+              {t("repo.issues.emptyHint")}
             </p>
           </div>
         ) : (
@@ -346,10 +348,10 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
                   </div>
 
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: theme.text3 }}>
-                    <span>{formatIssueDate(issue.created_at)}</span>
+                    <span>{formatIssueDate(issue.created_at, language)}</span>
                     {issue.assignees.length > 0 ? (
                       <span>
-                        {t("repo.issues.assignedTo", "Assigned to")}{" "}
+                        {t("repo.issues.assignedTo")}{" "}
                         {issue.assignees.map((assignee) => assignee.login).join(", ")}
                       </span>
                     ) : null}
@@ -365,7 +367,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
                     backgroundColor: theme.bg4,
                     color: issue.state === "open" ? theme.danger : theme.success,
                   }}
-                  title={issue.state === "open" ? t("repo.issues.close", "Close") : t("repo.issues.reopen", "Reopen")}
+                  title={issue.state === "open" ? t("repo.issues.close") : t("repo.issues.reopen")}
                 >
                   {issue.state === "open" ? <XCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
                 </button>
@@ -385,11 +387,11 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
           paper: { sx: issueDialogPaperSx(theme) },
         }}
       >
-        <DialogTitle sx={{ color: theme.text }}>{t("repo.issues.create", "Create Issue")}</DialogTitle>
+        <DialogTitle sx={{ color: theme.text }}>{t("repo.issues.create")}</DialogTitle>
         <DialogContent sx={issueDialogContentSx(theme)}>
           <TextField
             fullWidth
-            label={t("repo.issues.form.title", "Title")}
+            label={t("repo.issues.form.title")}
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             sx={issueFieldSx(theme, { mt: 2, mb: 2 })}
@@ -397,7 +399,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
           />
           <TextField
             fullWidth
-            label={t("repo.issues.form.description", "Description")}
+            label={t("repo.issues.form.description")}
             value={formData.body}
             onChange={(e) => setFormData({ ...formData, body: e.target.value })}
             multiline
@@ -408,13 +410,13 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
             multiple
             options={labels}
             getOptionLabel={(option) => option.name}
-            noOptionsText={t("repo.issues.form.noOptions", "No options")}
+            noOptionsText={t("repo.issues.form.noOptions")}
             value={labels.filter((label) => formData.label_ids?.includes(label.id))}
             onChange={(_, newValue) =>
               setFormData({ ...formData, label_ids: newValue.map((label) => label.id) })
             }
             renderInput={(params) => (
-              <TextField {...params} label={t("repo.issues.form.labels", "Labels")} sx={issueFieldSx(theme)} />
+              <TextField {...params} label={t("repo.issues.form.labels")} sx={issueFieldSx(theme)} />
             )}
             renderValue={(value, getItemProps) =>
               value.map((option, index) => (
@@ -434,16 +436,16 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
             sx={{ mb: 2 }}
           />
           <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel sx={{ color: theme.text2 }}>{t("repo.issues.form.milestone", "Milestone")}</InputLabel>
+            <InputLabel sx={{ color: theme.text2 }}>{t("repo.issues.form.milestone")}</InputLabel>
             <Select
               value={formData.milestone_id || ""}
               onChange={(e) => setFormData({ ...formData, milestone_id: e.target.value || undefined })}
-              label={t("repo.issues.form.milestone", "Milestone")}
+              label={t("repo.issues.form.milestone")}
               sx={issueFieldSx(theme)}
               MenuProps={{ slotProps: { paper: { sx: issueMenuPaperSx(theme) } } }}
             >
               <MenuItem value="">
-                <em>{t("common.none", "None")}</em>
+                <em>{t("common.none")}</em>
               </MenuItem>
               {milestones
                 .filter((milestone) => milestone.state === "open")
@@ -457,7 +459,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
         </DialogContent>
         <DialogActions sx={{ borderTop: `1px solid ${theme.border}` }}>
           <Button onClick={() => setCreateDialogOpen(false)} sx={issueTextButtonSx(theme)}>
-            {t("common.cancel", "Cancel")}
+            {t("common.cancel")}
           </Button>
           <Button
             variant="contained"
@@ -465,7 +467,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
             disabled={loading || !formData.title.trim()}
             sx={issuePrimaryButtonSx(theme)}
           >
-            {t("common.create", "Create")}
+            {t("common.create")}
           </Button>
         </DialogActions>
       </Dialog>

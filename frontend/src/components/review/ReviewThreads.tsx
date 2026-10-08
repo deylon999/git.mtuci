@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -15,7 +15,9 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
-import { useTranslation } from 'react-i18next';
+import { pluralWord } from '../../i18n/plural';
+import { localeTag } from '../../utils/dates';
+import { useUserPreferences } from '../../context/UserPreferencesContext';
 import {
   getThreads,
   updateThread,
@@ -37,7 +39,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
   pullNumber,
   onThreadsChange,
 }) => {
-  const { t } = useTranslation();
+  const { t, language } = useUserPreferences();
   const [threads, setThreads] = useState<ReviewThread[]>([]);
   const [comments, setComments] = useState<Record<string, ReviewComment[]>>({});
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
@@ -46,44 +48,41 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [showResolved, setShowResolved] = useState(false);
 
-  useEffect(() => {
-    loadThreads();
-  }, [repositoryId, pullNumber, showResolved]);
-
-  const loadThreads = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await getThreads(repositoryId, pullNumber, showResolved ? undefined : false);
-      setThreads(response.data);
-
-      // Load comments for each thread
-      for (const thread of response.data) {
-        await loadThreadComments(thread.id);
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t('repo.review.threads.loadFailed', 'Failed to load threads'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadThreadComments = async (threadId: string) => {
+  const loadThreadComments = useCallback(async (threadId: string) => {
     try {
       const response = await getThreadComments(threadId);
       setComments((prev) => ({ ...prev, [threadId]: response.data }));
     } catch (err) {
       console.error('Failed to load comments:', err);
     }
-  };
+  }, []);
+
+  const loadThreads = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await getThreads(repositoryId, pullNumber, showResolved ? undefined : false);
+      setThreads(response.data);
+      // Load every thread's comments in parallel instead of one request after another.
+      await Promise.all(response.data.map((thread) => loadThreadComments(thread.id)));
+    } catch {
+      setError(t('repo.review.threads.loadFailed'));
+    } finally {
+      setLoading(false);
+    }
+  }, [repositoryId, pullNumber, showResolved, t, loadThreadComments]);
+
+  useEffect(() => {
+    void loadThreads();
+  }, [loadThreads]);
 
   const handleResolve = async (threadId: string, resolve: boolean) => {
     try {
       await updateThread(threadId, { is_resolved: resolve });
       await loadThreads();
       onThreadsChange?.();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t('repo.review.threads.updateFailed', 'Failed to update thread'));
+    } catch {
+      setError(t('repo.review.threads.updateFailed'));
     }
   };
 
@@ -96,8 +95,8 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
       await createThreadComment(threadId, data);
       await loadThreadComments(threadId);
       setReplyText((prev) => ({ ...prev, [threadId]: '' }));
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t('repo.review.threads.commentFailed', 'Failed to add comment'));
+    } catch {
+      setError(t('repo.review.threads.commentFailed'));
     }
   };
 
@@ -117,7 +116,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">
-          {t('repo.review.threads.title', 'Review Threads')}
+          {t('repo.review.threads.title')}
         </Typography>
         <Button
           size="small"
@@ -125,8 +124,8 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
           variant="outlined"
         >
           {showResolved
-            ? t('repo.review.threads.hideResolved', 'Hide Resolved')
-            : t('repo.review.threads.showResolved', 'Show Resolved')}
+            ? t('repo.review.threads.hideResolved')
+            : t('repo.review.threads.showResolved')}
         </Button>
       </Box>
 
@@ -138,7 +137,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
 
       {threads.length === 0 && !loading && (
         <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-          {t('repo.review.threads.empty', 'No review threads')}
+          {t('repo.review.threads.empty')}
         </Typography>
       )}
 
@@ -157,7 +156,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
                   </Typography>
                   {thread.is_resolved && (
                     <Chip
-                      label={t('repo.review.threads.resolved', 'Resolved')}
+                      label={t('repo.review.threads.resolved')}
                       size="small"
                       color="success"
                       icon={<ResolveIcon />}
@@ -187,7 +186,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
                     startIcon={isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                     onClick={() => toggleThread(thread.id)}
                   >
-                    {threadComments.length} {t('repo.review.threads.comments', 'comments')}
+                    {threadComments.length} {pluralWord(language, 'repo.review.threads.commentCount', threadComments.length)}
                   </Button>
                   {!thread.is_resolved ? (
                     <Button
@@ -196,7 +195,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
                       onClick={() => handleResolve(thread.id, true)}
                       color="success"
                     >
-                      {t('repo.review.threads.resolve', 'Resolve')}
+                      {t('repo.review.threads.resolve')}
                     </Button>
                   ) : (
                     <Button
@@ -204,7 +203,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
                       startIcon={<UnresolveIcon />}
                       onClick={() => handleResolve(thread.id, false)}
                     >
-                      {t('repo.review.threads.unresolve', 'Unresolve')}
+                      {t('repo.review.threads.unresolve')}
                     </Button>
                   )}
                 </Box>
@@ -219,7 +218,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
                       {comment.body}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {new Date(comment.created_at).toLocaleString()}
+                      {new Date(comment.created_at).toLocaleString(localeTag(language))}
                     </Typography>
                   </Box>
                 ))}
@@ -228,7 +227,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
                   <TextField
                     fullWidth
                     size="small"
-                    placeholder={t('repo.review.threads.replyPlaceholder', 'Add a reply...')}
+                    placeholder={t('repo.review.threads.replyPlaceholder')}
                     value={replyText[thread.id] || ''}
                     onChange={(e) =>
                       setReplyText((prev) => ({ ...prev, [thread.id]: e.target.value }))
@@ -242,7 +241,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
                     onClick={() => handleReply(thread.id)}
                     disabled={!replyText[thread.id]?.trim()}
                   >
-                    {t('common.reply', 'Reply')}
+                    {t('common.reply')}
                   </Button>
                 </Box>
               </Box>

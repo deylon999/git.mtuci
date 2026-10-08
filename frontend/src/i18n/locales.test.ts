@@ -43,8 +43,6 @@ describe("locales", () => {
     expect(Object.keys(SOURCES).length).toBeGreaterThan(100);
     const missing: string[] = [];
     for (const [file, text] of Object.entries(SOURCES)) {
-      // Files on react-i18next carry inline English defaults and are checked separately once migrated.
-      if (text.includes("react-i18next")) continue;
       for (const m of text.matchAll(/\btp?\(\s*["'`]([a-zA-Z][\w-]*(?:\.[\w-]+)+)["'`]/g)) {
         if (!ru.has(m[1])) missing.push(`${file}: ${m[1]}`);
       }

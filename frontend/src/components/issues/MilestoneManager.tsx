@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -17,7 +17,8 @@ import {
   Chip,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
-import { useTranslation } from 'react-i18next';
+import { localeTag } from '../../utils/dates';
+import { useUserPreferences } from '../../context/UserPreferencesContext';
 import { getTheme } from '../../theme';
 import {
   getMilestones,
@@ -53,7 +54,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
   onMilestonesChange,
   isDarkTheme = false,
 }) => {
-  const { t } = useTranslation();
+  const { t, language } = useUserPreferences();
   const theme = getTheme(isDarkTheme);
   const [milestones, setMilestones] = useState<IssueMilestone[]>([]);
   const [loading, setLoading] = useState(false);
@@ -67,28 +68,28 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
     due_date: undefined,
   });
 
-  useEffect(() => {
-    if (open) {
-      loadMilestones();
-    }
-  }, [open, repositoryId]);
-
-  const loadMilestones = async () => {
+  const loadMilestones = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const response = await getMilestones(repositoryId);
       setMilestones(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t('repo.issues.milestones.loadFailed', 'Failed to load milestones'));
+    } catch {
+      setError(t('repo.issues.milestones.loadFailed'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [repositoryId, t]);
+
+  useEffect(() => {
+    if (open) {
+      void loadMilestones();
+    }
+  }, [open, loadMilestones]);
 
   const handleCreate = async () => {
     if (!formData.title.trim()) {
-      setError(t('repo.issues.milestones.titleRequired', 'Milestone title is required'));
+      setError(t('repo.issues.milestones.titleRequired'));
       return;
     }
 
@@ -100,8 +101,8 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
       setIsCreating(false);
       setFormData({ title: '', description: '', state: 'open', due_date: undefined });
       onMilestonesChange?.();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t('repo.issues.milestones.createFailed', 'Failed to create milestone'));
+    } catch {
+      setError(t('repo.issues.milestones.createFailed'));
     } finally {
       setLoading(false);
     }
@@ -124,15 +125,15 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
       setEditingMilestone(null);
       setFormData({ title: '', description: '', state: 'open', due_date: undefined });
       onMilestonesChange?.();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t('repo.issues.milestones.updateFailed', 'Failed to update milestone'));
+    } catch {
+      setError(t('repo.issues.milestones.updateFailed'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (milestoneId: string) => {
-    if (!confirm(t('repo.issues.milestones.deleteConfirm', 'Are you sure you want to delete this milestone?'))) return;
+    if (!confirm(t('repo.issues.milestones.deleteConfirm'))) return;
 
     setLoading(true);
     setError(null);
@@ -140,8 +141,8 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
       await deleteMilestone(milestoneId);
       await loadMilestones();
       onMilestonesChange?.();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t('repo.issues.milestones.deleteFailed', 'Failed to delete milestone'));
+    } catch {
+      setError(t('repo.issues.milestones.deleteFailed'));
     } finally {
       setLoading(false);
     }
@@ -172,7 +173,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return null;
-    return new Date(dateString).toLocaleDateString();
+    return new Date(dateString).toLocaleDateString(localeTag(language));
   };
 
   return (
@@ -187,7 +188,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
       }}
     >
       <DialogTitle sx={{ color: theme.text }}>
-        {t('repo.issues.milestones.manage', 'Manage Milestones')}
+        {t('repo.issues.milestones.manage')}
       </DialogTitle>
       <DialogContent sx={issueDialogContentSx(theme)}>
         {error && (
@@ -200,12 +201,12 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
           <Box sx={{ mb: 3, p: 2, border: '1px solid', borderColor: theme.border, borderRadius: 1, bgcolor: theme.bg }}>
             <Typography variant="subtitle2" sx={{ mb: 2 }}>
               {editingMilestone
-                ? t('repo.issues.milestones.edit', 'Edit Milestone')
-                : t('repo.issues.milestones.create', 'Create Milestone')}
+                ? t('repo.issues.milestones.edit')
+                : t('repo.issues.milestones.create')}
             </Typography>
             <TextField
               fullWidth
-              label={t('repo.issues.milestones.title', 'Title')}
+              label={t('repo.issues.milestones.title')}
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               sx={issueFieldSx(theme, { mb: 2 })}
@@ -213,7 +214,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
             />
             <TextField
               fullWidth
-              label={t('repo.issues.milestones.description', 'Description')}
+              label={t('repo.issues.milestones.description')}
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               multiline
@@ -222,7 +223,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
             />
             <TextField
               fullWidth
-              label={t('repo.issues.milestones.dueDate', 'Due Date')}
+              label={t('repo.issues.milestones.dueDate')}
               type="date"
               value={formData.due_date ? formData.due_date.split('T')[0] : ''}
               onChange={(e) =>
@@ -233,7 +234,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
             />
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button onClick={cancelEdit} disabled={loading} sx={issueTextButtonSx(theme)}>
-                {t('common.cancel', 'Cancel')}
+                {t('common.cancel')}
               </Button>
               <Button
                 variant="contained"
@@ -241,7 +242,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
                 disabled={loading || !formData.title.trim()}
                 sx={issuePrimaryButtonSx(theme)}
               >
-                {editingMilestone ? t('common.save', 'Save') : t('common.create', 'Create')}
+                {editingMilestone ? t('common.save') : t('common.create')}
               </Button>
             </Box>
           </Box>
@@ -254,7 +255,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
             variant="outlined"
             sx={{ ...issueOutlinedButtonSx(theme), mb: 2 }}
           >
-            {t('repo.issues.milestones.new', 'New Milestone')}
+            {t('repo.issues.milestones.new')}
           </Button>
         )}
 
@@ -267,8 +268,8 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
                     <Typography variant="subtitle1" sx={{ color: theme.text }}>{milestone.title}</Typography>
                     <Chip
                       label={milestone.state === 'open'
-                        ? t('repo.issues.milestones.stateOpen', 'Open')
-                        : t('repo.issues.milestones.stateClosed', 'Closed')}
+                        ? t('repo.issues.milestones.stateOpen')
+                        : t('repo.issues.milestones.stateClosed')}
                       size="small"
                       color={milestone.state === 'open' ? 'success' : 'default'}
                     />
@@ -283,7 +284,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
                     )}
                     {milestone.due_date && (
                       <Typography variant="caption" sx={{ color: theme.text2 }}>
-                        {t('repo.issues.milestones.duePrefix', 'Due')}: {formatDate(milestone.due_date)}
+                        {t('repo.issues.milestones.duePrefix')}: {formatDate(milestone.due_date)}
                       </Typography>
                     )}
                   </Box>
@@ -301,14 +302,14 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
           ))}
           {milestones.length === 0 && !loading && (
             <Typography variant="body2" sx={{ p: 2, textAlign: 'center', color: theme.text2 }}>
-              {t('repo.issues.milestones.empty', 'No milestones yet')}
+              {t('repo.issues.milestones.empty')}
             </Typography>
           )}
         </List>
       </DialogContent>
       <DialogActions sx={{ borderTop: `1px solid ${theme.border}` }}>
         <Button onClick={onClose} sx={issueTextButtonSx(theme)}>
-          {t('common.close', 'Close')}
+          {t('common.close')}
         </Button>
       </DialogActions>
     </Dialog>
