@@ -240,9 +240,9 @@ function formatForkCount(value: number, language: string): string {
 function formatRepoVisibility(value: string | null | undefined, language: string): string {
   const normalized = (value ?? "").toLowerCase();
   if (language === "ru") {
-    if (normalized === "private") return "Private";
-    if (normalized === "course") return "Course";
-    return "Public";
+    if (normalized === "private") return "Приватный";
+    if (normalized === "course") return "Курсовой";
+    return "Публичный";
   }
   if (normalized === "private") return "Private";
   if (normalized === "course") return "Course";

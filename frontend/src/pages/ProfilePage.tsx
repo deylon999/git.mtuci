@@ -1,12 +1,15 @@
 import { currentLocaleTag } from "../utils/dates";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { pluralWord } from "../i18n/plural";
+import { translateWithParams } from "../i18n/params";
+import { getI18nLocale } from "../i18n/runtime";
+import { tr } from "../utils/i18nLabels";
+import { formatRelativeTime } from "../utils/formatRelativeTime";
 import { Link, useNavigate } from "react-router-dom";
 import {
   CalendarDays,
-  Clock,
   Edit3,
   GitFork,
-  Lock,
   UserRound,
 } from "lucide-react";
 import { changeMyPassword, uploadAvatarWithMode } from "../api/authApi";
@@ -110,18 +113,18 @@ const languageColors: Record<string, string> = {
   rust: "#dea584",
 };
 
+const trp = (key: string, params: Record<string, string | number>) => translateWithParams(getI18nLocale(), key, params);
+const counted = (n: number, pluralKey: string) => `${n} ${pluralWord(getI18nLocale(), pluralKey, n)}`;
+
 function initials(name?: string | null): string {
   const parts = (name || "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "П";
+  if (parts.length === 0) return "?";
   return parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
 }
 
 function roleLabel(role?: string | null): string {
-  if (role === "admin") return "Администратор";
-  if (role === "teacher") return "Преподаватель";
-  if (role === "laborant") return "Лаборант";
-  if (role === "student") return "Студент";
-  return "Пользователь";
+  if (role === "admin" || role === "teacher" || role === "laborant" || role === "student") return tr(`roles.${role}`);
+  return tr("profilePage.roleUser");
 }
 
 function roleBadgeClass(role?: string | null): string {
@@ -139,18 +142,8 @@ function formatDate(value?: string | null): string {
 }
 
 function formatRelative(value?: string | null): string {
-  if (!value) return "недавно";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "недавно";
-  const diff = Date.now() - date.getTime();
-  const minute = 60_000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-  if (diff < minute) return "только что";
-  if (diff < hour) return `${Math.max(1, Math.floor(diff / minute))} мин назад`;
-  if (diff < day) return `${Math.floor(diff / hour)} ч назад`;
-  if (diff < day * 7) return `${Math.floor(diff / day)} дн назад`;
-  return formatDate(value);
+  if (!value || Number.isNaN(new Date(value).getTime())) return tr("profilePage.recently");
+  return formatRelativeTime(value);
 }
 
 function languageColor(language?: string | null): string {
@@ -160,7 +153,7 @@ function languageColor(language?: string | null): string {
 
 function courseAbbr(title: string): string {
   const words = title.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "К";
+  if (words.length === 0) return "·";
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return words.slice(0, 2).map((word) => word[0]?.toUpperCase()).join("");
 }
@@ -183,11 +176,13 @@ function mapStudentGradeCourse(course: StudentGradeCourse): ProfileCourseRow {
   return {
     id: course.course_id,
     title: course.title,
-    sub: course.teacher_name ? course.teacher_name : `${course.assignments_submitted}/${course.assignments_total} работ`,
+    sub: course.teacher_name
+      ? course.teacher_name
+      : trp("profilePage.courseSubmitted", { done: course.assignments_submitted, total: course.assignments_total }),
     score: `${earned}/${max}`,
     progress: Math.max(0, Math.min(100, Math.round(percent ?? 0))),
     color: courseProgressColor(percent),
-    scoreLabel: "баллов",
+    scoreLabel: tr("profilePage.scorePoints"),
   };
 }
 
@@ -198,11 +193,11 @@ function mapTeacherCourse(course: { course_id: string; title: string; students_c
   return {
     id: course.course_id,
     title: course.title,
-    sub: `${course.students_count} студентов, ${course.assignments_count} заданий`,
+    sub: trp("profilePage.teacherCourseSub", { students: course.students_count, assignments: course.assignments_count }),
     score: course.pending_count ? String(course.pending_count) : "0",
     progress,
     color: course.pending_count ? "#f59e0b" : "#4caf50",
-    scoreLabel: "на ревью",
+    scoreLabel: tr("profilePage.inReview"),
   };
 }
 
@@ -222,7 +217,7 @@ function mapRepository(repo: Repository): ProfileRepo {
 
 function mapStudentRepository(repo: StudentRepositoryItem): ProfileRepo {
   return {
-    id: repo.repository_id || repo.id,
+    id: repo.id,
     name: repo.gitea_path || repo.name,
     description: repo.description,
     language: repo.language,
@@ -230,8 +225,8 @@ function mapStudentRepository(repo: StudentRepositoryItem): ProfileRepo {
     commits: repo.commits_count,
     forks: repo.forks_count,
     updatedAt: repo.updated_at,
-    href: repo.repository_id ? `/repositories/${repo.repository_id}` : "/repositories",
-    badge: repo.source === "assignment" ? repo.assignment_label || "Курсовой" : null,
+    href: `/repositories/${repo.id}/code`,
+    badge: repo.source === "assignment" ? repo.assignment_label || tr("repo.visibility.course") : null,
   };
 }
 
@@ -486,7 +481,7 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
         setGroupRanking(null);
       }
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Не удалось загрузить профиль");
+      setLoadError(error instanceof Error ? error.message : tr("profilePage.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -516,7 +511,7 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Не удалось загрузить аватар");
+      setLoadError(error instanceof Error ? error.message : tr("profilePage.avatarFailed"));
     } finally {
       setAvatarLoading(false);
     }
@@ -527,15 +522,15 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
     setPasswordError(null);
     setSuccess(null);
     if (newPassword !== repeatNewPassword) {
-      setPasswordError("Пароли не совпадают");
+      setPasswordError(tr("profilePage.passwordMismatch"));
       return;
     }
     if (newPassword.length < 8) {
-      setPasswordError("Пароль должен быть не короче 8 символов");
+      setPasswordError(tr("profilePage.passwordTooShort"));
       return;
     }
     if (oldPassword === newPassword) {
-      setPasswordError("Новый пароль совпадает со старым");
+      setPasswordError(tr("profilePage.passwordSame"));
       return;
     }
     setSaving(true);
@@ -544,15 +539,15 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
       setOldPassword("");
       setNewPassword("");
       setRepeatNewPassword("");
-      setSuccess("Пароль изменён");
+      setSuccess(tr("profilePage.passwordChanged"));
     } catch (error) {
-      setPasswordError(error instanceof Error ? error.message : "Не удалось изменить пароль");
+      setPasswordError(error instanceof Error ? error.message : tr("profilePage.passwordChangeFailed"));
     } finally {
       setSaving(false);
     }
   }
 
-  const profileName = me?.full_name || me?.email || "Профиль";
+  const profileName = me?.full_name || me?.email || tr("profilePage.profileFallback");
   const loginLine = [me?.mtuci_login, me?.email].filter(Boolean).join(" · ");
   // The avatar file name never changes between uploads, so bust the cache once per loaded user object
   // rather than on every render (which re-downloaded the image on each keystroke in the forms below).
@@ -567,7 +562,7 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
       ) : me ? (
         <>
           <div className="breadcrumb">
-            <Link to="/dashboard">Главное</Link>
+            <Link to="/dashboard">{tr("profilePage.breadcrumbHome")}</Link>
             <span>/</span>
             <span>{profileName}</span>
           </div>
@@ -575,12 +570,12 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
           {loadError ? (
             <div className="error-box">
               <span>{loadError}</span>
-              <button type="button" onClick={() => void loadRoleData(true)}>Повторить</button>
+              <button type="button" onClick={() => void loadRoleData(true)}>{tr("profilePage.retry")}</button>
             </div>
           ) : null}
 
           <section className="profile-header">
-            <button className="profile-avatar" type="button" onClick={() => fileInputRef.current?.click()} title="Изменить аватар">
+            <button className="profile-avatar" type="button" onClick={() => fileInputRef.current?.click()} title={tr("profilePage.changeAvatar")}>
               {avatarUrl ? <img src={avatarUrl} alt="" /> : initials(profileName)}
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" onChange={onAvatarChange} style={{ display: "none" }} />
@@ -590,41 +585,44 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
                 <h1 className="profile-name">{profileName}</h1>
                 <span className={`badge ${roleBadgeClass(me.role)}`}>{roleLabel(me.role)}</span>
                 <span className={`badge ${me.is_blocked ? "badge-red" : "badge-green"}`}>
-                  {me.is_blocked ? "Заблокирован" : "Активен"}
+                  {me.is_blocked ? tr("profilePage.statusBlocked") : tr("profilePage.statusActive")}
                 </span>
               </div>
-              <div className="profile-login">{loginLine || "логин не указан"}</div>
+              <div className="profile-login">{loginLine || tr("profilePage.loginMissing")}</div>
               <div className="profile-meta">
-                <MetaItem icon={<CalendarDays />}>Зарегистрирован {formatDate(me.created_at)}</MetaItem>
-                {me.group_name ? <MetaItem icon={<UserRound />}>Группа {me.group_name}</MetaItem> : null}
-                <MetaItem icon={<Clock />}>Сейчас онлайн</MetaItem>
-                <MetaItem icon={<GitFork />}>{stats.repositories} репозиториев</MetaItem>
+                <MetaItem icon={<CalendarDays />}>{trp("profilePage.joinedOn", { date: formatDate(me.created_at) })}</MetaItem>
+                {me.group_name ? <MetaItem icon={<UserRound />}>{trp("profilePage.groupName", { group: me.group_name })}</MetaItem> : null}
+                <MetaItem icon={<GitFork />}>{counted(stats.repositories, "student.plural.repos")}</MetaItem>
               </div>
             </div>
 
             <div className="profile-actions">
               <button className="btn" type="button" onClick={() => fileInputRef.current?.click()}>
                 <Edit3 />
-                Аватар
-              </button>
-              <button className="btn btn-danger" type="button" disabled>
-                <Lock />
-                {me.is_blocked ? "Заблокирован" : "Блокировка"}
+                {tr("profilePage.avatar")}
               </button>
             </div>
           </section>
 
           <section className="stats-row">
-            <StatBox delta={displayedCommitsWeek ? `+${displayedCommitsWeek} за неделю` : "за последний год"} label="Коммитов всего" value={displayedCommitsTotal} />
-            <StatBox delta={isStudent ? "включая учебные" : "личные и рабочие"} label="Репозиториев" value={stats.repositories} />
             <StatBox
-              delta={isTeacherLike ? `${stats.assignments} на проверке` : `${stats.assignments} заданий`}
-              label={isTeacherLike ? "Активных курсов" : "Активных курса"}
+              delta={displayedCommitsWeek ? trp("profilePage.commitsThisWeek", { n: displayedCommitsWeek }) : tr("profilePage.inLastYear")}
+              label={tr("profilePage.commitsTotal")}
+              value={displayedCommitsTotal}
+            />
+            <StatBox
+              delta={isStudent ? tr("profilePage.reposIncludingCourse") : tr("profilePage.reposPersonalAndWork")}
+              label={tr("profilePage.reposLabel")}
+              value={stats.repositories}
+            />
+            <StatBox
+              delta={isTeacherLike ? trp("profilePage.toReviewCount", { n: stats.assignments }) : counted(stats.assignments, "student.plural.assignments")}
+              label={tr("profilePage.activeCourses")}
               value={isTeacherLike ? stats.courses : Math.max(stats.courses, 0)}
             />
             <StatBox
               progress={Math.max(0, Math.min(100, Math.round(stats.progress || 0)))}
-              label={isTeacherLike ? "Средняя оценка" : "Средний прогресс"}
+              label={isTeacherLike ? tr("profilePage.averageGrade") : tr("profilePage.averageProgress")}
               value={`${Math.max(0, Math.min(100, Math.round(stats.progress || 0)))}%`}
               tone="success"
             />
@@ -636,24 +634,24 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
 
               <div className="card">
                 <div className="tabs">
-                  <Tab active={activeTab === "repos"} count={repos.length} onClick={() => setActiveTab("repos")}>Репозитории</Tab>
+                  <Tab active={activeTab === "repos"} count={repos.length} onClick={() => setActiveTab("repos")}>{tr("profilePage.reposLabel")}</Tab>
                   <Tab
                     active={activeTab === "activity"}
                     count={isStudent ? studentFeed.length : recentActions.length}
                     onClick={() => setActiveTab("activity")}
                   >
-                    Активность
+                    {tr("profilePage.tabActivity")}
                   </Tab>
-                  <Tab active={activeTab === "prs"} count={isStudent ? prFeed.length : stats.prsOpen} onClick={() => setActiveTab("prs")}>Pull Requests</Tab>
+                  <Tab active={activeTab === "prs"} count={isStudent ? prFeed.length : stats.prsOpen} onClick={() => setActiveTab("prs")}>{tr("profilePage.tabPulls")}</Tab>
                 </div>
 
                 {activeTab === "repos" ? (
                   <div>
-                    {repos.length === 0 ? <EmptyLine text="Репозитории пока не найдены" /> : null}
+                    {repos.length === 0 ? <EmptyLine text={tr("profilePage.noRepos")} /> : null}
                     {repos.map((repo) => <RepositoryRow key={repo.id} repo={repo} onOpen={() => navigate(repo.href)} />)}
                     {repos.length > 0 ? (
                       <div className="card-more">
-                        <Link to="/repositories">Показать все репозитории →</Link>
+                        <Link to="/repositories">{tr("profilePage.showAllRepos")}</Link>
                       </div>
                     ) : null}
                   </div>
@@ -662,9 +660,9 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
                 {activeTab === "activity" ? (
                   <div>
                     {isStudent ? (
-                      studentFeed.length === 0 ? <EmptyLine text="Активность пока не найдена" /> : studentFeed.map((item) => <FeedRow key={item.id} item={item} />)
+                      studentFeed.length === 0 ? <EmptyLine text={tr("profilePage.noActivity")} /> : studentFeed.map((item) => <FeedRow key={item.id} item={item} />)
                     ) : recentActions.length === 0 ? (
-                      <EmptyLine text="За последние 24 часа действий нет" />
+                      <EmptyLine text={tr("profilePage.noActivity24h")} />
                     ) : (
                       recentActions.map((log) => <LogRow key={log.id} log={log} />)
                     )}
@@ -676,7 +674,7 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
                     {isStudent && prFeed.length > 0 ? (
                       prFeed.map((item) => <FeedRow key={item.id} item={item} />)
                     ) : (
-                      <EmptyLine text="Pull Requests пока не найдены" />
+                      <EmptyLine text={tr("profilePage.noPulls")} />
                     )}
                   </div>
                 ) : null}
@@ -782,15 +780,11 @@ function CommitGraph({ total, weeks }: { total: number; weeks: CommitGraphDay[][
   return (
     <div className="card">
       <div className="card-header">
-        <span className="card-title">График коммитов</span>
-        <select className="mini-select" value="2026" onChange={() => undefined}>
-          <option>2026</option>
-          <option>2025</option>
-        </select>
+        <span className="card-title">{tr("profilePage.commitGraph")}</span>
       </div>
       <div className="commit-graph-wrap">
         <div className="commit-graph-header">
-          <span className="commit-graph-title">{total} коммитов за последний год</span>
+          <span className="commit-graph-title">{trp("profilePage.commitsLastYear", { count: counted(total, "student.plural.commits") })}</span>
         </div>
         <div className="graph-grid">
           {weeks.map((week, wi) => (
@@ -798,21 +792,21 @@ function CommitGraph({ total, weeks }: { total: number; weeks: CommitGraphDay[][
               {week.map((day, di) => {
                 const level = day.count === 0 ? "l0" : day.count <= 1 ? "l1" : day.count <= 3 ? "l2" : day.count <= 5 ? "l3" : "l4";
                 const title = day.count === 0
-                  ? `${formatGraphDate(day.date)}: нет коммитов`
-                  : `${formatGraphDate(day.date)}: ${day.count} коммитов`;
+                  ? trp("profilePage.graphNoCommits", { date: formatGraphDate(day.date) })
+                  : trp("profilePage.graphCommits", { date: formatGraphDate(day.date), count: counted(day.count, "student.plural.commits") });
                 return <div className={`graph-day ${level}`} key={`${wi}-${di}`} title={title} />;
               })}
             </div>
           ))}
         </div>
         <div className="graph-legend">
-          <span>Меньше</span>
+          <span>{tr("profilePage.less")}</span>
           <i className="graph-legend-box l0" />
           <i className="graph-legend-box l1" />
           <i className="graph-legend-box l2" />
           <i className="graph-legend-box l3" />
           <i className="graph-legend-box l4" />
-          <span>Больше</span>
+          <span>{tr("profilePage.more")}</span>
         </div>
       </div>
     </div>
@@ -846,9 +840,9 @@ function RepositoryRow({ onOpen, repo }: { onOpen: () => void; repo: ProfileRepo
             {repo.language}
           </span>
         ) : null}
-        {repo.commits != null ? <span>{repo.commits} коммитов</span> : null}
-        {repo.forks ? <span>{repo.forks} форков</span> : null}
-        <span className="muted">обновлён {formatRelative(repo.updatedAt)}</span>
+        {repo.commits != null ? <span>{counted(repo.commits, "student.plural.commits")}</span> : null}
+        {repo.forks ? <span>{counted(repo.forks, "student.plural.forks")}</span> : null}
+        <span className="muted">{trp("profilePage.updated", { time: formatRelative(repo.updatedAt) })}</span>
       </div>
     </button>
   );
@@ -902,11 +896,11 @@ function CoursesCard({
   return (
     <div className="card">
       <div className="card-header">
-        <span className="card-title">Курсы</span>
-        <span className="card-link">{courses || rows.length} активных</span>
+        <span className="card-title">{tr("profilePage.coursesTitle")}</span>
+        <span className="card-link">{trp("profilePage.activeCount", { n: courses || rows.length })}</span>
       </div>
       {rows.length === 0 ? (
-        <EmptyLine text={isTeacherLike ? "Курсы преподавателя пока не найдены" : "Активные курсы пока не найдены"} />
+        <EmptyLine text={isTeacherLike ? tr("profilePage.noTeacherCourses") : tr("profilePage.noActiveCourses")} />
       ) : rows.map((row) => (
         <div className="course-item" key={row.id}>
           <div className="course-abbr" style={{ background: `${row.color}22`, color: row.color }}>{courseAbbr(row.title)}</div>
@@ -940,12 +934,12 @@ function GitStatsCard({
 }) {
   return (
     <div className="card">
-      <div className="card-header"><span className="card-title">Git статистика</span></div>
-      <MiniStat label="Всего коммитов" value={totalCommits} />
-      <MiniStat label="За последнюю неделю" value={`+${weekCommits}`} tone="success" />
-      <MiniStat label="PR открыто" value={studentSummary?.prs_open ?? stats.prsOpen} />
-      <MiniStat label="Работ отправлено" value={studentSummary?.submitted ?? stats.submitted} />
-      <MiniStat label="На ревью" value={studentSummary?.in_review ?? stats.inReview} />
+      <div className="card-header"><span className="card-title">{tr("profilePage.gitStats")}</span></div>
+      <MiniStat label={tr("profilePage.commitsTotal")} value={totalCommits} />
+      <MiniStat label={tr("profilePage.lastWeek")} value={`+${weekCommits}`} tone="success" />
+      <MiniStat label={tr("profilePage.prsOpen")} value={studentSummary?.prs_open ?? stats.prsOpen} />
+      <MiniStat label={tr("profilePage.worksSubmitted")} value={studentSummary?.submitted ?? stats.submitted} />
+      <MiniStat label={tr("profilePage.inReviewLabel")} value={studentSummary?.in_review ?? stats.inReview} />
     </div>
   );
 }
@@ -964,23 +958,25 @@ function RankingCard({ currentUser, ranking }: { currentUser: UserRead; ranking:
   return (
     <div className="card">
       <div className="card-header">
-        <span className="card-title">Рейтинг в группе</span>
-        <span className="card-subtle">{ranking?.group_name || currentUser.group_name || "Группа"}</span>
+        <span className="card-title">{tr("profilePage.groupRanking")}</span>
+        <span className="card-subtle">{ranking?.group_name || currentUser.group_name || tr("profilePage.groupFallback")}</span>
       </div>
-      {entries.length === 0 ? <EmptyLine text="Рейтинг пока недоступен" /> : null}
+      {entries.length === 0 ? <EmptyLine text={tr("profilePage.rankingUnavailable")} /> : null}
       {entries.map((entry) => (
         <div className={`rank-item ${entry.is_you ? "current" : ""}`} key={entry.student_id}>
           <div className={`rank-num ${entry.place <= 3 ? "top" : ""}`}>{entry.place}</div>
           <div className="rank-ava">{initials(entry.name)}</div>
           <div className="rank-name">
             {entry.name}
-            {entry.is_you ? <span> (Вы)</span> : null}
+            {entry.is_you ? <span> {tr("profilePage.you")}</span> : null}
           </div>
           <div className="rank-score">{entry.points}</div>
         </div>
       ))}
       <div className="card-footnote">
-        {ranking?.your_place ? `${ranking.your_place} место · ${ranking.your_points ?? 0} баллов` : "место пока не рассчитано"}
+        {ranking?.your_place
+          ? trp("profilePage.place", { place: ranking.your_place, points: ranking.your_points ?? 0 })
+          : tr("profilePage.placeNotCalculated")}
       </div>
     </div>
   );
@@ -989,12 +985,12 @@ function RankingCard({ currentUser, ranking }: { currentUser: UserRead; ranking:
 function InfoCard({ department, me }: { department: string | null; me: UserRead }) {
   return (
     <div className="card">
-      <div className="card-header"><span className="card-title">Информация</span></div>
+      <div className="card-header"><span className="card-title">{tr("profilePage.info")}</span></div>
       <MiniStat label="Email" value={me.email} />
-      <MiniStat label="Роль" value={roleLabel(me.role)} />
-      {me.group_name ? <MiniStat label="Группа" value={me.group_name} /> : null}
-      {department ? <MiniStat label="Кафедра" value={department} /> : null}
-      <MiniStat label="Регистрация" value={formatDate(me.created_at)} />
+      <MiniStat label={tr("profilePage.role")} value={roleLabel(me.role)} />
+      {me.group_name ? <MiniStat label={tr("profilePage.group")} value={me.group_name} /> : null}
+      {department ? <MiniStat label={tr("profilePage.department")} value={department} /> : null}
+      <MiniStat label={tr("profilePage.joined")} value={formatDate(me.created_at)} />
     </div>
   );
 }
@@ -1028,15 +1024,15 @@ function PasswordCard({
 }) {
   return (
     <div className="card password-card">
-      <div className="card-header"><span className="card-title">Смена пароля</span></div>
+      <div className="card-header"><span className="card-title">{tr("profilePage.passwordTitle")}</span></div>
       <form onSubmit={onSubmit} className="password-form">
-        <input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} placeholder="Текущий пароль" required />
-        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Новый пароль" required />
-        <input type="password" value={repeatNewPassword} onChange={(e) => setRepeatNewPassword(e.target.value)} placeholder="Повторите пароль" required />
+        <input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} placeholder={tr("profilePage.currentPassword")} required />
+        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={tr("profilePage.newPassword")} required />
+        <input type="password" value={repeatNewPassword} onChange={(e) => setRepeatNewPassword(e.target.value)} placeholder={tr("profilePage.repeatPassword")} required />
         {passwordError ? <div className="form-error">{passwordError}</div> : null}
         {success ? <div className="form-success">{success}</div> : null}
         <div className="form-actions">
-          <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? "Сохраняем..." : "Изменить пароль"}</button>
+          <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? tr("profilePage.saving") : tr("profilePage.changePassword")}</button>
           <button
             className="btn"
             type="button"
@@ -1048,7 +1044,7 @@ function PasswordCard({
               setSuccess(null);
             }}
           >
-            Отмена
+            {tr("common.cancel")}
           </button>
         </div>
       </form>
