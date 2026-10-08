@@ -32,6 +32,8 @@ export default function StudentCreateRepoPage({ isDarkTheme = false }: StudentCr
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [createdClone, setCreatedClone] = useState<string | null>(null);
+  // Separate flag: a repository created without a clone URL must still show the success screen.
+  const [created, setCreated] = useState(false);
 
   useEffect(() => {
     void getMe().then((u) => {
@@ -83,6 +85,7 @@ export default function StudentCreateRepoPage({ isDarkTheme = false }: StudentCr
       });
       const clone = repo.clone_url ? `git clone ${repo.clone_url}` : null;
       setCreatedClone(clone);
+      setCreated(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("student.errors.createRepo"));
     } finally {
@@ -90,30 +93,36 @@ export default function StudentCreateRepoPage({ isDarkTheme = false }: StudentCr
     }
   };
 
-  if (createdClone) {
+  if (created) {
     return (
       <StudentPageShell className="max-w-3xl mx-auto py-4">
         <h1 className="text-lg font-semibold" style={{ color: theme.text }}>
           {t("student.repos.createPage.created")}
         </h1>
-        <p className="text-sm" style={{ color: theme.text2 }}>
-          {t("student.repos.createPage.cloneHint")}
-        </p>
-        <code
-          className="block rounded-lg border px-3 py-2 text-xs font-mono break-all"
-          style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text }}
-        >
-          {createdClone}
-        </code>
+        {createdClone ? (
+          <>
+            <p className="text-sm" style={{ color: theme.text2 }}>
+              {t("student.repos.createPage.cloneHint")}
+            </p>
+            <code
+              className="block rounded-lg border px-3 py-2 text-xs font-mono break-all"
+              style={{ backgroundColor: theme.bg3, borderColor: theme.border, color: theme.text }}
+            >
+              {createdClone}
+            </code>
+          </>
+        ) : null}
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => void navigator.clipboard.writeText(createdClone).catch(() => undefined)}
-            className="rounded-lg border px-3 py-1.5 text-xs"
-            style={{ borderColor: theme.border, color: theme.text2 }}
-          >
-            {t("common.copy")}
-          </button>
+          {createdClone ? (
+            <button
+              type="button"
+              onClick={() => void navigator.clipboard.writeText(createdClone).catch(() => undefined)}
+              className="rounded-lg border px-3 py-1.5 text-xs"
+              style={{ borderColor: theme.border, color: theme.text2 }}
+            >
+              {t("common.copy")}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => navigate("/repositories")}
