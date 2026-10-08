@@ -1,3 +1,4 @@
+import { isSessionRejectedError } from "./client";
 import { seedMeCache } from "./authApi";
 import { seedNotificationsCache } from "./notificationsApi";
 import { seedSystemInfoCache } from "./systemApi";
@@ -79,8 +80,7 @@ export function runStudentShellBootstrap(
         return true;
       })
       .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : "";
-        if (!msg.startsWith("403 ") && !msg.startsWith("401 ")) {
+        if (!isSessionRejectedError(err)) {
           console.error("Student shell bootstrap failed, falling back to per-widget requests:", err);
         }
         // Always release the waiters (auth user, notifications): otherwise a 5xx or network error

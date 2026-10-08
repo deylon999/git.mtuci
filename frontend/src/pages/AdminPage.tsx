@@ -22,6 +22,7 @@ import {
   Filter,
   type LucideIcon,
 } from "lucide-react";
+import { ApiError } from "../api/client";
 import type { AdminUserRead } from "../api/types";
 import {
   getAdminUsers,
@@ -400,7 +401,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
       setNotifications((prev) => [newNotification, ...prev].slice(0, DASHBOARD_NOTIFICATIONS_LIMIT));
       toast.success(t("admin.dashboard.backupSuccess"));
     } catch (err) {
-      const isBackupBusy = err instanceof Error && err.message.includes("429");
+      const isBackupBusy = err instanceof ApiError && err.status === 429;
       const uiError = isBackupBusy
         ? t("admin.dashboard.backupInProgress")
         : err instanceof Error

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { login } from "../api/authApi";
 import { useAuthUser } from "../context/AuthUserContext";
@@ -8,8 +8,17 @@ import { getDefaultRouteForRole } from "../utils/defaultRoute";
 import { getTheme } from "../theme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 
+/** In-app path the user was sent away from (state.from), ignoring auth pages and anything that is not a local path. */
+function safeReturnPath(state: unknown): string | null {
+  const from = (state as { from?: unknown } | null)?.from;
+  if (typeof from !== "string" || !from.startsWith("/") || from.startsWith("//")) return null;
+  if (/^\/(login|register|forgot-password|reset-password)(\/|\?|$)/.test(from)) return null;
+  return from;
+}
+
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useUserPreferences();
   const { refreshUser } = useAuthUser();
 
@@ -51,7 +60,7 @@ export default function LoginPage() {
         localStorage.removeItem('remember_me');
       }
       const me = await refreshUser({ force: true });
-      if (me) navigate(getDefaultRouteForRole(me.role), { replace: true });
+      if (me) navigate(safeReturnPath(location.state) ?? getDefaultRouteForRole(me.role), { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("auth.login.error"));
     } finally {

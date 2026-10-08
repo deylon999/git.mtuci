@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { clearToken, getToken } from "./api/client";
+import { clearToken, getToken, SESSION_EXPIRED_EVENT } from "./api/client";
 import { Toaster } from "react-hot-toast";
 import AuthRequired from "./components/AuthRequired";
 import AdminRequired from "./components/AdminRequired";
@@ -154,8 +154,18 @@ function AppShell({
   const isTeacherLike = effectiveRole === "teacher" || effectiveRole === "laborant";
   const mainPaddingY = !isAuthPage && isTeacherLike ? "py-4" : "py-6";
 
+  const returnTo = `${location.pathname}${location.search}`;
+  useEffect(() => {
+    const onExpired = () => {
+      clearUser();
+      navigate("/login", { replace: true, state: { from: returnTo } });
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, [clearUser, navigate, returnTo]);
+
   if (!isAuthPage && !getToken()) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/login" replace state={{ from: returnTo }} />;
   }
 
   const isPendingStudent = Boolean(user?.role === "student" && user.is_pending);

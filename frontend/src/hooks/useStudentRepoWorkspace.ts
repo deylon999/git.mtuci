@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ApiError } from "../api/client";
 import {
   getStudentRepoSummary,
   getStudentRepositories,
@@ -103,7 +104,7 @@ export function useStudentRepoWorkspace(repoId: string | undefined, initialMeta?
       } catch (e) {
         if (cancelled) return;
         const msg = e instanceof Error ? e.message : tr("repo.errors.workspaceLoadFailed");
-        if (msg.includes("404") && /not found|не найден/i.test(msg)) {
+        if (e instanceof ApiError && e.status === 404) {
           navigate("/repositories", { replace: true });
           return;
         }

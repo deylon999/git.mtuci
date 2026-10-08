@@ -47,6 +47,20 @@ describe("apiRequest", () => {
     await expect(apiRequest("/x")).rejects.toThrow("422 body.email: invalid");
   });
 
+  it("drops the token when an authenticated request gets 401", async () => {
+    setToken("expired");
+    mockFetch(401, { detail: "Session expired, please log in again" });
+    await expect(apiRequest("/x")).rejects.toThrow("401 Session expired");
+    expect(store.has("token")).toBe(false);
+  });
+
+  it("keeps the token on 403", async () => {
+    setToken("valid");
+    mockFetch(403, { detail: "Permission denied" });
+    await expect(apiRequest("/x")).rejects.toThrow("403");
+    expect(store.get("token")).toBe("valid");
+  });
+
   it("does not treat server errors or network failures as a rejected session", async () => {
     mockFetch(500, { detail: "boom" });
     expect(isSessionRejectedError(await apiRequest("/x").catch((e: unknown) => e))).toBe(false);

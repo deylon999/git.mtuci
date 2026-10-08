@@ -2,6 +2,9 @@ export const API_URL = import.meta.env.VITE_API_URL ?? "/api";
 
 const TOKEN_KEY = "token";
 
+/** Fired on window when an authenticated request gets 401: the token was cleared and the user must sign in again. */
+export const SESSION_EXPIRED_EVENT = "mtuci:session-expired";
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -67,9 +70,13 @@ export async function apiRequest<T>(
     Object.assign(headers, opts.headers);
   }
 
+  let sentToken = false;
   if (auth) {
     const token = getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+      sentToken = true;
+    }
   }
 
   const res = await fetch(`${API_URL}${path}`, {
@@ -79,6 +86,12 @@ export async function apiRequest<T>(
   });
 
   if (!res.ok) {
+    if (res.status === 401 && sentToken) {
+      // The session expired or was revoked (password change, admin reset): drop it once, centrally,
+      // instead of leaving every page to show its own error with a dead token.
+      clearToken();
+      if (typeof window !== "undefined") window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    }
     let detail = "";
     try {
       const data = await parseJson<{ detail?: string | Array<{ loc: string[]; msg: string; type: string }> }>(res.clone());
