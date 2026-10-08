@@ -40,7 +40,7 @@ const en = mergeDeep(
 
 export type Locale = "ru" | "en";
 
-const LOCALES: Record<Locale, TranslationTree> = { ru, en };
+export const LOCALES: Record<Locale, TranslationTree> = { ru, en };
 
 export { translateWithParams } from "./params";
 export function isLocale(value: string): value is Locale {
