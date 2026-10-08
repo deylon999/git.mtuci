@@ -37,7 +37,7 @@ export default function StudentRepositoryLayout({ isDarkTheme = false }: Student
   const showMissing = !loading && !meta;
 
   return (
-    <RepoApiProvider value={user?.role === "teacher" || user?.role === "laborant" ? teacherRepoApi : studentRepoApi}>
+    <RepoApiProvider value={user?.role === "teacher" || user?.role === "laborant" || user?.role === "admin" ? teacherRepoApi : studentRepoApi}>
       <StudentRepoWorkspaceContext.Provider
         value={{ repoId, meta, setMeta, summary, setSummary, loading, error, activeTab }}
       >

@@ -172,6 +172,8 @@ export const coreEn = {
     allCourses: "All courses",
     createCourse: "Create course",
     students: "STUDENTS",
+    teaching: "TEACHING",
+    notifications: "Notifications",
     allStudents: "All students",
     codeReview: "Code Review",
     templateRepos: "Template repos",

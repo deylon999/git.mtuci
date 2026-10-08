@@ -72,6 +72,11 @@ function getInitials(fullName: string) {
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }
 
+/** Roles that see every submission of an assignment and grade it (admin can do everything a teacher can). */
+function isReviewerRole(role: string | undefined): boolean {
+  return role === "teacher" || role === "admin";
+}
+
 export default function AssignmentPage({ isDarkTheme = false }: AssignmentPageProps) {
   const { t, tp } = useUserPreferences();
   // Theme-based colors
@@ -241,7 +246,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
         const meResult = await getMe();
         if (cancelled) return;
         setMe(meResult);
-        if (meResult.role === "teacher" || meResult.role === "laborant") {
+        if (meResult.role === "teacher" || meResult.role === "laborant" || meResult.role === "admin") {
           const courseRow = await getCourse(courseId);
           if (cancelled) return;
           setCourse(courseRow);
@@ -268,14 +273,14 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   useEffect(() => {
     if (!courseId || !assignmentId || !me) return;
     if (me.role === "student") return;
-    if (me.role === "teacher" && !selectedRepoStudentId) return;
+    if (isReviewerRole(me.role) && !selectedRepoStudentId) return;
     let cancelled = false;
 
     const loadRepoData = async () => {
       try {
         const [commitsRes, filesRes] = await Promise.all([
-          getCommits(courseId, assignmentId, me.role === "teacher" ? selectedRepoStudentId : undefined),
-          getFiles(courseId, assignmentId, me.role === "teacher" ? selectedRepoStudentId : undefined),
+          getCommits(courseId, assignmentId, isReviewerRole(me.role) ? selectedRepoStudentId : undefined),
+          getFiles(courseId, assignmentId, isReviewerRole(me.role) ? selectedRepoStudentId : undefined),
         ]);
         if (cancelled) return;
         setCommits(commitsRes);
@@ -292,7 +297,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   }, [courseId, assignmentId, me, selectedRepoStudentId, t]);
 
   useEffect(() => {
-    if (!courseId || !assignmentId || me?.role !== "teacher") return;
+    if (!courseId || !assignmentId || !isReviewerRole(me?.role)) return;
     let cancelled = false;
 
     const loadSubmissions = async () => {
@@ -352,7 +357,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   }, [courseId, assignmentId, me?.role, t]);
 
   useEffect(() => {
-    if (me?.role !== "teacher") return;
+    if (!isReviewerRole(me?.role)) return;
     if (submissions.length === 0) {
       setSelectedGradingStudentId("");
       return;
@@ -376,7 +381,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
         courseId,
         assignmentId,
         f.name,
-        me?.role === "teacher" ? selectedRepoStudentId : undefined,
+        isReviewerRole(me?.role) ? selectedRepoStudentId : undefined,
       );
       setView({ file: f, loading: false, content: res.content, error: null });
     } catch (err) {
@@ -599,7 +604,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
             <div>
               <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${cardBorder} ${cardBg} ${textSecondary}`}>
                 <BookOpen className="h-3.5 w-3.5" />
-                {me?.role === "teacher" ? "Панель преподавателя" : "Панель студента"}
+                {isReviewerRole(me?.role) ? "Панель преподавателя" : "Панель студента"}
               </div>
               <h1 className={`mt-4 text-3xl font-semibold leading-tight sm:text-4xl ${textPrimary}`}>{headerTitle}</h1>
               <p className={`mt-3 max-w-3xl text-sm leading-6 ${textSecondary}`}>
@@ -619,7 +624,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
                     {t("repo.assignment.penaltiesTitle")}
                   </span>
                 ) : null}
-                {me?.role === "teacher" && selectedRepoStudent ? (
+                {isReviewerRole(me?.role) && selectedRepoStudent ? (
                   <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm ${cardBg} ${textSecondary}`}>
                     <Users className="h-3.5 w-3.5" />
                     {selectedRepoStudent.student_full_name}
@@ -699,7 +704,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
         ) : null}
 
         <div className="mb-6 grid gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
-          {me?.role === "teacher" ? (
+          {isReviewerRole(me?.role) ? (
             <div className={`rounded-2xl border ${cardBorder} ${cardBg} p-4 shadow-sm`}>
               <div className={`mb-2 text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.studentRepoHint")}</div>
               <div className={`mb-3 text-xs ${textSecondary}`}>
@@ -737,7 +742,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
               <button type="button" className={tabButtonClass("grading")} onClick={() => setActiveTab("grading")}>
                 {me?.role === "student" ? t("repo.assignment.myGrade") : t("repo.assignment.grading")}
               </button>
-              {me?.role === "teacher" ? (
+              {isReviewerRole(me?.role) ? (
                 <button
                   type="button"
                   className={tabButtonClass("plagiarism")}
@@ -810,7 +815,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
         </div>
       ) : null}
 
-      {me?.role === "teacher" && activeTab === "plagiarism" ? (
+      {isReviewerRole(me?.role) && activeTab === "plagiarism" ? (
         <div className={sectionShell}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className={`text-lg font-semibold ${textPrimary}`}>{t("repo.assignment.plagiarismTitle")}</div>
@@ -1067,7 +1072,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
         </div>
       ) : null}
 
-      {me?.role === "teacher" && activeTab === "grading" ? (
+      {isReviewerRole(me?.role) && activeTab === "grading" ? (
         <div className={sectionShell}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -1271,7 +1276,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
                       ) : null}
                     </div>
 
-                    {me?.role === "teacher" ? (
+                    {isReviewerRole(me?.role) ? (
                       <div className={`rounded-2xl border ${cardBorder} ${cardBg} p-4`}>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className={`text-sm font-semibold ${textPrimary}`}>{t("repo.assignment.aiAssistantTitle")}</div>

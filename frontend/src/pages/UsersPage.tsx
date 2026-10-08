@@ -27,6 +27,7 @@ import {
   getGroups,
   exportUsersCSV,
   importUsersCSV,
+  resetAdminUserPassword,
 } from "../api/adminApi";
 import { getMe } from "../api/authApi";
 import { usePermissions } from "../hooks/usePermissions";
@@ -134,6 +135,10 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
   // Modals state
   const [viewUser, setViewUser] = useState<User | null>(null);
   const [editUser, setEditUser] = useState<User | null>(null);
+  // Admin password reset inside the edit modal: idle -> confirm -> done (shows the generated password once).
+  const [resetStep, setResetStep] = useState<"idle" | "confirm" | "done">("idle");
+  const [resetPasswordValue, setResetPasswordValue] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
 
   useEffect(() => {
     getMe().then(setCurrentUser).catch(() => null);
@@ -273,6 +278,8 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
 
   const handleEdit = (user: User) => {
     setEditUser(user);
+    setResetStep("idle");
+    setResetPasswordValue(null);
     const groupName = user.group_name?.trim() ?? (user.group === "—" ? "" : user.group.trim());
     setEditForm({
       role: user.role,
@@ -294,6 +301,31 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
           );
         }
       });
+  };
+
+  const handleResetPassword = async () => {
+    if (!editUser) return;
+    setResetLoading(true);
+    try {
+      const res = await resetAdminUserPassword(editUser.id);
+      setResetPasswordValue(res.new_password);
+      setResetStep("done");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t("admin.users.resetPasswordError"), "error");
+      setResetStep("idle");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const copyResetPassword = async () => {
+    if (!resetPasswordValue) return;
+    try {
+      await navigator.clipboard.writeText(resetPasswordValue);
+      showToast(t("common.copied"), "success");
+    } catch {
+      // clipboard may be unavailable (http, permissions); the password stays visible for manual copy
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -1193,6 +1225,57 @@ useEffect(() => {
                 <div>
                   <label className={`block text-sm font-medium mb-1 ${modalLabel}`}>ID</label>
                   <p className={`text-sm ${modalText}`}>{editForm.student_id}</p>
+                </div>
+              ) : null}
+              {editUser.role !== "admin" ? (
+                <div className={`rounded-lg border p-3 ${isDarkTheme ? "border-[#30363d]" : "border-gray-200"}`}>
+                  <p className={`text-sm font-medium ${modalText}`}>{t("admin.users.resetPassword")}</p>
+                  {resetStep === "done" && resetPasswordValue ? (
+                    <>
+                      <p className={`mt-1 text-xs ${modalLabel}`}>{t("admin.users.resetPasswordDone")}</p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <code className={`flex-1 break-all rounded px-2 py-1 text-sm ${modalInputBg} ${modalText}`}>
+                          {resetPasswordValue}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => void copyResetPassword()}
+                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700"
+                        >
+                          {t("common.copy")}
+                        </button>
+                      </div>
+                    </>
+                  ) : resetStep === "confirm" ? (
+                    <>
+                      <p className={`mt-1 text-xs ${modalLabel}`}>{t("admin.users.resetPasswordHint")}</p>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setResetStep("idle")}
+                          className={`rounded-lg border px-3 py-1.5 text-xs ${isDarkTheme ? "border-[#30363d]" : "border-gray-300"} ${modalLabel}`}
+                        >
+                          {t("common.cancel")}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={resetLoading}
+                          onClick={() => void handleResetPassword()}
+                          className="rounded-lg bg-red-600 px-3 py-1.5 text-xs text-white hover:bg-red-700 disabled:opacity-50"
+                        >
+                          {t("common.confirm")}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setResetStep("confirm")}
+                      className={`mt-2 rounded-lg border px-3 py-1.5 text-xs ${isDarkTheme ? "border-[#30363d] hover:bg-[#252525]" : "border-gray-300 hover:bg-gray-100"} ${modalLabel}`}
+                    >
+                      {t("admin.users.resetPassword")}
+                    </button>
+                  )}
                 </div>
               ) : null}
               <div className="flex gap-2 pt-2">

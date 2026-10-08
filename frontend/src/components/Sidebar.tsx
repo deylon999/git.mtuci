@@ -18,6 +18,7 @@ import {
   Activity,
   FolderGit2,
   Plus,
+  Bell,
 } from "lucide-react";
 import { getTeacherDashboard } from "../api/teacherDashboardApi";
 import { useAuthUser } from "../context/AuthUserContext";
@@ -81,6 +82,20 @@ function buildAdminMenu(): MenuSection[] {
       ],
     },
     {
+      // Admin can do everything a teacher can, so the teaching tools are reachable from the admin menu too.
+      titleKey: "sidebar.teaching",
+      items: [
+        { path: "/courses", labelKey: "sidebar.allCourses", icon: BookOpen, permission: "assignment_view" },
+        {
+          path: "/teacher/code-review",
+          labelKey: "sidebar.codeReview",
+          icon: ClipboardCheck,
+          anyPermission: ["grade_edit", "repo_view_students", "lab_accept"],
+        },
+        { path: "/teacher/students", labelKey: "sidebar.allStudents", icon: GraduationCap, permission: "user_view" },
+      ],
+    },
+    {
       titleKey: "sidebar.repositories",
       items: [
         { path: "/repositories", labelKey: "sidebar.allRepositories", icon: FileText, permission: "repo_view" },
@@ -93,6 +108,7 @@ function buildAdminMenu(): MenuSection[] {
       items: [
         { path: "/logs", labelKey: "sidebar.logs", icon: FileCode, permission: "logs_view" },
         { path: "/admin/monitoring", labelKey: "sidebar.monitoring", icon: Clock, permission: "settings_view" },
+        { path: "/admin/notifications", labelKey: "sidebar.notifications", icon: Bell },
         { path: "/admin/settings", labelKey: "sidebar.settings", icon: Settings, permission: "settings_edit" },
       ],
     },

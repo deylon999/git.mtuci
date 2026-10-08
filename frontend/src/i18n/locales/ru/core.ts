@@ -172,6 +172,8 @@ export const coreRu = {
     allCourses: "Все курсы",
     createCourse: "Создать курс",
     students: "СТУДЕНТЫ",
+    teaching: "УЧЕБНЫЙ ПРОЦЕСС",
+    notifications: "Уведомления",
     allStudents: "Все студенты",
     codeReview: "Code Review",
     templateRepos: "Шаблонные репо",
