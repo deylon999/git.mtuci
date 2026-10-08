@@ -126,6 +126,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   const [commits, setCommits] = useState<Commit[]>([]);
   const [files, setFiles] = useState<RepoFile[]>([]);
   const [me, setMe] = useState<UserRead | null>(null);
+  const [fileInputsKey, setFileInputsKey] = useState(0);
   const [submissions, setSubmissions] = useState<SubmissionStatusRead[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [submissionsError, setSubmissionsError] = useState<string | null>(null);
@@ -441,6 +442,8 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
       setSubmissionRepoUrl(updated.repository_url ?? "");
       setSubmissionReportFile(null);
       setSubmissionFiles([]);
+      // Remount the native file inputs: they kept showing the already uploaded file names after a successful submit.
+      setFileInputsKey((k) => k + 1);
       setSubmissionSuccess(t("repo.assignment.submissionSaved"));
     } catch (err) {
       setMyGradeError(err instanceof Error ? err.message : t("repo.errors.submitFailed"));
@@ -1488,6 +1491,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
                 <label className={`block text-xs font-semibold ${textTertiary}`}>
                   {t("repo.assignment.reportFileLabel")}
                   <input
+                    key={`report-${fileInputsKey}`}
                     type="file"
                     onChange={(e) => setSubmissionReportFile(e.target.files?.[0] ?? null)}
                     className={`mt-1 block w-full text-sm ${textSecondary}`}
@@ -1501,6 +1505,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
                 <label className={`block text-xs font-semibold ${textTertiary}`}>
                   {t("repo.assignment.extraFilesLabel")}
                   <input
+                    key={`files-${fileInputsKey}`}
                     type="file"
                     multiple
                     onChange={(e) => setSubmissionFiles(Array.from(e.target.files ?? []))}

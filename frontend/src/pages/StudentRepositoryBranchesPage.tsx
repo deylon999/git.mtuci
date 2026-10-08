@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { GitBranch, Loader2, Plus, Trash2 } from "lucide-react";
-import {
-  createStudentRepoBranch,
-  deleteStudentRepoBranch,
-  getStudentRepoBranches,
-} from "../api/studentDashboardApi";
+import { useRepoApi } from "../context/RepoApiContext";
 import { useStudentRepoWorkspaceContext } from "../context/StudentRepoWorkspaceContext";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getTheme } from "../theme";
@@ -17,6 +13,8 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
   const theme = getTheme(isDarkTheme);
   const { t, tp } = useUserPreferences();
   const { repoId, summary } = useStudentRepoWorkspaceContext();
+  // Through the repo API context: staff (teacher/admin) read via /teacher/repositories and have no write actions.
+  const api = useRepoApi();
   const isBlocked = !!summary?.is_blocked;
 
   const [branches, setBranches] = useState<{ name: string; is_default: boolean }[]>([]);
@@ -34,7 +32,7 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
     setLoading(true);
     setError(null);
     try {
-      const data = await getStudentRepoBranches(repoId);
+      const data = await api.getBranches(repoId);
       setBranches(data.branches);
       setDefaultBranch(data.default_branch || "main");
       if (!fromRef) setFromRef(data.default_branch || "main");
@@ -50,9 +48,9 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
   useEffect(() => {
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repoId]);
+  }, [repoId, api]);
 
-  const canMutate = !isBlocked;
+  const canMutate = !isBlocked && Boolean(api.createBranch && api.deleteBranch);
 
   const onCreate = async () => {
     const name = newBranch.trim();
@@ -72,7 +70,8 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
     setSaving(true);
     setError(null);
     try {
-      await createStudentRepoBranch(repoId, { name, from_ref: from });
+      if (!api.createBranch) return;
+      await api.createBranch(repoId, { name, from_ref: from });
       setNewBranch("");
       await refresh();
     } catch (e) {
@@ -88,7 +87,8 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
     if (!ok) return;
     setSaving(true);
     try {
-      await deleteStudentRepoBranch(repoId, name);
+      if (!api.deleteBranch) return;
+      await api.deleteBranch(repoId, name);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : t("repo.branchesPage.deleteFailed"));

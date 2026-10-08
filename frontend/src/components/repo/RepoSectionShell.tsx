@@ -9,7 +9,7 @@ import type { ThemeColors } from "../../theme";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
 import RepoCloneMenuButton from "./RepoCloneMenuButton";
 import { useEffect, useState } from "react";
-import { getStudentRepoUnmergedBranches } from "../../api/studentDashboardApi";
+import { useRepoApi } from "../../context/RepoApiContext";
 
 interface RepoSectionShellProps {
   theme: ThemeColors;
@@ -39,6 +39,7 @@ export default function RepoSectionShell({
   onOpenLicense,
 }: RepoSectionShellProps) {
   const { t } = useUserPreferences();
+  const api = useRepoApi();
   const [unmergedBranches, setUnmergedBranches] = useState<string[]>([]);
   const baseBranch = summary?.default_branch ?? "main";
   const isBlocked = !!summary?.is_blocked;
@@ -49,7 +50,7 @@ export default function RepoSectionShell({
       setUnmergedBranches([]);
       return;
     }
-    getStudentRepoUnmergedBranches(repoId, baseBranch, 50)
+    api.getUnmergedBranches(repoId, baseBranch, 50)
       .then((rows) => {
         if (!cancelled) setUnmergedBranches(rows);
       })
@@ -59,7 +60,7 @@ export default function RepoSectionShell({
     return () => {
       cancelled = true;
     };
-  }, [repoId, baseBranch, isBlocked]);
+  }, [repoId, baseBranch, isBlocked, api]);
 
   return (
     <div className="w-full flex flex-col gap-4 max-w-7xl mx-auto">
