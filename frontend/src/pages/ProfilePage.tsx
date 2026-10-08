@@ -553,7 +553,9 @@ export default function ProfilePage({ isDarkTheme = true }: ProfilePageProps) {
 
   const profileName = me?.full_name || me?.email || "Профиль";
   const loginLine = [me?.mtuci_login, me?.email].filter(Boolean).join(" · ");
-  const avatarUrl = me?.avatar_url ? `${me.avatar_url}?t=${Date.now()}` : null;
+  // The avatar file name never changes between uploads, so bust the cache once per loaded user object
+  // rather than on every render (which re-downloaded the image on each keystroke in the forms below).
+  const avatarUrl = useMemo(() => (me?.avatar_url ? `${me.avatar_url}?t=${Date.now()}` : null), [me]);
 
   return (
     <div className="profile-html-page" data-theme={isDarkTheme ? "dark" : "light"}>

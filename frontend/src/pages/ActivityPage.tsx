@@ -266,85 +266,113 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
     }
   };
 
-  // WebSocket connection
-  useEffect(() => {
-    // Same origin as the page (Vite / nginx proxy /ws); the backend requires an admin token.
-    const token = getToken();
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${proto}//${window.location.host}/ws/activity${token ? `?token=${encodeURIComponent(token)}` : ""}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+  // WebSocket connection. loadData is read through a ref so changing filters does not reconnect the socket.
+  const loadDataRef = useRef(loadData);
+  loadDataRef.current = loadData;
 
-    ws.onopen = () => {
-      console.log("WebSocket connected");
-      setWsConnected(true);
+  useEffect(() => {
+    let cancelled = false;
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => {
+        if (!cancelled) void loadDataRef.current();
+      }, 500);
     };
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log("WebSocket message:", data);
-      
-      if (data.type === "new_activity") {
-        // Add to realtime events
-        setRealtimeEvents(prev => [{
-          id: ++eventIdRef.current,
-          type: data.activity_type,
-          message: `${data.user_name} ${data.activity_type} to ${data.repo_name}: ${data.message}`,
-          time: new Date()
-        }, ...prev].slice(0, 5)); // Keep last 5
-        
-        // Real-time update hot repos if repo_name exists
-        if (data.repo_name) {
-          setHotRepos(prev => {
-            const existing = prev.find(r => r.name === data.repo_name);
-            let updated: HotRepoStat[];
-            
-            if (existing) {
-              // Update existing repo
-              updated = prev.map(r => 
-                r.name === data.repo_name 
-                  ? { ...r, events: r.events + 1 }
-                  : r
-              );
-            } else {
-              // Add new repo to the list
-              const newRepo: HotRepoStat = {
-                name: data.repo_name,
-                url: toSafeExternalUrl(data.repo_url) ?? "",
-                events: 1,
-                language: null
-              };
-              updated = [...prev, newRepo];
-            }
-            
-            // Sort by events desc and take top 5
-            return updated
-              .sort((a, b) => b.events - a.events)
-              .slice(0, 5);
-          });
+    const connect = () => {
+      // Same origin as the page (Vite / nginx proxy /ws); the backend requires an admin token.
+      const token = getToken();
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${proto}//${window.location.host}/ws/activity${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+      const socket = new WebSocket(wsUrl);
+      ws = socket;
+      wsRef.current = socket;
+
+      socket.onopen = () => {
+        setWsConnected(true);
+      };
+
+      socket.onmessage = (event) => {
+        let data: any; // server payload shape varies by event type
+        try {
+          data = JSON.parse(event.data);
+        } catch {
+          return; // ignore malformed payloads instead of throwing inside the socket handler
         }
         
-        // Refresh stats after short delay
-        setTimeout(() => loadData(), 500);
-      } else if (data.type === "stats_updated") {
-        setTimeout(() => loadData(), 500);
-      }
+        if (data.type === "new_activity") {
+          // Add to realtime events
+          setRealtimeEvents(prev => [{
+            id: ++eventIdRef.current,
+            type: data.activity_type,
+            message: `${data.user_name} ${data.activity_type} → ${data.repo_name}: ${data.message}`,
+            time: new Date()
+          }, ...prev].slice(0, 5)); // Keep last 5
+          
+          // Real-time update hot repos if repo_name exists
+          if (data.repo_name) {
+            setHotRepos(prev => {
+              const existing = prev.find(r => r.name === data.repo_name);
+              let updated: HotRepoStat[];
+              
+              if (existing) {
+                // Update existing repo
+                updated = prev.map(r => 
+                  r.name === data.repo_name 
+                    ? { ...r, events: r.events + 1 }
+                    : r
+                );
+              } else {
+                // Add new repo to the list
+                const newRepo: HotRepoStat = {
+                  name: data.repo_name,
+                  url: toSafeExternalUrl(data.repo_url) ?? "",
+                  events: 1,
+                  language: null
+                };
+                updated = [...prev, newRepo];
+              }
+              
+              // Sort by events desc and take top 5
+              return updated
+                .sort((a, b) => b.events - a.events)
+                .slice(0, 5);
+            });
+          }
+          
+          // Refresh stats after short delay
+          scheduleReload();
+        } else if (data.type === "stats_updated") {
+          scheduleReload();
+        }
+      };
+
+      socket.onclose = () => {
+        setWsConnected(false);
+        if (wsRef.current === socket) wsRef.current = null;
+        // The live feed used to stay dead after any server restart; reconnect while the page is open.
+        if (!cancelled) reconnectTimer = setTimeout(connect, 5000);
+      };
+
+      socket.onerror = () => {
+        setWsConnected(false);
+        socket.close();
+      };
     };
 
-    ws.onclose = () => {
-      console.log("WebSocket disconnected");
-      setWsConnected(false);
-    };
-
-    ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
-      setWsConnected(false);
-    };
+    connect();
 
     return () => {
-      ws.close();
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (reloadTimer) clearTimeout(reloadTimer);
+      ws?.close();
     };
-  }, [loadData]);
+  }, []);
 
   // Track if filters have changed (not on initial mount)
   const filtersChangedRef = useRef(false);
