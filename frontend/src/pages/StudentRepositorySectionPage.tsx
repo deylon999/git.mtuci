@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   Check,
@@ -592,12 +592,23 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
     };
   }, [repoId, selectedPullNumber, api]);
 
-  const refreshDetail = async () => {
-    if (!selectedPullNumber || !api.getPullDetail) return;
-    const res = await api.getPullDetail(repoId, selectedPullNumber);
-    setDetail(res);
-    setLastChecksRefreshAt(new Date());
-  };
+  const selectedPullRef = useRef(selectedPullNumber);
+  selectedPullRef.current = selectedPullNumber;
+
+  // Background refresh (polling, focus): errors are swallowed so a flaky network does not spam unhandled
+  // rejections every few seconds, and a response for a PR the user already left is dropped.
+  const refreshDetail = useCallback(async () => {
+    const pullNumber = selectedPullNumber;
+    if (!pullNumber || !api.getPullDetail) return;
+    try {
+      const res = await api.getPullDetail(repoId, pullNumber);
+      if (selectedPullRef.current !== pullNumber) return;
+      setDetail(res);
+      setLastChecksRefreshAt(new Date());
+    } catch {
+      // keep the last known detail; the next tick retries
+    }
+  }, [api, repoId, selectedPullNumber]);
 
   useEffect(() => {
     if (!selectedPullNumber || !api.getPullDetail) return;
@@ -608,7 +619,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
       void refreshDetail();
     }, intervalMs);
     return () => window.clearInterval(timer);
-  }, [selectedPullNumber, api.getPullDetail, detail?.pull.state, detail?.checks.items]);
+  }, [selectedPullNumber, api.getPullDetail, detail?.pull.state, detail?.checks.items, refreshDetail]);
 
   useEffect(() => {
     if (!selectedPullNumber || !api.getPullDetail) return;
@@ -624,7 +635,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [selectedPullNumber, api.getPullDetail, detail?.pull.state, detail?.checks.items]);
+  }, [selectedPullNumber, api.getPullDetail, refreshDetail]);
 
   const checkStateTone = (state: string): { bg: string; fg: string } => {
     if (state === "success") return { bg: `${theme.success}1e`, fg: theme.success };

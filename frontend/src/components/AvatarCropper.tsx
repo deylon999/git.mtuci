@@ -75,7 +75,7 @@ export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = tr
     };
   }
 
-  function handleMouseMove(e: React.MouseEvent) {
+  function handleMouseMove(e: MouseEvent) {
     if (!isDragging) return;
     e.preventDefault();
     const rawX = e.clientX - dragStart.x;
@@ -84,8 +84,10 @@ export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = tr
     setPosition(clamped);
   }
 
-  function handleTouchMove(e: React.TouchEvent) {
+  function handleTouchMove(e: TouchEvent) {
     if (!isDragging) return;
+    // Stop the page from scrolling while the image is dragged on touch screens.
+    e.preventDefault();
     const touch = e.touches[0];
     const rawX = touch.clientX - dragStart.x;
     const rawY = touch.clientY - dragStart.y;
@@ -93,24 +95,26 @@ export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = tr
     setPosition(clamped);
   }
 
-  function handleEnd() {
-    setIsDragging(false);
-  }
+  // Latest handlers through a ref: listeners are attached once per drag but always see the current zoom/position.
+  const handlersRef = useRef({ mouse: handleMouseMove, touch: handleTouchMove });
+  handlersRef.current = { mouse: handleMouseMove, touch: handleTouchMove };
 
   useEffect(() => {
-    if (isDragging) {
-      window.addEventListener("mousemove", handleMouseMove as unknown as EventListener);
-      window.addEventListener("mouseup", handleEnd);
-      window.addEventListener("touchmove", handleTouchMove as unknown as EventListener);
-      window.addEventListener("touchend", handleEnd);
-    }
+    if (!isDragging) return;
+    const onMouseMove = (e: MouseEvent) => handlersRef.current.mouse(e);
+    const onTouchMove = (e: TouchEvent) => handlersRef.current.touch(e);
+    const onEnd = () => setIsDragging(false);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onEnd);
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onEnd);
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove as unknown as EventListener);
-      window.removeEventListener("mouseup", handleEnd);
-      window.removeEventListener("touchmove", handleTouchMove as unknown as EventListener);
-      window.removeEventListener("touchend", handleEnd);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onEnd);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onEnd);
     };
-  }, [isDragging, dragStart]);
+  }, [isDragging]);
 
   const containerBg = isDarkTheme ? "bg-[#1e1e1e]" : "bg-slate-100";
   const sliderBg = isDarkTheme ? "bg-[#30363d]" : "bg-slate-200";
