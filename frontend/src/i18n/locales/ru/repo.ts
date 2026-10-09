@@ -152,11 +152,6 @@ export const repoRu = {
     labelVisibility: "Видимость",
     labelDefaultBranch: "Ветка по умолчанию",
     labelClone: "Клонирование",
-    placeholderAccess: "Доступ",
-    placeholderBranches: "Ветки",
-    placeholderWebhooks: "Вебхуки",
-    placeholderDeployKeys: "Ключи развертывания",
-    placeholderSecurity: "Безопасность",
     owner: "Владелец",
     ownerLabel: "Владелец: {name}",
     branches: "{n} {word}",
@@ -166,13 +161,6 @@ export const repoRu = {
     copied: "Скопировано",
     collaboratorsHint:
       "Доступ к личным репозиториям настраивается ниже: соавторы, команды (группы), приглашения и журнал изменений.",
-    branchProtection:
-      "Защита веток и правила слияния пока в разработке. Сейчас в репозитории {count} {word}.",
-    webhookNote:
-      "Webhook на push настраивается платформой MTUCI автоматически при создании репозитория. Ручное управление хуками будет добавлено позже.",
-    deployKeysNote:
-      "Добавление deploy keys для CI/CD планируется. Используйте HTTPS clone URL или личный SSH-ключ Gitea.",
-    vulnScanSoon: "Сканирование уязвимостей — скоро",
     readOnly: "Только чтение",
     blockedReadOnly: "Репозиторий заблокирован администратором. Доступно только чтение.",
     renameHint: "Переименовывает репозиторий (и в Gitea, если доступно).",

@@ -306,7 +306,7 @@ export const adminPagesEn = {
     sortNewFirst: "Newest first",
     sortOldFirst: "Oldest first",
     shownOf: "Showing {shown} of {total}",
-    perPage: "Per",
+    perPage: "Show",
     onPage: "per page",
   },
   roles: {
@@ -391,7 +391,7 @@ export const adminPagesEn = {
     actionLogin: " signed in",
     actionLogout: " signed out",
     shownOf: "Showing {shown} of {total}",
-    perPage: "Per",
+    perPage: "Show",
     onPage: "per page",
     activityByHour: "Activity by hour",
     today: "Today",

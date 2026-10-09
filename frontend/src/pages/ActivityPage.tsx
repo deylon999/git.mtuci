@@ -827,6 +827,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                   <option value={25} style={adminSelect.optionStyle}>25</option>
                   <option value={50} style={adminSelect.optionStyle}>50</option>
                 </select>
+                <span>{t("admin.activity.onPage")}</span>
               </div>
             </div>
           </div>

@@ -711,7 +711,17 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                 {deployKeys.map((k) => (
                   <div key={k.id} className="text-xs flex items-center justify-between" style={{ color: theme.text2 }}>
                     <span>{k.title}</span>
-                    <button type="button" onClick={() => void deleteDeployKey(repoId!, k.id).then(() => setDeployKeys((arr) => arr.filter((i) => i.id !== k.id)))}>{t("repo.settings.delete")}</button>
+                    <button
+                      type="button"
+                      disabled={readOnly}
+                      onClick={() =>
+                        void deleteDeployKey(repoId!, k.id)
+                          .then(() => setDeployKeys((arr) => arr.filter((i) => i.id !== k.id)))
+                          .catch((e) => setError(e instanceof Error ? e.message : t("repo.settings.actionFailed")))
+                      }
+                    >
+                      {t("repo.settings.delete")}
+                    </button>
                   </div>
                 ))}
               </div>
@@ -729,10 +739,6 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
                 <li className="flex items-center gap-2">
                   <Globe className="h-3.5 w-3.5 shrink-0" />
                   {tp("repo.settings.publicAccess", { value: visibilityValue })}
-                </li>
-                <li className="flex items-center gap-2">
-                  <Shield className="h-3.5 w-3.5 shrink-0" />
-                  {t("repo.settings.vulnScanSoon")}
                 </li>
               </ul>
             </PlaceholderBlock>
