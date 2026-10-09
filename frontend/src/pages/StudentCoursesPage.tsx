@@ -12,6 +12,7 @@ import { StudentPageShell } from "../components/student/studentPageUi";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { pluralWord } from "../i18n/plural";
 import { getTheme } from "../theme";
+import { currentLocaleTag } from "../utils/dates";
 import { gradeColorForPercent } from "../utils/gradeScoring";
 import { clearLkCoursesCache, readLkCoursesCache, writeLkCoursesCache } from "../utils/lkCoursesCache";
 
@@ -112,12 +113,13 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
   }, [user?.id, loadCourses]);
 
   const courseStats = useMemo(() => {
-    const map = new Map<string, { total: number; graded: number; overdue: number }>();
+    const map = new Map<string, { total: number; graded: number; submitted: number; overdue: number }>();
     for (const a of assignments) {
       const key = a.course_id;
-      const cur = map.get(key) ?? { total: 0, graded: 0, overdue: 0 };
+      const cur = map.get(key) ?? { total: 0, graded: 0, submitted: 0, overdue: 0 };
       cur.total += 1;
       if (a.status === "graded") cur.graded += 1;
+      if (a.status === "graded" || a.status === "submitted") cur.submitted += 1;
       if (a.status === "overdue") cur.overdue += 1;
       map.set(key, cur);
     }
@@ -138,6 +140,14 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
   }, [courses, tab, searchQuery]);
 
   const doneCount = useMemo(() => courses.filter(isDone).length, [courses]);
+  const upcoming = useMemo(
+    () =>
+      assignments
+        .filter((a) => new Date(a.deadline).getTime() >= Date.now() && a.status !== "graded")
+        .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+        .slice(0, 8),
+    [assignments],
+  );
 
   const tabs: { id: TabKey; label: string }[] = [
     { id: "all", label: tp("student.courses.tabAll", { n: courses.length }) },
@@ -273,7 +283,7 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
               />
             ))}
           </div>
-          {assignments.length > 0 ? (
+          {upcoming.length > 0 ? (
             <div
               className="rounded-xl border overflow-hidden mt-2"
               style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}
@@ -295,14 +305,7 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
                     </tr>
                   </thead>
                   <tbody>
-                    {[...assignments]
-                      .filter((a) => {
-                        const dl = new Date(a.deadline).getTime();
-                        return dl >= Date.now() && a.status !== "graded";
-                      })
-                      .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
-                      .slice(0, 8)
-                      .map((a) => (
+                    {upcoming.map((a) => (
                         <tr key={a.id} className="border-t" style={{ borderColor: theme.border, color: theme.text2 }}>
                           <td className="px-4 py-2">
                             <Link to={`/courses/${a.course_id}/assignments/${a.id}`} style={{ color: theme.text }}>
@@ -311,7 +314,7 @@ export default function StudentCoursesPage({ isDarkTheme = false }: StudentCours
                           </td>
                           <td className="px-4 py-2">{a.course_title}</td>
                           <td className="px-4 py-2">
-                            {new Date(a.deadline).toLocaleDateString(language === "en" ? "en-US" : "ru-RU")}
+                            {new Date(a.deadline).toLocaleDateString(currentLocaleTag())}
                           </td>
                           <td className="px-4 py-2">{t(`status.${a.status}`)}</td>
                         </tr>
@@ -340,21 +343,23 @@ function CourseCard({
   index: number;
   theme: ReturnType<typeof getTheme>;
   groupName: string | null;
-  platformStats?: { total: number; graded: number; overdue: number };
+  platformStats?: { total: number; graded: number; submitted: number; overdue: number };
   t: (key: string) => string;
   tp: (key: string, params?: Record<string, string | number | null | undefined>) => string;
 }) {
   const gradient = BANNER_GRADIENTS[index % BANNER_GRADIENTS.length];
   const emoji = BANNER_EMOJI[index % BANNER_EMOJI.length];
-  const pct = course.percent;
-  const progress =
-    pct != null
-      ? Math.min(100, Math.round(pct))
-      : platformStats && platformStats.total > 0
-        ? Math.round((platformStats.graded / platformStats.total) * 100)
-        : course.attendance_percent != null
-          ? Math.round(course.attendance_percent)
-          : 0;
+  const lkOnly = course.source === "lk";
+  // LK-only courses have attendance; platform courses show how many assignments are already graded.
+  const total = course.assignments_total > 0 ? course.assignments_total : (platformStats?.total ?? 0);
+  const graded = course.assignments_total > 0 ? course.assignments_graded : (platformStats?.graded ?? 0);
+  const submitted = course.assignments_total > 0 ? course.assignments_submitted : (platformStats?.submitted ?? 0);
+  const progress = lkOnly
+    ? Math.round(course.attendance_percent ?? 0)
+    : total > 0
+      ? Math.round((graded / total) * 100)
+      : 0;
+  const progressColor = lkOnly ? gradeColorForPercent(course.attendance_percent, theme) : theme.accent2;
 
   const scoreText =
     course.score_label ??
@@ -395,27 +400,22 @@ function CourseCard({
         <div>
           <div className="flex justify-between text-[11px] mb-1">
             <span style={{ color: theme.text2 }}>
-              {course.source === "lk" ? t("student.courses.attendance") : t("student.courses.courseProgress")}
+              {lkOnly ? t("student.courses.attendance") : t("student.courses.courseProgress")}
             </span>
-            <span style={{ color: gradeColorForPercent(pct, theme) }}>{progress}%</span>
+            <span style={{ color: progressColor }}>{progress}%</span>
           </div>
           <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: theme.bg4 }}>
             <div
               className="h-full rounded-full"
-              style={{ width: `${progress}%`, backgroundColor: gradeColorForPercent(pct, theme) }}
+              style={{ width: `${Math.min(100, progress)}%`, backgroundColor: progressColor }}
             />
           </div>
         </div>
         <div className="grid grid-cols-3 gap-1.5 text-center">
           {[
-            { val: scoreText, lbl: course.source === "lk" ? t("student.courses.attendance") : t("student.courses.score") },
+            { val: scoreText, lbl: lkOnly ? t("student.courses.attendance") : t("student.courses.score") },
             {
-              val:
-                course.assignments_total > 0
-                  ? `${course.assignments_graded}/${course.assignments_total}`
-                  : platformStats
-                    ? `${platformStats.graded}/${platformStats.total}`
-                    : "—",
+              val: total > 0 ? `${submitted}/${total}` : "—",
               lbl: t("student.courses.submitted"),
             },
             {
