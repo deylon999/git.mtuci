@@ -125,7 +125,7 @@ export default function GitAuthPanel({ isDarkTheme = false }: { isDarkTheme?: bo
         </div>
       ) : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <p style={{ color: theme.text2, fontSize: 12, marginBottom: 0 }}>{t("gitAuthPanel.patTitle")}</p>
           <input value={tokenName} onChange={(e) => setTokenName(e.target.value)} placeholder={t("gitAuthPanel.tokenNamePlaceholder")} style={fieldBaseStyle} />

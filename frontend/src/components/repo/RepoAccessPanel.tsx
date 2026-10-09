@@ -153,7 +153,7 @@ export function RepoAccessPanel({ theme, repoId, readOnly = false }: RepoAccessP
           <Users className="h-4 w-4" />
           {t("repo.access.collaboratorsTitle")}
         </h3>
-        <div className="rounded-lg border overflow-hidden" style={{ borderColor: theme.border }}>
+        <div className="rounded-lg border overflow-x-auto" style={{ borderColor: theme.border }}>
           <table className="w-full text-sm">
             <thead style={{ backgroundColor: `${theme.border}33` }}>
               <tr>
@@ -283,6 +283,7 @@ export function RepoAccessPanel({ theme, repoId, readOnly = false }: RepoAccessP
               {t("repo.access.noTeams")}
             </p>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead style={{ backgroundColor: `${theme.border}33` }}>
                 <tr>
@@ -345,6 +346,7 @@ export function RepoAccessPanel({ theme, repoId, readOnly = false }: RepoAccessP
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
         {canManage ? (
@@ -477,7 +479,7 @@ export function RepoAccessPanel({ theme, repoId, readOnly = false }: RepoAccessP
               {t("repo.access.noAudit")}
             </p>
           ) : (
-            <div className="rounded-lg border overflow-hidden max-h-64 overflow-y-auto" style={{ borderColor: theme.border }}>
+            <div className="rounded-lg border max-h-64 overflow-auto" style={{ borderColor: theme.border }}>
               <table className="w-full text-xs">
                 <thead style={{ backgroundColor: `${theme.border}33`, position: "sticky", top: 0 }}>
                   <tr>

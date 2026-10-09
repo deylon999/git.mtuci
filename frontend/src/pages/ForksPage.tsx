@@ -148,7 +148,8 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
           ) : error ? (
             <p className="p-4 text-sm text-red-500">{error}</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className={`text-xs font-medium uppercase tracking-wider ${ui.tableHeaderText}`}>
                 <tr>
                   {tableHeaders.map((h) => (
@@ -181,6 +182,7 @@ export default function ForksPage({ isDarkTheme = false }: ForksPageProps) {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       </div>

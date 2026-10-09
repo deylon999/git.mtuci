@@ -143,7 +143,7 @@ export default function CourseRosterPanel({ courseId, isDarkTheme = false }: Cou
           {t("repo.roster.emptyHint")}
         </p>
       ) : (
-        <div className="max-h-64 overflow-y-auto">
+        <div className="max-h-64 overflow-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ color: theme.text2 }}>
