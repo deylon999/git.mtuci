@@ -12,6 +12,7 @@ import { useUserPreferences } from "../context/UserPreferencesContext";
 import { usePermissions } from "../hooks/usePermissions";
 import { useAuthUser } from "../context/AuthUserContext";
 import { pluralWord } from "../i18n/plural";
+import ConfirmModal from "../components/ConfirmModal";
 
 interface CoursesPageProps {
   isDarkTheme?: boolean;
@@ -47,6 +48,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [availableGroups, setAvailableGroups] = useState<string[]>([]);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
@@ -108,6 +110,12 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
 
   const isAdmin = me?.role === "admin" || authUser?.role === "admin";
   const canCreateCourse = isAdmin || (hasPermission("assignment_create") && me?.role === "teacher");
+  const canDeleteCourse = isAdmin || (hasPermission("assignment_delete") && me?.role === "teacher");
+
+  // "Create course" in the sidebar links to ?create=1; open the form even when this page is already mounted.
+  useEffect(() => {
+    if (openCreate) setShowCreateForm(true);
+  }, [openCreate]);
 
   useEffect(() => {
     if (!isAdmin || !showCreateForm) return;
@@ -173,9 +181,6 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
   }
 
   async function onDeleteCourse(courseId: string) {
-    const ok = window.confirm(t("admin.courses.deleteConfirm"));
-    if (!ok) return;
-
     setDeletingCourseId(courseId);
     setError(null);
     try {
@@ -185,6 +190,7 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
       setError(err instanceof Error ? err.message : t("admin.courses.deleteError"));
     } finally {
       setDeletingCourseId(null);
+      setConfirmDeleteId(null);
     }
   }
 
@@ -501,11 +507,12 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
                 </div>
               </Link>
 
-              {canCreateCourse ? (
+              {canDeleteCourse ? (
                 <button
                   type="button"
                   title={t("admin.courses.deleteCourseTitle")}
-                  onClick={() => onDeleteCourse(c.id)}
+                  aria-label={t("admin.courses.deleteCourseTitle")}
+                  onClick={() => setConfirmDeleteId(c.id)}
                   disabled={deletingCourseId === c.id}
                   className="rounded-lg border px-2 py-1 text-sm transition disabled:opacity-60"
                   style={{ borderColor: `${theme.danger}50`, color: theme.danger }}
@@ -523,6 +530,19 @@ export default function CoursesPage({ isDarkTheme = true }: CoursesPageProps) {
           {t("admin.courses.emptyList")}
         </div>
       ) : null}
+
+      <ConfirmModal
+        isOpen={confirmDeleteId !== null}
+        title={t("admin.courses.deleteCourseTitle")}
+        message={t("admin.courses.deleteConfirm")}
+        confirmText={t("common.delete")}
+        isDangerous
+        isLoading={deletingCourseId !== null}
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={() => {
+          if (confirmDeleteId) void onDeleteCourse(confirmDeleteId);
+        }}
+      />
     </div>
   );
 }
