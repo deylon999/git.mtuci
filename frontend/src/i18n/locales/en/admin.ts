@@ -221,12 +221,6 @@ export const adminEn = {
     apiDownAlert: "API service is down",
     noIncidents: "No incidents",
   },
-  settings: {
-    title: "Admin settings",
-    smtpPlaceholder: "smtp.example.com",
-    portPlaceholder: "587",
-    senderPlaceholder: "noreply@example.com",
-  },
   activity: {
     title: "Activity",
     eventPush: "Push",

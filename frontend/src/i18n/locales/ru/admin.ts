@@ -221,12 +221,6 @@ export const adminRu = {
     apiDownAlert: "Сервис API недоступен",
     noIncidents: "Нет инцидентов",
   },
-  settings: {
-    title: "Настройки администратора",
-    smtpPlaceholder: "smtp.example.com",
-    portPlaceholder: "587",
-    senderPlaceholder: "noreply@example.com",
-  },
   activity: {
     title: "Активность",
     eventPush: "Push",

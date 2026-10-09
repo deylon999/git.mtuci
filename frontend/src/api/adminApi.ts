@@ -129,6 +129,24 @@ export async function getServiceStatus(): Promise<ServiceStatus> {
   return apiRequest<ServiceStatus>("/admin/service-status");
 }
 
+export interface PlatformSettings {
+  session_lifetime_minutes: number;
+  rate_limit_rpm: number;
+  smtp_configured: boolean;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_sender: string;
+  gitea_public_url: string;
+  frontend_url: string;
+  ai_review_configured: boolean;
+  ai_review_model: string;
+  insecure_defaults: string[];
+}
+
+export async function getPlatformSettings(): Promise<PlatformSettings> {
+  return apiRequest<PlatformSettings>("/admin/settings");
+}
+
 export async function getBackups(): Promise<BackupInfo> {
   return apiRequest<BackupInfo>("/admin/backups");
 }

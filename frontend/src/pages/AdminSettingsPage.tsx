@@ -1,525 +1,236 @@
-import { useState, useEffect } from "react";
-import { Shield, Users, Bell, Mail } from "lucide-react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { AlertTriangle, Mail, Plug, Shield } from "lucide-react";
 import AdminPageHeader from "../components/AdminPageHeader";
+import { getPlatformSettings, type PlatformSettings } from "../api/adminApi";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface AdminSettingsPageProps {
   isDarkTheme?: boolean;
 }
 
-// Цвета по ТЗ
 const getColors = (isDarkTheme: boolean) => ({
   pageBg: isDarkTheme ? "#0f0f10" : "#f9fafb",
   cardBg: isDarkTheme ? "#141414" : "#ffffff",
+  rowBg: isDarkTheme ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
   border: isDarkTheme ? "#30363d" : "#e0e0e0",
   accent: "#2563eb",
   textPrimary: isDarkTheme ? "#e6e6e6" : "#1a1a1a",
   textSecondary: isDarkTheme ? "#888888" : "#666666",
-  inputBg: isDarkTheme ? "#0a0a0a" : "#f5f5f5",
-  switchBg: isDarkTheme ? "#1f2937" : "#e5e7eb",
-  switchActive: "#2563eb",
+  warnBg: isDarkTheme ? "rgba(234, 179, 8, 0.12)" : "rgba(234, 179, 8, 0.1)",
+  warnBorder: isDarkTheme ? "rgba(234, 179, 8, 0.35)" : "rgba(234, 179, 8, 0.4)",
+  warnText: isDarkTheme ? "#facc15" : "#a16207",
 });
 
-type SystemSettings = {
-  registrationOpen: boolean;
-  requireEmailVerification: boolean;
-  autoApproveUsers: boolean;
-  maintenanceMode: boolean;
-  maxUsers: number;
-  sessionTimeout: number;
-};
+type Colors = ReturnType<typeof getColors>;
 
-type NotificationSettings = {
-  newUsers: boolean;
-  systemErrors: boolean;
-  securityAlerts: boolean;
-  dailyReports: boolean;
-};
+function Section({
+  colors,
+  icon,
+  iconColor,
+  title,
+  children,
+}: {
+  colors: Colors;
+  icon: ReactNode;
+  iconColor: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      style={{
+        backgroundColor: colors.cardBg,
+        border: `1px solid ${colors.border}`,
+        borderRadius: "12px",
+        padding: "20px",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+        <div
+          style={{
+            width: "40px",
+            height: "40px",
+            flexShrink: 0,
+            borderRadius: "8px",
+            backgroundColor: `${iconColor}1f`,
+            color: iconColor,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {icon}
+        </div>
+        <h3 style={{ color: colors.textPrimary, fontSize: "16px", fontWeight: 600, margin: 0 }}>{title}</h3>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>{children}</div>
+    </section>
+  );
+}
 
-const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
-  registrationOpen: true,
-  requireEmailVerification: true,
-  autoApproveUsers: false,
-  maintenanceMode: false,
-  maxUsers: 1000,
-  sessionTimeout: 24,
-};
-
-const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
-  newUsers: true,
-  systemErrors: true,
-  securityAlerts: true,
-  dailyReports: false,
-};
-
-// Corrupted or older saved JSON falls back to (or is completed by) the defaults.
-function loadSaved<T extends object>(key: string, defaults: T): T {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
-  } catch {
-    return defaults;
-  }
+function Row({ colors, label, envVar, value }: { colors: Colors; label: string; envVar?: string; value: ReactNode }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "4px 16px",
+        padding: "12px",
+        backgroundColor: colors.rowBg,
+        borderRadius: "8px",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: 500 }}>{label}</div>
+        {envVar ? (
+          <code style={{ color: colors.textSecondary, fontSize: "11px" }}>{envVar}</code>
+        ) : null}
+      </div>
+      <div style={{ color: colors.textPrimary, fontSize: "13px", overflowWrap: "anywhere", textAlign: "right" }}>
+        {value}
+      </div>
+    </div>
+  );
 }
 
 export default function AdminSettingsPage({ isDarkTheme = false }: AdminSettingsPageProps) {
   const { t } = useUserPreferences();
-  const [systemSettings, setSystemSettings] = useState<SystemSettings>(() =>
-    loadSaved("adminSystemSettings", DEFAULT_SYSTEM_SETTINGS),
-  );
-
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(() =>
-    loadSaved("adminNotificationSettings", DEFAULT_NOTIFICATION_SETTINGS),
-  );
-
-  useEffect(() => {
-    localStorage.setItem("adminSystemSettings", JSON.stringify(systemSettings));
-  }, [systemSettings]);
-
-  useEffect(() => {
-    localStorage.setItem("adminNotificationSettings", JSON.stringify(notificationSettings));
-  }, [notificationSettings]);
-
   const colors = getColors(isDarkTheme);
+  const [settings, setSettings] = useState<PlatformSettings | null>(null);
+  const [error, setError] = useState(false);
+
+  const load = useCallback(() => {
+    let cancelled = false;
+    setError(false);
+    getPlatformSettings()
+      .then((data) => {
+        if (!cancelled) setSettings(data);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => load(), [load]);
+
+  const muted = (text: string) => <span style={{ color: colors.textSecondary }}>{text}</span>;
+  const orNotSet = (value: string) => (value ? value : muted(t("admin.settings.notSet")));
 
   return (
-    <>
-      <style>{`
-        .admin-switch {
-          position: relative;
-          width: 44px;
-          height: 24px;
-          background-color: ${colors.switchBg};
-          border-radius: 12px;
-          cursor: pointer;
-          transition: background-color 0.2s;
-        }
-        .admin-switch.active {
-          background-color: ${colors.switchActive};
-        }
-        .admin-switch::after {
-          content: '';
-          position: absolute;
-          top: 2px;
-          left: 2px;
-          width: 20px;
-          height: 20px;
-          background-color: white;
-          border-radius: 50%;
-          transition: transform 0.2s;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-        }
-        .admin-switch.active::after {
-          transform: translateX(20px);
-        }
-        .admin-card:hover {
-          border-color: ${isDarkTheme ? "#404040" : "#d0d0d0"};
-        }
-        .admin-input {
-          width: 100%;
-          padding: 10px 12px;
-          border-radius: 6px;
-          border: 1px solid ${colors.border};
-          background-color: ${colors.inputBg};
-          color: ${colors.textPrimary};
-          font-size: 14px;
-          outline: none;
-        }
-        .admin-input:focus {
-          border-color: ${colors.accent};
-        }
-      `}</style>
+    <div style={{ backgroundColor: colors.pageBg, minHeight: "100%", padding: "16px" }}>
+      <AdminPageHeader isDarkTheme={isDarkTheme} title={t("admin.settings.title")} />
+      <p style={{ color: colors.textSecondary, fontSize: "13px", margin: "4px 0 16px" }}>
+        {t("admin.settings.subtitle")}
+      </p>
 
-      <div style={{ backgroundColor: colors.pageBg, minHeight: "100%", padding: "16px" }}>
-        <AdminPageHeader isDarkTheme={isDarkTheme} title={t("admin.settings.title")} />
-
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {/* Системные настройки */}
-          <div 
-            className="admin-card"
-            style={{
-              backgroundColor: colors.cardBg,
-              border: `1px solid ${colors.border}`,
-              borderRadius: "12px",
-              padding: "20px",
-              transition: "border-color 0.2s",
+      {error ? (
+        <div style={{ color: colors.textSecondary, fontSize: "14px" }}>
+          {t("admin.settings.loadError")}{" "}
+          <button
+            type="button"
+            onClick={() => {
+              setSettings(null);
+              load();
             }}
+            style={{ color: colors.accent, background: "none", border: "none", cursor: "pointer", padding: 0 }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
-              <div style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "8px",
-                backgroundColor: isDarkTheme ? "rgba(37, 99, 235, 0.2)" : "rgba(37, 99, 235, 0.1)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}>
-                <Shield size={20} style={{ color: "#2563eb" }} />
-              </div>
-              <div>
-                <h3 style={{ color: colors.textPrimary, fontSize: "16px", fontWeight: "600", margin: 0 }}>
-                  {t("admin.settings.systemSection")}
-                </h3>
-                <p style={{ color: colors.textSecondary, fontSize: "12px", margin: "2px 0 0 0" }}>
-                  {t("admin.settings.systemSectionHint")}
-                </p>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {/* Регистрация открыта */}
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px",
-                backgroundColor: isDarkTheme ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                borderRadius: "8px",
-              }}>
-                <div>
-                  <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    {t("admin.settings.openRegistration")}
-                  </div>
-                  <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    {t("admin.settings.openRegistrationHint")}
-                  </div>
-                </div>
-                <div 
-                  className={`admin-switch ${systemSettings.registrationOpen ? "active" : ""}`}
-                  onClick={() => setSystemSettings(prev => ({ ...prev, registrationOpen: !prev.registrationOpen }))}
-                />
-              </div>
-
-              {/* Требовать верификацию email */}
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px",
-                backgroundColor: isDarkTheme ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                borderRadius: "8px",
-              }}>
-                <div>
-                  <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    {t("admin.settings.emailVerification")}
-                  </div>
-                  <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    {t("admin.settings.emailVerificationHint")}
-                  </div>
-                </div>
-                <div 
-                  className={`admin-switch ${systemSettings.requireEmailVerification ? "active" : ""}`}
-                  onClick={() => setSystemSettings(prev => ({ ...prev, requireEmailVerification: !prev.requireEmailVerification }))}
-                />
-              </div>
-
-              {/* Авто-одобрение пользователей */}
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px",
-                backgroundColor: isDarkTheme ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                borderRadius: "8px",
-              }}>
-                <div>
-                  <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    {t("admin.settings.autoApprove")}
-                  </div>
-                  <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    {t("admin.settings.autoApproveHint")}
-                  </div>
-                </div>
-                <div 
-                  className={`admin-switch ${systemSettings.autoApproveUsers ? "active" : ""}`}
-                  onClick={() => setSystemSettings(prev => ({ ...prev, autoApproveUsers: !prev.autoApproveUsers }))}
-                />
-              </div>
-
-              {/* Режим обслуживания */}
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px",
-                backgroundColor: isDarkTheme ? "rgba(239, 68, 68, 0.1)" : "rgba(239, 68, 68, 0.05)",
-                borderRadius: "8px",
-                border: systemSettings.maintenanceMode ? `1px solid ${isDarkTheme ? "rgba(239, 68, 68, 0.3)" : "rgba(239, 68, 68, 0.2)"}` : "none",
-              }}>
-                <div>
-                  <div style={{ color: systemSettings.maintenanceMode ? "#ef4444" : colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    {t("admin.settings.maintenanceMode")}
-                  </div>
-                  <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    {t("admin.settings.maintenanceModeHint")}
-                  </div>
-                </div>
-                <div 
-                  className={`admin-switch ${systemSettings.maintenanceMode ? "active" : ""}`}
-                  onClick={() => setSystemSettings(prev => ({ ...prev, maintenanceMode: !prev.maintenanceMode }))}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Пользователи и лимиты */}
-          <div 
-            className="admin-card"
-            style={{
-              backgroundColor: colors.cardBg,
-              border: `1px solid ${colors.border}`,
-              borderRadius: "12px",
-              padding: "20px",
-              transition: "border-color 0.2s",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
-              <div style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "8px",
-                backgroundColor: isDarkTheme ? "rgba(34, 197, 94, 0.2)" : "rgba(34, 197, 94, 0.1)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}>
-                <Users size={20} style={{ color: "#22c55e" }} />
-              </div>
-              <div>
-                <h3 style={{ color: colors.textPrimary, fontSize: "16px", fontWeight: "600", margin: 0 }}>
-                  {t("admin.settings.usersLimits")}
-                </h3>
-                <p style={{ color: colors.textSecondary, fontSize: "12px", margin: "2px 0 0 0" }}>
-                  {t("admin.settings.usersLimitsHint")}
-                </p>
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-              <div>
-                <label style={{ color: colors.textSecondary, fontSize: "12px", display: "block", marginBottom: "4px" }}>
-                  {t("admin.settings.maxUsers")}
-                </label>
-                <input
-                  type="number"
-                  className="admin-input"
-                  value={systemSettings.maxUsers}
-                  onChange={(e) => setSystemSettings(prev => ({ ...prev, maxUsers: parseInt(e.target.value) || 0 }))}
-                />
-              </div>
-              <div>
-                <label style={{ color: colors.textSecondary, fontSize: "12px", display: "block", marginBottom: "4px" }}>
-                  {t("admin.settings.sessionTimeout")}
-                </label>
-                <input
-                  type="number"
-                  className="admin-input"
-                  value={systemSettings.sessionTimeout}
-                  onChange={(e) => setSystemSettings(prev => ({ ...prev, sessionTimeout: parseInt(e.target.value) || 24 }))}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Уведомления администратора */}
-          <div 
-            className="admin-card"
-            style={{
-              backgroundColor: colors.cardBg,
-              border: `1px solid ${colors.border}`,
-              borderRadius: "12px",
-              padding: "20px",
-              transition: "border-color 0.2s",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
-              <div style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "8px",
-                backgroundColor: isDarkTheme ? "rgba(168, 85, 247, 0.2)" : "rgba(168, 85, 247, 0.1)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}>
-                <Bell size={20} style={{ color: "#a855f7" }} />
-              </div>
-              <div>
-                <h3 style={{ color: colors.textPrimary, fontSize: "16px", fontWeight: "600", margin: 0 }}>
-                  {t("admin.settings.adminNotifications")}
-                </h3>
-                <p style={{ color: colors.textSecondary, fontSize: "12px", margin: "2px 0 0 0" }}>
-                  {t("admin.settings.adminNotificationsHint")}
-                </p>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {/* Новые пользователи */}
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px",
-                backgroundColor: isDarkTheme ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                borderRadius: "8px",
-              }}>
-                <div>
-                  <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    {t("admin.settings.notifyNewUsers")}
-                  </div>
-                  <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    {t("admin.settings.notifyNewUsersHint")}
-                  </div>
-                </div>
-                <div 
-                  className={`admin-switch ${notificationSettings.newUsers ? "active" : ""}`}
-                  onClick={() => setNotificationSettings(prev => ({ ...prev, newUsers: !prev.newUsers }))}
-                />
-              </div>
-
-              {/* Ошибки системы */}
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px",
-                backgroundColor: isDarkTheme ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                borderRadius: "8px",
-              }}>
-                <div>
-                  <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    {t("admin.settings.notifySystemErrors")}
-                  </div>
-                  <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    {t("admin.settings.notifySystemErrorsHint")}
-                  </div>
-                </div>
-                <div 
-                  className={`admin-switch ${notificationSettings.systemErrors ? "active" : ""}`}
-                  onClick={() => setNotificationSettings(prev => ({ ...prev, systemErrors: !prev.systemErrors }))}
-                />
-              </div>
-
-              {/* Оповещения безопасности */}
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px",
-                backgroundColor: isDarkTheme ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                borderRadius: "8px",
-              }}>
-                <div>
-                  <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    {t("admin.settings.notifySecurity")}
-                  </div>
-                  <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    {t("admin.settings.notifySecurityHint")}
-                  </div>
-                </div>
-                <div 
-                  className={`admin-switch ${notificationSettings.securityAlerts ? "active" : ""}`}
-                  onClick={() => setNotificationSettings(prev => ({ ...prev, securityAlerts: !prev.securityAlerts }))}
-                />
-              </div>
-
-              {/* Ежедневные отчёты */}
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px",
-                backgroundColor: isDarkTheme ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                borderRadius: "8px",
-              }}>
-                <div>
-                  <div style={{ color: colors.textPrimary, fontSize: "14px", fontWeight: "500" }}>
-                    {t("admin.settings.notifyDailyReports")}
-                  </div>
-                  <div style={{ color: colors.textSecondary, fontSize: "11px", marginTop: "2px" }}>
-                    {t("admin.settings.notifyDailyReportsHint")}
-                  </div>
-                </div>
-                <div 
-                  className={`admin-switch ${notificationSettings.dailyReports ? "active" : ""}`}
-                  onClick={() => setNotificationSettings(prev => ({ ...prev, dailyReports: !prev.dailyReports }))}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Настройки email */}
-          <div 
-            className="admin-card"
-            style={{
-              backgroundColor: colors.cardBg,
-              border: `1px solid ${colors.border}`,
-              borderRadius: "12px",
-              padding: "20px",
-              transition: "border-color 0.2s",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
-              <div style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "8px",
-                backgroundColor: isDarkTheme ? "rgba(234, 179, 8, 0.2)" : "rgba(234, 179, 8, 0.1)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}>
-                <Mail size={20} style={{ color: "#eab308" }} />
-              </div>
-              <div>
-                <h3 style={{ color: colors.textPrimary, fontSize: "16px", fontWeight: "600", margin: 0 }}>
-                  {t("admin.settings.emailSettings")}
-                </h3>
-                <p style={{ color: colors.textSecondary, fontSize: "12px", margin: "2px 0 0 0" }}>
-                  {t("admin.settings.emailSettingsHint")}
-                </p>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div>
-                <label style={{ color: colors.textSecondary, fontSize: "12px", display: "block", marginBottom: "4px" }}>
-                  {t("admin.settings.smtpServer")}
-                </label>
-                <input
-                  type="text"
-                  className="admin-input"
-                  placeholder={t("admin.settings.smtpPlaceholder")}
-                />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <div>
-                  <label style={{ color: colors.textSecondary, fontSize: "12px", display: "block", marginBottom: "4px" }}>
-                    {t("admin.settings.port")}
-                  </label>
-                  <input
-                    type="number"
-                    className="admin-input"
-                    placeholder={t("admin.settings.portPlaceholder")}
-                  />
-                </div>
-                <div>
-                  <label style={{ color: colors.textSecondary, fontSize: "12px", display: "block", marginBottom: "4px" }}>
-                    {t("admin.settings.sender")}
-                  </label>
-                  <input
-                    type="email"
-                    className="admin-input"
-                    placeholder={t("admin.settings.senderPlaceholder")}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+            {t("admin.settings.retry")}
+          </button>
         </div>
-      </div>
-    </>
+      ) : !settings ? (
+        <div style={{ color: colors.textSecondary, fontSize: "14px" }}>{t("common.loading")}</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {settings.insecure_defaults.length > 0 ? (
+            <div
+              role="alert"
+              style={{
+                display: "flex",
+                gap: "12px",
+                padding: "14px 16px",
+                borderRadius: "12px",
+                border: `1px solid ${colors.warnBorder}`,
+                backgroundColor: colors.warnBg,
+              }}
+            >
+              <AlertTriangle size={20} style={{ color: colors.warnText, flexShrink: 0 }} />
+              <div>
+                <div style={{ color: colors.warnText, fontSize: "14px", fontWeight: 600 }}>
+                  {t("admin.settings.insecureTitle")}
+                </div>
+                <div style={{ color: colors.textPrimary, fontSize: "13px", marginTop: "4px" }}>
+                  {t("admin.settings.insecureHint")}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
+                  {settings.insecure_defaults.map((name) => (
+                    <code key={name} style={{ color: colors.textPrimary, fontSize: "12px" }}>
+                      {name}
+                    </code>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <Section colors={colors} icon={<Shield size={20} />} iconColor="#2563eb" title={t("admin.settings.accessSection")}>
+            <Row colors={colors} label={t("admin.settings.newAccounts")} value={t("admin.settings.newAccountsValue")} />
+            <Row
+              colors={colors}
+              label={t("admin.settings.sessionLifetime")}
+              envVar="ACCESS_TOKEN_EXPIRE_MINUTES"
+              value={`${settings.session_lifetime_minutes} ${t("admin.settings.minutesShort")}`}
+            />
+            <Row
+              colors={colors}
+              label={t("admin.settings.rateLimit")}
+              envVar="RATE_LIMIT_RPM"
+              value={`${settings.rate_limit_rpm} ${t("admin.settings.perMinute")}`}
+            />
+          </Section>
+
+          <Section colors={colors} icon={<Mail size={20} />} iconColor="#eab308" title={t("admin.settings.emailSection")}>
+            {settings.smtp_configured ? (
+              <>
+                <Row
+                  colors={colors}
+                  label={t("admin.settings.smtpServer")}
+                  envVar="SMTP_HOST, SMTP_PORT"
+                  value={`${settings.smtp_host}:${settings.smtp_port}`}
+                />
+                <Row
+                  colors={colors}
+                  label={t("admin.settings.sender")}
+                  envVar="SMTP_USER"
+                  value={orNotSet(settings.smtp_sender)}
+                />
+              </>
+            ) : (
+              <Row
+                colors={colors}
+                label={t("admin.settings.smtpServer")}
+                envVar="SMTP_HOST"
+                value={muted(t("admin.settings.smtpNotConfigured"))}
+              />
+            )}
+          </Section>
+
+          <Section colors={colors} icon={<Plug size={20} />} iconColor="#a855f7" title={t("admin.settings.integrationsSection")}>
+            <Row colors={colors} label={t("admin.settings.giteaUrl")} envVar="GITEA_PUBLIC_URL" value={orNotSet(settings.gitea_public_url)} />
+            <Row colors={colors} label={t("admin.settings.appUrl")} envVar="FRONTEND_URL" value={orNotSet(settings.frontend_url)} />
+            <Row
+              colors={colors}
+              label={t("admin.settings.aiReview")}
+              envVar="OPENAI_BASE_URL, OPENAI_MODEL"
+              value={settings.ai_review_configured ? settings.ai_review_model : muted(t("admin.settings.notConfigured"))}
+            />
+          </Section>
+        </div>
+      )}
+    </div>
   );
 }

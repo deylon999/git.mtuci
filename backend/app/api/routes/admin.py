@@ -1191,6 +1191,54 @@ async def admin_service_status(
     return ServiceStatus(**payload, services=services)
 
 
+class AdminPlatformSettingsRead(BaseModel):
+    """Effective platform configuration. Values come from environment variables; secrets are never returned."""
+
+    session_lifetime_minutes: int
+    rate_limit_rpm: int
+    smtp_configured: bool
+    smtp_host: str
+    smtp_port: int
+    smtp_sender: str
+    gitea_public_url: str
+    frontend_url: str
+    ai_review_configured: bool
+    ai_review_model: str
+    insecure_defaults: list[str]
+
+
+@router.get("/settings", response_model=AdminPlatformSettingsRead)
+@require_permission("settings_view")
+async def admin_platform_settings(
+    current_user=Depends(get_current_user),
+) -> AdminPlatformSettingsRead:
+    from app.core.config import settings
+    from app.schemas.system import build_system_info_read
+    from app.services.ai_review_service import _ollama_base_url
+
+    insecure: list[str] = []
+    if settings.JWT_SECRET_KEY in ("", "change-me"):
+        insecure.append("JWT_SECRET_KEY")
+    if settings.GITEA_ADMIN_PASSWORD == "admin12345":
+        insecure.append("GITEA_ADMIN_PASSWORD")
+    if not settings.GITEA_WEBHOOK_SECRET:
+        insecure.append("GITEA_WEBHOOK_SECRET")
+
+    return AdminPlatformSettingsRead(
+        session_lifetime_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        rate_limit_rpm=settings.RATE_LIMIT_RPM,
+        smtp_configured=bool(settings.SMTP_HOST),
+        smtp_host=settings.SMTP_HOST,
+        smtp_port=settings.SMTP_PORT,
+        smtp_sender=settings.SMTP_USER,
+        gitea_public_url=build_system_info_read().gitea_public_url,
+        frontend_url=settings.FRONTEND_URL,
+        ai_review_configured=bool(settings.OPENAI_API_KEY) or _ollama_base_url() is not None,
+        ai_review_model=settings.OPENAI_MODEL,
+        insecure_defaults=insecure,
+    )
+
+
 @router.post("/restart")
 @require_permission("admin")
 async def restart_api(
