@@ -1,6 +1,8 @@
 export const API_URL = import.meta.env.VITE_API_URL ?? "/api";
 
 const TOKEN_KEY = "token";
+// Role of the last /auth/me in this session: a hint for speculative requests made before the user loads.
+const ROLE_HINT_KEY = "mtuci_role_hint";
 
 /** Fired on window when an authenticated request gets 401: the token was cleared and the user must sign in again. */
 export const SESSION_EXPIRED_EVENT = "mtuci:session-expired";
@@ -11,6 +13,23 @@ export function getToken(): string | null {
 
 export function setToken(token: string) {
   localStorage.setItem(TOKEN_KEY, token);
+  localStorage.removeItem(ROLE_HINT_KEY);
+}
+
+export function getRoleHint(): string | null {
+  try {
+    return localStorage.getItem(ROLE_HINT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setRoleHint(role: string): void {
+  try {
+    localStorage.setItem(ROLE_HINT_KEY, role);
+  } catch {
+    // storage unavailable: the hint is only an optimization
+  }
 }
 
 const sessionCleanups = new Set<() => void>();
@@ -31,6 +50,7 @@ export function getSessionGeneration(): number {
 
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(ROLE_HINT_KEY);
   sessionGeneration += 1;
   for (const cleanup of sessionCleanups) {
     try {

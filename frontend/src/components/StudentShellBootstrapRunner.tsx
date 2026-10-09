@@ -1,8 +1,9 @@
 import { useLayoutEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { getToken } from "../api/client";
+import { getRoleHint, getToken } from "../api/client";
 import {
   isStudentBootstrapPath,
+  markStudentShellBootstrapSkipped,
   resetStudentShellBootstrap,
   runStudentShellBootstrap,
 } from "../api/studentAppBootstrap";
@@ -24,6 +25,14 @@ export default function StudentShellBootstrapRunner() {
     if (prevPathRef.current !== pathname) {
       resetStudentShellBootstrap();
       prevPathRef.current = pathname;
+    }
+
+    // The bundle is student-only: for a known instructor/admin it is a guaranteed 403. Release the waiters so
+    // they load the user on their own. (A teaching assistant can be in student mode, so it still tries.)
+    const roleHint = getRoleHint();
+    if (roleHint === "teacher" || roleHint === "admin") {
+      markStudentShellBootstrapSkipped();
+      return;
     }
 
     if (pathname === "/dashboard") {

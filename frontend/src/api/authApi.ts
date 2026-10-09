@@ -1,4 +1,4 @@
-import { apiRequest, clearToken, getSessionGeneration, onSessionCleared, setToken } from "./client";
+import { apiRequest, clearToken, getSessionGeneration, onSessionCleared, setRoleHint, setToken } from "./client";
 import type { TokenResponse, UserRead } from "./types";
 
 const ME_CACHE_TTL_MS = 15_000;
@@ -99,6 +99,7 @@ export async function getMe(opts?: { force?: boolean }): Promise<UserRead> {
       if (generation === getSessionGeneration()) {
         meCache = data;
         meCacheTs = Date.now();
+        setRoleHint(data.role);
       }
       return data;
     })
