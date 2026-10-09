@@ -35,6 +35,7 @@ import { pluralWord } from "../i18n/plural";
 import type { Locale } from "../i18n";
 import { formatRelativeTime } from "../utils/formatRelativeTime";
 import { getTheme } from "../theme";
+import { toSafeExternalUrl } from "../utils/safeUrl";
 
 const LANG_COLORS: Record<string, string> = {
   python: "#3572A5",
@@ -212,7 +213,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
       setCopyId(repo.id);
       setTimeout(() => setCopyId(null), 2000);
     } catch {
-      /* ignore */
+      toast.error(t("repo.errors.copyFailed"));
     }
   };
 
@@ -464,7 +465,7 @@ export default function StudentRepositoriesPage({ isDarkTheme = false }: Student
             const isFork = repo.gitea_path ? forkPaths.has(repo.gitea_path) : false;
             const langKey = (repo.language ?? "").toLowerCase();
             const langColor = LANG_COLORS[langKey] ?? theme.text3;
-            const webUrl = repo.gitea_web_url;
+            const webUrl = toSafeExternalUrl(repo.gitea_web_url);
             const browseState = {
               name: repo.name,
               giteaPath: repo.gitea_path,
