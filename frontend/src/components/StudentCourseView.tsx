@@ -18,6 +18,11 @@ interface StudentCourseViewProps {
   isDarkTheme?: boolean;
 }
 
+/** The final grade includes the late penalty and may be fractional (7.5). */
+function formatPoints(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -292,7 +297,7 @@ export default function StudentCourseView({
                       }}
                     >
                       {t(`status.${status}`)}
-                      {st?.grade != null ? ` · ${st.grade}/${st.grade_max}` : ""}
+                      {st?.grade != null ? ` · ${formatPoints(st.final_grade ?? st.grade)}/${st.grade_max}` : ""}
                     </span>
                   </div>
                   <div className="text-right shrink-0">
