@@ -5,6 +5,17 @@ import { useRepoApi } from "../context/RepoApiContext";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getTheme } from "../theme";
 
+type DiffLineKind = "add" | "del" | "hunk" | "file" | "meta" | "ctx";
+
+function diffLineKind(line: string): DiffLineKind {
+  if (line.startsWith("diff --git")) return "file";
+  if (line.startsWith("+++") || line.startsWith("---") || line.startsWith("index ")) return "meta";
+  if (line.startsWith("@@")) return "hunk";
+  if (line.startsWith("+")) return "add";
+  if (line.startsWith("-")) return "del";
+  return "ctx";
+}
+
 interface StudentRepositoryCommitDiffPageProps {
   isDarkTheme?: boolean;
 }
@@ -68,12 +79,36 @@ export default function StudentRepositoryCommitDiffPage({ isDarkTheme = false }:
             {error}
           </div>
         ) : (
-          <pre
-            className="px-4 py-4 overflow-auto text-xs leading-relaxed"
-            style={{ color: theme.text, backgroundColor: theme.bg }}
-          >
-            {diff || "—"}
-          </pre>
+          <div className="overflow-x-auto" style={{ backgroundColor: theme.bg }}>
+            {diff ? (
+              <pre className="min-w-max py-2 text-xs leading-relaxed font-mono">
+                {diff.split("\n").map((line, index) => {
+                  const kind = diffLineKind(line);
+                  const style =
+                    kind === "add"
+                      ? { backgroundColor: `${theme.success}1f`, color: theme.text }
+                      : kind === "del"
+                        ? { backgroundColor: `${theme.danger}1f`, color: theme.text }
+                        : kind === "hunk"
+                          ? { backgroundColor: `${theme.accent}14`, color: theme.accent2 }
+                          : kind === "file"
+                            ? { color: theme.text, fontWeight: 600, borderTop: index > 0 ? `1px solid ${theme.border}` : undefined }
+                            : kind === "meta"
+                              ? { color: theme.text3 }
+                              : { color: theme.text2 };
+                  return (
+                    <div key={index} className="px-4" style={style}>
+                      {line || " "}
+                    </div>
+                  );
+                })}
+              </pre>
+            ) : (
+              <p className="px-4 py-4 text-xs" style={{ color: theme.text2 }}>
+                —
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>

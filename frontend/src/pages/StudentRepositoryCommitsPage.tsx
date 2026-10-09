@@ -151,20 +151,30 @@ export default function StudentRepositoryCommitsPage({ isDarkTheme = false }: St
                   className="text-sm font-medium hover:underline"
                   style={{ color: theme.text }}
                 >
-                  {c.message}
+                  {c.message.split("\n")[0]}
                 </Link>
                 <p className="text-xs mt-1 flex flex-wrap gap-x-2" style={{ color: theme.text3 }}>
                   {c.author_name ? <span>{c.author_name}</span> : null}
                   {c.committed_at ? (
                     <span>{formatRelativeTime(c.committed_at, new Date(), language)}</span>
                   ) : null}
-                  {c.sha ? <span className="font-mono">{c.sha}</span> : null}
+                  {c.sha ? (
+                    <span className="font-mono" title={c.sha}>
+                      {c.sha.slice(0, 7)}
+                    </span>
+                  ) : null}
                 </p>
               </div>
             </li>
           ))}
         </ul>
       )}
+      {commitsLoading && page > 1 ? (
+        <div className="flex justify-center gap-2 p-4 border-t text-sm" style={{ borderColor: theme.border, color: theme.text2 }}>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {t("repo.commits.loading")}
+        </div>
+      ) : null}
       {hasMore && !commitsLoading ? (
         <div className="p-4 border-t text-center" style={{ borderColor: theme.border }}>
           <button
