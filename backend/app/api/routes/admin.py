@@ -213,6 +213,8 @@ async def _emit_admin_backup_notification(
     ntype: str,
     href: str = "/admin/monitoring",
     dedupe_key: str,
+    i18n_key: str,
+    i18n_params: dict[str, str | int] | None = None,
 ) -> None:
     """Best-effort notification for backup events; never raises outside."""
     try:
@@ -237,6 +239,8 @@ async def _emit_admin_backup_notification(
                 href=href,
                 created_at=created_at,
                 event_type=event_type,
+                i18n_key=i18n_key,
+                i18n_params=i18n_params,
             )
             if created:
                 touched_admin_ids.append(admin_id)
@@ -587,6 +591,8 @@ async def _build_admin_notifications_feed(
                 id=row.id,
                 title=row.title,
                 message=row.message,
+                i18n_key=row.i18n_key,
+                i18n_params=row.i18n_params,
                 type=row.type,
                 read=row.read,
                 href=row.href,
@@ -1364,6 +1370,8 @@ async def admin_create_backup(
                     message=f"pg_dump failed: {result.stderr}"[:240],
                     ntype="error",
                     dedupe_key=f"backup:error:pgdump:{timestamp}",
+                    i18n_key="backupFailed",
+                    i18n_params={"error": f"pg_dump failed: {result.stderr}"[:240]},
                 )
                 raise HTTPException(status_code=500, detail=f"Backup failed: {result.stderr}")
 
@@ -1383,6 +1391,8 @@ async def admin_create_backup(
                 message=f"Создан файл {backup_name}",
                 ntype="success",
                 dedupe_key=f"backup:success:{timestamp}",
+                i18n_key="backupSuccess",
+                i18n_params={"file": backup_name},
             )
 
             return {"success": True, "file": backup_name, "message": "Backup created successfully"}
@@ -1394,6 +1404,7 @@ async def admin_create_backup(
                 message="Создание бэкапа завершилось по таймауту",
                 ntype="error",
                 dedupe_key=f"backup:error:timeout:{timestamp}",
+                i18n_key="backupTimeout",
             )
             raise HTTPException(status_code=500, detail="Backup timeout")
         except HTTPException:
@@ -1405,6 +1416,8 @@ async def admin_create_backup(
                 message=f"Backup error: {str(e)}"[:240],
                 ntype="error",
                 dedupe_key=f"backup:error:{timestamp}",
+                i18n_key="backupFailed",
+                i18n_params={"error": f"Backup error: {str(e)}"[:240]},
             )
             raise HTTPException(status_code=500, detail=f"Backup error: {str(e)}")
 

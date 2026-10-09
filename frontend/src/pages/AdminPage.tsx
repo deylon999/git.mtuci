@@ -54,6 +54,7 @@ import AdminPageHeader from "../components/AdminPageHeader";
 import { getTheme } from "../theme";
 import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+import { localizeNotification } from "../utils/notificationText";
 import { useAuthUser } from "../context/AuthUserContext";
 import { translate, translateWithParams } from "../i18n";
 import { getI18nLocale } from "../i18n/runtime";
@@ -320,8 +321,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
               : n.type === "success"
                 ? "success"
                 : "info",
-        title: n.title,
-        message: n.message,
+        ...localizeNotification(n),
         timestamp: new Date(n.created_at).toLocaleString(currentLocaleTag()),
       }));
 

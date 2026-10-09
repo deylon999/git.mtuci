@@ -404,5 +404,35 @@ export const coreRu = {
     failedCreateToken: "Не удалось создать токен",
     failedAddSshKey: "Не удалось добавить SSH ключ",
   },
+  // Уведомления с сервера: бэкенд присылает `i18n_key` + `i18n_params` (см. utils/notificationText.ts).
+  notificationText: {
+    assignmentNew: { title: "Новое задание", message: "{assignment} · {course}" },
+    gradePosted: { title: "Новая оценка", message: "{assignment} · {course}: {points} {points|балл|балла|баллов}" },
+    teacherComment: { title: "Комментарий преподавателя", message: "{assignment}: {preview}" },
+    deadlineSoon: {
+      title: "Приближается дедлайн",
+      message: "{assignment} · {course} — осталось {days} {days|день|дня|дней}",
+    },
+    deadlineToday: { title: "Дедлайн сегодня", message: "{assignment} · {course} — сдать сегодня" },
+    submissionCreated: { title: "Новая сдача работы", message: "Ответ от {student} · {assignment} ({course})" },
+    submissionNew: { title: "Новая сдача работы", message: "{student} · {assignment} ({course})" },
+    submissionStale: {
+      title: "Работа без проверки больше {limit} ч",
+      message: "{student} · {assignment} ({course}) — ждёт {hours} ч",
+    },
+    deadlineMissed: { title: "Просрочен дедлайн", message: "{student}: работа не сдана · {assignment} ({course})" },
+    prComment: { title: "Комментарий к PR #{number}", message: "{repo}: {preview}" },
+    pendingUser: {
+      title: "Новый пользователь ожидает подтверждения",
+      message: "Студент {name} ({email}) зарегистрировался и ожидает одобрения администратора.",
+    },
+    pendingUserGroup: {
+      title: "Новый пользователь ожидает подтверждения",
+      message: "Студент {name} ({email}) зарегистрировался и ожидает одобрения администратора. Группа: {group}",
+    },
+    backupSuccess: { title: "Бэкап создан", message: "Файл {file}" },
+    backupFailed: { title: "Ошибка бэкапа", message: "{error}" },
+    backupTimeout: { title: "Ошибка бэкапа", message: "Создание бэкапа прервано по таймауту" },
+  },
 };
 

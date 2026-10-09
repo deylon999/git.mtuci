@@ -11,6 +11,8 @@ class NotificationRead(BaseModel):
     id: UUID
     title: str
     message: str
+    i18n_key: str | None = Field(default=None, description="Translation key for title/message on the client")
+    i18n_params: dict[str, str | int] | None = None
     type: str = Field(description="info | success | warning | error")
     read: bool
     href: str | None = None

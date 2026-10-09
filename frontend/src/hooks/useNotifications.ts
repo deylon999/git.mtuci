@@ -15,6 +15,7 @@ import {
 import type { Notification } from "../api/types";
 import { useUserPreferencesOptional } from "../context/UserPreferencesContext";
 import { showBrowserNotification } from "../utils/browserNotifications";
+import { localizeNotification } from "../utils/notificationText";
 
 function getNotificationsWsUrl(): string {
   const token = getToken();
@@ -46,7 +47,8 @@ export function useNotifications() {
       if (pushEnabledRef.current && unread.length > prevUnreadRef.current) {
         const newest = unread[0];
         if (newest) {
-          showBrowserNotification(newest.title, { body: newest.message, tag: newest.id });
+          const text = localizeNotification(newest);
+          showBrowserNotification(text.title, { body: text.message, tag: newest.id });
         }
       }
       prevUnreadRef.current = unread.length;

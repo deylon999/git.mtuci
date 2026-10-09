@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -68,8 +69,13 @@ async def _sync_admin_pending_users_notification(
     message = (
         f"Студент {display_name} ({pending_user.email}) зарегистрировался и ожидает одобрения администратора."
     )
-    if pending_user.group_name and pending_user.group_name.strip():
-        message += f" Группа: {pending_user.group_name.strip()}"
+    i18n_key = "pendingUser"
+    i18n_params: dict[str, str | int] = {"name": display_name, "email": pending_user.email}
+    group = (pending_user.group_name or "").strip()
+    if group:
+        message += f" Группа: {group}"
+        i18n_key = "pendingUserGroup"
+        i18n_params["group"] = group
     href = f"/users?highlight={pending_user.id}"
 
     if existing:
@@ -80,6 +86,10 @@ async def _sync_admin_pending_users_notification(
         if existing.message != message:
             existing.message = message
             changed = True
+        if existing.i18n_key != i18n_key or existing.i18n_params != i18n_params:
+            # Backfills rows created before i18n keys existed; not a new event, so it does not mark the alert unread.
+            existing.i18n_key = i18n_key
+            existing.i18n_params = i18n_params
         if existing.href != href:
             existing.href = href
             changed = True
@@ -102,6 +112,8 @@ async def _sync_admin_pending_users_notification(
             dedupe_key=_ADMIN_PENDING_DEDUPE,
             title=title,
             message=message,
+            i18n_key=i18n_key,
+            i18n_params=i18n_params,
             type="warning",
             severity=severity,
             actionable=actionable,
@@ -112,6 +124,18 @@ async def _sync_admin_pending_users_notification(
         )
     )
     return True
+
+
+_PR_COMMENT_LOG_RE = re.compile(r"^PR #(\d+)(?: от \S+)?: (.*)$", re.DOTALL)
+
+
+def _pr_comment_i18n(
+    log_message: str | None, repo_name: str | None
+) -> tuple[str | None, dict[str, str | int] | None]:
+    match = _PR_COMMENT_LOG_RE.match(log_message or "")
+    if not match or not repo_name:
+        return None, None
+    return "prComment", {"number": int(match.group(1)), "repo": repo_name, "preview": match.group(2)}
 
 
 async def _repo_pulls_href(session: AsyncSession, repo_name: str | None) -> str:
@@ -154,6 +178,8 @@ async def notify_new_assignment_for_students(
             dedupe_key=f"assignment-new:{assignment.id}",
             title="Новое задание",
             message=f"{assignment.title} · {course_title}",
+            i18n_key="assignmentNew",
+            i18n_params={"assignment": assignment.title, "course": course_title},
             ntype="info",
             href=href,
             created_at=assignment.created_at,
@@ -178,6 +204,12 @@ async def notify_grade_posted(
         dedupe_key=f"grade:{submission.id}",
         title="Новая оценка",
         message=f"{assignment.title} · {course_title}: {_submission_points(submission)} баллов",
+        i18n_key="gradePosted",
+        i18n_params={
+            "assignment": assignment.title,
+            "course": course_title,
+            "points": _submission_points(submission),
+        },
         ntype="success",
         href=href,
         created_at=submission.graded_at,
@@ -206,6 +238,8 @@ async def notify_submission_created(
         dedupe_key=f"submission-manual:{submission.id}:{int(submitted_at.timestamp())}",
         title="Новая сдача работы",
         message=f"{student_name} отправил ответ · {assignment.title} ({course.title})",
+        i18n_key="submissionCreated",
+        i18n_params={"student": student_name, "assignment": assignment.title, "course": course.title},
         ntype="info",
         href=href,
         created_at=submitted_at,
@@ -253,6 +287,8 @@ async def _sync_teacher_course_notifications(
                 dedupe_key=f"submission-new:{sub.id}",
                 title="Новая сдача работы",
                 message=f"{student_name} · {assignment.title} ({course_title})",
+                i18n_key="submissionNew",
+                i18n_params={"student": student_name, "assignment": assignment.title, "course": course_title},
                 ntype="info",
                 href=href,
                 created_at=sub.submitted_at,
@@ -284,6 +320,14 @@ async def _sync_teacher_course_notifications(
                 dedupe_key=f"submission-stale:{sub.id}",
                 title="Работа без проверки >24ч",
                 message=f"{student_name} · {assignment.title} ({course_title}) — {hours} ч",
+                i18n_key="submissionStale",
+                i18n_params={
+                    "student": student_name,
+                    "assignment": assignment.title,
+                    "course": course_title,
+                    "hours": hours,
+                    "limit": STALE_REVIEW_HOURS,
+                },
                 ntype="warning",
                 href=href,
                 created_at=now,
@@ -327,6 +371,8 @@ async def _sync_teacher_course_notifications(
                 dedupe_key=f"teacher-missed:{assignment.id}:{student_id}",
                 title="Просрочен дедлайн",
                 message=f"{student_name} не сдал · {assignment.title} ({course_title})",
+                i18n_key="deadlineMissed",
+                i18n_params={"student": student_name, "assignment": assignment.title, "course": course_title},
                 ntype="error",
                 href=href,
                 created_at=now,
@@ -470,6 +516,8 @@ async def sync_user_notifications(
                     dedupe_key=f"assignment-new:{assignment.id}",
                     title="Новое задание",
                     message=f"{assignment.title} · {course_title}",
+                    i18n_key="assignmentNew",
+                    i18n_params={"assignment": assignment.title, "course": course_title},
                     ntype="info",
                     href=href,
                     created_at=assignment.created_at,
@@ -484,6 +532,12 @@ async def sync_user_notifications(
                     dedupe_key=f"grade:{sub.id}",
                     title="Новая оценка",
                     message=f"{assignment.title} · {course_title}: {_submission_points(sub)} баллов",
+                    i18n_key="gradePosted",
+                    i18n_params={
+                        "assignment": assignment.title,
+                        "course": course_title,
+                        "points": _submission_points(sub),
+                    },
                     ntype="success",
                     href=href,
                     created_at=sub.graded_at,
@@ -501,6 +555,8 @@ async def sync_user_notifications(
                         dedupe_key=f"teacher-comment:{sub.id}",
                         title="Комментарий преподавателя",
                         message=f"{assignment.title}: {preview}",
+                        i18n_key="teacherComment",
+                        i18n_params={"assignment": assignment.title, "preview": preview},
                         ntype="warning",
                         href=href,
                         created_at=updated_at,
@@ -517,6 +573,12 @@ async def sync_user_notifications(
                         dedupe_key=f"deadline:{assignment.id}",
                         title="Приближается дедлайн",
                         message=f"{assignment.title} · {course_title} — через {max(days_left, 0)} дн.",
+                        i18n_key="deadlineSoon" if days_left > 0 else "deadlineToday",
+                        i18n_params={
+                            "assignment": assignment.title,
+                            "course": course_title,
+                            "days": max(days_left, 0),
+                        },
                         ntype="error" if days_left <= 1 else "warning",
                         href=href,
                         created_at=now,
@@ -583,6 +645,7 @@ async def sync_user_notifications(
     pr_category = "assignments" if role == UserRole.student else "teacher_pr_submitted"
     for log in log_result.scalars().all():
         href = await _repo_pulls_href(session, log.repo_name)
+        pr_key, pr_params = _pr_comment_i18n(log.message, log.repo_name)
         if await deliver_notification(
             session,
             user,
@@ -590,6 +653,8 @@ async def sync_user_notifications(
             dedupe_key=f"pr-comment:{log.id}",
             title="Комментарий к Pull Request",
             message=log.message or f"Репозиторий {log.repo_name or ''}",
+            i18n_key=pr_key,
+            i18n_params=pr_params,
             ntype="info",
             href=href,
             created_at=log.created_at,
@@ -684,6 +749,8 @@ async def create_pr_comment_notification(
         dedupe_key=f"pr-comment:{activity_log_id}",
         title=f"Комментарий к PR #{pr_number}",
         message=f"{repo_name}: {comment_preview[:200]}",
+        i18n_key="prComment",
+        i18n_params={"number": pr_number, "repo": repo_name, "preview": comment_preview[:200]},
         ntype="info",
         href=href,
     )

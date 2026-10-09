@@ -31,6 +31,8 @@ async def upsert_notification(
     href: str | None = None,
     created_at: datetime | None = None,
     event_type: NotificationEventType | None = None,
+    i18n_key: str | None = None,
+    i18n_params: dict[str, str | int] | None = None,
 ) -> bool:
     result = await session.execute(
         select(Notification).where(
@@ -64,6 +66,8 @@ async def upsert_notification(
             dedupe_key=dedupe_key,
             title=title,
             message=message,
+            i18n_key=i18n_key,
+            i18n_params=i18n_params,
             type=ntype,
             severity=severity,
             actionable=actionable,
@@ -89,6 +93,8 @@ async def deliver_notification(
     created_at: datetime | None = None,
     email_subject: str | None = None,
     event_type: NotificationEventType | None = None,
+    i18n_key: str | None = None,
+    i18n_params: dict[str, str | int] | None = None,
 ) -> bool:
     """Create in-app notification when category is enabled; optionally send email."""
     prefs = notification_prefs_from_user(user)
@@ -105,6 +111,8 @@ async def deliver_notification(
         href=href,
         created_at=created_at,
         event_type=event_type,
+        i18n_key=i18n_key,
+        i18n_params=i18n_params,
     )
     if not created:
         return False

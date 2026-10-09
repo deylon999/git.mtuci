@@ -404,4 +404,31 @@ export const coreEn = {
     failedCreateToken: "Failed to create the token",
     failedAddSshKey: "Failed to add the SSH key",
   },
+  // Server notifications: the backend sends `i18n_key` + `i18n_params` (see utils/notificationText.ts).
+  notificationText: {
+    assignmentNew: { title: "New assignment", message: "{assignment} · {course}" },
+    gradePosted: { title: "New grade", message: "{assignment} · {course}: {points} {points|point|points}" },
+    teacherComment: { title: "Instructor comment", message: "{assignment}: {preview}" },
+    deadlineSoon: { title: "Deadline approaching", message: "{assignment} · {course}: due in {days} {days|day|days}" },
+    deadlineToday: { title: "Deadline today", message: "{assignment} · {course}: due today" },
+    submissionCreated: { title: "New submission", message: "{student} submitted work · {assignment} ({course})" },
+    submissionNew: { title: "New submission", message: "{student} · {assignment} ({course})" },
+    submissionStale: {
+      title: "Not reviewed for over {limit} hours",
+      message: "{student} · {assignment} ({course}): waiting {hours} {hours|hour|hours}",
+    },
+    deadlineMissed: { title: "Missed deadline", message: "{student} hasn't submitted · {assignment} ({course})" },
+    prComment: { title: "Comment on PR #{number}", message: "{repo}: {preview}" },
+    pendingUser: {
+      title: "New user awaiting approval",
+      message: "Student {name} ({email}) created an account and is waiting for administrator approval.",
+    },
+    pendingUserGroup: {
+      title: "New user awaiting approval",
+      message: "Student {name} ({email}) created an account and is waiting for administrator approval. Group: {group}",
+    },
+    backupSuccess: { title: "Backup completed", message: "Created {file}" },
+    backupFailed: { title: "Backup failed", message: "{error}" },
+    backupTimeout: { title: "Backup failed", message: "The backup timed out" },
+  },
 };

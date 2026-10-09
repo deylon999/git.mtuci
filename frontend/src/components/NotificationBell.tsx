@@ -5,6 +5,7 @@ import { getTheme } from "../theme";
 import { useNotifications } from "../hooks/useNotifications";
 import type { Notification, NotificationType } from "../api/types";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+import { localizeNotification } from "../utils/notificationText";
 
 function useNotificationTimeFormatter() {
   const { t, tp } = useUserPreferences();
@@ -44,7 +45,7 @@ interface NotificationBellProps {
 
 export default function NotificationBell({ isDarkTheme = false }: NotificationBellProps) {
   const navigate = useNavigate();
-  const { t, tp } = useUserPreferences();
+  const { t, tp, language } = useUserPreferences();
   const formatNotificationTime = useNotificationTimeFormatter();
   const theme = getTheme(isDarkTheme);
   const { notifications, unreadCount, refresh, markAsRead, markAllAsRead } = useNotifications();
@@ -160,10 +161,10 @@ export default function NotificationBell({ isDarkTheme = false }: NotificationBe
                         className={`text-sm font-medium ${notification.read ? "opacity-70" : ""}`}
                         style={{ color: theme.text }}
                       >
-                        {notification.title}
+                        {localizeNotification(notification, language).title}
                       </p>
                       <p className="text-xs mt-0.5 line-clamp-2" style={{ color: theme.text2 }}>
-                        {notification.message}
+                        {localizeNotification(notification, language).message}
                       </p>
                       <p className="text-[10px] mt-1" style={{ color: theme.text2 }}>
                         {formatNotificationTime(notification.created_at)}

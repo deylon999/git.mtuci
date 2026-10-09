@@ -28,6 +28,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { currentLocaleTag } from "../utils/dates";
+import { localizeNotification } from "../utils/notificationText";
 
 type Props = {
   isDarkTheme?: boolean;
@@ -121,7 +122,7 @@ function severityTagClass(severity: AdminNotificationItem["severity"]): string {
 }
 
 export default function AdminNotificationsPage({ isDarkTheme = true }: Props) {
-  const { t } = useUserPreferences();
+  const { t, language } = useUserPreferences();
   const navigate = useNavigate();
   const ui = getAdminPageTheme(isDarkTheme);
   const dateLocale = currentLocaleTag();
@@ -440,12 +441,12 @@ export default function AdminNotificationsPage({ isDarkTheme = true }: Props) {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start gap-2">
-                              <p className={`text-sm font-medium flex-1 ${ui.textPrimary}`}>{item.title}</p>
+                              <p className={`text-sm font-medium flex-1 ${ui.textPrimary}`}>{localizeNotification(item, language).title}</p>
                               {!item.read && (
                                 <span className={`mt-1.5 w-2 h-2 shrink-0 rounded-full ${unreadDotClass(item.unread_color)}`} />
                               )}
                             </div>
-                            <p className={`text-xs mt-1 leading-relaxed break-words ${ui.textSecondary}`}>{item.message}</p>
+                            <p className={`text-xs mt-1 leading-relaxed break-words ${ui.textSecondary}`}>{localizeNotification(item, language).message}</p>
                             <div className="mt-2 flex items-center gap-2 flex-wrap">
                               <span className={`text-[10px] ${ui.textTertiary}`}>
                                 {formatRelativeTime(item.created_at, dateLocale, t(`${P}.yesterday`).toLowerCase())}

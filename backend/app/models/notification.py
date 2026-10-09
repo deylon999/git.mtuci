@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -25,6 +25,9 @@ class Notification(Base):
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     message: Mapped[str] = mapped_column(Text(), nullable=False)
+    # Frontend renders title/message from this key in the UI language; title/message stay as the Russian fallback.
+    i18n_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    i18n_params: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     type: Mapped[str] = mapped_column(String(20), nullable=False, default="info")
     severity: Mapped[str] = mapped_column(String(20), nullable=False, default="info")
     actionable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

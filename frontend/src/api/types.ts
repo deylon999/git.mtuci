@@ -8,6 +8,9 @@ export interface Notification {
   id: string;
   title: string;
   message: string;
+  /** Key under `notificationText.*`; render through `localizeNotification`. */
+  i18n_key?: string | null;
+  i18n_params?: Record<string, string | number> | null;
   type: NotificationType;
   read: boolean;
   href?: string | null;
