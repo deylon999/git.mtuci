@@ -278,6 +278,7 @@ export const studentEn = {
     },
   },
   forks: {
+    syncDone: "Fork synced with the original repository",
     title: "Forks",
     subtitle: "Forked repositories in your Gitea — sync with upstream",
     refresh: "Refresh",

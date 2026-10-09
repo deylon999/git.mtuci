@@ -12,6 +12,7 @@ import {
 } from "../components/student/studentPageUi";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getTheme } from "../theme";
+import { toSafeExternalUrl } from "../utils/safeUrl";
 
 interface StudentForksPageProps {
   isDarkTheme?: boolean;
@@ -62,6 +63,7 @@ export default function StudentForksPage({ isDarkTheme = false }: StudentForksPa
     setSyncing(item.id);
     try {
       await syncStudentFork(item.fork_repo_path);
+      toast.success(t("student.forks.syncDone"));
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("student.errors.syncFork"));
@@ -154,7 +156,7 @@ export default function StudentForksPage({ isDarkTheme = false }: StudentForksPa
               <div className="mt-3 flex flex-wrap gap-2">
                 {item.gitea_web_url ? (
                   <a
-                    href={item.gitea_web_url}
+                    href={toSafeExternalUrl(item.gitea_web_url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs"
