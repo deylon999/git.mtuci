@@ -9,6 +9,7 @@ import { useUserPreferences } from "../context/UserPreferencesContext";
 import { formatDeadlineRemaining } from "../utils/studentDeadlineGroups";
 import { formatDeadlineLabel } from "../utils/studentDeadlines";
 import { getTheme } from "../theme";
+import { formatPoints } from "../utils/gradeScoring";
 
 interface StudentCourseViewProps {
   courseId: string;
@@ -18,10 +19,6 @@ interface StudentCourseViewProps {
   isDarkTheme?: boolean;
 }
 
-/** The final grade includes the late penalty and may be fractional (7.5). */
-function formatPoints(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;

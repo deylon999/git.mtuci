@@ -11,7 +11,7 @@ import { StudentPageShell } from "../components/student/studentPageUi";
 import { useAuthUser } from "../context/AuthUserContext";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getTheme } from "../theme";
-import { gradeColorForPercent, gradePercent } from "../utils/gradeScoring";
+import { formatPoints, gradeColorForPercent, gradePercent } from "../utils/gradeScoring";
 
 interface StudentGradesPageProps {
   isDarkTheme?: boolean;
@@ -68,10 +68,6 @@ function formatSubmittedAt(
   });
 }
 
-/** Points can be fractional after a late penalty (7.5), so don't round them away. */
-function formatPoints(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
 
 function courseDisplayScore(course: StudentGradeCourse): number | null {
   if (course.percent != null) return Math.round(course.percent);

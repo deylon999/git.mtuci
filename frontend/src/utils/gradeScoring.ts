@@ -17,3 +17,8 @@ export function formatGradeTotal(earned: number, max: number, percent: number | 
   const pct = percent ?? gradePercent(earned, max);
   return pct != null ? `${earned} / ${max} (${pct}%)` : `${earned} / ${max}`;
 }
+
+/** Grades can be fractional after a late penalty (7.5); show one decimal only when needed. */
+export function formatPoints(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
