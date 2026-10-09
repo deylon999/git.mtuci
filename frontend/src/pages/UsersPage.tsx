@@ -1,9 +1,9 @@
 import { currentLocaleTag } from "../utils/dates";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import toast from "react-hot-toast";
 import {
   Download,
   Upload,
-  Plus,
   Search,
   Users,
   CheckCircle,
@@ -35,6 +35,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { usePendingCount } from "../context/PendingCountContext";
 import type { AdminUserRead, UserRole, UserRead } from "../api/types";
 import AdminPageHeader from "../components/AdminPageHeader";
+import ConfirmModal from "../components/ConfirmModal";
 import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { tr } from "../utils/i18nLabels";
 import { useUserPreferences } from "../context/UserPreferencesContext";
@@ -51,6 +52,8 @@ interface User {
   student_id: string | null;
   role: "student" | "teacher" | "admin" | "laborant";
   status: "active" | "pending" | "blocked";
+  /** Kept apart from `status`: a blocked account can still be awaiting approval. */
+  isPending: boolean;
   repos: number;
   lastLogin: string;
   avatar_url: string | null;
@@ -94,6 +97,46 @@ function getStatusBadge(status: User["status"], isDarkTheme: boolean) {
   );
 }
 
+function toUserRow(u: AdminUserRead): User {
+  return {
+    id: u.id,
+    name: u.full_name,
+    email: u.email,
+    group: u.group_name || "—",
+    group_name: u.group_name ?? null,
+    student_id: u.student_id ?? null,
+    role: u.role,
+    status: u.is_blocked ? "blocked" : u.is_pending ? "pending" : "active",
+    isPending: Boolean(u.is_pending),
+    repos: u.repositories_count ?? 0,
+    lastLogin: u.last_login
+      ? new Date(u.last_login).toLocaleString(currentLocaleTag(), {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "—",
+    initials: u.full_name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase(),
+    color: "bg-blue-500",
+    avatar_url: u.avatar_url || null,
+  };
+}
+
+type PendingConfirm = {
+  title: string;
+  message: string;
+  confirmText: string;
+  run: () => Promise<void>;
+};
+
 interface UsersPageProps {
   isDarkTheme?: boolean;
 }
@@ -122,13 +165,11 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [totalUsers, setTotalUsers] = useState(0);
 
-  // Toast notification
-  const [toast, setToast] = useState<{message: string; type: 'error' | 'success'} | null>(null);
-
-  const showToast = (message: string, type: 'error' | 'success' = 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+  const showToast = (message: string, type: "error" | "success" = "error") => {
+    if (type === "success") toast.success(message);
+    else toast.error(message);
   };
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
 
   // Current user (for self-protection)
   const [currentUser, setCurrentUser] = useState<UserRead | null>(null);
@@ -215,10 +256,9 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
       await patchAdminUser(user.id, {
         role: user.role,
         is_blocked: !currentlyBlocked,
-        is_pending: user.status === "pending",
+        is_pending: user.isPending,
       });
-      const res = await getAdminUsers();
-      updateUsers(res);
+      await refreshUsers();
       showToast(currentlyBlocked ? t("admin.users.unblocked") : t("admin.users.blocked"), "success");
     } catch {
       showToast(t("admin.users.statusChangeError"), "error");
@@ -247,8 +287,7 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
       await approveUser(user.id);
       // Уменьшаем счётчик в сайдбаре сразу после успешного подтверждения
       decrementPending();
-      const res = await getAdminUsers();
-      updateUsers(res);
+      await refreshUsers();
       showToast(t("admin.users.confirmed"), "success");
     } catch {
       showToast(t("admin.users.confirmError"), "error");
@@ -257,24 +296,26 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
     }
   };
 
-  const handleReject = async (user: User) => {
+  const handleReject = (user: User) => {
     if (user.role === "admin") {
       showToast(t("admin.users.cannotConfirmAdmin"), "error");
       return;
     }
-    if (!window.confirm(tp("admin.users.rejectConfirm", { name: user.name }))) return;
-    setActionLoading(true);
-    try {
-      await rejectUser(user.id);
-      decrementPending();
-      const res = await getAdminUsers();
-      updateUsers(res);
-      showToast(t("admin.users.rejected"), "success");
-    } catch {
-      showToast(t("admin.users.rejectError"), "error");
-    } finally {
-      setActionLoading(false);
-    }
+    setPendingConfirm({
+      title: t("admin.notificationsPage.rejectConfirmTitle"),
+      message: tp("admin.users.rejectConfirm", { name: user.name }),
+      confirmText: t("admin.users.reject"),
+      run: async () => {
+        try {
+          await rejectUser(user.id);
+          if (user.isPending) decrementPending();
+          await refreshUsers();
+          showToast(t("admin.users.rejected"), "success");
+        } catch {
+          showToast(t("admin.users.rejectError"), "error");
+        }
+      },
+    });
   };
 
   const handleEdit = (user: User) => {
@@ -340,13 +381,12 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
       await patchAdminUser(editUser.id, {
         role: editForm.role,
         is_blocked: editUser.status === "blocked",
-        is_pending: editUser.status === "pending",
+        is_pending: editUser.isPending,
         group_name: editForm.group_name.trim() || null,
         student_id: editForm.student_id.trim() || null,
       });
       setEditUser(null);
-      const res = await getAdminUsers();
-      updateUsers(res);
+      await refreshUsers();
       showToast(t("admin.users.saved"), "success");
     } catch {
       showToast(t("admin.users.saveError"), "error");
@@ -355,91 +395,32 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
     }
   };
 
-  const updateUsers = (res: AdminUserRead[]) => {
-    setUsers(
-      res.map((u) => ({
-        id: u.id,
-        name: u.full_name,
-        email: u.email,
-        group: u.group_name || "—",
-        group_name: u.group_name ?? null,
-        student_id: u.student_id ?? null,
-        role: u.role,
-        status: u.is_blocked
-          ? "blocked"
-          : u.is_pending
-          ? "pending"
-          : "active",
-        repos: u.repositories_count ?? 0,
-        lastLogin: u.last_login
-          ? new Date(u.last_login).toLocaleDateString(currentLocaleTag())
-          : "—",
-        initials: u.full_name
-          .split(" ")
-          .map((n) => n[0])
-          .join("")
-          .toUpperCase(),
-        color: "bg-blue-500",
-        avatar_url: u.avatar_url || null,
-      }))
-    );
+  const refreshUsers = useCallback(async () => {
+    const res = await getAdminUsers();
+    setUsers(res.map(toUserRow));
     setTotalUsers(res.length);
-  };
+  }, []);
 
-useEffect(() => {
-  const fetchUsers = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await getAdminUsers();
-      setUsers(
-        res.map((u) => ({
-          id: u.id,
-          name: u.full_name,
-          email: u.email,
-          group: u.group_name || "—",
-          group_name: u.group_name ?? null,
-          student_id: u.student_id ?? null,
-          role: u.role,
-          status: u.is_blocked
-            ? "blocked"
-            : u.is_pending
-            ? "pending"
-            : "active",
-          repos: u.repositories_count ?? 0,
-          lastLogin: u.last_login
-            ? new Date(u.last_login).toLocaleString(currentLocaleTag(), {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "—",
-
-          initials: u.full_name
-            .split(" ")
-            .map((n) => n[0])
-            .join("")
-            .toUpperCase(),
-
-          color: "bg-blue-500",
-          avatar_url: u.avatar_url || null,
-        }))
-      );
-
-      setTotalUsers(res.length);
-
-    } catch {
-      setError(t("admin.users.loadError"));
-    } finally {
-      setLoading(false);
-    }
-  };
-    fetchUsers();
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getAdminUsers()
+      .then((res) => {
+        if (cancelled) return;
+        setUsers(res.map(toUserRow));
+        setTotalUsers(res.length);
+      })
+      .catch(() => {
+        if (!cancelled) setError(t("admin.users.loadError"));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [t]);
-
-
 
   const stats = [
     {
@@ -482,7 +463,15 @@ useEffect(() => {
     return true;
   });
 
-  const filteredUserIds = useMemo(() => filteredUsers.map((user) => user.id), [filteredUsers]);
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const pagedUsers = filteredUsers.slice((safePage - 1) * itemsPerPage, safePage * itemsPerPage);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const filteredUserIds = useMemo(() => pagedUsers.map((user) => user.id), [pagedUsers]);
   const selectedUsersSet = useMemo(() => new Set(selectedUsers), [selectedUsers]);
   const allFilteredSelected =
     filteredUserIds.length > 0 && filteredUserIds.every((id) => selectedUsersSet.has(id));
@@ -537,9 +526,8 @@ useEffect(() => {
     setImporting(true);
     try {
       const result = await importUsersCSV(file);
-      const res = await getAdminUsers();
-      updateUsers(res);
-      
+      await refreshUsers();
+
       if (result.errors.length > 0) {
         showToast(tp("admin.users.importResult", { imported: result.imported, errors: result.errors.length }), "error");
       } else {
@@ -574,44 +562,42 @@ useEffect(() => {
       return;
     }
 
-    const confirmed = window.confirm(
-      skipped > 0
-        ? tp("admin.users.deleteSelectedConfirmWithSkipped", {
-            n: deletableRows.length,
-            skipped,
-          })
-        : tp("admin.users.deleteSelectedConfirm", { n: deletableRows.length }),
-    );
-    if (!confirmed) return;
+    setPendingConfirm({
+      title: t("admin.users.deleteSelectedTitle"),
+      message:
+        skipped > 0
+          ? tp("admin.users.deleteSelectedConfirmWithSkipped", { n: deletableRows.length, skipped })
+          : tp("admin.users.deleteSelectedConfirm", { n: deletableRows.length }),
+      confirmText: t("common.delete"),
+      run: async () => {
+        try {
+          const results = await Promise.allSettled(deletableRows.map((u) => deleteAdminUser(u.id)));
+          const deleted = results.filter((r) => r.status === "fulfilled").length;
+          const failed = results.length - deleted;
 
+          await refreshUsers();
+          setSelectedUsers([]);
+
+          if (failed === 0 && skipped === 0) {
+            showToast(tp("admin.users.deleteSelectedSuccess", { n: deleted }), "success");
+          } else {
+            showToast(tp("admin.users.deleteSelectedPartial", { deleted, skipped, failed }), failed > 0 ? "error" : "success");
+          }
+        } catch {
+          showToast(t("admin.users.deleteSelectedError"), "error");
+        }
+      },
+    });
+  };
+
+  const runPendingConfirm = async () => {
+    if (!pendingConfirm) return;
     setActionLoading(true);
     try {
-      const results = await Promise.allSettled(
-        deletableRows.map((u) => deleteAdminUser(u.id)),
-      );
-      const deleted = results.filter((r) => r.status === "fulfilled").length;
-      const failed = results.length - deleted;
-
-      const res = await getAdminUsers();
-      updateUsers(res);
-      setSelectedUsers([]);
-
-      if (failed === 0 && skipped === 0) {
-        showToast(tp("admin.users.deleteSelectedSuccess", { n: deleted }), "success");
-      } else {
-        showToast(
-          tp("admin.users.deleteSelectedPartial", {
-            deleted,
-            skipped,
-            failed,
-          }),
-          failed > 0 ? "error" : "success",
-        );
-      }
-    } catch {
-      showToast(t("admin.users.deleteSelectedError"), "error");
+      await pendingConfirm.run();
     } finally {
       setActionLoading(false);
+      setPendingConfirm(null);
     }
   };
 
@@ -648,13 +634,13 @@ useEffect(() => {
 
   return (
     <div className={`h-full overflow-y-auto ${ui.pageWrapper} transition-colors`}>
-      <div className="w-full py-6 px-6 space-y-6 pb-20">
+      <div className="w-full py-6 px-4 sm:px-6 space-y-6 pb-20">
         {/* Header */}
         <AdminPageHeader
           isDarkTheme={isDarkTheme}
           title={t("admin.users.title")}
-          subtitle={filteredUsers.length === totalUsers 
-            ? `${totalUsers} ${pluralizeRecords(totalUsers)}` 
+          subtitle={filteredUsers.length === totalUsers
+            ? `${totalUsers} ${pluralizeRecords(totalUsers)}`
             : tp("admin.users.foundOf", { found: filteredUsers.length, total: totalUsers })}
           actions={
             <>
@@ -681,16 +667,12 @@ useEffect(() => {
                 onChange={handleImport}
                 style={{ display: "none" }}
               />
-              <button className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors shadow-sm ${isDarkTheme ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
-                <Plus className="h-4 w-4" />
-                {t("admin.users.addUser")}
-              </button>
             </>
           }
         />
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map((stat) => (
             <div key={stat.label} className={`${tableBg} rounded-xl p-5 border ${tableBorder}`}>
               <p className={`text-sm ${tableHeaderText} mb-1`}>{stat.label}</p>
@@ -700,7 +682,7 @@ useEffect(() => {
         </div>
 
         {/* Toolbar */}
-        <div className={`${tableBg} rounded-xl p-4 border ${tableBorder} flex items-center gap-3`}>
+        <div className={`${tableBg} rounded-xl p-4 border ${tableBorder} flex flex-wrap items-center gap-3`}>
           <div className="relative" ref={roleRef}>
             <button
               onClick={() => setShowRoleDropdown(!showRoleDropdown)}
@@ -829,8 +811,8 @@ useEffect(() => {
             <div className="h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
           </div>
         )}
-        <div className={`${tableBg} rounded-xl border ${tableBorder} overflow-hidden`}>
-          <table className="w-full">
+        <div className={`${tableBg} rounded-xl border ${tableBorder} overflow-x-auto`}>
+          <table className="w-full min-w-[900px]">
             <thead>
               <tr className={`border-b ${tableRowBorder} ${ui.sectionHeaderBg}`}>
                 <th className="px-4 py-3 text-left">
@@ -859,7 +841,7 @@ useEffect(() => {
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.length === 0 ? (
+              {loading && users.length === 0 ? null : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
@@ -879,7 +861,7 @@ useEffect(() => {
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((user) => (
+                pagedUsers.map((user) => (
                   <tr key={user.id} className={`border-b ${tableRowBorder} last:border-b-0 ${tableRowBg} ${tableRowHover} transition-colors`}>
                   <td className="px-4 py-3">
                     <div
@@ -988,31 +970,8 @@ useEffect(() => {
           </table>
         </div>
 
-        {/* Toast Notification */}
-        {toast && (
-          <div className={`fixed bottom-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transition-all ${
-            toast.type === 'error' 
-              ? 'bg-red-500 text-white' 
-              : 'bg-green-500 text-white'
-          }`}>
-            <div className="flex items-center gap-2">
-              {toast.type === 'error' ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-              <span className="text-sm font-medium">{toast.message}</span>
-            </div>
-          </div>
-        )}
-
         {/* Pagination */}
         {(() => {
-          const totalPages = Math.ceil(totalUsers / itemsPerPage) || 1;
 
           // Generate page numbers to show
           const getPageNumbers = () => {
@@ -1022,8 +981,8 @@ useEffect(() => {
             // For many pages, show first, last and a window around the current page: 1 … 6 7 8 … 20.
             // (Previously always [1, 2, 3, …, last], so pages 4..last-1 had no button and the current one was hidden.)
             const pages: number[] = [1];
-            const from = Math.max(2, currentPage - 1);
-            const to = Math.min(totalPages - 1, currentPage + 1);
+            const from = Math.max(2, safePage - 1);
+            const to = Math.min(totalPages - 1, safePage + 1);
             if (from > 2) pages.push(-1); // -1 represents ellipsis
             for (let p = from; p <= to; p += 1) pages.push(p);
             if (to < totalPages - 1) pages.push(-1);
@@ -1034,10 +993,10 @@ useEffect(() => {
           const pageNumbers = getPageNumbers();
 
           return (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-4">
                 <span className={`text-sm ${tableHeaderText}`}>
-                  {tp("admin.users.shownOf", { shown: filteredUsers.length, total: totalUsers })}
+                  {tp("admin.users.shownOf", { shown: pagedUsers.length, total: filteredUsers.length })}
                   {roleFilter !== "all" || statusFilter !== "all" || groupFilter !== "all" ? t("admin.users.filtered") : ""}
                 </span>
                 <div className="flex items-center gap-2" ref={perPageRef}>
@@ -1097,7 +1056,7 @@ useEffect(() => {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
+                    disabled={safePage === 1}
                     className={`p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${paginationBtn}`}
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -1111,7 +1070,7 @@ useEffect(() => {
                         key={page}
                         onClick={() => setCurrentPage(page)}
                         className={`min-w-[36px] h-9 px-3 rounded-lg text-sm font-medium transition-colors ${
-                          currentPage === page
+                          safePage === page
                             ? "bg-blue-600 text-white"
                             : paginationBtn
                         }`}
@@ -1123,7 +1082,7 @@ useEffect(() => {
 
                   <button
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
+                    disabled={safePage === totalPages}
                     className={`p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${paginationBtn}`}
                   >
                     <ChevronRight className="h-4 w-4" />
@@ -1137,8 +1096,8 @@ useEffect(() => {
 
       {/* View User Modal */}
       {viewUser && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className={`${modalBg} border ${modalBorder} rounded-xl p-6 max-w-md w-full mx-4`}>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className={`${modalBg} border ${modalBorder} rounded-xl p-6 max-w-md w-full max-h-full overflow-y-auto`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-lg font-semibold ${modalText}`}>{t("admin.users.profileModal")}</h3>
               <button onClick={() => setViewUser(null)} className={`p-1 ${modalBtnHover} rounded ${modalBtnText}`}>
@@ -1185,10 +1144,21 @@ useEffect(() => {
         </div>
       )}
 
+      <ConfirmModal
+        isOpen={pendingConfirm !== null}
+        title={pendingConfirm?.title ?? ""}
+        message={pendingConfirm?.message ?? ""}
+        confirmText={pendingConfirm?.confirmText}
+        isDangerous
+        isLoading={actionLoading}
+        onCancel={() => setPendingConfirm(null)}
+        onConfirm={() => void runPendingConfirm()}
+      />
+
       {/* Edit User Modal */}
       {editUser && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className={`${modalBg} border ${modalBorder} rounded-xl p-6 max-w-md w-full mx-4`}>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className={`${modalBg} border ${modalBorder} rounded-xl p-6 max-w-md w-full max-h-full overflow-y-auto`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-lg font-semibold ${modalText}`}>{t("admin.users.editModal")}</h3>
               <button onClick={() => setEditUser(null)} className={`p-1 ${modalBtnHover} rounded ${modalBtnText}`}>
