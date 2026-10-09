@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Outlet, useLocation, useParams } from "react-router-dom";
 import RepoSectionShell from "../components/repo/RepoSectionShell";
 import { StudentRepoWorkspaceContext } from "../context/StudentRepoWorkspaceContext";
@@ -66,7 +67,17 @@ export default function StudentRepositoryLayout({ isDarkTheme = false }: Student
               {error ?? t("repo.route.repositoryNotFound")}
             </div>
           ) : (
-            <Outlet />
+            // Tabs are lazy chunks: keep the repo header and tabs while one loads instead of the app-wide fallback.
+            <Suspense
+              fallback={
+                <div
+                  className="rounded-xl border animate-pulse min-h-[280px]"
+                  style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}
+                />
+              }
+            >
+              <Outlet />
+            </Suspense>
           )}
         </RepoSectionShell>
       </StudentRepoWorkspaceContext.Provider>
