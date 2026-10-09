@@ -236,10 +236,10 @@ function AppShell({
               <Routes>
                 <Route path="/" element={<RoleBasedHomeRedirect />} />
                 <Route path="/home" element={<HomeRoute isDarkTheme={isDarkTheme} />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/register" element={<RegisterPage />} />
-                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/login" element={<LoginPage isDarkTheme={isDarkTheme} />} />
+                <Route path="/register" element={<RegisterPage isDarkTheme={isDarkTheme} />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage isDarkTheme={isDarkTheme} />} />
+                <Route path="/reset-password" element={<ResetPasswordPage isDarkTheme={isDarkTheme} />} />
 
                 <Route element={<AuthRequired />}>
                   <Route path="/profile" element={<ProfilePage isDarkTheme={isDarkTheme} />} />

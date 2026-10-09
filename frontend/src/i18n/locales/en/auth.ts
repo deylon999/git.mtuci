@@ -85,6 +85,7 @@ export const authEn = {
       passwordMismatch: "Passwords do not match",
       passwordMinLength: "Password must be at least 8 characters",
       invalidToken: "Invalid or missing password reset link",
+      requestNewLink: "Request a new link",
       subtitleAccount: "Enter a new password for your account.",
     },
   },

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
@@ -16,7 +16,8 @@ function safeReturnPath(state: unknown): string | null {
   return from;
 }
 
-export default function LoginPage() {
+/** The theme comes from App, so these pages follow the toggle immediately instead of a localStorage snapshot. */
+export default function LoginPage({ isDarkTheme = false }: { isDarkTheme?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const registeredState = location.state as { registered?: boolean; email?: string } | null;
@@ -24,28 +25,12 @@ export default function LoginPage() {
   const { t } = useUserPreferences();
   const { refreshUser } = useAuthUser();
 
-  // Read theme from localStorage (persisted across sessions)
-  const [isDarkTheme, setIsDarkTheme] = useState(() => {
-    const saved = localStorage.getItem("theme");
-    return saved ? saved === "dark" : false;
-  });
-
   const [email, setEmail] = useState(() => registeredState?.email ?? "");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Listen for theme changes from other pages
-  useEffect(() => {
-    const handleStorageChange = () => {
-      const saved = localStorage.getItem("theme");
-      setIsDarkTheme(saved ? saved === "dark" : false);
-    };
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
 
   const theme = getTheme(isDarkTheme);
 

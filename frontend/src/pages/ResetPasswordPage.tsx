@@ -4,25 +4,11 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { resetPassword } from "../api/authApi";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 
-export default function ResetPasswordPage() {
+/** The theme comes from App, so these pages follow the toggle immediately instead of a localStorage snapshot. */
+export default function ResetPasswordPage({ isDarkTheme = false }: { isDarkTheme?: boolean }) {
   const navigate = useNavigate();
   const { t } = useUserPreferences();
   const [searchParams] = useSearchParams();
-
-  // Read theme from localStorage (persisted across sessions)
-  const [isDarkTheme, setIsDarkTheme] = useState(() => {
-    const saved = localStorage.getItem("theme");
-    return saved ? saved === "dark" : false;
-  });
-
-  useEffect(() => {
-    const handleStorageChange = () => {
-      const saved = localStorage.getItem("theme");
-      setIsDarkTheme(saved ? saved === "dark" : false);
-    };
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
 
   const [token, setToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -91,7 +77,20 @@ export default function ResetPasswordPage() {
           <p className={`mt-1 text-sm ${subtitleText} transition-colors`}>{t("auth.reset.subtitleAccount")}</p>
         </div>
 
-        {success ? (
+        {!searchParams.get("token") && !success ? (
+          <div className="space-y-4">
+            <div className={`rounded-lg border p-4 text-sm ${errorBg} transition-colors`}>
+              {t("auth.reset.invalidToken")}
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/forgot-password")}
+              className={`w-full rounded-lg px-3 py-2.5 font-medium transition ${primaryBtn}`}
+            >
+              {t("auth.reset.requestNewLink")}
+            </button>
+          </div>
+        ) : success ? (
           <div className="space-y-4">
             <div className={`rounded-lg border p-4 text-sm ${successBg} transition-colors`}>
               {t("auth.reset.successDetail")}

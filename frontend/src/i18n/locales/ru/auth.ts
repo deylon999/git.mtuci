@@ -85,6 +85,7 @@ export const authRu = {
       passwordMismatch: "Пароли не совпадают",
       passwordMinLength: "Пароль должен содержать минимум 8 символов",
       invalidToken: "Недействительная или отсутствующая ссылка для сброса пароля",
+      requestNewLink: "Запросить новую ссылку",
       subtitleAccount: "Введите новый пароль для вашего аккаунта.",
     },
   },

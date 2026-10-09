@@ -1,28 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { register, registerStudentMtuci } from "../api/authApi";
 import type { FormEvent } from "react";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 
-export default function RegisterPage() {
+/** The theme comes from App, so these pages follow the toggle immediately instead of a localStorage snapshot. */
+export default function RegisterPage({ isDarkTheme = false }: { isDarkTheme?: boolean }) {
   const navigate = useNavigate();
   const { t } = useUserPreferences();
-
-  // Read theme from localStorage (persisted across sessions)
-  const [isDarkTheme, setIsDarkTheme] = useState(() => {
-    const saved = localStorage.getItem("theme");
-    return saved ? saved === "dark" : false;
-  });
-
-  useEffect(() => {
-    const handleStorageChange = () => {
-      const saved = localStorage.getItem("theme");
-      setIsDarkTheme(saved ? saved === "dark" : false);
-    };
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
