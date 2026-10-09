@@ -20,6 +20,7 @@ import {
 import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
 import { useUserPreferences } from '../../context/UserPreferencesContext';
 import { getTheme } from '../../theme';
+import { normalizeHexColor, readableTextColor } from '../../utils/labelColor';
 import {
   getLabels,
   createLabel,
@@ -46,6 +47,8 @@ interface LabelManagerProps {
   onLabelsChange?: () => void;
   isDarkTheme?: boolean;
 }
+
+const HEX_COLOR_RE = /^#?(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 const DEFAULT_COLORS = [
   '#d73a4a', '#0075ca', '#cfd3d7', '#a2eeef', '#7057ff',
@@ -92,7 +95,10 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
     }
   }, [open, loadLabels]);
 
+  const colorValid = HEX_COLOR_RE.test((formData.color ?? "").trim());
+
   const handleCreate = async () => {
+    if (loading || !colorValid) return;
     if (!formData.name.trim()) {
       setError(t('repo.issues.labels.nameRequired'));
       return;
@@ -101,7 +107,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
     setLoading(true);
     setError(null);
     try {
-      await createLabel(repositoryId, formData);
+      await createLabel(repositoryId, { ...formData, color: normalizeHexColor(formData.color) });
       await loadLabels();
       setIsCreating(false);
       setFormData({ name: '', color: '#cccccc', description: '' });
@@ -114,14 +120,14 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
   };
 
   const handleUpdate = async () => {
-    if (!editingLabel) return;
+    if (!editingLabel || loading || !colorValid) return;
 
     setLoading(true);
     setError(null);
     try {
       const updateData: UpdateLabelRequest = {
         name: formData.name,
-        color: formData.color,
+        color: normalizeHexColor(formData.color),
         description: formData.description,
       };
       await updateLabel(editingLabel.id, updateData);
@@ -137,6 +143,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
   };
 
   const handleDelete = async (labelId: string) => {
+    if (loading) return;
     if (!(await askConfirm({ message: t('repo.issues.labels.deleteConfirm') }))) return;
 
     setLoading(true);
@@ -156,7 +163,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
     setEditingLabel(label);
     setFormData({
       name: label.name,
-      color: label.color,
+      color: normalizeHexColor(label.color),
       description: label.description || '',
     });
     setIsCreating(false);
@@ -226,8 +233,13 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
                 {DEFAULT_COLORS.map((color) => (
                   <Box
                     key={color}
+                    component="button"
+                    type="button"
+                    aria-label={color}
+                    aria-pressed={formData.color === color}
                     onClick={() => setFormData({ ...formData, color })}
                     sx={{
+                      p: 0,
                       width: 32,
                       height: 32,
                       backgroundColor: color,
@@ -246,6 +258,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
                 value={formData.color}
                 onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                 placeholder="#cccccc"
+                error={!colorValid}
                 sx={issueFieldSx(theme)}
               />
             </Box>
@@ -253,8 +266,8 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
               <Chip
                 label={formData.name || t('repo.issues.labels.preview')}
                 sx={{
-                  backgroundColor: formData.color,
-                  color: parseInt((formData.color ?? '').slice(1), 16) > 0xffffff / 2 ? '#000' : '#fff',
+                  backgroundColor: normalizeHexColor(formData.color),
+                  color: readableTextColor(formData.color),
                 }}
               />
               <Box sx={{ flexGrow: 1 }} />
@@ -264,7 +277,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
               <Button
                 variant="contained"
                 onClick={editingLabel ? handleUpdate : handleCreate}
-                disabled={loading || !formData.name.trim()}
+                disabled={loading || !formData.name.trim() || !colorValid}
                 sx={issuePrimaryButtonSx(theme)}
               >
                 {editingLabel ? t('common.save') : t('common.create')}
@@ -294,8 +307,8 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
                       label={label.name}
                       size="small"
                       sx={{
-                        backgroundColor: label.color,
-                        color: parseInt(label.color.slice(1), 16) > 0xffffff / 2 ? '#000' : '#fff',
+                        backgroundColor: normalizeHexColor(label.color),
+                        color: readableTextColor(label.color),
                       }}
                     />
                   </Box>
@@ -304,10 +317,22 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
                 slotProps={{ secondary: { sx: { color: theme.text2 } } }}
               />
               <ListItemSecondaryAction>
-                <IconButton edge="end" onClick={() => startEdit(label)} sx={{ mr: 1, color: theme.text2 }}>
+                <IconButton
+                  edge="end"
+                  onClick={() => startEdit(label)}
+                  disabled={loading}
+                  aria-label={t('common.edit')}
+                  sx={{ mr: 1, color: theme.text2 }}
+                >
                   <EditIcon />
                 </IconButton>
-                <IconButton edge="end" onClick={() => handleDelete(label.id)} sx={{ color: theme.danger }}>
+                <IconButton
+                  edge="end"
+                  onClick={() => void handleDelete(label.id)}
+                  disabled={loading}
+                  aria-label={t('common.delete')}
+                  sx={{ color: theme.danger }}
+                >
                   <DeleteIcon />
                 </IconButton>
               </ListItemSecondaryAction>

@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import MuiThemeScope from '../common/MuiThemeScope';
 import { useParams } from "react-router-dom";
 import {
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import type { Locale } from "../../i18n";
 import { localeTag } from "../../utils/dates";
+import { normalizeHexColor, readableTextColor } from "../../utils/labelColor";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
 import {
   getIssueByNumber,
@@ -30,12 +32,6 @@ import { MarkdownWithLinks } from "../common/MarkdownWithLinks";
 
 interface IssueDetailProps {
   isDarkTheme?: boolean;
-}
-
-function readableLabelColor(color: string) {
-  const normalized = color.startsWith("#") ? color : `#${color}`;
-  const value = parseInt(normalized.slice(1), 16);
-  return Number.isFinite(value) && value > 0xffffff / 2 ? "#111827" : "#ffffff";
 }
 
 function formatDateTime(date: string, locale: Locale) {
@@ -75,22 +71,34 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
   const [error, setError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [stateChanging, setStateChanging] = useState(false);
+  const loadSeqRef = useRef(0);
 
-  const loadIssue = async () => {
+  // `silent` refreshes after an action keep the page on screen instead of swapping it for the spinner.
+  const loadIssue = async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!repoId || !number) return;
 
-    setLoading(true);
-    setError(null);
+    const seq = ++loadSeqRef.current;
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const issueNumber = parseInt(number, 10);
-      const response = await getIssueByNumber(repoId, issueNumber);
+      const [response, timelineResp] = await Promise.all([
+        getIssueByNumber(repoId, issueNumber),
+        getIssueTimeline(repoId, issueNumber),
+      ]);
+      // Navigating to another issue starts a new load; drop this one's late response.
+      if (seq !== loadSeqRef.current) return;
       setIssue(response.data);
-      const timelineResp = await getIssueTimeline(repoId, issueNumber);
       setTimeline(timelineResp.data);
     } catch {
-      setError(t("repo.issues.loadFailed"));
+      if (seq !== loadSeqRef.current) return;
+      if (silent) toast.error(t("repo.issues.loadFailed"));
+      else setError(t("repo.issues.loadFailed"));
     } finally {
-      setLoading(false);
+      if (!silent && seq === loadSeqRef.current) setLoading(false);
     }
   };
 
@@ -113,21 +121,26 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
   }, [repoId, number]);
 
   useEffect(() => {
+    setComments([]);
     if (issue?.id) {
       void loadComments();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [issue?.id]);
 
+  // Action failures go to a toast: putting them in `error` would replace the whole issue (and a typed comment) with the message.
   const handleStateChange = async (newState: "open" | "closed") => {
-    if (!issue) return;
+    if (!issue || stateChanging) return;
 
+    setStateChanging(true);
     try {
       const updateData: UpdateIssueRequest = { state: newState };
       await updateIssue(issue.id, updateData);
-      await loadIssue();
+      await loadIssue({ silent: true });
     } catch {
-      setError(t("repo.issues.updateFailed"));
+      toast.error(t("repo.issues.updateFailed"));
+    } finally {
+      setStateChanging(false);
     }
   };
 
@@ -138,14 +151,10 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
     try {
       const data: CreateCommentRequest = { body: commentText };
       await createComment(issue.id, data);
-      await loadComments();
-      if (repoId && number) {
-        const timelineResp = await getIssueTimeline(repoId, parseInt(number, 10));
-        setTimeline(timelineResp.data);
-      }
       setCommentText("");
+      await Promise.all([loadComments(), loadIssue({ silent: true })]);
     } catch {
-      setError(t("repo.issues.commentFailed"));
+      toast.error(t("repo.issues.commentFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -210,7 +219,7 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
                 <span
                   key={label.id}
                   className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                  style={{ backgroundColor: label.color, color: readableLabelColor(label.color) }}
+                  style={{ backgroundColor: normalizeHexColor(label.color), color: readableTextColor(label.color) }}
                 >
                   {label.name}
                 </span>
@@ -230,7 +239,8 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
           <button
             type="button"
             onClick={() => void handleStateChange(issue.state === "open" ? "closed" : "open")}
-            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+            disabled={stateChanging}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60"
             style={{
               borderColor: issue.state === "open" ? `${theme.danger}55` : `${theme.success}55`,
               backgroundColor: issue.state === "open" ? `${theme.danger}12` : `${theme.success}12`,

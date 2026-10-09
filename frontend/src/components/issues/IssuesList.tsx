@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
 import {
   Autocomplete,
   Button,
@@ -27,6 +28,7 @@ import {
 } from "lucide-react";
 import type { Locale } from "../../i18n";
 import { localeTag } from "../../utils/dates";
+import { normalizeHexColor, readableTextColor } from "../../utils/labelColor";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
 import {
   getIssues,
@@ -64,11 +66,7 @@ const stateTabs: Array<{ value: "open" | "closed" | "all"; key: string }> = [
   { value: "all", key: "repo.issues.all" },
 ];
 
-function readableLabelColor(color: string) {
-  const normalized = color.startsWith("#") ? color : `#${color}`;
-  const value = parseInt(normalized.slice(1), 16);
-  return Number.isFinite(value) && value > 0xffffff / 2 ? "#111827" : "#ffffff";
-}
+const SEARCH_DEBOUNCE_MS = 300;
 
 function formatIssueDate(date: string, locale: Locale) {
   return new Date(date).toLocaleDateString(localeTag(locale), {
@@ -81,7 +79,8 @@ function formatIssueDate(date: string, locale: Locale) {
 export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkTheme = false }) => {
   const { t, language } = useUserPreferences();
   const theme = getTheme(isDarkTheme);
-  const [issues, setIssues] = useState<IssueListItem[]>([]);
+  // Every issue matching the search, all states: the tabs filter locally so each tab's count is real.
+  const [allIssues, setAllIssues] = useState<IssueListItem[]>([]);
   const [labels, setLabels] = useState<IssueLabel[]>([]);
   const [milestones, setMilestones] = useState<IssueMilestone[]>([]);
   const [loading, setLoading] = useState(false);
@@ -91,6 +90,10 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
   const [milestoneManagerOpen, setMilestoneManagerOpen] = useState(false);
   const [stateFilter, setStateFilter] = useState<"open" | "closed" | "all">("open");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [busyIssueId, setBusyIssueId] = useState<string | null>(null);
+  const loadSeqRef = useRef(0);
   const [formData, setFormData] = useState<CreateIssueRequest>({
     title: "",
     body: "",
@@ -101,27 +104,36 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
 
   const counts = useMemo(
     () => ({
-      open: issues.filter((issue) => issue.state === "open").length,
-      closed: issues.filter((issue) => issue.state === "closed").length,
-      all: issues.length,
+      open: allIssues.filter((issue) => issue.state === "open").length,
+      closed: allIssues.filter((issue) => issue.state === "closed").length,
+      all: allIssues.length,
     }),
-    [issues],
+    [allIssues],
+  );
+  const issues = useMemo(
+    () => (stateFilter === "all" ? allIssues : allIssues.filter((issue) => issue.state === stateFilter)),
+    [allIssues, stateFilter],
   );
 
-  const loadIssues = async () => {
-    setLoading(true);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // `silent` refreshes after an action keep the list on screen instead of the spinner.
+  const loadIssues = async ({ silent = false }: { silent?: boolean } = {}) => {
+    const seq = ++loadSeqRef.current;
+    if (!silent) setLoading(true);
     setError(null);
     try {
-      const params = {
-        ...(stateFilter === "all" ? {} : { state: stateFilter }),
-        ...(searchQuery.trim() ? { q: searchQuery.trim() } : {}),
-      };
-      const response = await getIssues(repositoryId, params);
-      setIssues(response.data);
+      const response = await getIssues(repositoryId, debouncedQuery ? { q: debouncedQuery } : undefined);
+      // Typing starts a new search; a slower earlier response must not overwrite its results.
+      if (seq !== loadSeqRef.current) return;
+      setAllIssues(response.data);
     } catch {
-      setError(t("repo.issues.loadFailed"));
+      if (seq === loadSeqRef.current) setError(t("repo.issues.loadFailed"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   };
 
@@ -145,22 +157,27 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
 
   useEffect(() => {
     void loadIssues();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repositoryId, debouncedQuery]);
+
+  useEffect(() => {
     void loadLabels();
     void loadMilestones();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repositoryId, stateFilter, searchQuery]);
+  }, [repositoryId]);
 
+  // Errors from the dialog and row actions go to a toast: the list's error banner sits behind the dialog.
   const handleCreate = async () => {
+    if (creating) return;
     if (!formData.title.trim()) {
-      setError(t("repo.issues.titleRequired"));
+      toast.error(t("repo.issues.titleRequired"));
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    setCreating(true);
     try {
       await createIssue(repositoryId, formData);
-      await loadIssues();
+      void loadIssues({ silent: true });
       setCreateDialogOpen(false);
       setFormData({
         title: "",
@@ -170,19 +187,23 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
         milestone_id: undefined,
       });
     } catch {
-      setError(t("repo.issues.createFailed"));
+      toast.error(t("repo.issues.createFailed"));
     } finally {
-      setLoading(false);
+      setCreating(false);
     }
   };
 
   const handleStateChange = async (issueId: string, newState: "open" | "closed") => {
+    if (busyIssueId) return;
+    setBusyIssueId(issueId);
     try {
       const updateData: UpdateIssueRequest = { state: newState };
       await updateIssue(issueId, updateData);
-      await loadIssues();
+      await loadIssues({ silent: true });
     } catch {
-      setError(t("repo.issues.updateFailed"));
+      toast.error(t("repo.issues.updateFailed"));
+    } finally {
+      setBusyIssueId(null);
     }
   };
 
@@ -338,8 +359,8 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
                         key={label.id}
                         className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
                         style={{
-                          backgroundColor: label.color,
-                          color: readableLabelColor(label.color),
+                          backgroundColor: normalizeHexColor(label.color),
+                          color: readableTextColor(label.color),
                         }}
                       >
                         {label.name}
@@ -361,7 +382,9 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
                 <button
                   type="button"
                   onClick={() => void handleStateChange(issue.id, issue.state === "open" ? "closed" : "open")}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border"
+                  disabled={busyIssueId === issue.id}
+                  aria-label={issue.state === "open" ? t("repo.issues.close") : t("repo.issues.reopen")}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-60"
                   style={{
                     borderColor: theme.border,
                     backgroundColor: theme.bg4,
@@ -426,8 +449,8 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
                   label={option.name}
                   size="small"
                   sx={{
-                    backgroundColor: option.color,
-                    color: readableLabelColor(option.color),
+                    backgroundColor: normalizeHexColor(option.color),
+                    color: readableTextColor(option.color),
                   }}
                 />
               ))
@@ -464,7 +487,7 @@ export const IssuesList: React.FC<IssuesListProps> = ({ repositoryId, isDarkThem
           <Button
             variant="contained"
             onClick={handleCreate}
-            disabled={loading || !formData.title.trim()}
+            disabled={creating || !formData.title.trim()}
             sx={issuePrimaryButtonSx(theme)}
           >
             {t("common.create")}

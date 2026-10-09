@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Paper,
@@ -47,6 +47,9 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showResolved, setShowResolved] = useState(false);
+  // Thread whose resolve/reply request is in flight, so a double click doesn't post twice.
+  const [busyThreadId, setBusyThreadId] = useState<string | null>(null);
+  const loadSeqRef = useRef(0);
 
   const loadThreadComments = useCallback(async (threadId: string) => {
     try {
@@ -58,17 +61,20 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
   }, []);
 
   const loadThreads = useCallback(async () => {
+    // Toggling "show resolved" or switching PRs starts a new load; a slower earlier response must not overwrite it.
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     setError(null);
     try {
       const response = await getThreads(repositoryId, pullNumber, showResolved ? undefined : false);
+      if (seq !== loadSeqRef.current) return;
       setThreads(response.data);
       // Load every thread's comments in parallel instead of one request after another.
       await Promise.all(response.data.map((thread) => loadThreadComments(thread.id)));
     } catch {
-      setError(t('repo.review.threads.loadFailed'));
+      if (seq === loadSeqRef.current) setError(t('repo.review.threads.loadFailed'));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [repositoryId, pullNumber, showResolved, t, loadThreadComments]);
 
@@ -77,26 +83,33 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
   }, [loadThreads]);
 
   const handleResolve = async (threadId: string, resolve: boolean) => {
+    if (busyThreadId) return;
+    setBusyThreadId(threadId);
     try {
       await updateThread(threadId, { is_resolved: resolve });
       await loadThreads();
       onThreadsChange?.();
     } catch {
       setError(t('repo.review.threads.updateFailed'));
+    } finally {
+      setBusyThreadId(null);
     }
   };
 
   const handleReply = async (threadId: string) => {
     const text = replyText[threadId]?.trim();
-    if (!text) return;
+    if (!text || busyThreadId) return;
 
+    setBusyThreadId(threadId);
     try {
       const data: CreateCommentRequest = { body: text };
       await createThreadComment(threadId, data);
-      await loadThreadComments(threadId);
       setReplyText((prev) => ({ ...prev, [threadId]: '' }));
+      await loadThreadComments(threadId);
     } catch {
       setError(t('repo.review.threads.commentFailed'));
+    } finally {
+      setBusyThreadId(null);
     }
   };
 
@@ -152,7 +165,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
                     {thread.file_path}
-                    {thread.line_number && `:${thread.line_number}`}
+                    {thread.line_number != null && `:${thread.line_number}`}
                   </Typography>
                   {thread.is_resolved && (
                     <Chip
@@ -167,7 +180,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
                 {thread.diff_hunk && (
                   <Box
                     sx={{
-                      backgroundColor: 'grey.100',
+                      backgroundColor: 'action.hover',
                       p: 1,
                       borderRadius: 1,
                       fontFamily: 'monospace',
@@ -193,6 +206,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
                       size="small"
                       startIcon={<ResolveIcon />}
                       onClick={() => handleResolve(thread.id, true)}
+                      disabled={busyThreadId === thread.id}
                       color="success"
                     >
                       {t('repo.review.threads.resolve')}
@@ -202,6 +216,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
                       size="small"
                       startIcon={<UnresolveIcon />}
                       onClick={() => handleResolve(thread.id, false)}
+                      disabled={busyThreadId === thread.id}
                     >
                       {t('repo.review.threads.unresolve')}
                     </Button>
@@ -239,7 +254,7 @@ export const ReviewThreads: React.FC<ReviewThreadsProps> = ({
                     variant="contained"
                     size="small"
                     onClick={() => handleReply(thread.id)}
-                    disabled={!replyText[thread.id]?.trim()}
+                    disabled={!replyText[thread.id]?.trim() || busyThreadId === thread.id}
                   >
                     {t('common.reply')}
                   </Button>

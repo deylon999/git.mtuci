@@ -90,6 +90,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
   }, [open, loadMilestones]);
 
   const handleCreate = async () => {
+    if (loading) return;
     if (!formData.title.trim()) {
       setError(t('repo.issues.milestones.titleRequired'));
       return;
@@ -111,7 +112,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
   };
 
   const handleUpdate = async () => {
-    if (!editingMilestone) return;
+    if (!editingMilestone || loading) return;
 
     setLoading(true);
     setError(null);
@@ -135,6 +136,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
   };
 
   const handleDelete = async (milestoneId: string) => {
+    if (loading) return;
     if (!(await askConfirm({ message: t('repo.issues.milestones.deleteConfirm') }))) return;
 
     setLoading(true);
@@ -175,7 +177,8 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return null;
-    return new Date(dateString).toLocaleDateString(localeTag(language));
+    // The date input stores UTC midnight of the picked day; format in UTC so it doesn't shift a day west of Greenwich.
+    return new Date(dateString).toLocaleDateString(localeTag(language), { timeZone: 'UTC' });
   };
 
   return (
@@ -294,10 +297,22 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
                 }
               />
               <ListItemSecondaryAction>
-                <IconButton edge="end" onClick={() => startEdit(milestone)} sx={{ mr: 1, color: theme.text2 }}>
+                <IconButton
+                  edge="end"
+                  onClick={() => startEdit(milestone)}
+                  disabled={loading}
+                  aria-label={t('common.edit')}
+                  sx={{ mr: 1, color: theme.text2 }}
+                >
                   <EditIcon />
                 </IconButton>
-                <IconButton edge="end" onClick={() => handleDelete(milestone.id)} sx={{ color: theme.danger }}>
+                <IconButton
+                  edge="end"
+                  onClick={() => void handleDelete(milestone.id)}
+                  disabled={loading}
+                  aria-label={t('common.delete')}
+                  sx={{ color: theme.danger }}
+                >
                   <DeleteIcon />
                 </IconButton>
               </ListItemSecondaryAction>
