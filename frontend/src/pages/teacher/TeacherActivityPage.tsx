@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { activityMessageText } from "../../utils/activityText";
 import { GitCommit, GitFork } from "lucide-react";
 import { getTeacherActivity, type TeacherActivityItem } from "../../api/teacherDashboardApi";
 import {
@@ -38,7 +39,7 @@ function activityBadgeTone(type: string): "blue" | "warning" | "success" | "neut
 
 export default function TeacherActivityPage({ isDarkTheme = false }: Props) {
   const theme = useTeacherTheme(isDarkTheme);
-  const { t } = useUserPreferences();
+  const { t, language } = useUserPreferences();
 
   function activityTypeLabel(type: string): string {
     const key = `teacher.activity.types.${type}` as const;
@@ -147,6 +148,7 @@ export default function TeacherActivityPage({ isDarkTheme = false }: Props) {
                 items.map((item, i) => {
                   const style = ACTIVITY_ICON_STYLES[i % ACTIVITY_ICON_STYLES.length];
                   const isFork = item.activity_type === "fork";
+                  const messageText = activityMessageText(item.activity_type, item.message, language);
                   return (
                     <TeacherActivityRow
                       key={item.id}
@@ -166,9 +168,9 @@ export default function TeacherActivityPage({ isDarkTheme = false }: Props) {
                             <span>
                               {" "}
                               → {item.repo_name}
-                              {item.message ? (
+                              {messageText ? (
                                 <span style={{ color: theme.text2 }}>
-                                  : «{item.message.length > 50 ? `${item.message.slice(0, 50)}…` : item.message}»
+                                  : «{messageText.length > 50 ? `${messageText.slice(0, 50)}…` : messageText}»
                                 </span>
                               ) : null}
                             </span>

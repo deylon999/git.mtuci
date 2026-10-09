@@ -388,6 +388,8 @@ export const adminPagesRu = {
     actionDelete: " удалил репозиторий ",
     actionLogin: " вошёл в систему",
     actionLogout: " вышел из системы",
+    actionComment: " прокомментировал pull request в ",
+    actionUpload: " загрузил файл в ",
     shownOf: "Показано {shown} из {total}",
     perPage: "По",
     onPage: "на странице",
@@ -415,6 +417,8 @@ export const adminPagesRu = {
     typeDelete: "Удаление",
     typeLogin: "Вход",
     typeLogout: "Выход",
+    typeComment: "Комментарий",
+    typeUpload: "Загрузка",
   },
   notificationsPage: {
     subtitle: "Системные события, которые требуют вашего внимания",

@@ -431,4 +431,10 @@ export const coreEn = {
     backupFailed: { title: "Backup failed", message: "{error}" },
     backupTimeout: { title: "Backup failed", message: "The backup timed out" },
   },
+  // Backend-generated activity messages (see utils/activityText.ts).
+  activityText: {
+    commits: "{n} {n|commit|commits}",
+    prCommentBy: "PR #{number}, comment by {login}",
+    prCommentByPreview: "PR #{number}, {login}: {preview}",
+  },
 };

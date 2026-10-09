@@ -1,4 +1,5 @@
 import { Search, Download, Wifi } from "lucide-react";
+import { activityMessageText } from "../utils/activityText";
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from "react";
 import toast from "react-hot-toast";
 import {
@@ -176,7 +177,7 @@ function HourlyActivityChart({
 }
 
 export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) {
-  const { t, tp } = useUserPreferences();
+  const { t, tp, language } = useUserPreferences();
   const dateLocale = currentLocaleTag();
   const colors = getColors(isDarkTheme);
   const ui = getAdminPageTheme(isDarkTheme);
@@ -563,6 +564,8 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
       repo_deleted: "admin.activity.typeDelete",
       login: "admin.activity.typeLogin",
       logout: "admin.activity.typeLogout",
+      pr_comment: "admin.activity.typeComment",
+      file_upload: "admin.activity.typeUpload",
     };
     const key = keysByType[type];
     return key ? t(key) : fallbackTag;
@@ -723,6 +726,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
             {activities.map((activity: ActivityItem) => {
               const iconBg = getEventIconBg(activity.type);
               const tagStyle = getTagStyle(activity.type);
+              const messageText = activityMessageText(activity.type, activity.message, language);
               return (
                 <div key={activity.id} style={{
                   display: "flex", alignItems: "flex-start", gap: "12px", padding: "12px 16px",
@@ -752,19 +756,21 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                       {(activity.type === "delete" || activity.type === "repo_deleted") && t("admin.activity.actionDelete")}
                       {activity.type === "login" && t("admin.activity.actionLogin")}
                       {activity.type === "logout" && t("admin.activity.actionLogout")}
+                      {activity.type === "pr_comment" && t("admin.activity.actionComment")}
+                      {activity.type === "file_upload" && t("admin.activity.actionUpload")}
                       {activity.repo ? (
                         <span style={{ color: colors.accent2, fontFamily: "monospace", fontSize: "11px" }}>{activity.repo}</span>
                       ) : null}
-                      {activity.message &&
+                      {messageText &&
                         activity.type !== "push" &&
                         activity.type !== "delete" &&
                         activity.type !== "repo_deleted" &&
                         activity.type !== "login" &&
                         activity.type !== "logout" && (
-                        <span style={{ color: colors.textSecondary, fontStyle: "italic", fontSize: "11px" }}> — «{activity.message}»</span>
+                        <span style={{ color: colors.textSecondary, fontStyle: "italic", fontSize: "11px" }}> — «{messageText}»</span>
                       )}
-                      {activity.message && activity.type === "push" && (
-                        <span style={{ color: colors.textSecondary, fontSize: "11px" }}> {activity.message}</span>
+                      {messageText && activity.type === "push" && (
+                        <span style={{ color: colors.textSecondary, fontSize: "11px" }}> {messageText}</span>
                       )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "3px" }}>

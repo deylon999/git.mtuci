@@ -434,5 +434,11 @@ export const coreRu = {
     backupFailed: { title: "Ошибка бэкапа", message: "{error}" },
     backupTimeout: { title: "Ошибка бэкапа", message: "Создание бэкапа прервано по таймауту" },
   },
+  // Сообщения активности, которые генерирует бэкенд (см. utils/activityText.ts).
+  activityText: {
+    commits: "{n} {n|коммит|коммита|коммитов}",
+    prCommentBy: "PR #{number}, комментарий от {login}",
+    prCommentByPreview: "PR #{number}, {login}: {preview}",
+  },
 };
 

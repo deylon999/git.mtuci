@@ -388,6 +388,8 @@ export const adminPagesEn = {
     actionDelete: " deleted the repository ",
     actionLogin: " signed in",
     actionLogout: " signed out",
+    actionComment: " commented on a pull request in ",
+    actionUpload: " uploaded a file to ",
     shownOf: "Showing {shown} of {total}",
     perPage: "Show",
     onPage: "per page",
@@ -415,6 +417,8 @@ export const adminPagesEn = {
     typeDelete: "Deleted",
     typeLogin: "Sign in",
     typeLogout: "Sign out",
+    typeComment: "Comment",
+    typeUpload: "Upload",
   },
   notificationsPage: {
     subtitle: "System events that need your attention",
