@@ -71,7 +71,7 @@ export default function ImportGithubRepositoryModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onClick={handleClose}>
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-lg rounded-xl border shadow-2xl"
+        className="w-full max-w-lg max-h-full overflow-y-auto rounded-xl border shadow-2xl"
         style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         onClick={(e) => e.stopPropagation()}
       >

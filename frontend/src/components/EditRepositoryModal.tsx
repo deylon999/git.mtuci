@@ -73,7 +73,7 @@ export default function EditRepositoryModal({
     >
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-xl border shadow-2xl"
+        className="w-full max-w-md max-h-full overflow-y-auto rounded-xl border shadow-2xl"
         style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         onClick={(e) => e.stopPropagation()}
       >

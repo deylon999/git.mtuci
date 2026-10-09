@@ -148,7 +148,7 @@ export default function AvatarUploadModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
       {/* p-4 on phones: the 320px crop area plus padding must fit a 375px screen. */}
-      <div className={`w-full max-w-md rounded-xl p-4 shadow-xl sm:p-6 ${isDarkTheme ? "bg-[#1e1e1e]" : "bg-white"}`}>
+      <div className={`w-full max-w-md max-h-full overflow-y-auto rounded-xl p-4 shadow-xl sm:p-6 ${isDarkTheme ? "bg-[#1e1e1e]" : "bg-white"}`}>
         <h2 className={`mb-4 text-xl font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"}`}>{t("avatar.title")}</h2>
 
         <p className={`mb-4 text-sm text-center ${isDarkTheme ? "text-gray-400" : "text-gray-600"}`}>{t("avatar.hint")}</p>

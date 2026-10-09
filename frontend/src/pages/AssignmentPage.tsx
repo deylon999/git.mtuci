@@ -1602,7 +1602,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
 
       {view.file ? (
         <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${modalOverlay}`}>
-          <div className={`w-full max-w-3xl rounded-lg p-4 shadow-lg ${modalBg}`}>
+          <div className={`w-full max-w-3xl max-h-full overflow-y-auto rounded-lg p-4 shadow-lg ${modalBg}`}>
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <div className={`text-lg font-semibold ${textPrimary}`}>{tp("repo.assignment.fileTitle", { name: view.file.name })}</div>
