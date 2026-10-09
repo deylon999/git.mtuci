@@ -296,7 +296,7 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      /* ignore */
+      toast.error(t("repo.errors.copyFailed"));
     }
   };
 
