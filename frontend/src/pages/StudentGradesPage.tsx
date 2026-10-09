@@ -41,14 +41,6 @@ function itemPoints(item: StudentGradeItem): number | null {
   return null;
 }
 
-function inferTypeKey(title: string): "typeLab" | "typeTest" | "typeCourse" | "typeAssignment" {
-  const lower = title.toLowerCase();
-  if (lower.includes("тест") || lower.includes("test")) return "typeTest";
-  if (lower.includes("курс")) return "typeCourse";
-  if (lower.includes("лаб") || lower.includes("lab")) return "typeLab";
-  return "typeAssignment";
-}
-
 function formatSubmittedAt(
   item: StudentGradeItem,
   t: (key: string) => string,
@@ -74,6 +66,11 @@ function formatSubmittedAt(
     day: "numeric",
     month: "short",
   });
+}
+
+/** Points can be fractional after a late penalty (7.5), so don't round them away. */
+function formatPoints(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function courseDisplayScore(course: StudentGradeCourse): number | null {
@@ -151,8 +148,7 @@ export default function StudentGradesPage({ isDarkTheme = false }: StudentGrades
   }, [data, groupPlace]);
 
   const groupLabel = user?.group_name ?? t("student.grades.groupFallback");
-  const averageLabel =
-    stats.average != null ? String(stats.average) : "—";
+  const averageLabel = stats.average != null ? `${stats.average}%` : "—";
   const pageSubtitle =
     stats.average != null
       ? tp("student.grades.subtitle", { group: groupLabel, average: averageLabel })
@@ -192,19 +188,19 @@ export default function StudentGradesPage({ isDarkTheme = false }: StudentGrades
       ) : data ? (
         <>
           <div
-            className="flex items-center gap-3.5 rounded-[10px] border px-4 py-3.5"
+            className="flex flex-wrap items-center gap-3.5 rounded-[10px] border px-4 py-3.5"
             style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
           >
             <div className="text-center shrink-0">
               <p className="text-[36px] font-bold leading-none" style={{ color: theme.text }}>
-                {stats.average != null ? stats.average : "—"}
+                {averageLabel}
               </p>
               <p className="text-[11px] mt-1" style={{ color: theme.text2 }}>
                 {t("student.grades.statAverage")}
               </p>
             </div>
 
-            <div className="flex-1 min-w-0 flex flex-col gap-1">
+            <div className="flex-1 min-w-[160px] flex flex-col gap-1">
               <div className="flex justify-between text-xs">
                 <span style={{ color: theme.text }}>{t("student.grades.semesterProgress")}</span>
                 <span className="font-semibold" style={{ color: theme.accent2 }}>
@@ -222,9 +218,9 @@ export default function StudentGradesPage({ isDarkTheme = false }: StudentGrades
               </div>
             </div>
 
-            <div className="flex gap-2.5 shrink-0">
+            <div className="flex flex-wrap gap-2.5">
               <StatPill
-                value={stats.best != null ? String(stats.best) : "—"}
+                value={stats.best != null ? `${stats.best}%` : "—"}
                 label={t("student.grades.statBest")}
                 valueColor={stats.best != null ? theme.success : theme.text}
                 theme={theme}
@@ -294,13 +290,16 @@ export default function StudentGradesPage({ isDarkTheme = false }: StudentGrades
                           className="text-xl font-semibold leading-tight"
                           style={{ color: gradeColorForPercent(pct, theme) }}
                         >
-                          {score != null ? score : "—"}
+                          {score != null ? `${score}%` : "—"}
                         </p>
-                        <p className="text-[11px]" style={{ color: theme.text2 }}>
-                          {tp("student.grades.scoreOfMax", { max: course.grade_max })}
+                        <p className="text-[11px] whitespace-nowrap" style={{ color: theme.text2 }}>
+                          {tp("student.grades.pointsOfMax", {
+                            earned: formatPoints(course.earned_points),
+                            max: formatPoints(course.max_points),
+                          })}
                         </p>
                       </div>
-                      <div className="w-[100px] shrink-0 ml-3">
+                      <div className="hidden sm:block w-[100px] shrink-0 ml-3">
                         <div className="h-[5px] rounded-[3px] overflow-hidden" style={{ backgroundColor: theme.bg4 }}>
                           <div
                             className="h-full rounded-[3px]"
@@ -321,13 +320,13 @@ export default function StudentGradesPage({ isDarkTheme = false }: StudentGrades
                     </button>
 
                     {open ? (
-                      <table className="w-full border-collapse">
+                      <div className="overflow-x-auto">
+                      <table className="w-full min-w-[560px] border-collapse">
                         <thead>
                           <tr style={{ backgroundColor: theme.bg2 }}>
                             {(
                               [
                                 "colAssignment",
-                                "colType",
                                 "colSubmitted",
                                 "colScore",
                                 "colComment",
@@ -351,7 +350,7 @@ export default function StudentGradesPage({ isDarkTheme = false }: StudentGrades
                           {courseItems.length === 0 ? (
                             <tr>
                               <td
-                                colSpan={5}
+                                colSpan={4}
                                 className="text-center text-sm py-5"
                                 style={{ color: theme.text2 }}
                               >
@@ -397,21 +396,6 @@ export default function StudentGradesPage({ isDarkTheme = false }: StudentGrades
                                   </td>
                                   <td
                                     className="text-xs px-3.5 py-2 border-b align-middle"
-                                    style={{ borderColor: theme.border }}
-                                  >
-                                    <span
-                                      className="inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-medium"
-                                      style={{
-                                        backgroundColor: theme.bg4,
-                                        color: theme.text2,
-                                        border: `0.5px solid ${theme.border}`,
-                                      }}
-                                    >
-                                      {t(`student.grades.${inferTypeKey(item.title)}`)}
-                                    </span>
-                                  </td>
-                                  <td
-                                    className="text-xs px-3.5 py-2 border-b align-middle"
                                     style={{ color: submittedColor, borderColor: theme.border }}
                                   >
                                     {formatSubmittedAt(item, t, language)}
@@ -426,7 +410,7 @@ export default function StudentGradesPage({ isDarkTheme = false }: StudentGrades
                                           className="font-semibold"
                                           style={{ color: gradeColorForPercent(itemPct, theme) }}
                                         >
-                                          {Math.round(pts)}
+                                          {formatPoints(pts)}
                                         </span>
                                         <span style={{ color: theme.text2 }}> / {item.grade_max}</span>
                                       </>
@@ -447,6 +431,7 @@ export default function StudentGradesPage({ isDarkTheme = false }: StudentGrades
                           )}
                         </tbody>
                       </table>
+                      </div>
                     ) : null}
                   </div>
                 );
