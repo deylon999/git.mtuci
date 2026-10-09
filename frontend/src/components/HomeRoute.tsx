@@ -3,7 +3,6 @@ import { Navigate } from "react-router-dom";
 import { clearToken, getToken, isSessionRejectedError } from "../api/client";
 import { getMe } from "../api/authApi";
 import { getDefaultRouteForRole } from "../utils/defaultRoute";
-import HomePage from "../pages/HomePage";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import AuthCheckFailed from "./AuthCheckFailed";
 
@@ -11,7 +10,7 @@ type Props = {
   isDarkTheme?: boolean;
 };
 
-export default function HomeRoute({ isDarkTheme = false }: Props) {
+export default function HomeRoute(_props: Props) {
   const { t } = useUserPreferences();
   const [role, setRole] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -50,5 +49,6 @@ export default function HomeRoute({ isDarkTheme = false }: Props) {
   if (role === "admin" || role === "student" || role === "teacher" || role === "laborant") {
     return <Navigate to={getDefaultRouteForRole(role)} replace />;
   }
-  return <HomePage isDarkTheme={isDarkTheme} />;
+  // Every real role has a home page above; anything else lands on the profile, which works for all accounts.
+  return <Navigate to="/profile" replace />;
 }
