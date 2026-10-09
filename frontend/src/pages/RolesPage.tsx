@@ -19,24 +19,21 @@ import {
 import {
   getRoles,
   getRolePermissions,
-  getLaborants,
   saveRolePermissions,
   resetRolePermissions,
-  trustLaborant,
-  untrustLaborant,
   getAuditLogs,
   type Role,
   type PermissionCategory as ApiPermissionCategory,
-  type Laborant,
   type AuditLog
 } from "../api/rolesApi";
-import { getMe, updateAssistantGrading } from "../api/authApi";
 import toast from "react-hot-toast";
 import AdminPageHeader from "../components/AdminPageHeader";
+import ConfirmModal from "../components/ConfirmModal";
 import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { usePermissions } from "../hooks/usePermissions";
 import { pluralWord } from "../i18n/plural";
+import { currentLocaleTag } from "../utils/dates";
 
 type RoleType = "admin" | "teacher" | "student" | "laborant";
 type PermissionLevel = "read" | "write" | "delete" | "none";
@@ -120,9 +117,25 @@ function getLevelBadge(level: PermissionLevel, isDarkTheme: boolean, t: (key: st
   );
 }
 
-function Toggle({ checked, onChange, disabled, isDarkTheme }: { checked: boolean; onChange: () => void; disabled?: boolean; isDarkTheme?: boolean }) {
+function Toggle({
+  checked,
+  onChange,
+  disabled,
+  isDarkTheme,
+  label,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+  isDarkTheme?: boolean;
+  label?: string;
+}) {
   return (
     <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
       onClick={onChange}
       disabled={disabled}
       className={`relative w-11 h-6 rounded-full transition-colors ${checked ? "bg-blue-600" : isDarkTheme ? "bg-[#2d2d2d] border border-[#30363d]" : "bg-gray-300"} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
@@ -141,7 +154,14 @@ interface RolesPageProps {
 export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
   const { t, tp, language } = useUserPreferences();
   const { refreshPermissions } = usePermissions();
-  const dateLocale = language === "en" ? "en-US" : "ru-RU";
+  const dateLocale = currentLocaleTag();
+  // Role and permission texts come from the server in Russian; translate them by id and fall back to the server text.
+  const translated = (key: string, fallback: string) => {
+    const value = t(key);
+    return value === key ? fallback : value;
+  };
+  const roleName = (role: Role | undefined) => (role ? translated(`admin.roles.roleName.${role.id}`, role.name) : "");
+  const roleDescription = (role: Role) => translated(`admin.roles.roleDescription.${role.id}`, role.description);
 
   const mapCategoryTitle = (title: string) => {
     const keys: Record<string, string> = {
@@ -160,8 +180,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
   const [selectedRole, setSelectedRole] = useState<RoleType>("admin");
   const [categories, setCategories] = useState<PermissionCategoryState[]>([]);
   const [initialCategories, setInitialCategories] = useState<PermissionCategoryState[]>([]);
-  const [assistants, setAssistants] = useState<Laborant[]>([]);
-  const [allowAssistantGrading, setAllowAssistantGrading] = useState(true);
+  const [pendingRole, setPendingRole] = useState<RoleType | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
@@ -179,61 +198,46 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
     try {
       const logs = await getAuditLogs(selectedRole, 20);
       setAuditLogs(logs);
-    } catch (error) {
-      console.error("Failed to load audit logs:", error);
+    } catch {
+      setAuditLogs([]);
     } finally {
       setAuditLoading(false);
     }
   }, [selectedRole]);
 
 
+  const [rolesFailed, setRolesFailed] = useState(false);
+
   // Load roles on mount
   useEffect(() => {
-    const fetchRoles = async () => {
-      try {
-        const data = await getRoles();
-        setRoles(data);
-      } catch (error) {
-        console.error("Failed to load roles:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchRoles();
+    getRoles()
+      .then(setRoles)
+      .catch(() => setRolesFailed(true))
+      .finally(() => setLoading(false));
   }, []);
 
-  // Load permissions and laborants when role changes
+  // Load permissions when the role changes; a slower response for a previous role must not land in the new one
+  // (saving would then write the wrong permissions to it).
   useEffect(() => {
-    const fetchData = async () => {
-      setPermissionsLoading(true);
-      // Reset assistants immediately to avoid showing old data
-      setAssistants([]);
-      try {
-        const [permsData, laborantsData, meData] = await Promise.all([
-          getRolePermissions(selectedRole),
-          selectedRole === "teacher" ? getLaborants() : Promise.resolve([]),
-          selectedRole === "teacher" ? getMe() : Promise.resolve(null),
-        ]);
-        
-        
-        // Load allow_assistant_grading from user data
-        if (meData && meData.allow_assistant_grading !== undefined) {
-          setAllowAssistantGrading(meData.allow_assistant_grading);
-        }
-        
+    let cancelled = false;
+    setPermissionsLoading(true);
+    getRolePermissions(selectedRole)
+      .then((permsData) => {
+        if (cancelled) return;
         const mappedCategories = mapApiCategories(permsData);
-
         setCategories(mappedCategories);
         setInitialCategories(mappedCategories);
-        setAssistants(laborantsData);
-      } catch (error) {
-        console.error("Failed to load role data:", error);
-      } finally {
-        setPermissionsLoading(false);
-      }
+      })
+      .catch(() => {
+        if (!cancelled) toast.error(t("admin.roles.permissionsLoadError"));
+      })
+      .finally(() => {
+        if (!cancelled) setPermissionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
     };
-    fetchData();
-  }, [selectedRole]);
+  }, [selectedRole, t]);
 
   const currentRole = roles.find((r) => r.id === selectedRole);
 
@@ -243,8 +247,13 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
     }
   }, [showAuditLogs, currentRole?.id, loadAuditLogs]);
 
-  // Update permissions when role changes
+  // Switching roles drops unsaved toggles, so ask first.
   const handleRoleChange = (role: RoleType) => {
+    if (role === selectedRole) return;
+    if (hasChanges) {
+      setPendingRole(role);
+      return;
+    }
     setSelectedRole(role);
   };
 
@@ -261,33 +270,6 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
       };
       return next;
     });
-  };
-
-  const [togglingId, setTogglingId] = useState<string | null>(null);
-
-  const toggleAssistantTrust = async (id: string) => {
-    const assistant = assistants.find((a) => a.id === id);
-    if (!assistant || togglingId) return;
-
-    setTogglingId(id);
-    try {
-      if (assistant.trusted) {
-        await untrustLaborant(id);
-        toast.success(t("admin.roles.laborantRemoved"));
-      } else {
-        await trustLaborant(id);
-        toast.success(t("admin.roles.laborantAdded"));
-      }
-      // Update local state
-      setAssistants((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, trusted: !a.trusted } : a))
-      );
-    } catch (error) {
-      toast.error(t("admin.roles.trustError"));
-      console.error(error);
-    } finally {
-      setTogglingId(null);
-    }
   };
 
   // Save permissions
@@ -309,8 +291,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
       setInitialCategories(categories);
       await refreshPermissions();
       toast.success(t("admin.roles.permissionsSaved"));
-    } catch (error) {
-      console.error("Save error:", error);
+    } catch {
       toast.error(t("admin.roles.permissionsSaveError"));
     } finally {
       setSaving(false);
@@ -328,8 +309,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
       setInitialCategories(mappedCategories);
       await refreshPermissions();
       toast.success(t("admin.roles.permissionsReset"));
-    } catch (error) {
-      console.error("Reset error:", error);
+    } catch {
       toast.error(t("admin.roles.permissionsResetError"));
     } finally {
       setResetting(false);
@@ -355,10 +335,6 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
   const saveBtnActive = "bg-blue-600 text-white hover:bg-blue-700 shadow-sm";
   const saveBtnInactive = `${ui.iconBg} ${ui.tableCellText} cursor-not-allowed opacity-60`;
   const sectionHeader = ui.tableHeaderText;
-  const assistantCard = `${tableBg} border ${tableBorder}`;
-  const assistantHeader = ui.iconBg;
-  const trustedText = isDarkTheme ? "text-emerald-400" : "text-emerald-600";
-  const untrustedText = ui.tableHeaderText;
   const auditCard = `${tableBg} border ${tableBorder}`;
   const auditTag = `${ui.iconBg} ${ui.tableCellText}`;
 
@@ -370,9 +346,17 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
     );
   }
 
+  if (rolesFailed) {
+    return (
+      <div className={`h-full flex items-center justify-center ${ui.pageWrapper} transition-colors`}>
+        <p className={`text-sm ${ui.tableCellText}`}>{t("admin.roles.rolesLoadError")}</p>
+      </div>
+    );
+  }
+
   return (
     <div className={`h-full overflow-y-auto ${ui.pageWrapper} transition-colors`}>
-      <div className="w-full py-6 px-6 space-y-6 pb-20">
+      <div className="w-full py-6 px-4 sm:px-6 space-y-6 pb-20">
         {/* Header */}
         <AdminPageHeader
           isDarkTheme={isDarkTheme}
@@ -381,7 +365,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
         />
 
         {/* Role Cards */}
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {roles.map((role) => {
             const Icon = iconMap[role.icon] || User;
             const isActive = selectedRole === role.id;
@@ -398,8 +382,8 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                 <div className={`w-10 h-10 rounded-lg ${getRoleIconStyle(role.id, isDarkTheme)} flex items-center justify-center mb-3`}>
                   <Icon className="h-5 w-5" />
                 </div>
-                <h3 className={`text-base font-semibold mb-1 ${textPrimary}`}>{role.name}</h3>
-                <p className={`text-xs mb-3 line-clamp-2 ${textSecondary}`}>{role.description}</p>
+                <h3 className={`text-base font-semibold mb-1 ${textPrimary}`}>{roleName(role)}</h3>
+                <p className={`text-xs mb-3 line-clamp-2 ${textSecondary}`}>{roleDescription(role)}</p>
                 <p className={`text-sm ${textTertiary}`}>{role.user_count} {pluralWord(language, "admin.roles.users", role.user_count)}</p>
               </button>
             );
@@ -407,7 +391,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
         </div>
 
         {/* Split Screen */}
-        <div className="grid grid-cols-[35%_1fr] gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[35%_1fr] gap-6">
           {/* Left Column - Role Selection */}
           <div className={`rounded-xl p-5 ${panelCard}`}>
             <h2 className={`text-sm font-semibold uppercase tracking-wider mb-4 ${headerText}`}>
@@ -429,7 +413,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="flex-1 text-left">
-                      <p className={`text-sm font-medium ${textPrimary}`}>{role.name}</p>
+                      <p className={`text-sm font-medium ${textPrimary}`}>{roleName(role)}</p>
                       <p className={`text-xs ${textSecondary}`}>{role.user_count} {pluralWord(language, "admin.roles.users", role.user_count)}</p>
                     </div>
                     {isSelected ? (
@@ -449,9 +433,9 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
 
           {/* Right Column - Permission Settings */}
           <div className={`rounded-xl p-5 ${panelCard}`}>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
               <div className="flex items-center gap-3">
-                <h2 className={`text-lg font-semibold ${textPrimary}`}>{currentRole?.name || t("admin.roles.roleFallback")}</h2>
+                <h2 className={`text-lg font-semibold ${textPrimary}`}>{roleName(currentRole) || t("admin.roles.roleFallback")}</h2>
                 <span className={textSecondary}>—</span>
                 <span className={textTertiary}>{t("admin.roles.accessRights")}</span>
               </div>
@@ -500,9 +484,13 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                           key={permission.id}
                           className={`flex items-center justify-between p-3 rounded-lg ${cardBgLight}`}
                         >
-                          <div className="flex-1">
-                            <p className={`text-sm font-medium ${textPrimary}`}>{permission.name}</p>
-                            <p className={`text-xs ${textSecondary}`}>{permission.description}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-medium ${textPrimary}`}>
+                              {translated(`admin.roles.perm.${permission.id}.name`, permission.name)}
+                            </p>
+                            <p className={`text-xs ${textSecondary}`}>
+                              {translated(`admin.roles.perm.${permission.id}.description`, permission.description)}
+                            </p>
                           </div>
                           <div className="flex items-center gap-3">
                             {getLevelBadge(permission.level, isDarkTheme, t)}
@@ -510,6 +498,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                               checked={permission.enabled}
                               onChange={() => togglePermission(categoryIndex, permissionIndex)}
                               isDarkTheme={isDarkTheme}
+                              label={translated(`admin.roles.perm.${permission.id}.name`, permission.name)}
                             />
                           </div>
                         </div>
@@ -567,7 +556,7 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                               </div>
                               <div className="flex items-center gap-2 text-xs">
                                 <span className={`px-2 py-0.5 rounded ${auditTag}`}>
-                                  {log.target_role}
+                                  {roleName(roles.find((role) => role.id === log.target_role)) || log.target_role}
                                 </span>
                                 <span className={textSecondary}>
                                   {log.action === "save_batch" ? t("admin.roles.changedPermissions") :
@@ -583,82 +572,23 @@ export default function RolesPage({ isDarkTheme = true }: RolesPageProps) {
                 </>
               )}
 
-              {/* Assistant Management - Only for Teacher role */}
-              {selectedRole === "teacher" && (
-                <>
-                  <div className={`border-t mb-6 ${dividerColor}`} />
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Users className={`h-4 w-4 ${sectionHeader}`} />
-                      <h3 className={`text-xs font-semibold uppercase tracking-wider ${sectionHeader}`}>
-                        {t("admin.roles.assistantManagement")}
-                      </h3>
-                    </div>
-
-                    <div className={`p-4 rounded-lg ${assistantHeader}`}>
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <p className={`text-sm font-medium ${textPrimary}`}>{t("admin.roles.allowAssistantGrading")}</p>
-                          <p className={`text-xs ${textSecondary}`}>{t("admin.roles.allowAssistantGradingHint")}</p>
-                        </div>
-                        <Toggle
-                          checked={allowAssistantGrading}
-                          onChange={async () => {
-                            const newValue = !allowAssistantGrading;
-                            setAllowAssistantGrading(newValue);
-                            try {
-                              await updateAssistantGrading(newValue);
-                              toast.success(newValue ? t("admin.roles.assistantGradingAllowed") : t("admin.roles.assistantGradingDenied"));
-                            } catch (error) {
-                              toast.error(t("admin.roles.settingSaveError"));
-                              setAllowAssistantGrading(!newValue); // Revert on error
-                            }
-                          }}
-                          isDarkTheme={isDarkTheme}
-                        />
-                      </div>
-
-                      {allowAssistantGrading && (
-                        <div className={`mt-4 pt-4 border-t ${dividerColor}`}>
-                          <p className={`text-xs mb-3 ${textTertiary}`}>
-                            {t("admin.roles.assistantHint")}
-                          </p>
-                          <div className="space-y-2">
-                            {assistants.map((assistant) => (
-                              <div
-                                key={assistant.id}
-                                className={`flex items-center justify-between p-3 rounded-lg border ${assistantCard}`}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isDarkTheme ? "bg-emerald-500/20" : "bg-emerald-100"}`}>
-                                    <span className={`text-xs font-medium ${isDarkTheme ? "text-emerald-400" : "text-emerald-600"}`}>{assistant.initials}</span>
-                                  </div>
-                                  <span className={`text-sm ${textPrimary}`}>{assistant.name}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className={`text-xs ${assistant.trusted ? trustedText : untrustedText}`}>
-                                    {assistant.trusted ? t("admin.roles.trusted") : t("admin.roles.notTrusted")}
-                                  </span>
-                                  <Toggle
-                                    checked={assistant.trusted}
-                                    onChange={() => toggleAssistantTrust(assistant.id)}
-                                    disabled={togglingId === assistant.id}
-                                    isDarkTheme={isDarkTheme}
-                                  />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={pendingRole !== null}
+        title={t("admin.roles.discardTitle")}
+        message={t("admin.roles.discardMessage")}
+        confirmText={t("admin.roles.discardConfirm")}
+        isDangerous
+        onCancel={() => setPendingRole(null)}
+        onConfirm={() => {
+          if (pendingRole) setSelectedRole(pendingRole);
+          setPendingRole(null);
+        }}
+      />
     </div>
   );
 }

@@ -1,16 +1,17 @@
 import { useState, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Moon, Sun, Bell, Globe, Shield, Key } from "lucide-react";
+import { Moon, Sun, Bell, Globe, Shield, Key, Users } from "lucide-react";
 import { patchUserSettings } from "../api/userSettingsApi";
 import StudentGitTokenSettings from "../components/StudentGitTokenSettings";
+import TrustedAssistantsSettings from "../components/TrustedAssistantsSettings";
 import { useAuthUser } from "../context/AuthUserContext";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { requestBrowserNotificationPermission } from "../utils/browserNotifications";
 import { getTheme } from "../theme";
 import type { Locale } from "../i18n";
 
-type SettingsSection = "general" | "notifications" | "security" | "git";
+type SettingsSection = "general" | "notifications" | "security" | "git" | "assistants";
 
 interface SettingsPageProps {
   isDarkTheme?: boolean;
@@ -23,6 +24,7 @@ export default function SettingsPage({ isDarkTheme = false, onToggleTheme }: Set
   const { user } = useAuthUser();
   const isStudent = user?.role === "student";
   const isStaff = user?.role === "teacher" || user?.role === "laborant" || user?.role === "admin";
+  const canTrustAssistants = user?.role === "teacher" || user?.role === "admin";
 
   const theme = getTheme(isDarkTheme);
 
@@ -69,6 +71,7 @@ export default function SettingsPage({ isDarkTheme = false, onToggleTheme }: Set
     { id: "notifications", label: t("settings.sections.notifications"), icon: Bell },
     { id: "security", label: t("settings.sections.security"), icon: Shield },
     ...(isStudent ? [{ id: "git" as const, label: t("settings.sections.git"), icon: Key }] : []),
+    ...(canTrustAssistants ? [{ id: "assistants" as const, label: t("settings.sections.assistants"), icon: Users }] : []),
   ];
 
   const pickLanguage = (locale: Locale) => {
@@ -404,6 +407,7 @@ export default function SettingsPage({ isDarkTheme = false, onToggleTheme }: Set
           ) : null}
 
           {section === "git" && isStudent ? <StudentGitTokenSettings isDarkTheme={isDarkTheme} /> : null}
+          {section === "assistants" && canTrustAssistants ? <TrustedAssistantsSettings isDarkTheme={isDarkTheme} /> : null}
         </div>
       </div>
     </>

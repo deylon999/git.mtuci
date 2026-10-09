@@ -122,12 +122,6 @@ export async function getCurrentUser(): Promise<UserRead> {
   return getMe();
 }
 
-export async function updateAssistantGrading(allow: boolean): Promise<{ allow_assistant_grading: boolean }> {
-  return apiRequest<{ allow_assistant_grading: boolean }>("/auth/me/assistant-grading", {
-    method: "PATCH",
-    body: { allow_assistant_grading: allow },
-  });
-}
 
 export async function forgotPassword(email: string): Promise<void> {
   await apiRequest<{ message: string }>("/auth/forgot-password", {

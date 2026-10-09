@@ -119,6 +119,7 @@ export const coreRu = {
       general: "Общие",
       notifications: "Уведомления",
       security: "Безопасность",
+      assistants: "Лаборанты",
       git: "Git-токены",
     },
     appearance: {

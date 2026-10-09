@@ -2,6 +2,7 @@
 Roles and permissions API routes
 """
 from typing import List, Optional
+from uuid import UUID
 from datetime import datetime, timezone
 import json
 import asyncio
@@ -354,15 +355,20 @@ async def reset_role_permissions(
     return list(categories.values())
 
 
+class TrustAssistantRequest(BaseModel):
+    assistant_id: UUID
+
+
 @router.post("/trusted")
 async def trust_assistant(
-    assistant_id: str,
+    payload: TrustAssistantRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """Add a laborant to teacher's trusted assistants."""
-    if current_user.role != UserRole.teacher:
+    """Add a laborant to the current teacher's (or admin's) trusted assistants."""
+    if current_user.role not in (UserRole.teacher, UserRole.admin):
         raise HTTPException(status_code=403, detail="Only teachers can manage trusted assistants")
+    assistant_id = payload.assistant_id
 
     result = await session.execute(
         select(User).where(User.id == assistant_id, User.role == UserRole.laborant)
@@ -392,12 +398,12 @@ async def trust_assistant(
 
 @router.delete("/trusted/{assistant_id}")
 async def untrust_assistant(
-    assistant_id: str,
+    assistant_id: UUID,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """Remove a laborant from teacher's trusted assistants."""
-    if current_user.role != UserRole.teacher:
+    """Remove a laborant from the current teacher's (or admin's) trusted assistants."""
+    if current_user.role not in (UserRole.teacher, UserRole.admin):
         raise HTTPException(status_code=403, detail="Only teachers can manage trusted assistants")
 
     result = await session.execute(

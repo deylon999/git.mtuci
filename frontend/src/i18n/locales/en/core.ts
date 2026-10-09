@@ -119,6 +119,7 @@ export const coreEn = {
       general: "General",
       notifications: "Notifications",
       security: "Security",
+      assistants: "Teaching assistants",
       git: "Git tokens",
     },
     appearance: {
