@@ -663,7 +663,7 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                       ? Math.floor((getDayStart(new Date()) - getDayStart(new Date(fullUser.last_login))) / (24 * 60 * 60 * 1000))
                       : Number.POSITIVE_INFINITY;
                     const isUserActive = !fullUser?.is_blocked && daysSinceLastLogin <= 7;
-                    const statusLabel = language === "ru" ? (isUserActive ? "Активен" : "Неактивен") : isUserActive ? "Active" : "Inactive";
+                    const statusLabel = t(isUserActive ? "admin.search.userActive" : "admin.search.userInactive");
                     const statusBadgeClass = isUserActive
                       ? isDarkTheme
                         ? "bg-green-500/20 text-green-400"
@@ -965,7 +965,7 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                             onClick={() => setOpenLogIds((prev) => ({ ...prev, [log.id]: !isOpen }))}
                             className={`text-[10px] ${ui.tableHeaderText} hover:text-blue-400 transition-colors`}
                           >
-                            {isOpen ? "Скрыть детали" : "Показать детали"}
+                            {isOpen ? t("admin.search.hideDetails") : t("admin.search.showDetails")}
                           </button>
                         </div>
                         {isOpen ? (

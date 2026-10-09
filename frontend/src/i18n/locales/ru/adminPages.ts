@@ -90,8 +90,12 @@ export const adminPagesRu = {
     importSuccess: "Успешно импортировано {n} пользователей",
   },
   search: {
+    showDetails: "Показать детали",
+    hideDetails: "Скрыть детали",
+    userActive: "Активен",
+    userInactive: "Неактивен",
     title: "Результаты поиска: «{query}»",
-    total: "Найдено {n} результатов · {ms} мс",
+    total: "Результатов: {n} · {ms} мс",
     find: "Найти",
     loadError: "Не удалось выполнить поиск",
     open: "Открыть",

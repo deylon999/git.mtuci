@@ -90,8 +90,12 @@ export const adminPagesEn = {
     importSuccess: "Successfully imported {n} users",
   },
   search: {
+    showDetails: "Show details",
+    hideDetails: "Hide details",
+    userActive: "Active",
+    userInactive: "Inactive",
     title: "Search results: \"{query}\"",
-    total: "Found {n} results · {ms} ms",
+    total: "Results: {n} · {ms} ms",
     find: "Find",
     loadError: "Failed to perform search",
     open: "Open",
