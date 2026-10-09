@@ -138,6 +138,7 @@ export const repoEn = {
     openAssignment: "Open assignment",
   },
   settings: {
+    loadFailed: "Couldn't load some repository settings. Reload the page to try again.",
     panelTitle: "Settings",
     sectionGeneral: "General",
     sectionAccess: "Access",

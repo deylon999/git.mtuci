@@ -237,10 +237,11 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
         setDeployKeys(dk);
         setSecrets(sec);
       } catch {
-        // ignore
+        // Empty lists here would read as "no webhooks / keys / secrets"; say they didn't load instead.
+        setError(t("repo.settings.loadFailed"));
       }
     })();
-  }, [repoId, readOnly]);
+  }, [repoId, readOnly, t]);
 
   useEffect(() => {
     if (!repoId) return;
@@ -253,10 +254,10 @@ export default function RepoSettingsPanel({ theme, meta, summary }: RepoSettings
         setReleases(rels);
         setRegistries(regs);
       } catch {
-        // ignore
+        setError(t("repo.settings.loadFailed"));
       }
     })();
-  }, [repoId]);
+  }, [repoId, t]);
 
   useEffect(() => {
     if (!repoId || section !== "releases" || releases.length === 0) return;

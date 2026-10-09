@@ -33,6 +33,7 @@ export const adminPagesEn = {
     pendingSubmissions: "{n} {n|submission|submissions} pending",
     noReviewQueue: "The queue is empty",
     systemState: "System status",
+    widgetLoadError: "Couldn't load this data",
     loadingMetrics: "Loading metrics…",
     gitService: "Git service",
     backupLabel: "Backup",

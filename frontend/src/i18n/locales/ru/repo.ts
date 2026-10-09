@@ -138,6 +138,7 @@ export const repoRu = {
     openAssignment: "Открыть задание",
   },
   settings: {
+    loadFailed: "Не удалось загрузить часть настроек репозитория. Обновите страницу, чтобы попробовать ещё раз.",
     panelTitle: "Настройки",
     sectionGeneral: "Общие",
     sectionAccess: "Доступ",

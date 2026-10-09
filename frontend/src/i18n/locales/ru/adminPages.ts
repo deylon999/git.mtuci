@@ -33,6 +33,7 @@ export const adminPagesRu = {
     pendingSubmissions: "{n} {n|работа|работы|работ} на проверке",
     noReviewQueue: "Нет работ в очереди",
     systemState: "Состояние системы",
+    widgetLoadError: "Не удалось загрузить данные",
     loadingMetrics: "Загрузка метрик…",
     gitService: "Git сервис",
     backupLabel: "Бэкап",

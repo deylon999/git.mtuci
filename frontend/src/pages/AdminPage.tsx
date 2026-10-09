@@ -140,6 +140,8 @@ function buildServicesFromStatus(status: ServiceStatus): MonitoredService[] {
   ];
 }
 
+type DashboardWidget = "metrics" | "services" | "backups" | "faculty" | "repos" | "review" | "notifications";
+
 interface Notification {
   id: string;
   type: 'critical' | 'warning' | 'info' | 'success';
@@ -260,6 +262,8 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   const [activeRepositories, setActiveRepositories] = useState<ActiveRepositoryStat[]>([]);
   const [activeRepositoriesLoading, setActiveRepositoriesLoading] = useState(false);
   const [usersError, setUsersError] = useState(false);
+  // Widgets whose request failed: they show an error instead of "no data" or an endless "loading…".
+  const [failedWidgets, setFailedWidgets] = useState<ReadonlySet<DashboardWidget>>(new Set());
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [reviewQueue, setReviewQueue] = useState<AdminReviewQueueItem[]>([]);
@@ -280,17 +284,24 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
     setFacultyStatsLoading(true);
     setActiveRepositoriesLoading(true);
     try {
+      const failed = new Set<DashboardWidget>();
+      const soft = <T,>(widget: DashboardWidget, request: Promise<T>, fallback: T): Promise<T> =>
+        request.catch(() => {
+          failed.add(widget);
+          return fallback;
+        });
       const [list, sysMetrics, svcStatus, backups, facultyData, repoData, reviewData, appNotifs] =
         await Promise.all([
         getAdminUsers().catch(() => null),
-        getSystemMetrics().catch(() => null),
-        getServiceStatus().catch(() => null),
-        getBackups().catch(() => null),
-        getCommitsByFaculty().catch(() => []),
-        getActiveRepositories(5).catch(() => []),
-        getAdminReviewQueue(5).catch(() => []),
-        getNotifications().catch(() => []),
+        soft("metrics", getSystemMetrics(), null),
+        soft("services", getServiceStatus(), null),
+        soft("backups", getBackups(), null),
+        soft("faculty", getCommitsByFaculty(), []),
+        soft("repos", getActiveRepositories(5), []),
+        soft("review", getAdminReviewQueue(5), []),
+        soft("notifications", getNotifications(), []),
       ]);
+      setFailedWidgets(failed);
       setUsersError(list === null);
       if (list) {
         setUsers(list);
@@ -578,7 +589,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                 ) : activeRepositories.length === 0 ? (
                   <div className="text-center py-8"
                   style={{ color: theme.text2 }}>
-                    {t("admin.dashboard.noActiveRepos")}
+                    {failedWidgets.has("repos") ? t("admin.dashboard.widgetLoadError") : t("admin.dashboard.noActiveRepos")}
                   </div>
                 ) : (
                   activeRepositories.map((repo) => (
@@ -630,7 +641,9 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                 <div className="flex flex-col items-center justify-center py-12"
                 style={{ color: theme.text3 }}>
                   <BellOff className="h-10 w-10 mb-3 opacity-50" />
-                  <p className="text-sm">{t("admin.dashboard.noNotifications")}</p>
+                  <p className="text-sm">
+                    {failedWidgets.has("notifications") ? t("admin.dashboard.widgetLoadError") : t("admin.dashboard.noNotifications")}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -684,7 +697,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                 ) : facultyStats.length === 0 ? (
                   <div className="text-center py-8"
                   style={{ color: theme.text2 }}>
-                    {t("admin.dashboard.noCommitData")}
+                    {failedWidgets.has("faculty") ? t("admin.dashboard.widgetLoadError") : t("admin.dashboard.noCommitData")}
                   </div>
                 ) : (
                   facultyStats.map((dept) => (
@@ -715,7 +728,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                 <div className="space-y-2">
                   {reviewQueue.length === 0 ? (
                     <p className="text-sm py-2" style={{ color: theme.text2 }}>
-                      {t("admin.dashboard.noReviewQueue")}
+                      {failedWidgets.has("review") ? t("admin.dashboard.widgetLoadError") : t("admin.dashboard.noReviewQueue")}
                     </p>
                   ) : (
                     reviewQueue.map((item, itemIdx) => {
@@ -825,13 +838,17 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                     </div>
                   ))
                 ) : (
-                  <div className={`text-sm ${ui.tableCellText}`}>{t("admin.dashboard.loadingMetrics")}</div>
+                  <div className={`text-sm ${ui.tableCellText}`}>
+                    {failedWidgets.has("metrics") ? t("admin.dashboard.widgetLoadError") : t("admin.dashboard.loadingMetrics")}
+                  </div>
                 )}
               </div>
 
               <div className="space-y-3 mb-6">
                 {systemServices === null ? (
-                  <div className={`text-sm ${ui.tableCellText}`}>{t("common.loading")}</div>
+                  <div className={`text-sm ${ui.tableCellText}`}>
+                    {failedWidgets.has("services") ? t("admin.dashboard.widgetLoadError") : t("common.loading")}
+                  </div>
                 ) : (
                   systemServices.map((svc) => {
                     const statusColor = svc.online ? theme.success : theme.danger;
@@ -868,7 +885,8 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                           hour: "2-digit",
                           minute: "2-digit",
                         })
-                      : backupInfo?.last_backup || t("admin.dashboard.noBackupData")}
+                      : backupInfo?.last_backup ||
+                        (failedWidgets.has("backups") ? t("admin.dashboard.widgetLoadError") : t("admin.dashboard.noBackupData"))}
                   </span>
                 </div>
               </div>
