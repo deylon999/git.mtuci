@@ -1,5 +1,6 @@
 import { currentLocaleTag } from "../utils/dates";
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import { RefreshCw, HardDrive, Database, Server, GitBranch } from "lucide-react";
 import { getSystemMetrics, getServiceStatus, getBackups, getLogs, createBackup, restartAPI } from "../api/adminApi";
 import type { ServiceStatus, SystemMetrics, TableSizeEntry } from "../api/types";
@@ -23,8 +24,8 @@ interface MonitoringPageProps {
 }
 
 export default function MonitoringPage({ isDarkTheme = false }: MonitoringPageProps) {
-  const { t, tp, language } = useUserPreferences();
-  const dateLocale = language === "en" ? "en-US" : "ru-RU";
+  const { t, tp } = useUserPreferences();
+  const dateLocale = currentLocaleTag();
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const diskPercent = metrics?.disk_percent ?? 0;
   const diskHigh = diskPercent > 80;
@@ -32,45 +33,57 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
   const [backups, setBackups] = useState<Awaited<ReturnType<typeof getBackups>> | null>(null);
   const [incidents, setIncidents] = useState<Array<{ level: string; message: string; created_at: string }>>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const inFlightRef = useRef(false);
+  const mountedRef = useRef(true);
   const [fetchError, setFetchError] = useState(false);
   const [secondsSinceUpdate, setSecondsSinceUpdate] = useState(0);
   const [showRestartModal, setShowRestartModal] = useState(false);
   const [restartLoading, setRestartLoading] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
 
-  const fetchData = async () => {
+  // Polling and manual refresh share one request at a time; responses after unmount are dropped.
+  const fetchData = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setLoading(true);
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     try {
       const [metricsData, statusData, backupsData, errorLogs, warningLogs] = await Promise.all([
         getSystemMetrics().catch(() => null),
         getServiceStatus().catch(() => null),
         getBackups().catch(() => null),
-        getLogs({ level: "ERROR" }, { limit: 5, offset: 0 }).catch(() => ({ logs: [] })),
-        getLogs({ level: "WARNING" }, { limit: 5, offset: 0 }).catch(() => ({ logs: [] })),
+        getLogs({ level: "ERROR", date_from: since }, { limit: 5, offset: 0 }).catch(() => ({ logs: [] })),
+        getLogs({ level: "WARNING", date_from: since }, { limit: 5, offset: 0 }).catch(() => ({ logs: [] })),
       ]);
+      if (!mountedRef.current) return;
       setMetrics(metricsData);
       setServiceStatus(statusData);
       setBackups(backupsData);
-      setIncidents([...(errorLogs?.logs || []), ...(warningLogs?.logs || [])].slice(0, 10));
+      setIncidents(
+        [...(errorLogs?.logs || []), ...(warningLogs?.logs || [])]
+          .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+          .slice(0, 10),
+      );
       setFetchError(!metricsData && !statusData);
       setSecondsSinceUpdate(0);
-    } catch (error) {
-      console.error("Failed to fetch monitoring data:", error);
-      setFetchError(true);
     } finally {
-      setLoading(false);
+      inFlightRef.current = false;
+      if (mountedRef.current) {
+        setLoading(false);
+        setInitialLoad(false);
+      }
     }
-  };
+  }, []);
 
   const handleCreateBackup = async () => {
     setBackupLoading(true);
     try {
       await createBackup();
-      await fetchData();
-      alert(t("admin.monitoring.backupCreated"));
-    } catch (error) {
-      console.error("Failed to create backup:", error);
-      alert(t("admin.monitoring.backupCreateError"));
+      toast.success(t("admin.monitoring.backupCreated"));
+      void fetchData();
+    } catch {
+      toast.error(t("admin.monitoring.backupCreateError"));
     } finally {
       setBackupLoading(false);
     }
@@ -82,23 +95,35 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
       const responseData = await restartAPI();
       setShowRestartModal(false);
       if (responseData.status === "warning") {
-        alert(responseData.message || t("admin.monitoring.apiRestartWarn"));
+        toast(responseData.message || t("admin.monitoring.apiRestartWarn"));
       } else {
-        alert(t("admin.monitoring.apiRestarted"));
+        toast.success(t("admin.monitoring.apiRestarted"));
       }
-    } catch (error) {
-      console.error("Failed to restart API:", error);
-      alert(t("admin.monitoring.apiRestartError"));
+    } catch {
+      toast.error(t("admin.monitoring.apiRestartError"));
     } finally {
       setRestartLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    mountedRef.current = true;
+    void fetchData();
+    const interval = setInterval(() => void fetchData(), 10000);
+    return () => {
+      mountedRef.current = false;
+      clearInterval(interval);
+    };
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (!showRestartModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !restartLoading) setShowRestartModal(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showRestartModal, restartLoading]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -149,9 +174,11 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
     <div style={{ backgroundColor: ac.pageBg, color: ac.text, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       {/* Page Header — исходная раскладка, без сжатия в max-w-7xl */}
       <div
+        className="px-4 py-5 sm:px-6"
         style={{
-          padding: "20px 24px",
           display: "flex",
+          flexWrap: "wrap",
+          gap: "12px",
           alignItems: "center",
           justifyContent: "space-between",
           backgroundColor: ac.pageBg,
@@ -164,7 +191,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             {t("admin.monitoring.subtitle")}
           </div>
         </div>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
           <div
             style={{
               display: "flex",
@@ -205,7 +232,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
           <button type="button" onClick={() => setShowRestartModal(true)} style={headerBtnStyle}>
             {t("admin.monitoring.restartApi")}
           </button>
-          <button type="button" onClick={fetchData} style={headerBtnStyle}>
+          <button type="button" onClick={() => void fetchData()} style={headerBtnStyle}>
             <RefreshCw className="h-3.5 w-3.5" style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
             {t("admin.monitoring.refresh")}
           </button>
@@ -213,18 +240,22 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
       </div>
 
       <div
+        className="px-4 pb-5 sm:px-6"
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "0 24px 20px",
           display: "flex",
           flexDirection: "column",
           gap: "14px",
           backgroundColor: ac.pageBg,
         }}
       >
+        {initialLoad ? (
+          <div style={{ fontSize: "13px", color: theme.text2, padding: "24px 0" }}>{t("common.loading")}</div>
+        ) : (
+        <>
         {/* Status Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
           {/* FastAPI */}
           <div style={{
             backgroundColor: ac.card, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`,
@@ -351,7 +382,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: "11px", color: theme.text2, marginBottom: "2px" }}>{t("admin.monitoring.diskStorage")}</div>
-              <div style={{ fontSize: "14px", fontWeight: "600", color: theme.warning }}>
+              <div style={{ fontSize: "14px", fontWeight: "600", color: diskHigh ? theme.warning : theme.text }}>
                 {tp("admin.monitoring.diskPercent", { n: metrics?.disk_percent || 0 })}
               </div>
               <div style={{ fontSize: "10px", color: theme.text2, marginTop: "1px" }}>
@@ -364,13 +395,13 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               fontSize: "10px", fontWeight: "500", whiteSpace: "nowrap",
               ...getBadgeStyle(diskHigh ? theme.warning : theme.success)
             }}>
-              {diskHigh ? "!" : "OK"}
+              {diskHigh ? "!" : t("admin.monitoring.statusOk")}
             </span>
           </div>
         </div>
 
         {/* Resources + Services */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+        <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
 
           {/* Server Resources */}
           <div style={{ backgroundColor: ac.card, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, borderRadius: "10px", overflow: "hidden", boxShadow: isDarkTheme ? 'none' : theme.shadow }}>
@@ -438,7 +469,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: "3px", transition: "width 0.3s",
-                    width: `${(metrics?.network_upload_mbps || 0) * 10}%`, backgroundColor: theme.success, opacity: 0.7
+                    width: `${Math.min(100, (metrics?.network_upload_mbps || 0) * 10)}%`, backgroundColor: theme.success, opacity: 0.7
                   }} />
                 </div>
                 <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>
@@ -452,7 +483,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 <div style={{ flex: 1, height: "6px", backgroundColor: ac.iconBg, borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: "3px", transition: "width 0.3s",
-                    width: `${(metrics?.network_download_mbps || 0) * 10}%`, backgroundColor: theme.success, opacity: 0.7
+                    width: `${Math.min(100, (metrics?.network_download_mbps || 0) * 10)}%`, backgroundColor: theme.success, opacity: 0.7
                   }} />
                 </div>
                 <span style={{ width: "35px", textAlign: "right", color: theme.text2, fontSize: "11px", flexShrink: 0 }}>
@@ -597,7 +628,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
         </div>
 
         {/* HTTP Requests + DB + Incidents */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" }}>
+        <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 xl:grid-cols-3">
 
           {/* HTTP Requests */}
           <div style={{ backgroundColor: ac.card, border: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, borderRadius: "10px", overflow: "hidden", boxShadow: isDarkTheme ? 'none' : theme.shadow }}>
@@ -663,7 +694,9 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
               backgroundColor: ac.input
             }}>
               {t("admin.monitoring.postgresql")}
-              <span style={{ fontSize: "10px", color: theme.text2, fontWeight: "400" }}>v{serviceStatus?.db_version || "16"}</span>
+              {serviceStatus?.db_version ? (
+                <span style={{ fontSize: "10px", color: theme.text2, fontWeight: "400" }}>v{serviceStatus.db_version}</span>
+              ) : null}
             </div>
             <div style={{ padding: "14px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: `${isDarkTheme ? '0.5px' : '1px'} solid ${ac.border}`, fontSize: "12px" }}>
@@ -813,8 +846,8 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 </div>
               )}
 
-              {incidents.slice(0, 6).map((incident, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+              {incidents.slice(0, 6).map((incident) => (
+                <div key={`${incident.level}-${incident.created_at}-${incident.message}`} style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
                   <div style={{
                     width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0, marginTop: "3px",
                     backgroundColor: incident.level === "ERROR" ? theme.danger : incident.level === "WARNING" ? theme.warning : theme.success
@@ -843,6 +876,8 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
 
       {/* Restart Modal */}
@@ -851,9 +886,10 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
           position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: "rgba(0, 0, 0, 0.5)",
           display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "16px",
           zIndex: 9999
         }}>
-          <div style={{
+          <div role="dialog" aria-modal="true" style={{
             backgroundColor: ac.card,
             border: `1px solid ${ac.border}`,
             borderRadius: "12px",
