@@ -89,6 +89,8 @@ export const studentEn = {
     rankingNoGrades: "No grades in the group yet for ranking",
     you: "(You)",
     points: "{n} {n|point|points}",
+    kpiDeadlinesNext: "Next: {title}",
+    kpiDeadlinesNone: "Nothing due today",
     kpiReposWeek: "+{n} this week",
     kpiReposNoNew: "No new repos this week",
     kpiReposNone: "No repositories yet",

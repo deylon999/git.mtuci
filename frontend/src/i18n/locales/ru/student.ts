@@ -89,6 +89,8 @@ export const studentRu = {
     rankingNoGrades: "В группе пока нет оценок для рейтинга",
     you: "(Вы)",
     points: "{n} {n|очко|очка|очков}",
+    kpiDeadlinesNext: "Ближайший: {title}",
+    kpiDeadlinesNone: "На сегодня ничего нет",
     kpiReposWeek: "+{n} на этой неделе",
     kpiReposNoNew: "Без новых на неделю",
     kpiReposNone: "Пока нет репозиториев",

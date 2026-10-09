@@ -462,7 +462,10 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
               recentRepos.map((repo) => {
                 const langKey = (repo.language ?? "").toLowerCase();
                 const langColor = LANG_COLORS[langKey] ?? theme.text3;
-                const href = repo.course_id && repo.assignment_id ? `/courses/${repo.course_id}/assignments/${repo.assignment_id}` : "/repositories";
+                const href =
+                  repo.course_id && repo.assignment_id
+                    ? `/courses/${repo.course_id}/assignments/${repo.assignment_id}`
+                    : `/repositories/${repo.repository_id ?? repo.id}/code`;
                 return (
               <Link
                 key={repo.id}

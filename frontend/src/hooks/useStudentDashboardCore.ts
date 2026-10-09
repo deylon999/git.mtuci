@@ -9,6 +9,7 @@ import type {
 } from "../api/studentDashboardApi";
 import { getStudentDashboardBundleDeduped } from "../api/studentRequestDedup";
 import { useStudentNavCountsOptional } from "../context/StudentNavCountsContext";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 import { translate, translateWithParams } from "../i18n";
 import { getI18nLocale } from "../i18n/runtime";
 import {
@@ -81,7 +82,25 @@ function mapDeadlines(
   });
 }
 
-function buildKpiView(stats: Awaited<ReturnType<typeof getStudentDashboardBundleDeduped>>["stats"]): StudentDashboardKpiView {
+/** "A and B" for deadlines due today, otherwise the next one; built here because the server sends Russian text. */
+function deadlinesTodaySubtitle(deadlines: StudentDeadlineItem[], now: Date): string {
+  const locale = getI18nLocale();
+  const today = deadlines.filter((d) => d.deadline.toDateString() === now.toDateString());
+  if (today.length > 0) {
+    const names = today.slice(0, 2).map((d) => d.name);
+    return new Intl.ListFormat(locale, { type: "conjunction" }).format(names);
+  }
+  const next = deadlines
+    .filter((d) => d.deadline.getTime() > now.getTime())
+    .sort((a, b) => a.deadline.getTime() - b.deadline.getTime())[0];
+  if (next) return translateWithParams(locale, "student.dashboard.kpiDeadlinesNext", { title: next.name });
+  return translate(locale, "student.dashboard.kpiDeadlinesNone");
+}
+
+function buildKpiView(
+  stats: Awaited<ReturnType<typeof getStudentDashboardBundleDeduped>>["stats"],
+  deadlinesTodaySub: string,
+): StudentDashboardKpiView {
   const locale = getI18nLocale();
   const { kpi } = stats;
   const reposSub =
@@ -106,7 +125,7 @@ function buildKpiView(stats: Awaited<ReturnType<typeof getStudentDashboardBundle
     coursesActive: kpi.courses_active,
     coursesSub: translateWithParams(locale, "student.dashboard.kpiAssignmentsTotal", { n: kpi.assignments_total }),
     deadlinesToday: kpi.deadlines_today,
-    deadlinesTodaySub: kpi.deadlines_today_sub,
+    deadlinesTodaySub,
   };
 }
 
@@ -115,6 +134,11 @@ export function useStudentDashboardCore(): StudentDashboardCore {
   const [reloadToken, setReloadToken] = useState(0);
   const setSidebarCounts = useStudentNavCountsOptional()?.setSidebarCounts;
   const { user } = useAuthUser();
+  const { language } = useUserPreferences();
+  // The session check replaces the user object on navigation; only reload when something we show changes.
+  const userId = user?.id;
+  const userFullName = user?.full_name;
+  const userGroup = user?.group_name ?? null;
 
   const refetch = useCallback(() => {
     setReloadToken((n) => n + 1);
@@ -126,7 +150,7 @@ export function useStudentDashboardCore(): StudentDashboardCore {
     async function load() {
       setState((prev) => ({ ...prev, loading: true, error: null }));
       try {
-        if (!user) {
+        if (!userId) {
           if (!cancelled) {
             setState((prev) => ({
               ...prev,
@@ -144,16 +168,16 @@ export function useStudentDashboardCore(): StudentDashboardCore {
 
         const now = new Date();
         const deadlines = mapDeadlines(bundle.stats.deadlines, now);
-
+        const todaySub = deadlinesTodaySubtitle(deadlines, now);
         setState({
           loading: false,
           error: null,
-          firstName: firstNameFromFullName(user.full_name, getI18nLocale()),
-          groupName: user.group_name ?? null,
+          firstName: firstNameFromFullName(userFullName ?? "", getI18nLocale()),
+          groupName: userGroup,
           deadlines,
           deadlinesToday: bundle.stats.kpi.deadlines_today,
-          deadlinesTodaySub: bundle.stats.kpi.deadlines_today_sub,
-          kpi: buildKpiView(bundle.stats),
+          deadlinesTodaySub: todaySub,
+          kpi: buildKpiView(bundle.stats, todaySub),
           courses: bundle.stats.courses,
           recentRepos: bundle.recent_repositories,
           activitySummary: bundle.activity_summary,
@@ -176,7 +200,7 @@ export function useStudentDashboardCore(): StudentDashboardCore {
     return () => {
       cancelled = true;
     };
-  }, [setSidebarCounts, reloadToken, refetch, user]);
+  }, [setSidebarCounts, reloadToken, refetch, userId, userFullName, userGroup, language]);
 
   return { ...state, refetch };
 }
