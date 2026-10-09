@@ -29,6 +29,11 @@ interface AuthUserContextValue {
 
 const AuthUserContext = createContext<AuthUserContextValue | null>(null);
 
+/** Re-validation returns a fresh object every time; keep the old one when nothing changed so consumers don't reload. */
+function keepIfUnchanged(prev: UserRead | null, next: UserRead): UserRead {
+  return prev && JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+}
+
 export function AuthUserProvider({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const [user, setUser] = useState<UserRead | null>(null);
@@ -63,7 +68,7 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
     }
     try {
       const me = await getMe(opts?.force ? { force: true } : undefined);
-      setUser(me);
+      setUser((prev) => keepIfUnchanged(prev, me));
       setFailed(false);
       return me;
     } catch (err) {
@@ -85,7 +90,7 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
       void getMe()
         .then((me) => {
           if (!cancelled) {
-            setUser(me);
+            setUser((prev) => keepIfUnchanged(prev, me));
             setFailed(false);
           }
         })
