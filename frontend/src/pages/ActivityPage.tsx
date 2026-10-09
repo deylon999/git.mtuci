@@ -14,6 +14,8 @@ import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getAdminPageTheme, getAdminNativeSelectProps } from "../layout/adminPageTheme";
 import { getToken } from "../api/client";
 import { toSafeExternalUrl } from "../utils/safeUrl";
+import { currentLocaleTag } from "../utils/dates";
+import { useDebounce } from "../hooks/useLogs";
 
 interface ActivityPageProps {
   isDarkTheme?: boolean;
@@ -81,8 +83,8 @@ function HourlyActivityChart({
           // Peak takes ~85% of container height (80px), min 4px for visibility
           const containerHeight = 90;
           const maxBarHeight = containerHeight * 0.85; // ~76px for peak
-          const barHeight = item.count > 0 
-            ? Math.max((item.count / maxCount) * maxBarHeight, 4) 
+          const barHeight = item.count > 0
+            ? Math.max((item.count / maxCount) * maxBarHeight, 4)
             : 4;
           const isPeak = item.hour === peakHour && item.count > 0;
           const isCurrent = item.is_current;
@@ -94,20 +96,20 @@ function HourlyActivityChart({
                 style={{
                   width: "100%",
                   background: isHovered
-                    ? "#fff"
-                    : isCurrent 
-                      ? colors.accent 
-                      : isPeak 
-                        ? `${colors.accent}80` 
+                    ? colors.accent2
+                    : isCurrent
+                      ? colors.accent
+                      : isPeak
+                        ? `${colors.accent}80`
                         : `${colors.accent}30`,
                   borderRadius: "3px 3px 0 0",
                   height: `${barHeight}px`,
                   cursor: "pointer",
                   transition: "all 0.2s ease",
-                  boxShadow: isHovered 
-                    ? `0 0 12px #fff80` 
-                    : isPeak 
-                      ? `0 0 8px ${colors.accent}50` 
+                  boxShadow: isHovered
+                    ? `0 0 10px ${colors.accent2}80`
+                    : isPeak
+                      ? `0 0 8px ${colors.accent}50`
                       : "none",
                 }}
                 onMouseEnter={(e) => {
@@ -135,9 +137,9 @@ function HourlyActivityChart({
       </div>
 
       {/* Time Labels */}
-      <div style={{ 
-        display: "flex", 
-        justifyContent: "space-between", 
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
         marginTop: "6px",
         padding: "0 2px"
       }}>
@@ -174,8 +176,8 @@ function HourlyActivityChart({
 }
 
 export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) {
-  const { t, tp, language } = useUserPreferences();
-  const dateLocale = language === "en" ? "en-US" : "ru-RU";
+  const { t, tp } = useUserPreferences();
+  const dateLocale = currentLocaleTag();
   const colors = getColors(isDarkTheme);
   const ui = getAdminPageTheme(isDarkTheme);
   const adminSelect = getAdminNativeSelectProps(isDarkTheme, "compact");
@@ -206,6 +208,10 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
   const [topUsers, setTopUsers] = useState<TopUserStat[]>([]);
   const [hourlyActivity, setHourlyActivity] = useState<HourlyActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [feedLoading, setFeedLoading] = useState(true);
+  const [feedError, setFeedError] = useState(false);
+  const feedRequestRef = useRef(0);
+  const sidebarRequestRef = useRef(0);
   const [exporting, setExporting] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -279,6 +285,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
   const [eventTypeFilter, setEventTypeFilter] = useState("");
   const [userFilter, setUserFilter] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "all">("today");
+  const debouncedSearch = useDebounce(searchQuery.trim(), 300);
 
   // Available users and event types for filters
   const eventTypes = [
@@ -298,7 +305,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
     const now = new Date();
     let dateFrom: string | undefined;
     let dateTo: string | undefined;
-    
+
     switch (dateRange) {
       case "today":
         dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
@@ -326,52 +333,64 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
     return { dateFrom, dateTo };
   }, [dateRange]);
 
-  // Load data function
-  const loadData = useCallback(async () => {
+  // Side panels (today's stats, hot repos, top users, hourly chart) do not depend on the feed filters.
+  const loadSidebar = useCallback(async () => {
+    const requestId = ++sidebarRequestRef.current;
+    const [statsData, reposData, usersData, hourlyData] = await Promise.all([
+      getTodayStats().catch(() => null),
+      getHotRepos().catch(() => null),
+      getTopUsers().catch(() => null),
+      getHourlyActivity().catch(() => null),
+    ]);
+    if (requestId !== sidebarRequestRef.current) return;
+    setStats(statsData);
+    if (reposData) setHotRepos(reposData);
+    if (usersData) setTopUsers(usersData);
+    if (hourlyData) setHourlyActivity(hourlyData);
+    setLoading(false);
+  }, []);
+
+  // Only the latest feed request may update the list, so fast filter changes never show an older result.
+  const loadFeed = useCallback(async () => {
+    const requestId = ++feedRequestRef.current;
+    setFeedLoading(true);
     try {
       const { dateFrom, dateTo } = getDateRange();
-      const filters = {
-        search: searchQuery || undefined,
+      const activityData = await getRecentActivity(pageSize, pageOffset, {
+        search: debouncedSearch || undefined,
         activityType: eventTypeFilter || undefined,
         userId: userFilter || undefined,
         dateFrom,
         dateTo,
-      };
-      
-      const [statsData, reposData, usersData, hourlyData, activityData] = await Promise.all([
-        getTodayStats(),
-        getHotRepos(),
-        getTopUsers(),
-        getHourlyActivity(),
-        getRecentActivity(pageSize, pageOffset, filters),
-      ]);
-      setStats(statsData);
-      setHotRepos(reposData);
-      setTopUsers(usersData);
-      setHourlyActivity(hourlyData);
+      });
+      if (requestId !== feedRequestRef.current) return;
       setActivities(activityData.activities);
       setTotalActivities(activityData.total);
-    } catch (error) {
-      console.error("Failed to load activity data:", error);
+      setFeedError(false);
+    } catch {
+      if (requestId === feedRequestRef.current) setFeedError(true);
     } finally {
-      setLoading(false);
+      if (requestId === feedRequestRef.current) setFeedLoading(false);
     }
-  }, [pageSize, pageOffset, searchQuery, eventTypeFilter, userFilter, getDateRange]);
+  }, [pageSize, pageOffset, debouncedSearch, eventTypeFilter, userFilter, getDateRange]);
+
+  const loadData = useCallback(async () => {
+    await Promise.all([loadSidebar(), loadFeed()]);
+  }, [loadSidebar, loadFeed]);
 
   const handleExportCsv = async () => {
     setExporting(true);
     try {
       const { dateFrom, dateTo } = getDateRange();
       await exportActivityCSV({
-        search: searchQuery || undefined,
+        search: debouncedSearch || undefined,
         activityType: eventTypeFilter || undefined,
         userId: userFilter || undefined,
         dateFrom,
         dateTo,
       });
       toast.success(t("admin.activity.exportSuccess"));
-    } catch (error) {
-      console.error("Activity export failed:", error);
+    } catch {
       toast.error(t("admin.activity.exportFailed"));
     } finally {
       setExporting(false);
@@ -415,18 +434,18 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
         } catch {
           return; // ignore malformed payloads instead of throwing inside the socket handler
         }
-        
+
         if (data.type === "new_activity") {
           // Real-time update hot repos if repo_name exists
           if (data.repo_name) {
             setHotRepos(prev => {
               const existing = prev.find(r => r.name === data.repo_name);
               let updated: HotRepoStat[];
-              
+
               if (existing) {
                 // Update existing repo
-                updated = prev.map(r => 
-                  r.name === data.repo_name 
+                updated = prev.map(r =>
+                  r.name === data.repo_name
                     ? { ...r, events: r.events + 1 }
                     : r
                 );
@@ -440,14 +459,14 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                 };
                 updated = [...prev, newRepo];
               }
-              
+
               // Sort by events desc and take top 5
               return updated
                 .sort((a, b) => b.events - a.events)
                 .slice(0, 5);
             });
           }
-          
+
           // Refresh stats after short delay
           scheduleReload();
         } else if (data.type === "stats_updated") {
@@ -478,31 +497,37 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
     };
   }, []);
 
-  // Track if filters have changed (not on initial mount)
-  const filtersChangedRef = useRef(false);
-  const isInitialLoadRef = useRef(true);
-
-  // Reset offset when filters change and reload data
-  const handleFilterChange = useCallback((setter: (value: any) => void, value: any) => {
+  // Reset to the first page whenever a filter changes.
+  const handleFilterChange = <T,>(setter: (value: T) => void, value: T) => {
     setter(value);
     setPageOffset(0);
-    filtersChangedRef.current = true;
-  }, []);
+  };
 
-  // Initial load only - empty deps
   useEffect(() => {
-    loadData();
-    isInitialLoadRef.current = false;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void loadSidebar();
+  }, [loadSidebar]);
 
-  // Load data when filters or pagination change (skip initial mount)
   useEffect(() => {
-    if (!isInitialLoadRef.current) {
-      loadData();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageSize, pageOffset, searchQuery, eventTypeFilter, userFilter, dateRange]);
+    void loadFeed();
+  }, [loadFeed]);
+
+  // The server sends "HH:MM" in Moscow time; show the viewer's local time, with the date when it is not today.
+  const formatActivityTime = (activity: ActivityItem) => {
+    const date = activity.timestamp ? new Date(activity.timestamp) : null;
+    if (!date || Number.isNaN(date.getTime())) return activity.time;
+    const time = date.toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" });
+    const sameDay = date.toDateString() === new Date().toDateString();
+    return sameDay ? time : `${date.toLocaleDateString(dateLocale, { day: "numeric", month: "short" })}, ${time}`;
+  };
+
+  const feedHeader =
+    dateRange === "today"
+      ? tp("admin.activity.todayHeader", { date: new Date().toLocaleDateString(dateLocale) })
+      : dateRange === "week"
+        ? t("admin.activity.periodWeek")
+        : dateRange === "month"
+          ? t("admin.activity.periodMonth")
+          : t("admin.activity.periodAll");
 
   const getEventIconBg = (type: string) => {
     switch (type) {
@@ -563,9 +588,9 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
   };
 
   return (
-    <div style={{ backgroundColor: colors.pageBg, minHeight: "100vh", padding: "24px 28px", display: "flex", flexDirection: "column", gap: "16px" }}>
+    <div className="px-4 py-6 sm:px-7" style={{ backgroundColor: colors.pageBg, minHeight: "100vh", display: "flex", flexDirection: "column", gap: "16px" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <div style={{ fontSize: "20px", fontWeight: 600, color: colors.textPrimary }}>{t("admin.activity.title")}</div>
           <div style={{ fontSize: "12px", color: colors.textSecondary, marginTop: "3px" }}>{t("admin.activity.subtitleFull")}</div>
@@ -582,9 +607,9 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
       </div>
 
       {/* Stats Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {loading ? (
-          <div style={{ gridColumn: "span 4", textAlign: "center", color: colors.textSecondary }}>{t("admin.activity.loading")}</div>
+          <div className="col-span-full" style={{ textAlign: "center", color: colors.textSecondary }}>{t("admin.activity.loading")}</div>
         ) : stats ? (
           <>
             {renderStatCard(t("admin.activity.statEventsToday"), stats.total_events, stats.total_events_delta)}
@@ -593,21 +618,21 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
             {renderStatCard(t("admin.activity.statNewRepos"), stats.new_repositories, stats.new_repositories_delta)}
           </>
         ) : (
-          <div style={{ gridColumn: "span 4", textAlign: "center", color: colors.textSecondary }}>{t("admin.activity.loadError")}</div>
+          <div className="col-span-full" style={{ textAlign: "center", color: colors.textSecondary }}>{t("admin.activity.loadError")}</div>
         )}
       </div>
 
       {/* Main Layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: "16px" }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-4">
         {/* Left - Feed */}
-        <div>
+        <div className="min-w-0">
           {/* Toolbar */}
           <div style={{
-            display: "flex", alignItems: "center", gap: "8px", background: colors.cardBg,
+            display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", background: colors.cardBg,
             border: `1px solid ${colors.border}`, borderRadius: "10px", padding: "10px 14px", marginBottom: "10px"
           }}>
             <div style={{
-              flex: 1, display: "flex", alignItems: "center", gap: "6px", background: colors.pageBg,
+              flex: "1 1 180px", display: "flex", alignItems: "center", gap: "6px", background: colors.pageBg,
               border: `0.5px solid ${colors.border}`, borderRadius: "7px", padding: "5px 10px"
             }}>
               <Search size={13} color={colors.textMuted} />
@@ -616,6 +641,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                 placeholder={t("admin.activity.searchPlaceholder")}
                 value={searchQuery}
                 onChange={(e) => handleFilterChange(setSearchQuery, e.target.value)}
+                aria-label={t("admin.activity.searchPlaceholder")}
                 style={{
                   background: "transparent", border: "none", outline: "none", fontSize: "12px",
                   color: colors.textName, width: "100%", fontFamily: "inherit"
@@ -623,7 +649,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                 className={isDarkTheme ? "placeholder-[#6e7681]" : "placeholder-slate-400"}
               />
             </div>
-            <div style={{ width: "0.5px", height: "20px", background: colors.border }} />
+            <div className="hidden sm:block" style={{ width: "0.5px", height: "20px", background: colors.border }} />
             {/* WebSocket Status */}
             <div style={{
               display: "flex", alignItems: "center", gap: "4px", padding: "4px 8px",
@@ -633,7 +659,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               <Wifi size={12} />
               {wsConnected ? t("admin.monitoring.online") : t("admin.monitoring.offline")}
             </div>
-            <div style={{ width: "0.5px", height: "20px", background: colors.border }} />
+            <div className="hidden sm:block" style={{ width: "0.5px", height: "20px", background: colors.border }} />
             <select
               value={eventTypeFilter}
               onChange={(e) => handleFilterChange(setEventTypeFilter, e.target.value)}
@@ -657,7 +683,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
             </select>
             <select
               value={dateRange}
-              onChange={(e) => handleFilterChange(setDateRange, e.target.value)}
+              onChange={(e) => handleFilterChange(setDateRange, e.target.value as typeof dateRange)}
               className="admin-native-select"
               style={toolbarSelectStyle}
             >
@@ -674,8 +700,25 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               padding: "8px 16px", background: colors.cardBg2, borderBottom: `0.5px solid ${colors.border}`,
               fontSize: "11px", fontWeight: 600, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em"
             }}>
-              {tp("admin.activity.todayHeader", { date: new Date().toLocaleDateString(dateLocale) })}
+              {feedHeader}
             </div>
+
+            {feedError && activities.length === 0 ? (
+              <div style={{ padding: "24px 16px", fontSize: "12px", color: colors.textSecondary, textAlign: "center" }}>
+                {t("admin.activity.loadError")}{" "}
+                <button type="button" onClick={() => void loadFeed()} style={{ color: colors.accent2 }}>
+                  {t("admin.activity.retry")}
+                </button>
+              </div>
+            ) : feedLoading && activities.length === 0 ? (
+              <div style={{ padding: "24px 16px", fontSize: "12px", color: colors.textSecondary, textAlign: "center" }}>
+                {t("admin.activity.loading")}
+              </div>
+            ) : activities.length === 0 ? (
+              <div style={{ padding: "24px 16px", fontSize: "12px", color: colors.textSecondary, textAlign: "center" }}>
+                {t("admin.activity.feedEmpty")}
+              </div>
+            ) : null}
 
             {activities.map((activity: ActivityItem) => {
               const iconBg = getEventIconBg(activity.type);
@@ -683,7 +726,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               return (
                 <div key={activity.id} style={{
                   display: "flex", alignItems: "flex-start", gap: "12px", padding: "12px 16px",
-                  borderBottom: `0.5px solid ${colors.border}`, cursor: "pointer"
+                  borderBottom: `0.5px solid ${colors.border}`, opacity: feedLoading ? 0.6 : 1
                 }}>
                   <div style={{
                     width: "32px", height: "32px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center",
@@ -728,7 +771,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                       <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "5px", fontWeight: 500, ...tagStyle }}>
                         {mapActivityTag(activity.type, activity.tag)}
                       </span>
-                      <span style={{ fontSize: "10px", color: colors.textMuted }}>{activity.time}</span>
+                      <span style={{ fontSize: "10px", color: colors.textMuted }}>{formatActivityTime(activity)}</span>
                     </div>
                   </div>
                 </div>
@@ -737,12 +780,12 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
 
             {/* Pagination */}
             <div style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
+              display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "space-between",
               padding: "10px 14px", borderTop: `0.5px solid ${colors.border}`, fontSize: "11px", color: colors.textSecondary
             }}>
               {/* Left: Count */}
               <span>{tp("admin.activity.shownOf", { shown: activities.length, total: totalActivities })}</span>
-              
+
               {/* Center: Page buttons */}
               <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
                 {Math.floor(pageOffset / pageSize) > 0 && (
@@ -770,7 +813,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                   >→</button>
                 )}
               </div>
-              
+
               {/* Right: Page size selector */}
               <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
                 <span>{t("admin.activity.perPage")}</span>
@@ -849,7 +892,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               <span>{t("admin.activity.hotRepos")}</span>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <span style={{ fontSize: "10px", color: colors.textSecondary, fontWeight: 400 }}>{t("admin.activity.byEvents")}</span>
-                <div 
+                <div
                   title={t("admin.activity.hotReposHint")}
                   style={{ cursor: "help", display: "flex", alignItems: "center" }}
                 >
@@ -866,17 +909,17 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
               </div>
             ) : (
               hotRepos.slice(0, 5).map((repo, i) => (
-                <a 
-                  key={i} 
+                <a
+                  key={i}
                   href={toSafeExternalUrl(repo.url)}
-                  target="_blank" 
+                  target="_blank"
                   rel="noopener noreferrer"
                   style={{
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: "8px", 
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
                     padding: "8px 14px",
-                    borderBottom: i < Math.min(hotRepos.length, 5) - 1 ? `0.5px solid ${colors.border}` : "none", 
+                    borderBottom: i < Math.min(hotRepos.length, 5) - 1 ? `0.5px solid ${colors.border}` : "none",
                     fontSize: "12px",
                     textDecoration: "none",
                     cursor: "pointer",
@@ -890,12 +933,12 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
                   }}
                 >
                   {repo.language ? (
-                    <span 
+                    <span
                       title={repo.language}
-                      style={{ 
-                        fontSize: "10px", 
-                        padding: "2px 5px", 
-                        borderRadius: "3px", 
+                      style={{
+                        fontSize: "10px",
+                        padding: "2px 5px",
+                        borderRadius: "3px",
                         background: colors.accent + "20",
                         color: colors.accent,
                         fontWeight: 500,

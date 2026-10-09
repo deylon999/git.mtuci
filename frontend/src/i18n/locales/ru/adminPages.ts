@@ -363,6 +363,8 @@ export const adminPagesRu = {
     hotRepos: "Горячие репо",
     byEvents: "По событиям",
     hotReposHint: "Рейтинг репозиториев по количеству действий за последние 24 часа",
+    feedEmpty: "Нет событий по выбранным фильтрам",
+    retry: "Повторить",
     quietToday: "Сегодня пока затишье",
     eventsCount: "{n} {n|событие|события|событий}",
     vsYesterday: "к вчера",

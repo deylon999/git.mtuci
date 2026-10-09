@@ -363,6 +363,8 @@ export const adminPagesEn = {
     hotRepos: "Hot repos",
     byEvents: "By events",
     hotReposHint: "Repos ranked by actions in the last 24 hours",
+    feedEmpty: "No events match these filters",
+    retry: "Try again",
     quietToday: "Quiet day so far",
     eventsCount: "{n} {n|event|events}",
     vsYesterday: "vs yesterday",
