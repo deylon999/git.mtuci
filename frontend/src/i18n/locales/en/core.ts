@@ -6,6 +6,11 @@ export const coreEn = {
     home: "Go home",
     unknown: "Unknown error",
   },
+  notFound: {
+    title: "Page not found",
+    hint: "The link may be broken, or the page has been moved or deleted.",
+    home: "Go to the home page",
+  },
   common: {
     areYouSure: "Are you sure?",
     openMenu: "Open menu",

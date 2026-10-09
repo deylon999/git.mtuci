@@ -63,6 +63,7 @@ const ReviewsPage = lazy(() => import("./pages/ReviewsPage"));
 const CodeSearchPage = lazy(() => import("./pages/CodeSearchPage"));
 const AdminSystemSearchPage = lazy(() => import("./pages/AdminSystemSearchPage"));
 const AdminNotificationsPage = lazy(() => import("./pages/AdminNotificationsPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
 const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 
@@ -342,7 +343,7 @@ function AppShell({
                   </Route>
                 </Route>
 
-                <Route path="*" element={<RoleBasedHomeRedirect />} />
+                <Route path="*" element={<NotFoundPage isDarkTheme={isDarkTheme} />} />
               </Routes>
             </Suspense>
           </main>
