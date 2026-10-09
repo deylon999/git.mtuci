@@ -1217,6 +1217,8 @@ class AdminPlatformSettingsRead(BaseModel):
 @require_permission("settings_view")
 async def admin_platform_settings(
     current_user=Depends(get_current_user),
+    # @require_permission reads `session` from the endpoint's own signature (functools.wraps), so it must be declared.
+    session: AsyncSession = Depends(get_session),
 ) -> AdminPlatformSettingsRead:
     from app.core.config import settings
     from app.schemas.system import build_system_info_read

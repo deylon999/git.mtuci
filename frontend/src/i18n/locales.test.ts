@@ -39,6 +39,15 @@ describe("locales", () => {
     expect(mismatched).toEqual([]);
   });
 
+  it("plural word objects have the form English asks for", () => {
+    // pluralWord() looks up `.other` for every English n ≠ 1; without it the raw key reaches the screen.
+    const missing = [...en.keys()]
+      .filter((k) => k.endsWith(".one"))
+      .map((k) => k.slice(0, -".one".length))
+      .filter((base) => !en.has(`${base}.other`));
+    expect(missing).toEqual([]);
+  });
+
   it("plural markers have the right number of forms", () => {
     const markers = (s: string) => [...s.matchAll(/\{(\w+)\|([^{}]*)\}/g)].map((m) => ({ name: m[1], forms: m[2].split("|").length }));
     const bad: string[] = [];

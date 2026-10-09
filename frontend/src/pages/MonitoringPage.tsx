@@ -1,4 +1,5 @@
 import { currentLocaleTag } from "../utils/dates";
+import { localizeUptime } from "../utils/uptime";
 import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { RefreshCw, HardDrive, Database, Server, GitBranch } from "lucide-react";
@@ -24,7 +25,7 @@ interface MonitoringPageProps {
 }
 
 export default function MonitoringPage({ isDarkTheme = false }: MonitoringPageProps) {
-  const { t, tp } = useUserPreferences();
+  const { t, tp, language } = useUserPreferences();
   const dateLocale = currentLocaleTag();
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const diskPercent = metrics?.disk_percent ?? 0;
@@ -151,7 +152,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
   const topTablesMaxMb = Math.max(...topTables.map((t) => t.size_mb), 1);
 
   const serviceDetail = (svc: (typeof services)[number]) => {
-    if (svc.uptime) return tp("admin.monitoring.uptime", { value: svc.uptime });
+    if (svc.uptime) return tp("admin.monitoring.uptime", { value: localizeUptime(svc.uptime, language) });
     if (svc.detail) return svc.detail;
     return EMPTY;
   };
@@ -276,7 +277,7 @@ export default function MonitoringPage({ isDarkTheme = false }: MonitoringPagePr
                 {serviceStatus?.api ? t("admin.monitoring.online") : t("admin.monitoring.offline")}
               </div>
               <div style={{ fontSize: "10px", color: theme.text2, marginTop: "1px" }}>
-                {tp("admin.monitoring.uptime", { value: serviceStatus?.api_uptime || "—" })}
+                {tp("admin.monitoring.uptime", { value: serviceStatus?.api_uptime ? localizeUptime(serviceStatus.api_uptime, language) : "—" })}
               </div>
             </div>
             <span style={{

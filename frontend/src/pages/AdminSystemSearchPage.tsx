@@ -665,7 +665,7 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                     const lastSeenText = formatLastSeen(fullUser?.last_login, dateLocale, language);
                     const repositoriesCount =
                       fullUser?.repositories_count ??
-                      parseCountFromText(hit.subtitle, [/(?:^|\s)(\d+)\s*(?:репозитор(?:ий|ия|иев)|repositories?|repos?)\b/iu]) ??
+                      parseCountFromText(hit.subtitle, [/(?:^|\s)(\d+)\s*(?:репозитор(?:ий|ия|иев)|repositories?|repos?)(?!\p{L})/iu]) ??
                       0;
                     // No per-user commit count in the API (the hit subtitle is the email), so only repositories are shown.
                     const repoCommitsText = formatRepoCount(repositoriesCount, language);
