@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, EmailStr, Field
 
+import app.core.email_policy  # noqa: F401  (allows .local addresses in EmailStr)
+
 
 class AuthRegisterRequest(BaseModel):
     email: EmailStr

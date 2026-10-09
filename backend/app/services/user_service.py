@@ -97,7 +97,7 @@ async def update_user_role_and_block(
     user_id,
     role: UserRole,
     is_blocked: bool,
-    is_pending: bool = True,
+    is_pending: bool | None = None,
     group_name: str | None = None,
     student_id: str | None = None,
 ) -> User:
@@ -108,7 +108,8 @@ async def update_user_role_and_block(
     previous_role = user.role
     user.role = role
     user.is_blocked = is_blocked
-    user.is_pending = is_pending
+    if is_pending is not None:
+        user.is_pending = is_pending
     
     # Compare by value to handle both enum and string inputs
     role_value = role.value if hasattr(role, 'value') else str(role)

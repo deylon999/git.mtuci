@@ -5,6 +5,8 @@ from typing import Any, Literal, Optional
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+import app.core.email_policy  # noqa: F401  (allows .local addresses in EmailStr)
+
 
 class AssignmentCreateRequest(BaseModel):
     title: str

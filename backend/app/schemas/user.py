@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, ConfigDict, Field
 
+import app.core.email_policy  # noqa: F401  (allows .local addresses in EmailStr)
+
 from app.models.user import UserRole
 
 
@@ -57,7 +59,8 @@ class AdminUserRead(BaseModel):
 class AdminUpdateUserRequest(BaseModel):
     role: UserRole
     is_blocked: bool
-    is_pending: bool = True
+    # Omitted = keep the current state. A `True` default re-pended an approved user on any role/group edit.
+    is_pending: bool | None = None
     group_name: str | None = None
     student_id: str | None = None
 
