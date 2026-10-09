@@ -225,7 +225,9 @@ function AppShell({
         {!isAuthPage ? (
           <Sidebar isDarkTheme={isDarkTheme} mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
         ) : null}
-        <div className="flex flex-1 flex-col min-h-0">
+        {/* min-w-0: a flex item otherwise grows to its widest child, so wide tables pushed the whole page past
+            the phone screen instead of scrolling inside their own overflow-x-auto wrapper. */}
+        <div className="flex flex-1 flex-col min-h-0 min-w-0">
           <main
             className={`flex-1 overflow-y-auto min-w-0 ${
               isAuthPage ? "" : isTeacherLike ? "px-6 py-5" : `${mainPaddingY} ${pageGutterClass}`

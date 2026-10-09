@@ -204,7 +204,9 @@ export default function RepoSectionShell({
       ) : null}
 
       <div className="flex flex-col xl:flex-row gap-4 items-start w-full">
-        <div className="flex-1 min-w-0 flex flex-col gap-4">{children}</div>
+        {/* w-full: in the stacked (phone) column, items-start sizes children to their content, so a wide
+            settings form pushed the whole repo card past the screen. */}
+        <div className="w-full flex-1 min-w-0 flex flex-col gap-4">{children}</div>
         <RepoProjectSidebar
           theme={theme}
           loading={loading && !summary}
