@@ -3,12 +3,13 @@ import { useParams } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { useUserPreferences } from '../context/UserPreferencesContext';
 import { ReviewThreads } from '../components/review/ReviewThreads';
+import MuiThemeScope from '../components/common/MuiThemeScope';
 
 interface ReviewsPageProps {
   isDarkTheme?: boolean;
 }
 
-export const ReviewsPage: React.FC<ReviewsPageProps> = () => {
+export const ReviewsPage: React.FC<ReviewsPageProps> = ({ isDarkTheme = false }) => {
   const { repoId, prNumber } = useParams<{ repoId: string; prNumber: string }>();
   const { t } = useUserPreferences();
 
@@ -21,9 +22,11 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <ReviewThreads repositoryId={repoId} pullNumber={prNum} />
-    </Box>
+    <MuiThemeScope isDarkTheme={isDarkTheme}>
+      <Box sx={{ p: 3 }}>
+        <ReviewThreads repositoryId={repoId} pullNumber={prNum} />
+      </Box>
+    </MuiThemeScope>
   );
 };
 

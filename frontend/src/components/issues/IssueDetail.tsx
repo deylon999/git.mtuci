@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import MuiThemeScope from '../common/MuiThemeScope';
 import { useParams } from "react-router-dom";
 import {
   CheckCircle2,
@@ -351,4 +352,11 @@ export const IssueDetail: React.FC<IssueDetailProps> = ({ isDarkTheme = false })
   );
 };
 
-export default IssueDetail;
+/** Route entry: same component inside the MUI theme that follows the app's dark/light mode. */
+export default function IssueDetailRoute(props: IssueDetailProps) {
+  return (
+    <MuiThemeScope isDarkTheme={props.isDarkTheme}>
+      <IssueDetail {...props} />
+    </MuiThemeScope>
+  );
+}
