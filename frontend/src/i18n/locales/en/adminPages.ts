@@ -286,7 +286,7 @@ export const adminPagesEn = {
     empty: "No logs found",
     deleteConfirm: "Delete logs older than 30 days?",
     deleteTitle: "Delete old logs",
-    deleteMessage: "Delete entries older than 1 day? This cannot be undone.",
+    deleteMessage: "Delete entries older than 30 days? This can't be undone.",
     deleteConfirmBtn: "Delete",
     exported: "Logs exported",
     deleted: "Old logs deleted",

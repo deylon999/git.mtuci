@@ -286,7 +286,7 @@ export const adminPagesRu = {
     empty: "Логов не найдено",
     deleteConfirm: "Удалить логи старше 30 дней?",
     deleteTitle: "Удалить старые логи",
-    deleteMessage: "Удалить записи старше 1 дня? Это действие необратимо.",
+    deleteMessage: "Удалить записи старше 30 дней? Это действие необратимо.",
     deleteConfirmBtn: "Удалить",
     exported: "Логи экспортированы",
     deleted: "Старые логи удалены",

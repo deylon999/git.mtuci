@@ -1,8 +1,16 @@
 import { currentLocaleTag } from "../utils/dates";
 import { useState, useEffect, useRef, memo } from "react";
 import { useLocation } from "react-router-dom";
+import toast from "react-hot-toast";
 import { Search, Download, Trash2, FileX } from "lucide-react";
-import { useLogsFilters, useLogsPagination, useLogsData, useLogsStats, useDebounce } from "../hooks/useLogs";
+import {
+  useLogsFilters,
+  useLogsPagination,
+  useLogsData,
+  useLogsStats,
+  useDebounce,
+  type LogsTimeFilter,
+} from "../hooks/useLogs";
 import { exportLogs, deleteOldLogs } from "../api/adminApi";
 import ConfirmModal from "../components/ConfirmModal";
 import type { LogEntry } from "../api/types";
@@ -10,6 +18,9 @@ import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getAdminPageTheme, getAdminNativeSelectProps } from "../layout/adminPageTheme";
 import AdminPageHeader from "../components/AdminPageHeader";
 import { getLogUserDisplayName, getLogUserInitials } from "../utils/logDisplay";
+
+/** "Delete old" removes entries older than this many days. */
+const LOG_RETENTION_DAYS = 30;
 
 interface LogsPageProps {
   isDarkTheme?: boolean;
@@ -142,7 +153,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
   const pagination = getPagination();
 
   const { logs, total, loading: logsLoading, error: logsError, refetch: refetchLogs } = useLogsData(filters, pagination);
-  const { stats } = useLogsStats();
+  const { stats, refetch: refetchStats } = useLogsStats();
 
   useEffect(() => {
     if (handledLocationKeyRef.current === location.key) return;
@@ -271,9 +282,8 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Export failed:", error);
-      alert(t("admin.logs.exportFailed"));
+    } catch {
+      toast.error(t("admin.logs.exportFailed"));
     } finally {
       setIsExporting(false);
     }
@@ -282,12 +292,12 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
   const handleDeleteOldLogs = async () => {
     setIsDeleting(true);
     try {
-      const result = await deleteOldLogs(1); // Delete logs older than 1 day for testing
-      alert(tp("admin.logs.deletedCount", { n: result.deleted_count }));
-      refetchLogs();
-    } catch (error) {
-      console.error("Delete failed:", error);
-      alert(t("admin.logs.deleteFailed"));
+      const result = await deleteOldLogs(LOG_RETENTION_DAYS);
+      toast.success(tp("admin.logs.deletedCount", { n: result.deleted_count }));
+      void refetchLogs();
+      void refetchStats();
+    } catch {
+      toast.error(t("admin.logs.deleteFailed"));
     } finally {
       setIsDeleting(false);
       setShowDeleteModal(false);
@@ -300,7 +310,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
   };
 
   const totalPages = Math.ceil(total / limit);
-  const hasActiveFilters = Boolean(level || source || search) || timeFilter !== "today" || sort !== "desc";
+  const hasActiveFilters = Boolean(level || source || search) || timeFilter !== "all" || sort !== "desc";
 
   const ui = getAdminPageTheme(isDarkTheme);
   const c = ui.colors;
@@ -311,7 +321,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
 
   return (
     <div className={`min-h-screen ${ui.pageWrapper}`}>
-      <div className="w-full py-6 px-6 pb-20 space-y-6">
+      <div className="w-full py-6 px-4 sm:px-6 pb-20 space-y-6">
         <AdminPageHeader
           isDarkTheme={isDarkTheme}
           title={t("admin.logs.title")}
@@ -340,7 +350,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
         />
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div style={{ background: c.card, border: `1px solid ${c.border}`, borderRadius: "12px", padding: "20px" }}>
             <div style={{ fontSize: "11px", color: c.textMuted, marginBottom: "4px" }}>{t("admin.logs.statTotal")}</div>
             <div style={{ fontSize: "22px", fontWeight: 600, color: c.text }}>{stats?.total ?? "-"}</div>
@@ -376,7 +386,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
               className={`bg-transparent border-none outline-none text-sm flex-1 ${ui.tableNameText} ${isDarkTheme ? "placeholder-[#6e7681]" : "placeholder-slate-400"}`}
             />
           </div>
-          <div className={`w-px h-5 shrink-0 ${isDarkTheme ? "bg-[#2d2d2d]" : "bg-slate-300"}`} />
+          <div className={`hidden sm:block w-px h-5 shrink-0 ${isDarkTheme ? "bg-[#2d2d2d]" : "bg-slate-300"}`} />
           <select
             value={level}
             onChange={(e) => handleFilterChange(() => setLevel(e.target.value as any))}
@@ -406,16 +416,17 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
           </select>
           <select
             value={timeFilter}
-            onChange={(e) => handleFilterChange(() => setTimeFilter(e.target.value as any))}
+            onChange={(e) => handleFilterChange(() => setTimeFilter(e.target.value as LogsTimeFilter))}
             className={adminSelect.className}
             style={adminSelect.style}
           >
+            <option value="all" style={adminSelect.optionStyle}>{t("admin.logs.periodAllTime")}</option>
             <option value="today" style={adminSelect.optionStyle}>{t("admin.logs.periodToday")}</option>
             <option value="hour" style={adminSelect.optionStyle}>{t("admin.logs.periodHour")}</option>
             <option value="week" style={adminSelect.optionStyle}>{t("admin.logs.periodWeek")}</option>
             <option value="month" style={adminSelect.optionStyle}>{t("admin.logs.periodMonth")}</option>
           </select>
-          <div className={`w-px h-5 shrink-0 ${isDarkTheme ? "bg-[#2d2d2d]" : "bg-slate-300"}`} />
+          <div className={`hidden sm:block w-px h-5 shrink-0 ${isDarkTheme ? "bg-[#2d2d2d]" : "bg-slate-300"}`} />
           <select
             value={sort}
             onChange={(e) => handleFilterChange(() => setSort(e.target.value as any))}
@@ -454,7 +465,8 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
             </div>
           ) : (
             <>
-              <table className="w-full border-collapse">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[860px] border-collapse">
                 <thead>
                   <tr className={`border-b ${ui.tableBorder} ${ui.sectionHeaderBg}`}>
                     <th className={`text-xs font-medium uppercase tracking-wider text-left px-4 py-3 ${ui.tableHeaderText} w-[120px]`}>{t("admin.logs.colTime")}</th>
@@ -488,9 +500,10 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
                   ))}
                 </tbody>
               </table>
+              </div>
 
               {/* Pagination */}
-              <div className={`flex items-center justify-between px-4 py-3 border-t ${ui.tableBorder} text-sm ${ui.tableCellText}`}>
+              <div className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t ${ui.tableBorder} text-sm ${ui.tableCellText}`}>
                 <span>{tp("admin.logs.shownOf", { shown: logs.length, total })}</span>
                 <div className="flex items-center gap-2">
                   {page > 1 && (

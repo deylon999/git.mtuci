@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getLogs, getLogsStats } from "../api/adminApi";
 import type { LogLevel, LogSource, LogsFilters, LogsPagination, LogEntry, LogsStats } from "../api/types";
@@ -19,23 +19,27 @@ export function useDebounce<T>(value: T, delay: number = 300): T {
   return debouncedValue;
 }
 
+export const LOGS_TIME_FILTERS = ["all", "today", "hour", "week", "month"] as const;
+export type LogsTimeFilter = (typeof LOGS_TIME_FILTERS)[number];
+
 export function useLogsFilters() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [level, setLevel] = useState<LogLevel | "">(() => (searchParams.get("level") as LogLevel) || "");
   const [source, setSource] = useState<LogSource | "">(() => (searchParams.get("source") as LogSource) || "");
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
-  const [timeFilter, setTimeFilter] = useState<"today" | "hour" | "week" | "month">(
-    () => (searchParams.get("time") as any) || "today"
-  );
+  const [timeFilter, setTimeFilter] = useState<LogsTimeFilter>(() => {
+    const fromUrl = searchParams.get("time");
+    return LOGS_TIME_FILTERS.includes(fromUrl as LogsTimeFilter) ? (fromUrl as LogsTimeFilter) : "all";
+  });
   const [sort, setSort] = useState<"desc" | "asc">(() => (searchParams.get("sort") as any) || "desc");
 
   // Memoize date_from based on timeFilter to avoid constant recalculations
   const dateFrom = useMemo(() => {
-    if (timeFilter === "today") return null;
-    
     const now = new Date();
     switch (timeFilter) {
+      case "today":
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
       case "hour":
         return new Date(now.getTime() - 60 * 60 * 1000).toISOString();
       case "week":
@@ -53,7 +57,7 @@ export function useLogsFilters() {
     if (level) params.set("level", level);
     if (source) params.set("source", source);
     if (search) params.set("search", search);
-    if (timeFilter) params.set("time", timeFilter);
+    if (timeFilter !== "all") params.set("time", timeFilter);
     if (sort) params.set("sort", sort);
     setSearchParams(params, { replace: true });
   }, [level, source, search, timeFilter, sort, setSearchParams]);
@@ -75,7 +79,7 @@ export function useLogsFilters() {
     setLevel("");
     setSource("");
     setSearch("");
-    setTimeFilter("today");
+    setTimeFilter("all");
     setSort("desc");
   }, []);
 
@@ -154,19 +158,25 @@ export function useLogsData(filters?: LogsFilters, pagination?: LogsPagination) 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on fields on purpose
   const memoizedPagination = useMemo(() => pagination, [pagination?.limit, pagination?.offset]);
 
+  const requestIdRef = useRef(0);
+
+  // Only the latest request may update state, so quick filter changes can't show an older result.
   const fetchLogs = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
     try {
       const response = await getLogs(memoizedFilters, memoizedPagination);
+      if (requestId !== requestIdRef.current) return;
       setLogs(response.logs);
       setTotal(response.total);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err.message : "Failed to load logs");
       setLogs([]);
       setTotal(0);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [memoizedFilters, memoizedPagination]);
 
