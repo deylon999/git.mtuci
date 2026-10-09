@@ -166,6 +166,9 @@ export const studentEn = {
     emptyFilterHint: "Change the filter or search query.",
   },
   deadlines: {
+    viewList: "List",
+    viewCalendar: "Calendar",
+    monthEmpty: "No deadlines this month",
     title: "Deadlines",
     subtitle: "All upcoming assignments across your courses",
     statToday: "Today",

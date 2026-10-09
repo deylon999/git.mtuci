@@ -15,14 +15,12 @@ import type { DeadlineGroupKey } from "../utils/studentDeadlineGroups";
 import { StudentPageShell } from "../components/student/studentPageUi";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { getTheme } from "../theme";
-
+import { currentLocaleTag } from "../utils/dates";
 type FilterKey = "all" | "week" | "pending" | "submitted";
 type ViewMode = "list" | "calendar";
-
 interface StudentDeadlinesPageProps {
   isDarkTheme?: boolean;
 }
-
 function urgencyColor(urgency: string, theme: ReturnType<typeof getTheme>) {
   switch (urgency) {
     case "danger":
@@ -35,7 +33,6 @@ function urgencyColor(urgency: string, theme: ReturnType<typeof getTheme>) {
       return theme.text2;
   }
 }
-
 function groupTitleColor(key: DeadlineGroupKey, theme: ReturnType<typeof getTheme>) {
   switch (key) {
     case "overdue":
@@ -49,7 +46,6 @@ function groupTitleColor(key: DeadlineGroupKey, theme: ReturnType<typeof getThem
       return theme.text2;
   }
 }
-
 export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDeadlinesPageProps) {
   const theme = getTheme(isDarkTheme);
   const { t, language } = useUserPreferences();
@@ -64,7 +60,6 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
     const n = new Date();
     return { year: n.getFullYear(), month: n.getMonth() };
   });
-
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -103,18 +98,15 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
       cancelled = true;
     };
   }, [language, t]);
-
   const courses = useMemo(() => {
     const set = new Map<string, string>();
     for (const item of items) set.set(item.courseId, item.course);
     return Array.from(set.entries()).map(([id, title]) => ({ id, title }));
   }, [items]);
-
   const filtered = useMemo(() => {
     const now = new Date();
     const weekEnd = new Date(now);
     weekEnd.setDate(weekEnd.getDate() + 7);
-
     return items.filter((item) => {
       if (courseFilter !== "all" && item.courseId !== courseFilter) return false;
       const submitted = submittedMap[item.id] ?? false;
@@ -124,35 +116,90 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
       return true;
     });
   }, [items, submittedMap, filter, courseFilter]);
-
   const groups = useMemo(() => groupDeadlinesByPeriod(filtered, new Date(), language), [filtered, language]);
   const deadlineDays = useMemo(() => deadlineDatesSet(filtered), [filtered]);
-
   const deadlineStats = useMemo(
     () => computeDeadlineStats(items, submittedMap, new Date()),
     [items, submittedMap],
   );
-
   const filters: { key: FilterKey; label: string }[] = [
     { key: "all", label: t("student.deadlines.filterAll") },
     { key: "week", label: t("student.deadlines.filterWeek") },
     { key: "pending", label: t("student.deadlines.filterPending") },
     { key: "submitted", label: t("student.deadlines.filterSubmitted") },
   ];
-
   const weekdayLabels = useMemo(() => deadlineWeekdayLabels(language), [language]);
-
-  const monthLabel = new Date(calendarMonth.year, calendarMonth.month).toLocaleDateString(
-    language === "en" ? "en-US" : "ru-RU",
-    {
+  const dateLocale = currentLocaleTag();
+  const monthLabel = new Date(calendarMonth.year, calendarMonth.month).toLocaleDateString(dateLocale, {
     month: "long",
     year: "numeric",
   });
+  // Deadlines of the month shown in the calendar, so the calendar view lists what its red days mean.
+  const monthItems = useMemo(
+    () =>
+      filtered
+        .filter(
+          (item) =>
+            item.deadline.getFullYear() === calendarMonth.year && item.deadline.getMonth() === calendarMonth.month,
+        )
+        .sort((a, b) => a.deadline.getTime() - b.deadline.getTime()),
+    [filtered, calendarMonth],
+  );
+  const namesByDay = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const item of monthItems) {
+      const key = `${item.deadline.getFullYear()}-${item.deadline.getMonth()}-${item.deadline.getDate()}`;
+      map.set(key, [...(map.get(key) ?? []), item.name]);
+    }
+    return map;
+  }, [monthItems]);
+  const renderRow = (dl: StudentDeadlineItem) => {
+    const submitted = submittedMap[dl.id];
+    const remaining = formatDeadlineRemaining(dl.deadline, new Date(), language);
+    return (
+      <Link
+        key={dl.id}
+        to={`/courses/${dl.courseId}/assignments/${dl.assignmentId}`}
+        className="flex items-center justify-between gap-3 px-4 py-3 border-b last:border-b-0"
+        style={{ borderColor: theme.border }}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: urgencyColor(dl.urgency, theme) }} />
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate" style={{ color: theme.text }}>
+              {dl.name}
+            </p>
+            <p className="text-xs truncate" style={{ color: theme.text2 }}>
+              {dl.course}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="text-right">
+            <p className="text-xs font-medium" style={{ color: urgencyColor(dl.urgency, theme) }}>
+              {dl.timeLabel}
+            </p>
+            <p className="text-[10px]" style={{ color: theme.text3 }}>
+              {remaining}
+            </p>
+          </div>
+          <span
+            className="rounded-md px-2 py-0.5 text-[10px] font-medium"
+            style={{
+              backgroundColor: submitted ? `${theme.success}20` : `${theme.warning}20`,
+              color: submitted ? theme.success : theme.warning,
+            }}
+          >
+            {submitted ? t("student.deadlines.filterSubmitted") : t("student.deadlines.filterPending")}
+          </span>
+        </div>
+      </Link>
+    );
+  };
   const firstDow = new Date(calendarMonth.year, calendarMonth.month, 1).getDay();
   const offset = firstDow === 0 ? 6 : firstDow - 1;
   const totalDays = daysInMonth(calendarMonth.year, calendarMonth.month);
   const today = new Date();
-
   return (
     <StudentPageShell>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -168,6 +215,9 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
           <button
             type="button"
             onClick={() => setViewMode("list")}
+            aria-label={t("student.deadlines.viewList")}
+            aria-pressed={viewMode === "list"}
+            title={t("student.deadlines.viewList")}
             className="px-2.5 py-1.5"
             style={{
               backgroundColor: viewMode === "list" ? theme.bg4 : theme.bg3,
@@ -179,6 +229,9 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
           <button
             type="button"
             onClick={() => setViewMode("calendar")}
+            aria-label={t("student.deadlines.viewCalendar")}
+            aria-pressed={viewMode === "calendar"}
+            title={t("student.deadlines.viewCalendar")}
             className="px-2.5 py-1.5 border-l"
             style={{ borderColor: theme.border, backgroundColor: viewMode === "calendar" ? theme.bg4 : theme.bg3 }}
           >
@@ -186,7 +239,6 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
           </button>
         </div>
       </div>
-
       <div className="flex flex-wrap gap-2 items-center">
         {filters.map((f) => (
           <button
@@ -217,7 +269,6 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
           ))}
         </select>
       </div>
-
       {!loading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
           {[
@@ -241,7 +292,6 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
           ))}
         </div>
       ) : null}
-
       {error ? (
         <div
           className="rounded-lg border px-4 py-3 text-sm"
@@ -250,7 +300,6 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
           {error}
         </div>
       ) : null}
-
       {loading ? (
         <p className="text-sm py-8 text-center" style={{ color: theme.text2 }}>
           {t("common.loading")}
@@ -311,6 +360,7 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
               const d = new Date(calendarMonth.year, calendarMonth.month, day);
               const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
               const has = deadlineDays.has(key);
+              const dayNames = namesByDay.get(key);
               const isToday =
                 d.getDate() === today.getDate() &&
                 d.getMonth() === today.getMonth() &&
@@ -324,7 +374,7 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
                     color: has ? theme.danger : theme.text2,
                     border: isToday ? `1px solid ${theme.accent}` : undefined,
                   }}
-                  title={has ? t("student.deadlines.statToday") : undefined}
+                  title={dayNames ? dayNames.join("\n") : undefined}
                 >
                   {day}
                 </div>
@@ -336,7 +386,18 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
           <p className="text-sm text-center py-4" style={{ color: theme.text2 }}>
             {t("student.deadlines.emptyAll")}
           </p>
-        ) : null}
+        ) : monthItems.length === 0 ? (
+          <p className="text-sm py-4" style={{ color: theme.text2 }}>
+            {t("student.deadlines.monthEmpty")}
+          </p>
+        ) : (
+          <div
+            className="rounded-xl border overflow-hidden"
+            style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
+          >
+            {monthItems.map(renderRow)}
+          </div>
+        )}
         </div>
       ) : items.length === 0 ? (
         <p className="text-sm text-center py-8" style={{ color: theme.text2 }}>
@@ -363,52 +424,7 @@ export default function StudentDeadlinesPage({ isDarkTheme = false }: StudentDea
               >
                 {group.title}
               </h2>
-              {group.items.map((dl) => {
-                const submitted = submittedMap[dl.id];
-                const remaining = formatDeadlineRemaining(dl.deadline, new Date(), language);
-                return (
-                  <Link
-                    key={dl.id}
-                    to={`/courses/${dl.courseId}/assignments/${dl.assignmentId}`}
-                    className="flex items-center justify-between gap-3 px-4 py-3 border-b last:border-b-0"
-                    style={{ borderColor: theme.border }}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: urgencyColor(dl.urgency, theme) }}
-                      />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate" style={{ color: theme.text }}>
-                          {dl.name}
-                        </p>
-                        <p className="text-xs truncate" style={{ color: theme.text2 }}>
-                          {dl.course}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="text-right">
-                        <p className="text-xs font-medium" style={{ color: urgencyColor(dl.urgency, theme) }}>
-                          {dl.timeLabel}
-                        </p>
-                        <p className="text-[10px]" style={{ color: theme.text3 }}>
-                          {remaining}
-                        </p>
-                      </div>
-                      <span
-                        className="rounded-md px-2 py-0.5 text-[10px] font-medium"
-                        style={{
-                          backgroundColor: submitted ? `${theme.success}20` : `${theme.warning}20`,
-                          color: submitted ? theme.success : theme.warning,
-                        }}
-                      >
-                        {submitted ? t("student.deadlines.filterSubmitted") : t("student.deadlines.filterPending")}
-                      </span>
-                    </div>
-                  </Link>
-                );
-              })}
+              {group.items.map(renderRow)}
             </div>
           ))}
         </div>

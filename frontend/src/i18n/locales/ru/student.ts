@@ -166,6 +166,9 @@ export const studentRu = {
     emptyFilterHint: "Измените фильтр или поисковый запрос.",
   },
   deadlines: {
+    viewList: "Список",
+    viewCalendar: "Календарь",
+    monthEmpty: "В этом месяце дедлайнов нет",
     title: "Дедлайны",
     subtitle: "Все предстоящие задания по вашим курсам",
     statToday: "Сегодня",
