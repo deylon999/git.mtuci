@@ -130,7 +130,6 @@ export const adminPagesEn = {
     tipEmailHint: "to quickly find a user",
     tipErrorHint: "to find problematic logs",
     tipGroupHint: "for example, a group code",
-    tipRepoHint: "to search by repository name",
     nearestDeadlineShort: "Deadline:",
     noDeadline: "No deadline",
     coursePrCount: "{n} {n|PR|PRs} waiting",

@@ -130,7 +130,6 @@ export const adminPagesRu = {
     tipEmailHint: "для быстрого поиска пользователя",
     tipErrorHint: "чтобы найти проблемные логи",
     tipGroupHint: "как пример кода группы",
-    tipRepoHint: "для поиска по названию репозитория",
     nearestDeadlineShort: "Дедлайн:",
     noDeadline: "Без дедлайна",
     coursePrCount: "{n} PR {n|ждёт|ждут|ждут}",

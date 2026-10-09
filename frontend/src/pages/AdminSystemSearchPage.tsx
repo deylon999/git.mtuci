@@ -13,6 +13,7 @@ import { getAdminUsers, getLogs, locateLogInAdminLogs } from "../api/adminApi";
 import type { AdminUserRead, LogEntry } from "../api/types";
 import { getAdminPageTheme } from "../layout/adminPageTheme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
+import { localeTag } from "../utils/dates";
 
 type SearchTab = "all" | "users" | "repositories" | "courses" | "logs";
 
@@ -283,7 +284,7 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
   const ui = getAdminPageTheme(isDarkTheme);
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const dateLocale = language === "en" ? "en-US" : "ru-RU";
+  const dateLocale = localeTag(language);
 
   const queryFromUrl = (params.get("q") ?? "").trim();
   const [activeTab, setActiveTab] = useState<SearchTab>("all");
@@ -332,6 +333,7 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
       setLogs([]);
       setElapsedMs(0);
       setError(null);
+      setLoading(false);
       return;
     }
 
@@ -342,9 +344,14 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
       setError(null);
       const started = performance.now();
       try {
+        // "ERROR timeout" filters logs by level + text, as the tips panel promises (and as "open in logs" does).
+        const logIntent = resolveLogSearchIntent(q);
         const [searchRes, logsRes] = await Promise.all([
           globalSearch(q, 50),
-          getLogs({ search: q, sort: "desc" }, { limit: 12, offset: 0 }).catch(() => ({ logs: [], total: 0 })),
+          getLogs(
+            { search: logIntent.search ?? undefined, level: logIntent.level ?? undefined, sort: "desc" },
+            { limit: 12, offset: 0 },
+          ).catch(() => ({ logs: [], total: 0 })),
         ]);
         if (cancelled) return;
         setHits(searchRes.hits);
@@ -352,7 +359,11 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
         setElapsedMs(Math.max(1, Math.round(performance.now() - started)));
         setSearchHistory((prev) => {
           const next = [q, ...prev.filter((item) => item !== q)].slice(0, 6);
-          localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+          try {
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+          } catch {
+            // Private mode or full storage: history just isn't kept.
+          }
           return next;
         });
       } catch {
@@ -656,9 +667,8 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                       fullUser?.repositories_count ??
                       parseCountFromText(hit.subtitle, [/(?:^|\s)(\d+)\s*(?:репозитор(?:ий|ия|иев)|repositories?|repos?)\b/iu]) ??
                       0;
-                    const commitsCount =
-                      parseCountFromText(hit.subtitle, [/(?:^|\s)(\d+)\s*(?:коммит(?:а|ов)?|commits?)\b/iu]) ?? 0;
-                    const repoCommitsText = `${formatRepoCount(repositoriesCount, language)} · ${formatCommitCount(commitsCount, language)}`;
+                    // No per-user commit count in the API (the hit subtitle is the email), so only repositories are shown.
+                    const repoCommitsText = formatRepoCount(repositoriesCount, language);
                     const daysSinceLastLogin = fullUser?.last_login
                       ? Math.floor((getDayStart(new Date()) - getDayStart(new Date(fullUser.last_login))) / (24 * 60 * 60 * 1000))
                       : Number.POSITIVE_INFINITY;
@@ -702,12 +712,12 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                           </div>
                         </div>
                         <div className="self-center shrink-0 min-w-[120px] flex flex-col items-end justify-between">
-                          <button
-                            type="button"
+                          <span
+                            aria-hidden="true"
                             className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-xs ${ui.tableBorder} ${ui.tableNameText}`}
                           >
                             {t("admin.search.open")}
-                          </button>
+                          </span>
                           <span className={`mt-1.5 text-[10px] text-right ${ui.tableHeaderText}`}>{lastSeenText}</span>
                         </div>
                       </article>
@@ -776,12 +786,12 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                           </div>
                         </div>
                         <div className="self-center shrink-0 min-w-[120px] flex flex-col items-end justify-between">
-                          <button
-                            type="button"
+                          <span
+                            aria-hidden="true"
                             className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-xs ${ui.tableBorder} ${ui.tableNameText}`}
                           >
                             {t("admin.search.open")}
-                          </button>
+                          </span>
                           <span className={`mt-1.5 text-[10px] text-right ${ui.tableHeaderText}`}>{lastRepoActivityText}</span>
                         </div>
                       </article>
@@ -824,12 +834,12 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                               {highlightText(hit.subtitle ?? "—", queryFromUrl, markClassName)}
                             </p>
                           </div>
-                          <button
-                            type="button"
+                          <span
+                            aria-hidden="true"
                             className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-xs ${ui.tableBorder} ${ui.tableNameText}`}
                           >
                             {t("admin.search.open")}
-                          </button>
+                          </span>
                         </article>
                       );
                     }
@@ -887,12 +897,12 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                           </div>
                         </div>
                         <div className="self-center shrink-0 min-w-[120px] flex flex-col items-end justify-between">
-                          <button
-                            type="button"
+                          <span
+                            aria-hidden="true"
                             className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-xs ${ui.tableBorder} ${ui.tableNameText}`}
                           >
                             {t("admin.search.open")}
-                          </button>
+                          </span>
                           <span className={`mt-1.5 text-[10px] text-right ${ui.tableHeaderText}`}>
                             {tp("admin.search.coursePrCount", { n: prCount })}
                           </span>
@@ -1091,9 +1101,6 @@ export default function AdminSystemSearchPage({ isDarkTheme = true }: Props) {
                 </p>
                 <p>
                   <span className={`font-medium ${tipBlueClass}`}>БВТ2401</span> {t("admin.search.tipGroupHint")}
-                </p>
-                <p>
-                  <span className={`font-medium ${tipNeutralClass}`}>repo:</span> {t("admin.search.tipRepoHint")}
                 </p>
               </div>
             </section>

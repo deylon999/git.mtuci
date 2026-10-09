@@ -82,8 +82,10 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
   const [loading, setLoading] = useState(false);
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
 
+  // URL -> input only when the URL holds a different query (back/forward, header search). Echoing our own
+  // debounced write back would trim the input mid-typing and eat the space in "data base".
   useEffect(() => {
-    setQuery(qFromUrl);
+    setQuery((current) => (current.trim() === qFromUrl.trim() ? current : qFromUrl));
   }, [qFromUrl]);
 
   useEffect(() => {
@@ -104,6 +106,7 @@ export default function CodeSearchPage({ isDarkTheme = true }: Props) {
     if (!q) {
       setHits([]);
       setElapsedMs(null);
+      setLoading(false);
       return;
     }
 
