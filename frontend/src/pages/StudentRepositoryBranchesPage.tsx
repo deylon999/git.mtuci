@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useConfirmDialog } from "../hooks/useConfirmDialog";
 import { GitBranch, Loader2, Plus, Trash2 } from "lucide-react";
 import { useRepoApi } from "../context/RepoApiContext";
 import { useStudentRepoWorkspaceContext } from "../context/StudentRepoWorkspaceContext";
@@ -12,6 +13,7 @@ interface StudentRepositoryBranchesPageProps {
 export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: StudentRepositoryBranchesPageProps) {
   const theme = getTheme(isDarkTheme);
   const { t, tp } = useUserPreferences();
+  const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
   const { repoId, summary } = useStudentRepoWorkspaceContext();
   // Through the repo API context: staff (teacher/admin) read via /teacher/repositories and have no write actions.
   const api = useRepoApi();
@@ -83,7 +85,7 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
 
   const onDelete = async (name: string) => {
     if (!name || name === defaultBranch) return;
-    const ok = window.confirm(tp("repo.branchesPage.confirmDelete", { name }));
+    const ok = await askConfirm({ message: tp("repo.branchesPage.confirmDelete", { name }) });
     if (!ok) return;
     setSaving(true);
     try {
@@ -98,6 +100,7 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
   };
 
   return (
+    <>
     <div className="rounded-xl border overflow-hidden" style={{ borderColor: theme.border, backgroundColor: theme.bg3 }}>
       <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-3" style={{ borderColor: theme.border }}>
         <h2 className="text-sm font-semibold flex items-center gap-2" style={{ color: theme.text }}>
@@ -192,6 +195,8 @@ export default function StudentRepositoryBranchesPage({ isDarkTheme = false }: S
         </ul>
       )}
     </div>
+      {confirmDialog}
+    </>
   );
 }
 

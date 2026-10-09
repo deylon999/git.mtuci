@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import {
   Box,
   Button,
@@ -59,6 +60,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
   isDarkTheme = false,
 }) => {
   const { t } = useUserPreferences();
+  const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
   const theme = getTheme(isDarkTheme);
   const [labels, setLabels] = useState<IssueLabel[]>([]);
   const [loading, setLoading] = useState(false);
@@ -135,7 +137,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
   };
 
   const handleDelete = async (labelId: string) => {
-    if (!confirm(t('repo.issues.labels.deleteConfirm'))) return;
+    if (!(await askConfirm({ message: t('repo.issues.labels.deleteConfirm') }))) return;
 
     setLoading(true);
     setError(null);
@@ -173,6 +175,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
   };
 
   return (
+    <>
     <Dialog
       open={open}
       onClose={onClose}
@@ -323,5 +326,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({
         </Button>
       </DialogActions>
     </Dialog>
+      {confirmDialog}
+    </>
   );
 };

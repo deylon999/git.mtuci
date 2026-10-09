@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { useConfirmDialog } from "../hooks/useConfirmDialog";
+import toast from "react-hot-toast";
 import { Loader2, UserMinus, Users } from "lucide-react";
 import {
   enrollGroupToCourse,
@@ -19,6 +21,7 @@ interface CourseRosterPanelProps {
 export default function CourseRosterPanel({ courseId, isDarkTheme = false }: CourseRosterPanelProps) {
   const theme = getTheme(isDarkTheme);
   const { t, tp } = useUserPreferences();
+  const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
   const [students, setStudents] = useState<CourseStudent[]>([]);
   const [groups, setGroups] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,28 +55,29 @@ export default function CourseRosterPanel({ courseId, isDarkTheme = false }: Cou
       const result = await enrollGroupToCourse(courseId, name);
       setGroupName("");
       await load();
-      alert(tp("repo.roster.enrollResult", { enrolled: result.enrolled, skipped: result.skipped }));
+      toast.success(tp("repo.roster.enrollResult", { enrolled: result.enrolled, skipped: result.skipped }));
     } catch (e) {
-      alert(e instanceof Error ? e.message : t("repo.roster.enrollError"));
+      toast.error(e instanceof Error ? e.message : t("repo.roster.enrollError"));
     } finally {
       setBusy(false);
     }
   }
 
   async function onRemove(studentId: string, name: string) {
-    if (!confirm(tp("repo.roster.confirmRemove", { name }))) return;
+    if (!(await askConfirm({ message: tp("repo.roster.confirmRemove", { name }) }))) return;
     setBusy(true);
     try {
       await unenrollStudent(courseId, studentId);
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : t("repo.roster.removeError"));
+      toast.error(e instanceof Error ? e.message : t("repo.roster.removeError"));
     } finally {
       setBusy(false);
     }
   }
 
   return (
+    <>
     <div
       className="mb-6 rounded-xl border p-4"
       style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
@@ -180,6 +184,8 @@ export default function CourseRosterPanel({ courseId, isDarkTheme = false }: Cou
         </div>
       )}
     </div>
+      {confirmDialog}
+    </>
   );
 }
 

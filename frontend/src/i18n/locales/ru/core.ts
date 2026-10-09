@@ -7,6 +7,7 @@ export const coreRu = {
     unknown: "Неизвестная ошибка",
   },
   common: {
+    areYouSure: "Вы уверены?",
     openMenu: "Открыть меню",
     loading: "Загрузка…",
     loadError: "Не удалось загрузить данные",

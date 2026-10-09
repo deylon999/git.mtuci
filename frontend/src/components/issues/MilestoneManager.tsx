@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import {
   Box,
   Button,
@@ -55,6 +56,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
   isDarkTheme = false,
 }) => {
   const { t, language } = useUserPreferences();
+  const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
   const theme = getTheme(isDarkTheme);
   const [milestones, setMilestones] = useState<IssueMilestone[]>([]);
   const [loading, setLoading] = useState(false);
@@ -133,7 +135,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
   };
 
   const handleDelete = async (milestoneId: string) => {
-    if (!confirm(t('repo.issues.milestones.deleteConfirm'))) return;
+    if (!(await askConfirm({ message: t('repo.issues.milestones.deleteConfirm') }))) return;
 
     setLoading(true);
     setError(null);
@@ -177,6 +179,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
   };
 
   return (
+    <>
     <Dialog
       open={open}
       onClose={onClose}
@@ -313,5 +316,7 @@ export const MilestoneManager: React.FC<MilestoneManagerProps> = ({
         </Button>
       </DialogActions>
     </Dialog>
+      {confirmDialog}
+    </>
   );
 };

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useConfirmDialog } from "../hooks/useConfirmDialog";
 import { Copy, Key, Loader2, RefreshCw } from "lucide-react";
 import {
   getStudentGitCloneTokenStatus,
@@ -14,6 +15,7 @@ interface StudentGitTokenSettingsProps {
 
 export default function StudentGitTokenSettings({ isDarkTheme = false }: StudentGitTokenSettingsProps) {
   const { t } = useUserPreferences();
+  const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
   const theme = getTheme(isDarkTheme);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
@@ -40,7 +42,7 @@ export default function StudentGitTokenSettings({ isDarkTheme = false }: Student
   }, [load]);
 
   const handleRegenerate = async () => {
-    if (!window.confirm(t("gitToken.confirmRegenerate"))) return;
+    if (!(await askConfirm({ message: t("gitToken.confirmRegenerate"), danger: false }))) return;
     setRegenerating(true);
     setError(null);
     setNewToken(null);
@@ -67,6 +69,7 @@ export default function StudentGitTokenSettings({ isDarkTheme = false }: Student
   };
 
   return (
+    <>
     <div
       className="settings-card rounded-xl border p-5"
       style={{ backgroundColor: theme.bgCard, borderColor: theme.border }}
@@ -168,5 +171,7 @@ export default function StudentGitTokenSettings({ isDarkTheme = false }: Student
         </>
       )}
     </div>
+      {confirmDialog}
+    </>
   );
 }

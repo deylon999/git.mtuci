@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useConfirmDialog } from "../hooks/useConfirmDialog";
 import { useDebounce } from "../hooks/useLogs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -292,6 +293,7 @@ interface RepositoriesPageProps {
 
 export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPageProps) {
   const { t, tp } = useUserPreferences();
+  const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
   const [giteaBase, setGiteaBase] = useState(getGiteaPublicBase);
   // Data states
   const [repositories, setRepositories] = useState<Repository[]>([]);
@@ -423,7 +425,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
   };
 
   const deleteRepo = async (repoId: string, repoName: string) => {
-    if (!window.confirm(tp("repo.repositories.deleteConfirm", { name: repoName }))) {
+    if (!(await askConfirm({ message: tp("repo.repositories.deleteConfirm", { name: repoName }) }))) {
       return;
     }
     setDeletingId(repoId);
@@ -448,7 +450,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
 
   const deleteSelected = async () => {
     if (selectedRepos.size === 0) return;
-    if (!window.confirm(tp("repo.repositories.deleteSelectedConfirm", { n: selectedRepos.size }))) {
+    if (!(await askConfirm({ message: tp("repo.repositories.deleteSelectedConfirm", { n: selectedRepos.size }) }))) {
       return;
     }
     setBulkDeleting(true);
@@ -605,6 +607,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
   const menuItemHover = ui.tableRowHover;
 
   return (
+    <>
     <div className={ui.pageWrapper}>
       <div className="w-full py-6 px-6 space-y-6 pb-20">
         <AdminPageHeader
@@ -982,5 +985,7 @@ export default function RepositoriesPage({ isDarkTheme = true }: RepositoriesPag
         onCreated={reloadRepositories}
       />
     </div>
+      {confirmDialog}
+    </>
   );
 }

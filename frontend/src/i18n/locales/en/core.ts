@@ -7,6 +7,7 @@ export const coreEn = {
     unknown: "Unknown error",
   },
   common: {
+    areYouSure: "Are you sure?",
     openMenu: "Open menu",
     loading: "Loading…",
     loadError: "Failed to load data",
