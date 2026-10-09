@@ -78,7 +78,7 @@ export default function TeacherCodeReviewPage({ isDarkTheme = false }: Props) {
       studentName: item.student_name,
       assignmentTitle: item.assignment_title,
       courseTitle: item.course_title,
-      gradeMax: gradeMaxByCourse[item.course_id] ?? 10,
+      gradeMax: item.grade_max ?? gradeMaxByCourse[item.course_id] ?? 10,
     });
   }
 
@@ -141,7 +141,9 @@ export default function TeacherCodeReviewPage({ isDarkTheme = false }: Props) {
                 badgeTone={waitingBadgeTone(item.waiting_hours, item.is_stale)}
                 urgent={item.is_stale}
                 onGrade={() => openGrade(item)}
-                gradeLabel={t("teacher.dashboard.review")}
+                gradeLabel={t("teacher.codeReview.grade")}
+                openHref={`/courses/${item.course_id}/assignments/${item.assignment_id}?student=${item.student_id}`}
+                openLabel={t("teacher.codeReview.openWork")}
               />
             );
           })}

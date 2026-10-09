@@ -234,7 +234,7 @@ export default function TeacherDashboardPage({ isDarkTheme = false }: Props) {
                         waitingLabel={formatWaitingBadge(item, tp)}
                         badgeTone={waitingBadgeTone(item.waiting_hours, item.is_stale)}
                         urgent={item.is_stale}
-                        reviewHref={`/courses/${item.course_id}/assignments/${item.assignment_id}`}
+                        reviewHref={`/courses/${item.course_id}/assignments/${item.assignment_id}?student=${item.student_id}`}
                         gradeLabel={t("teacher.dashboard.review")}
                       />
                     ))

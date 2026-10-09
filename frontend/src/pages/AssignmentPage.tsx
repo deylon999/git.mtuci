@@ -1,6 +1,6 @@
 import { currentLocaleTag } from "../utils/dates";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   checkPlagiarism,
   comparePlagiarism,
@@ -157,6 +157,9 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
   const [selectedStudent2Id, setSelectedStudent2Id] = useState("");
   const [selectedRepoStudentId, setSelectedRepoStudentId] = useState("");
   const [selectedGradingStudentId, setSelectedGradingStudentId] = useState("");
+  // Links from the review queue pass ?student=<id> so the page opens on that student's work.
+  const [searchParams] = useSearchParams();
+  const focusStudentId = searchParams.get("student") ?? "";
   const [gradingSearch, setGradingSearch] = useState("");
   const [gradingFilter, setGradingFilter] = useState<GradingFilter>("all");
   const [activeTab, setActiveTab] = useState<AssignmentTab>("commits");
@@ -314,8 +317,9 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
         );
         setCommentInputs(Object.fromEntries(data.map((s) => [s.student_id, s.comment ?? ""])));
         if (data.length > 0) {
-          setSelectedRepoStudentId((prev) => prev || data[0].student_id);
-          setSelectedGradingStudentId((prev) => prev || data[0].student_id);
+          const preferred = data.find((s) => s.student_id === focusStudentId)?.student_id ?? data[0].student_id;
+          setSelectedRepoStudentId((prev) => prev || preferred);
+          setSelectedGradingStudentId((prev) => prev || preferred);
         }
       } catch (err) {
         if (!cancelled) {
@@ -330,7 +334,7 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     return () => {
       cancelled = true;
     };
-  }, [courseId, assignmentId, me?.role, t]);
+  }, [courseId, assignmentId, me?.role, t, focusStudentId]);
 
   useEffect(() => {
     if (!courseId || !assignmentId || me?.role !== "student") return;

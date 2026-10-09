@@ -21,6 +21,7 @@ export interface TeacherGradingQueueItem {
   repo_name: string | null;
   waiting_hours: number;
   is_stale: boolean;
+  grade_max?: number;
 }
 
 export interface TeacherDashboard {

@@ -27,6 +27,7 @@ class TeacherGradingQueueItemRead(BaseModel):
     repo_name: str | None = None
     waiting_hours: float = 0
     is_stale: bool = False
+    grade_max: int = 10
 
 
 class TeacherDashboardRead(BaseModel):

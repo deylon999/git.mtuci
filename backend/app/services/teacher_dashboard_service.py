@@ -591,6 +591,7 @@ async def get_teacher_grading_queue(
                 repo_name=student_repo.repo_name if student_repo else None,
                 waiting_hours=round(hours, 1),
                 is_stale=is_stale,
+                grade_max=course.grade_max,
             )
         )
     return items

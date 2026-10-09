@@ -717,6 +717,8 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
                 urgent={item.is_stale}
                 onGrade={() => openGradeModal(item)}
                 gradeLabel={t("teacher.codeReview.grade")}
+                openHref={`/courses/${item.course_id}/assignments/${item.assignment_id}?student=${item.student_id}`}
+                openLabel={t("teacher.codeReview.openWork")}
               />
             ))
           )}

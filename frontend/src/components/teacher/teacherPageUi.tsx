@@ -544,6 +544,8 @@ export function TeacherPendingRow({
   reviewHref,
   onGrade,
   gradeLabel,
+  openHref,
+  openLabel,
 }: {
   theme: ThemeColors;
   studentName: string;
@@ -555,6 +557,9 @@ export function TeacherPendingRow({
   reviewHref?: string;
   onGrade?: () => void;
   gradeLabel: string;
+  /** Shown before the grade button: opens the assignment on this student's submission. */
+  openHref?: string;
+  openLabel?: string;
 }) {
   return (
     <div
@@ -587,8 +592,15 @@ export function TeacherPendingRow({
           </p>
         ) : null}
       </div>
-      <div className="ml-auto flex shrink-0 items-center gap-2">
+      <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
         {waitingLabel ? <TeacherBadge tone={badgeTone ?? "muted"}>{waitingLabel}</TeacherBadge> : null}
+        {openHref && openLabel ? (
+          <span onClick={(e) => e.stopPropagation()}>
+            <TeacherLinkBtn to={openHref} theme={theme} variant="default">
+              {openLabel}
+            </TeacherLinkBtn>
+          </span>
+        ) : null}
         {reviewHref ? (
           <TeacherLinkBtn to={reviewHref} theme={theme} variant="primary">
             {gradeLabel}

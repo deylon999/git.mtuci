@@ -96,6 +96,7 @@ export const teacherEn = {
     notFound: "No students found",
   },
   codeReview: {
+    openWork: "Open work",
     title: "Code Review",
     subtitle: "Student work awaiting review",
     statWaiting: "Awaiting review",

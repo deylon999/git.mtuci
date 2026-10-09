@@ -96,6 +96,7 @@ export const teacherRu = {
     notFound: "Студенты не найдены",
   },
   codeReview: {
+    openWork: "Открыть работу",
     title: "Code Review",
     subtitle: "Работы студентов ожидающие проверки",
     statWaiting: "Ожидают проверки",
