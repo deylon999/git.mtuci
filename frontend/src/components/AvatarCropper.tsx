@@ -1,6 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 
+/** Side of the square crop view, px. */
+export const CROP_VIEW_SIZE = 320;
+/** Radius of the circle guide in the view, px: this circle is what ends up in the avatar. */
+export const CROP_CIRCLE_RADIUS = 128;
+
 interface AvatarCropperProps {
   imageUrl: string;
   onCropChange?: (crop: { x: number; y: number; zoom: number }) => void;
@@ -14,13 +19,16 @@ export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = tr
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  // Zoom that fits the whole image in the view; the slider range and the % label are relative to it,
+  // so a 100px icon and a 4000px photo both start at 100% with the same room to zoom.
+  const [fitZoom, setFitZoom] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Load image and calculate initial scale to fit in container
   useEffect(() => {
     const img = new Image();
     img.onload = () => {
-      const containerSize = 320;
+      const containerSize = CROP_VIEW_SIZE;
       const imgWidth = img.naturalWidth;
       const imgHeight = img.naturalHeight;
       setImageSize({ width: imgWidth, height: imgHeight });
@@ -31,6 +39,7 @@ export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = tr
       const fitScale = Math.min(scaleX, scaleY);
       
       // Set initial zoom to fit the whole image
+      setFitZoom(fitScale);
       setZoom(fitScale);
       setPosition({ x: 0, y: 0 });
     };
@@ -55,12 +64,12 @@ export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = tr
 
   // Clamp position to keep image within reasonable bounds
   function clampPosition(newX: number, newY: number, currentZoom: number) {
-    const containerSize = 320;
+    const containerSize = CROP_VIEW_SIZE;
     const scaledWidth = imageSize.width * currentZoom;
     const scaledHeight = imageSize.height * currentZoom;
     
     // Allow dragging until the image edge reaches the circle edge (128px from center)
-    const circleRadius = 128; // The white circle radius
+    const circleRadius = CROP_CIRCLE_RADIUS;
     
     // Max allowed offset: image edge should not go beyond opposite circle edge
     const maxX = Math.max(0, (scaledWidth / 2) - circleRadius);
@@ -185,14 +194,20 @@ export default function AvatarCropper({ imageUrl, onCropChange, isDarkTheme = tr
           <span className={`text-xs ${textSecondary}`}>{t("avatar.scale")}</span>
           <input
             type="range"
-            min="0.1"
-            max="3"
-            step="0.05"
+            min={fitZoom * 0.5}
+            max={fitZoom * 5}
+            step={fitZoom * 0.05}
             value={zoom}
-            onChange={(e) => setZoom(parseFloat(e.target.value))}
+            aria-label={t("avatar.scale")}
+            onChange={(e) => {
+              const next = parseFloat(e.target.value);
+              setZoom(next);
+              // Zooming out shrinks the allowed drag range; pull the image back inside it.
+              setPosition((prev) => clampPosition(prev.x, prev.y, next));
+            }}
             className={`flex-1 h-2 ${sliderBg} rounded-lg appearance-none cursor-pointer ${accentColor}`}
           />
-          <span className={`text-xs ${textTertiary} w-10`}>{(zoom * 100).toFixed(0)}%</span>
+          <span className={`text-xs ${textTertiary} w-10`}>{Math.round((zoom / fitZoom) * 100)}%</span>
         </div>
         
         <p className={`text-xs ${textSecondary} text-center`}>

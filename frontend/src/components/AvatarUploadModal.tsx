@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useUserPreferences } from "../context/UserPreferencesContext";
-import AvatarCropper from "./AvatarCropper";
+import AvatarCropper, { CROP_CIRCLE_RADIUS } from "./AvatarCropper";
 
 interface AvatarUploadModalProps {
   file: File | null;
@@ -31,35 +31,30 @@ async function cropImageToBlob(
         return;
       }
 
-      // Create circular clip path
-      ctx.beginPath();
-      ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
+      // Square output, no circular clip: JPEG has no alpha, so clipped corners came out black.
+      // Avatars are shown in a circle anyway. White under transparent PNGs for the same reason.
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
 
       const imgWidth = img.naturalWidth;
       const imgHeight = img.naturalHeight;
-      
-      // The cropper UI shows image in a 320x320 container
-      // The canvas is 512x512
-      const uiSize = 320;
       const scale = cropData.zoom;
-      
-      // Scale factor from UI to canvas
-      const outputScale = size / uiSize;
-      
+
+      // The canvas covers the cropper's circle guide, not the whole view around it.
+      const outputScale = size / (CROP_CIRCLE_RADIUS * 2);
+
       // Calculate scaled dimensions (same as in cropper)
       const scaledWidth = imgWidth * scale * outputScale;
       const scaledHeight = imgHeight * scale * outputScale;
-      
+
       // Convert UI offsets to canvas space
       const offsetX = cropData.x * outputScale;
       const offsetY = cropData.y * outputScale;
-      
+
       // Calculate draw position (centered in canvas + offset)
       const drawX = (size - scaledWidth) / 2 + offsetX;
       const drawY = (size - scaledHeight) / 2 + offsetY;
-      
+
       // Draw the image
       ctx.drawImage(img, drawX, drawY, scaledWidth, scaledHeight);
 
@@ -140,16 +135,33 @@ export default function AvatarUploadModal({
   }
 
   function handleClose() {
+    if (isUploading || isProcessing) return;
     onClose();
   }
+
+  const handleCloseRef = useRef(handleClose);
+  handleCloseRef.current = handleClose;
+  useEffect(() => {
+    if (!file) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleCloseRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [file]);
 
   if (!file) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="avatar-upload-title"
+    >
       {/* p-4 on phones: the 320px crop area plus padding must fit a 375px screen. */}
       <div className={`w-full max-w-md max-h-full overflow-y-auto rounded-xl p-4 shadow-xl sm:p-6 ${isDarkTheme ? "bg-[#1e1e1e]" : "bg-white"}`}>
-        <h2 className={`mb-4 text-xl font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"}`}>{t("avatar.title")}</h2>
+        <h2 id="avatar-upload-title" className={`mb-4 text-xl font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"}`}>{t("avatar.title")}</h2>
 
         <p className={`mb-4 text-sm text-center ${isDarkTheme ? "text-gray-400" : "text-gray-600"}`}>{t("avatar.hint")}</p>
 
