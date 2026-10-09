@@ -1,4 +1,6 @@
 import { currentLocaleTag } from "../../utils/dates";
+import toast from "react-hot-toast";
+import ConfirmModal from "../ConfirmModal";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { buildDefaultPenaltyPeriods, type PenaltyPeriod } from "../../utils/penaltyDefaults";
@@ -70,6 +72,8 @@ function startOfLocalDay(d: Date): Date {
 export default function TeacherCourseView({ courseId, isDarkTheme = false }: Props) {
   const theme = useTeacherTheme(isDarkTheme);
   const { t, tp } = useUserPreferences();
+  const [confirmDeleteAssignmentId, setConfirmDeleteAssignmentId] = useState<string | null>(null);
+  const [deletingAssignment, setDeletingAssignment] = useState(false);
   const [tab, setTab] = useState<TabKey>("overview");
   const [detail, setDetail] = useState<TeacherCourseDetail | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -187,19 +191,22 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
       setCreateDateError(null);
       await load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : t("teacher.errors.createFailed"));
+      toast.error(err instanceof Error ? err.message : t("teacher.errors.createFailed"));
     } finally {
       setCreateLoading(false);
     }
   }
 
   async function onDeleteAssignment(assignmentId: string) {
-    if (!confirm(t("teacher.courseView.confirmDeleteAssignment"))) return;
+    setDeletingAssignment(true);
     try {
       await deleteAssignment(courseId, assignmentId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : t("teacher.errors.deleteFailed"));
+      toast.error(err instanceof Error ? err.message : t("teacher.errors.deleteFailed"));
       return;
+    } finally {
+      setDeletingAssignment(false);
+      setConfirmDeleteAssignmentId(null);
     }
     await load();
   }
@@ -611,7 +618,7 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
                       </Link>
                       <button
                         type="button"
-                        onClick={() => void onDeleteAssignment(a.id)}
+                        onClick={() => setConfirmDeleteAssignmentId(a.id)}
                         className="text-xs px-2 py-1 rounded border"
                         style={{ borderColor: theme.border, color: theme.danger }}
                       >
@@ -731,6 +738,19 @@ export default function TeacherCourseView({ courseId, isDarkTheme = false }: Pro
         isDarkTheme={isDarkTheme}
         onClose={() => setGradeTarget(null)}
         onGraded={() => void load()}
+      />
+
+      <ConfirmModal
+        isOpen={confirmDeleteAssignmentId !== null}
+        title={t("common.delete")}
+        message={t("teacher.courseView.confirmDeleteAssignment")}
+        confirmText={t("common.delete")}
+        isDangerous
+        isLoading={deletingAssignment}
+        onCancel={() => setConfirmDeleteAssignmentId(null)}
+        onConfirm={() => {
+          if (confirmDeleteAssignmentId) void onDeleteAssignment(confirmDeleteAssignmentId);
+        }}
       />
     </TeacherPageShell>
   );

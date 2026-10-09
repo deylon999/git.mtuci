@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
 import { Eye, Search } from "lucide-react";
 import {
   exportTeacherStudentsCsv,
@@ -136,7 +137,7 @@ export default function TeacherStudentsPage({ isDarkTheme = false }: Props) {
             variant="success"
             onClick={() =>
               void exportTeacherStudentsCsv().catch((e) =>
-                alert(e instanceof Error ? e.message : t("teacher.errors.exportFailed")),
+                toast.error(e instanceof Error ? e.message : t("teacher.errors.exportFailed")),
               )
             }
           >

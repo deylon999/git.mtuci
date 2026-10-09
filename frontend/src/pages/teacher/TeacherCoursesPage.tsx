@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import ConfirmModal from "../../components/ConfirmModal";
 import { deleteCourse } from "../../api/coursesApi";
 import { getTeacherCoursesList, type TeacherCourseListItem } from "../../api/teacherDashboardApi";
 import {
@@ -25,6 +26,7 @@ export default function TeacherCoursesPage({ isDarkTheme = false }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<TeacherCourseListItem[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,14 +61,14 @@ export default function TeacherCoursesPage({ isDarkTheme = false }: Props) {
       : t("teacher.courses.subtitle");
 
   async function onDeleteCourse(courseId: string) {
-    if (!window.confirm(t("admin.courses.deleteConfirm"))) return;
+    setConfirmDeleteId(null);
     setDeletingId(courseId);
     setError(null);
     try {
       await deleteCourse(courseId);
       setItems((prev) => prev.filter((c) => c.course_id !== courseId));
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("teacher.errors.loadFailed"));
+      setError(e instanceof Error ? e.message : t("teacher.errors.deleteFailed"));
     } finally {
       setDeletingId(null);
     }
@@ -153,7 +155,7 @@ export default function TeacherCoursesPage({ isDarkTheme = false }: Props) {
                   onDelete={
                     deletingId === c.course_id
                       ? undefined
-                      : () => void onDeleteCourse(c.course_id)
+                      : () => setConfirmDeleteId(c.course_id)
                   }
                   t={t}
                   tp={tp}
@@ -163,6 +165,18 @@ export default function TeacherCoursesPage({ isDarkTheme = false }: Props) {
           })}
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={confirmDeleteId !== null}
+        title={t("admin.courses.deleteCourseTitle")}
+        message={t("admin.courses.deleteConfirm")}
+        confirmText={t("common.delete")}
+        isDangerous
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={() => {
+          if (confirmDeleteId) void onDeleteCourse(confirmDeleteId);
+        }}
+      />
     </TeacherPageShell>
   );
 }
