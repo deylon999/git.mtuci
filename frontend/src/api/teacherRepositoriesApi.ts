@@ -1,5 +1,5 @@
 import { apiRequest } from "./client";
-import type { StudentRepositoryItem } from "./studentDashboardApi";
+import type { StudentRepoGiteaLinks, StudentRepositoryItem } from "./studentDashboardApi";
 
 function repoQuery(params: Record<string, string | undefined>) {
   const qs = new URLSearchParams();
@@ -70,7 +70,7 @@ export interface TeacherRepoSummary {
   license_name: string | null;
   license_path: string | null;
   recent_commits: TeacherRepoRecentCommit[];
-  gitea_links: any | null;
+  gitea_links: StudentRepoGiteaLinks | null;
 }
 
 export interface TeacherRepoIssue {
@@ -332,8 +332,8 @@ export function reactTeacherRepoIssue(
   repoId: string,
   issueNumber: number,
   content: "+1" | "-1" | "laugh" | "confused" | "heart" | "hooray" | "rocket" | "eyes",
-): Promise<any> {
-  return apiRequest<any>(
+): Promise<unknown> {
+  return apiRequest<unknown>(
     `/teacher/repositories/${repoId}/issues/${encodeURIComponent(String(issueNumber))}/reactions`,
     { method: "POST", body: { content } },
   );

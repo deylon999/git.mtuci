@@ -50,8 +50,8 @@ export default function RepoMarkdown({ content, theme }: RepoMarkdownProps) {
     if (node == null) return "";
     if (typeof node === "string" || typeof node === "number") return String(node);
     if (Array.isArray(node)) return node.map(flattenText).join(" ");
-    if (typeof node === "object" && "props" in (node as any)) {
-      return flattenText((node as any).props?.children);
+    if (typeof node === "object" && "props" in node) {
+      return flattenText((node as { props?: { children?: React.ReactNode } }).props?.children);
     }
     return "";
   };

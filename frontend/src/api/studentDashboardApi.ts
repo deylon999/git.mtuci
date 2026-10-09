@@ -671,8 +671,8 @@ export function reactStudentRepoIssue(
   repoId: string,
   issueNumber: number,
   content: "+1" | "-1" | "laugh" | "confused" | "heart" | "hooray" | "rocket" | "eyes",
-): Promise<any> {
-  return apiRequest<any>(
+): Promise<unknown> {
+  return apiRequest<unknown>(
     `/students/me/repositories/${repoId}/issues/${encodeURIComponent(String(issueNumber))}/reactions`,
     { method: "POST", body: { content } },
   );

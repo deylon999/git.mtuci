@@ -429,7 +429,7 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
       };
 
       socket.onmessage = (event) => {
-        let data: any; // server payload shape varies by event type
+        let data: { type?: string; repo_name?: string; repo_url?: string }; // other fields vary by event type
         try {
           data = JSON.parse(event.data);
         } catch {
@@ -438,23 +438,25 @@ export default function ActivityPage({ isDarkTheme = true }: ActivityPageProps) 
 
         if (data.type === "new_activity") {
           // Real-time update hot repos if repo_name exists
-          if (data.repo_name) {
+          const repoName = data.repo_name;
+          const repoUrl = data.repo_url;
+          if (repoName) {
             setHotRepos(prev => {
-              const existing = prev.find(r => r.name === data.repo_name);
+              const existing = prev.find(r => r.name === repoName);
               let updated: HotRepoStat[];
 
               if (existing) {
                 // Update existing repo
                 updated = prev.map(r =>
-                  r.name === data.repo_name
+                  r.name === repoName
                     ? { ...r, events: r.events + 1 }
                     : r
                 );
               } else {
                 // Add new repo to the list
                 const newRepo: HotRepoStat = {
-                  name: data.repo_name,
-                  url: toSafeExternalUrl(data.repo_url) ?? "",
+                  name: repoName,
+                  url: toSafeExternalUrl(repoUrl) ?? "",
                   events: 1,
                   language: null
                 };

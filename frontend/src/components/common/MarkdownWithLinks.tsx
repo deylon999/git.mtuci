@@ -20,9 +20,9 @@ export const MarkdownWithLinks: React.FC<MarkdownWithLinksProps> = ({
   repositoryId,
 }) => {
   const [syntaxHighlighter, setSyntaxHighlighter] = React.useState<
-    React.ComponentType<any> | null
+    typeof import('react-syntax-highlighter').PrismAsyncLight | null
   >(null);
-  const [syntaxStyle, setSyntaxStyle] = React.useState<any>(null);
+  const [syntaxStyle, setSyntaxStyle] = React.useState<Record<string, React.CSSProperties> | null>(null);
 
   React.useEffect(() => {
     if (!/```|~~~/.test(content)) return;
@@ -85,7 +85,7 @@ export const MarkdownWithLinks: React.FC<MarkdownWithLinksProps> = ({
       PrismAsyncLight.registerLanguage('typescript', typescript);
       PrismAsyncLight.registerLanguage('ts', typescript);
       setSyntaxHighlighter(() => PrismAsyncLight);
-      setSyntaxStyle((prismStyles as any).vscDarkPlus);
+      setSyntaxStyle(prismStyles.vscDarkPlus);
     })();
     return () => {
       cancelled = true;
@@ -200,7 +200,7 @@ export const MarkdownWithLinks: React.FC<MarkdownWithLinksProps> = ({
     >
       <ReactMarkdown
         components={{
-          code({ node: _node, className, children, ...props }) {
+          code({ node: _node, ref: _ref, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '');
             if (match) {
               const codeText = String(children).replace(/\n$/, '');
@@ -208,10 +208,10 @@ export const MarkdownWithLinks: React.FC<MarkdownWithLinksProps> = ({
                 const Highlighter = syntaxHighlighter;
                 return (
                   <Highlighter
+                    {...props}
                     style={syntaxStyle}
                     language={match[1]}
                     PreTag="div"
-                    {...props}
                   >
                     {codeText}
                   </Highlighter>

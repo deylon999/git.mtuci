@@ -14,7 +14,7 @@ const STORAGE_KEY = "mtuci:laborant-mode";
 
 const RoleModeContext = createContext<RoleModeContextValue | null>(null);
 
-function detectDualRole(user: any): boolean {
+function detectDualRole(user: { role?: string; can_switch_student_mode?: boolean } | null | undefined): boolean {
   if (!user || user.role !== "laborant") return false;
   return user.can_switch_student_mode === true;
 }

@@ -32,7 +32,7 @@ export function useLogsFilters() {
     const fromUrl = searchParams.get("time");
     return LOGS_TIME_FILTERS.includes(fromUrl as LogsTimeFilter) ? (fromUrl as LogsTimeFilter) : "all";
   });
-  const [sort, setSort] = useState<"desc" | "asc">(() => (searchParams.get("sort") as any) || "desc");
+  const [sort, setSort] = useState<"desc" | "asc">(() => (searchParams.get("sort") === "asc" ? "asc" : "desc"));
 
   // Memoize date_from based on timeFilter to avoid constant recalculations
   const dateFrom = useMemo(() => {

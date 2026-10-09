@@ -389,7 +389,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
           <div className={`hidden sm:block w-px h-5 shrink-0 ${isDarkTheme ? "bg-[#2d2d2d]" : "bg-slate-300"}`} />
           <select
             value={level}
-            onChange={(e) => handleFilterChange(() => setLevel(e.target.value as any))}
+            onChange={(e) => handleFilterChange(() => setLevel(e.target.value as typeof level))}
             className={adminSelect.className}
             style={adminSelect.style}
           >
@@ -401,7 +401,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
           </select>
           <select
             value={source}
-            onChange={(e) => handleFilterChange(() => setSource(e.target.value as any))}
+            onChange={(e) => handleFilterChange(() => setSource(e.target.value as typeof source))}
             className={adminSelect.className}
             style={adminSelect.style}
           >
@@ -429,7 +429,7 @@ export default function LogsPage({ isDarkTheme = false }: LogsPageProps) {
           <div className={`hidden sm:block w-px h-5 shrink-0 ${isDarkTheme ? "bg-[#2d2d2d]" : "bg-slate-300"}`} />
           <select
             value={sort}
-            onChange={(e) => handleFilterChange(() => setSort(e.target.value as any))}
+            onChange={(e) => handleFilterChange(() => setSort(e.target.value as typeof sort))}
             className={adminSelect.className}
             style={adminSelect.style}
           >
