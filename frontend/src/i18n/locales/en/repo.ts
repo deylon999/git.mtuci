@@ -377,7 +377,7 @@ export const repoEn = {
   },
   repositories: {
     title: "All repositories",
-    reposCount: "{n} repositories",
+    reposCount: "{n} {n|repository|repositories}",
     statTotal: "Total repos",
     statPublic: "Public",
     statPrivate: "Private",
@@ -397,7 +397,7 @@ export const repoEn = {
     loadError: "Failed to load",
     retry: "Retry",
     deleteSelected: "Delete selected ({n})",
-    deleteSelectedConfirm: "Permanently delete {n} repositories?",
+    deleteSelectedConfirm: "Permanently delete {n} {n|repository|repositories}?",
     deleteSelectedSuccess: "Selected repositories deleted",
     deleteConfirm: "Permanently delete repository «{name}»?",
     deleteSuccess: "Repository deleted",

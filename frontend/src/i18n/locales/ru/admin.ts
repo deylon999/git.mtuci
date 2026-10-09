@@ -109,7 +109,7 @@ export const adminRu = {
     settingSaveError: "Ошибка при сохранении настройки",
     trusted: "Доверенный",
     notTrusted: "Не доверенный",
-    rolesCount: "{n} ролей",
+    rolesCount: "{n} {n|роль|роли|ролей}",
     assistantHint: "Только выбранные лаборанты смогут выставлять оценки и менять статусы работ в ваших курсах",
     sectionRepos: "РЕПОЗИТОРИИ",
     sectionUsers: "ПОЛЬЗОВАТЕЛИ И ГРУППЫ",
@@ -361,7 +361,7 @@ export const adminRu = {
   notifications: {
     ariaLabel: "Уведомления",
     title: "Уведомления",
-    unread: "{n} непрочитанных",
+    unread: "{n} {n|непрочитанное|непрочитанных|непрочитанных}",
     markAll: "Отметить все",
     empty: "Нет уведомлений",
   },

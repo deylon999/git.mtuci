@@ -160,12 +160,7 @@ export default function TeacherDashboardPage({ isDarkTheme = false }: Props) {
           icon={<AlertCircle className="h-3.5 w-3.5 shrink-0" />}
         >
           <span>
-            {tp(
-              data.pending_grading === 1
-                ? "teacher.dashboard.pendingBannerOne"
-                : "teacher.dashboard.pendingBannerMany",
-              { count: data.pending_grading },
-            )}{" "}
+            {tp("teacher.dashboard.pendingBanner", { count: data.pending_grading })}{" "}
             —{" "}
             <span className="font-medium underline">{t("teacher.dashboard.pendingBannerLink")}</span>
           </span>

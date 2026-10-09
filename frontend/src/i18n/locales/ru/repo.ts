@@ -377,7 +377,7 @@ export const repoRu = {
   },
   repositories: {
     title: "Все репозитории",
-    reposCount: "{n} репозиториев",
+    reposCount: "{n} {n|репозиторий|репозитория|репозиториев}",
     statTotal: "Всего репо",
     statPublic: "Публичных",
     statPrivate: "Приватных",
@@ -397,7 +397,7 @@ export const repoRu = {
     loadError: "Ошибка загрузки",
     retry: "Повторить",
     deleteSelected: "Удалить выбранные ({n})",
-    deleteSelectedConfirm: "Удалить {n} репозиториев без возможности восстановления?",
+    deleteSelectedConfirm: "Удалить {n} {n|репозиторий|репозитория|репозиториев} без возможности восстановления?",
     deleteSelectedSuccess: "Выбранные репозитории удалены",
     deleteConfirm: "Удалить репозиторий «{name}» без возможности восстановления?",
     deleteSuccess: "Репозиторий удалён",

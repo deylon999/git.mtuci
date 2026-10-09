@@ -233,7 +233,7 @@ function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
 }
 
 function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
-  const { t } = useUserPreferences();
+  const { t, tp } = useUserPreferences();
   const { summary } = useStudentRepoWorkspaceContext();
   const api = useRepoApi();
   const isBlocked = !!summary?.is_blocked;
@@ -789,10 +789,9 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                     <div className="rounded-lg border px-3 py-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
                       <div className="text-[10px] uppercase tracking-wide" style={{ color: theme.text3 }}>{t("repo.section.prFiles")}</div>
                       <div className="mt-1 text-xs font-semibold" style={{ color: theme.text }}>
-                        {t("repo.section.filesCount").replace(
-                          "{count}",
-                          String(detail.pull.changed_files_count ?? detail.files.length),
-                        )}
+                        {tp("repo.section.filesCount", {
+                          count: detail.pull.changed_files_count ?? detail.files.length,
+                        })}
                       </div>
                     </div>
                   </div>
@@ -819,7 +818,7 @@ function PullsPanel({ theme, repoId }: { theme: ThemeColors; repoId: string }) {
                       </a>
                     ) : null}
                     <span style={{ color: theme.text3 }}>
-                      {t("repo.section.reviewCommentsCount").replace("{count}", String(detail.pull.review_comments_count))}
+                      {tp("repo.section.reviewCommentsCount", { count: detail.pull.review_comments_count })}
                     </span>
                   </div>
 

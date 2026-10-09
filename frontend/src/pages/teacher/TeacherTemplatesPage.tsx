@@ -74,12 +74,7 @@ export default function TeacherTemplatesPage({ isDarkTheme = false }: Props) {
             const sub = [
               item.repo_name,
               item.description,
-              tp(
-                item.assignments_count === 1
-                  ? "teacher.templates.usedInOne"
-                  : "teacher.templates.usedInMany",
-                { count: item.assignments_count },
-              ),
+              tp("teacher.templates.usedIn", { count: item.assignments_count }),
             ]
               .filter(Boolean)
               .join(" · ");

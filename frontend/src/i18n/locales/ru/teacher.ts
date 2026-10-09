@@ -22,8 +22,7 @@ export const teacherRu = {
   dashboard: {
     greeting: "👋 Добрый день, {name}!",
     greetingFallback: "коллега",
-    pendingBannerOne: "{count} работа ожидает проверки",
-    pendingBannerMany: "{count} работ ожидают проверки",
+    pendingBanner: "{count} {count|работа ожидает|работы ожидают|работ ожидают} проверки",
     pendingBannerLink: "Перейти к Code Review →",
     activityBtn: "Активность студентов",
     loading: "Загрузка…",
@@ -51,7 +50,6 @@ export const teacherRu = {
     submittedRatio: "{submitted} / {total} сдали",
     activityTitle: "Активность по дням",
     activitySubtitle: "Коммиты студентов",
-    commitsTooltip: "{count} коммитов",
   },
   courses: {
     title: "Курсы",
@@ -75,7 +73,7 @@ export const teacherRu = {
   students: {
     title: "Все студенты",
     subtitle: "Все студенты по вашим курсам",
-    subtitleCount: "{n} студентов по всем курсам",
+    subtitleCount: "{n} {n|студент|студента|студентов} по всем курсам",
     exportCsv: "Экспорт CSV",
     statTotal: "Всего студентов",
     statActiveWeek: "Активных (7 дней)",
@@ -134,8 +132,7 @@ export const teacherRu = {
     badgeTemplate: "Шаблон",
     badgePublic: "Публичный",
     openGitea: "Открыть в Gitea",
-    usedInOne: "Используется в {count} курсе",
-    usedInMany: "Используется в {count} курсах",
+    usedIn: "Используется в {count} {count|курсе|курсах|курсах}",
     updated: "Обновлён {date}",
     repositoriesLink: "Репозитории →",
   },
