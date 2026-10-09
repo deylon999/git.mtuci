@@ -352,7 +352,6 @@ export const adminPagesRu = {
       logs_view: { name: "Просмотр логов", description: "Доступ к системным логам" },
       admin: { name: "Перезапуск системы", description: "Выполнять административные операции перезапуска" },
     },
-    permissionMatrix: "Матрица прав",
   },
   activity: {
     subtitle: "События платформы",
