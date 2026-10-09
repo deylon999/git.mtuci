@@ -438,6 +438,16 @@ export default function Sidebar({ isDarkTheme = true, mobileOpen = false, onMobi
   const isTeacherLike = userRole === "teacher" || userRole === "laborant";
   const isLaborant = userRole === "laborant";
 
+  // Esc closes the mobile drawer.
+  useEffect(() => {
+    if (!mobileOpen || !onMobileClose) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onMobileClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileOpen, onMobileClose]);
+
   // While loading, show nothing or student menu to avoid flashing admin menu
   if (userRole === null || permissionsLoading) {
     return (

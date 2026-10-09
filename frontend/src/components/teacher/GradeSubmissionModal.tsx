@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useDialogA11y } from "../../hooks/useDialogA11y";
 import { Loader2, X } from "lucide-react";
 import { gradeSubmission } from "../../api/coursesApi";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
@@ -46,14 +47,7 @@ export default function GradeSubmissionModal({
   }, [open, target]);
 
   // Esc closes, but not while a grade is being saved.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !loading) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, loading, onClose]);
+  const panelRef = useDialogA11y<HTMLFormElement>(open && Boolean(target), onClose, { busy: loading });
 
   if (!open || !target) return null;
   const close = () => {
@@ -91,6 +85,7 @@ export default function GradeSubmissionModal({
       onClick={close}
     >
       <form
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={t("teacher.gradeModal.title")}

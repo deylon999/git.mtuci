@@ -1,5 +1,6 @@
 import { currentLocaleTag } from "../utils/dates";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 import toast from "react-hot-toast";
 import {
   Download,
@@ -195,6 +196,8 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
     student_id: "",
   });
   const [actionLoading, setActionLoading] = useState(false);
+  const viewPanelRef = useDialogA11y(Boolean(viewUser), () => setViewUser(null));
+  const editPanelRef = useDialogA11y(Boolean(editUser), () => setEditUser(null), { busy: actionLoading });
   const [availableGroups, setAvailableGroups] = useState<string[]>([]);
   const [showPerPageDropdown, setShowPerPageDropdown] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -1097,10 +1100,21 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
       {/* View User Modal */}
       {viewUser && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className={`${modalBg} border ${modalBorder} rounded-xl p-6 max-w-md w-full max-h-full overflow-y-auto`}>
+          <div
+            ref={viewPanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("admin.users.profileModal")}
+            className={`${modalBg} border ${modalBorder} rounded-xl p-6 max-w-md w-full max-h-full overflow-y-auto`}
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-lg font-semibold ${modalText}`}>{t("admin.users.profileModal")}</h3>
-              <button onClick={() => setViewUser(null)} className={`p-1 ${modalBtnHover} rounded ${modalBtnText}`}>
+              <button
+                type="button"
+                onClick={() => setViewUser(null)}
+                aria-label={t("common.close")}
+                className={`p-1 ${modalBtnHover} rounded ${modalBtnText}`}
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -1158,10 +1172,21 @@ export default function UsersPage({ isDarkTheme = false }: UsersPageProps) {
       {/* Edit User Modal */}
       {editUser && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className={`${modalBg} border ${modalBorder} rounded-xl p-6 max-w-md w-full max-h-full overflow-y-auto`}>
+          <div
+            ref={editPanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("admin.users.editModal")}
+            className={`${modalBg} border ${modalBorder} rounded-xl p-6 max-w-md w-full max-h-full overflow-y-auto`}
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-lg font-semibold ${modalText}`}>{t("admin.users.editModal")}</h3>
-              <button onClick={() => setEditUser(null)} className={`p-1 ${modalBtnHover} rounded ${modalBtnText}`}>
+              <button
+                type="button"
+                onClick={() => setEditUser(null)}
+                aria-label={t("common.close")}
+                className={`p-1 ${modalBtnHover} rounded ${modalBtnText}`}
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>

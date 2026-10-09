@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useId } from "react";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 import { Loader2, X } from "lucide-react";
 import { getTheme } from "../theme";
 import { useUserPreferences } from "../context/UserPreferencesContext";
@@ -28,6 +29,9 @@ export default function DeleteRepositoryDialog({
     if (isOpen) setConfirmName("");
   }, [isOpen]);
 
+  const titleId = useId();
+  const panelRef = useDialogA11y<HTMLDivElement>(isOpen, onClose, { busy: loading });
+
   if (!isOpen) return null;
 
   const canDelete = confirmName === repoName;
@@ -41,15 +45,19 @@ export default function DeleteRepositoryDialog({
         className="w-full max-w-md rounded-xl border shadow-2xl"
         style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         onClick={(e) => e.stopPropagation()}
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
       >
         <div
           className="flex items-center justify-between border-b px-4 py-3"
           style={{ borderColor: theme.border }}
         >
-          <h2 className="text-sm font-semibold" style={{ color: theme.danger }}>
+          <h2 id={titleId} className="text-sm font-semibold" style={{ color: theme.danger }}>
             {t("repo.delete.title")}
           </h2>
-          <button type="button" onClick={onClose} disabled={loading} style={{ color: theme.text2 }}>
+          <button type="button" onClick={onClose} disabled={loading} aria-label={t("common.close")} style={{ color: theme.text2 }}>
             <X className="h-4 w-4" />
           </button>
         </div>

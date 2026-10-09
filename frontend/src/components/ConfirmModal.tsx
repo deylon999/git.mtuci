@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface ConfirmModalProps {
@@ -28,20 +28,14 @@ export default function ConfirmModal({
   const resolvedConfirm = confirmText ?? t("common.confirm");
   const resolvedCancel = cancelText ?? t("common.cancel");
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isLoading) onCancel();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, isLoading, onCancel]);
+  const panelRef = useDialogA11y(isOpen, onCancel, { busy: isLoading });
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div
+        ref={panelRef}
         role="alertdialog"
         aria-modal="true"
         aria-label={title}

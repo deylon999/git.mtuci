@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useId } from "react";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 import { Loader2, X } from "lucide-react";
 import { updateRepository } from "../api/repositoriesApi";
 import { getTheme } from "../theme";
@@ -36,6 +37,9 @@ export default function EditRepositoryModal({
     setDescription(initialDescription ?? "");
     setError(null);
   }, [isOpen, initialName, initialDescription]);
+
+  const titleId = useId();
+  const panelRef = useDialogA11y<HTMLFormElement>(isOpen, onClose, { busy: loading });
 
   if (!isOpen) return null;
 
@@ -76,15 +80,19 @@ export default function EditRepositoryModal({
         className="w-full max-w-md max-h-full overflow-y-auto rounded-xl border shadow-2xl"
         style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         onClick={(e) => e.stopPropagation()}
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
       >
         <div
           className="flex items-center justify-between border-b px-4 py-3"
           style={{ borderColor: theme.border }}
         >
-          <h2 className="text-sm font-semibold" style={{ color: theme.text }}>
+          <h2 id={titleId} className="text-sm font-semibold" style={{ color: theme.text }}>
             {t("repo.edit.title")}
           </h2>
-          <button type="button" onClick={onClose} disabled={loading} style={{ color: theme.text2 }}>
+          <button type="button" onClick={onClose} disabled={loading} aria-label={t("common.close")} style={{ color: theme.text2 }}>
             <X className="h-4 w-4" />
           </button>
         </div>

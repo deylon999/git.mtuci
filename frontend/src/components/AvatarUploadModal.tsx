@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import AvatarCropper, { CROP_CIRCLE_RADIUS } from "./AvatarCropper";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 
 interface AvatarUploadModalProps {
   file: File | null;
@@ -139,28 +140,19 @@ export default function AvatarUploadModal({
     onClose();
   }
 
-  const handleCloseRef = useRef(handleClose);
-  handleCloseRef.current = handleClose;
-  useEffect(() => {
-    if (!file) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleCloseRef.current();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [file]);
+  const panelRef = useDialogA11y(Boolean(file), handleClose, { busy: isUploading || isProcessing });
 
   if (!file) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="avatar-upload-title"
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
       {/* p-4 on phones: the 320px crop area plus padding must fit a 375px screen. */}
-      <div className={`w-full max-w-md max-h-full overflow-y-auto rounded-xl p-4 shadow-xl sm:p-6 ${isDarkTheme ? "bg-[#1e1e1e]" : "bg-white"}`}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="avatar-upload-title"
+        className={`w-full max-w-md max-h-full overflow-y-auto rounded-xl p-4 shadow-xl sm:p-6 ${isDarkTheme ? "bg-[#1e1e1e]" : "bg-white"}`}>
         <h2 id="avatar-upload-title" className={`mb-4 text-xl font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"}`}>{t("avatar.title")}</h2>
 
         <p className={`mb-4 text-sm text-center ${isDarkTheme ? "text-gray-400" : "text-gray-600"}`}>{t("avatar.hint")}</p>

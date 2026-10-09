@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useId } from "react";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 import { BookOpen, FileCode, Globe, Loader2, Lock, Scale, X } from "lucide-react";
 import {
   createRepository,
@@ -53,6 +54,9 @@ export default function CreateRepositoryModal({
       cancelled = true;
     };
   }, [isOpen, t]);
+
+  const titleId = useId();
+  const panelRef = useDialogA11y<HTMLFormElement>(isOpen, () => handleClose(), { busy: loading });
 
   if (!isOpen) return null;
 
@@ -115,13 +119,17 @@ export default function CreateRepositoryModal({
         className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border shadow-2xl"
         style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         onClick={(e) => e.stopPropagation()}
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
       >
         <div
           className="flex items-start justify-between border-b px-5 py-4"
           style={{ borderColor: theme.border }}
         >
           <div>
-            <h2 className="text-lg font-semibold" style={{ color: theme.text }}>
+            <h2 id={titleId} className="text-lg font-semibold" style={{ color: theme.text }}>
               {t("repo.create.title")}
             </h2>
             <p className="mt-0.5 text-sm" style={{ color: theme.text2 }}>

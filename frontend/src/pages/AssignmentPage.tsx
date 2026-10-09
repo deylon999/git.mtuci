@@ -1,5 +1,6 @@
 import { currentLocaleTag } from "../utils/dates";
 import { useEffect, useMemo, useState } from "react";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   checkPlagiarism,
@@ -170,6 +171,9 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
     content: null,
     error: null,
   });
+  const filePanelRef = useDialogA11y(Boolean(view.file), () =>
+    setView({ file: null, loading: false, content: null, error: null }),
+  );
 
   const headerTitle = useMemo(() => {
     if (!assignment) return t("repo.assignment.defaultTitle");
@@ -1602,7 +1606,13 @@ export default function AssignmentPage({ isDarkTheme = false }: AssignmentPagePr
 
       {view.file ? (
         <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${modalOverlay}`}>
-          <div className={`w-full max-w-3xl max-h-full overflow-y-auto rounded-lg p-4 shadow-lg ${modalBg}`}>
+          <div
+            ref={filePanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={tp("repo.assignment.fileTitle", { name: view.file.name })}
+            className={`w-full max-w-3xl max-h-full overflow-y-auto rounded-lg p-4 shadow-lg ${modalBg}`}
+          >
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <div className={`text-lg font-semibold ${textPrimary}`}>{tp("repo.assignment.fileTitle", { name: view.file.name })}</div>

@@ -1,4 +1,4 @@
-import { translate, translateWithParams, type Locale } from "../i18n";
+import { translate, translateWithParams } from "../i18n";
 import { getI18nLocale } from "../i18n/runtime";
 import { localeTag } from "./dates";
 

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useId } from "react";
+import { useDialogA11y } from "../../hooks/useDialogA11y";
 import { Loader2, X } from "lucide-react";
 import type { ThemeColors } from "../../theme";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
@@ -36,6 +37,9 @@ export default function RepoCreateFileModal({
     }
   }, [open, defaultPath, t]);
 
+  const titleId = useId();
+  const panelRef = useDialogA11y<HTMLFormElement>(open, onClose, { busy: saving });
+
   if (!open) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,10 +71,14 @@ export default function RepoCreateFileModal({
         className="w-full max-w-lg rounded-xl border shadow-xl flex flex-col max-h-[90vh]"
         style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         onClick={(e) => e.stopPropagation()}
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         onSubmit={(e) => void handleSubmit(e)}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: theme.border }}>
-          <h3 className="text-sm font-semibold" style={{ color: theme.text }}>
+          <h3 id={titleId} className="text-sm font-semibold" style={{ color: theme.text }}>
             {t("repo.createFile.title")}
           </h3>
           <button type="button" onClick={onClose} className="p-1 rounded hover:opacity-80" aria-label={t("common.close")}>

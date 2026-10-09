@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useId } from "react";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 import { Github, Loader2, Lock, Globe, X } from "lucide-react";
 import { importGithubRepository, type RepositoryVisibility } from "../api/repositoriesApi";
 import { getTheme } from "../theme";
@@ -25,6 +26,9 @@ export default function ImportGithubRepositoryModal({
   const [visibility, setVisibility] = useState<RepositoryVisibility>("public");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const titleId = useId();
+  const panelRef = useDialogA11y<HTMLFormElement>(isOpen, () => handleClose(), { busy: loading });
 
   if (!isOpen) return null;
 
@@ -74,17 +78,21 @@ export default function ImportGithubRepositoryModal({
         className="w-full max-w-lg max-h-full overflow-y-auto rounded-xl border shadow-2xl"
         style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         onClick={(e) => e.stopPropagation()}
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
       >
         <div className="flex items-start justify-between border-b px-5 py-4" style={{ borderColor: theme.border }}>
           <div>
-            <h2 className="text-lg font-semibold" style={{ color: theme.text }}>
+            <h2 id={titleId} className="text-lg font-semibold" style={{ color: theme.text }}>
               {t("student.repos.importDialog.title")}
             </h2>
             <p className="mt-0.5 text-sm" style={{ color: theme.text2 }}>
               {t("student.repos.importDialog.subtitle")}
             </p>
           </div>
-          <button type="button" onClick={handleClose} disabled={loading} className="rounded-md p-1" style={{ color: theme.text2 }}>
+          <button type="button" onClick={handleClose} disabled={loading} aria-label={t("common.close")} className="rounded-md p-1" style={{ color: theme.text2 }}>
             <X className="h-5 w-5" />
           </button>
         </div>
