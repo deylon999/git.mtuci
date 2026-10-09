@@ -1,4 +1,5 @@
 import { addDays, currentLocaleTag } from "../utils/dates";
+import { localizeFeedItem } from "../utils/studentFeedText";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { pluralWord } from "../i18n/plural";
 import { translateWithParams } from "../i18n/params";
@@ -843,18 +844,19 @@ function RepositoryRow({ onOpen, repo }: { onOpen: () => void; repo: ProfileRepo
 }
 
 function FeedRow({ item }: { item: StudentActivityFeedItem }) {
+  const view = localizeFeedItem(item);
   const content = (
     <div className="feed-item">
       <div className={`feed-dot ${feedDotClass(item.type)}`} />
       <div>
         <div className="feed-text">
-          {item.text}
-          {item.bold ? <strong> {item.bold}</strong> : null}
-          {item.text_after ?? ""}
+          {view.text}
+          {view.bold ? <strong> {view.bold}</strong> : null}
+          {view.after ?? ""}
         </div>
-        <div className="feed-time">{item.time_label}</div>
+        <div className="feed-time">{view.time}</div>
       </div>
-      {item.badge ? <span className={`badge badge-${item.badge_variant === "ok" ? "green" : item.badge_variant === "warn" ? "yellow" : "blue"}`}>{item.badge}</span> : null}
+      {view.badge ? <span className={`badge badge-${item.badge_variant === "ok" ? "green" : item.badge_variant === "warn" ? "yellow" : "blue"}`}>{view.badge}</span> : null}
     </div>
   );
   return item.href ? <Link to={item.href}>{content}</Link> : content;

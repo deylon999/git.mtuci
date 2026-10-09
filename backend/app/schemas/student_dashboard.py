@@ -142,6 +142,10 @@ class StudentActivityFeedItemRead(BaseModel):
     badge: str | None = None
     badge_variant: str | None = None
     href: str | None = None
+    # The client renders text/bold/text_after/badge from `studentFeed.<i18n_key>.*` in the UI language;
+    # the Russian fields above stay as the fallback.
+    i18n_key: str | None = None
+    i18n_params: dict[str, str | int] | None = None
 
 
 class StudentGroupRankingEntryRead(BaseModel):

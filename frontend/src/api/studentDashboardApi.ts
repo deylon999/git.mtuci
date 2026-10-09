@@ -116,6 +116,9 @@ export interface StudentActivityFeedItem {
   badge: string | null;
   badge_variant: "ok" | "warn" | "err" | "info" | "gray" | null;
   href: string | null;
+  /** Render through `localizeFeedItem`. */
+  i18n_key?: string | null;
+  i18n_params?: Record<string, string | number> | null;
 }
 
 export interface StudentGroupRankingEntry {

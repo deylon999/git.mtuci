@@ -232,7 +232,7 @@ export default function StudentCreateRepoPage({ isDarkTheme = false }: StudentCr
               >
                 {templates.gitignores.map((g) => (
                   <option key={g.id} value={g.id}>
-                    {g.label}
+                    {g.id ? g.label : t("student.repos.createPage.noGitignore")}
                   </option>
                 ))}
               </select>
@@ -250,7 +250,7 @@ export default function StudentCreateRepoPage({ isDarkTheme = false }: StudentCr
               >
                 {templates.licenses.map((l) => (
                   <option key={l.id} value={l.id}>
-                    {l.label}
+                    {l.id ? l.label : t("student.repos.createPage.noLicense")}
                   </option>
                 ))}
               </select>

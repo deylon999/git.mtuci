@@ -440,5 +440,15 @@ export const coreRu = {
     prCommentBy: "PR #{number}, комментарий от {login}",
     prCommentByPreview: "PR #{number}, {login}: {preview}",
   },
+  // Лента на дашборде и в профиле студента (см. utils/studentFeedText.ts). Части: text, bold, after, badge.
+  studentFeed: {
+    grade: { text: "{assignment} — ", bold: "оценка {score}", after: " · {course}" },
+    teacherComment: { text: "Комментарий преподавателя к ", after: ": «{preview}»", badge: "Новое" },
+    commit: { text: "Коммит в ", after: " — {message}" },
+    pr: { text: "Pull request в ", after: " — {message}" },
+    prComment: { text: "Комментарий к pull request ", after: " {repo} — «{preview}»" },
+    prCommentNoText: { text: "Комментарий к pull request ", after: " {repo}" },
+    repoCreated: { text: "Создан репозиторий " },
+  },
 };
 

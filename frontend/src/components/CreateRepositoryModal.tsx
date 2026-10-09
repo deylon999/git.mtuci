@@ -259,7 +259,7 @@ export default function CreateRepositoryModal({
               >
                 {(templates?.gitignores ?? [{ id: "", label: t("repo.create.loadingTemplates") }]).map((opt) => (
                   <option key={opt.id || "none"} value={opt.id}>
-                    {opt.label}
+                    {opt.id || !templates ? opt.label : t("repo.create.noGitignore")}
                   </option>
                 ))}
               </select>
@@ -285,7 +285,7 @@ export default function CreateRepositoryModal({
               >
                 {(templates?.licenses ?? [{ id: "", label: t("repo.create.loadingTemplates") }]).map((opt) => (
                   <option key={opt.id || "none"} value={opt.id}>
-                    {opt.label}
+                    {opt.id || !templates ? opt.label : t("repo.create.noLicense")}
                   </option>
                 ))}
               </select>

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { localizeFeedItem } from "../utils/studentFeedText";
 import { Link } from "react-router-dom";
 import {
   AlertCircle,
@@ -268,6 +269,8 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
   } = useStudentDashboardCore();
 
   const dashboardCourses = useMemo(() => courses.slice(0, 3), [courses]);
+  // The server sends a Russian label ("Топ 10%"); keep only the number and word it in the UI language.
+  const topPercent = Number(groupRanking?.top_percent_label?.match(/\d+/)?.[0]) || null;
 
   const stats = useMemo(() => {
     if (!kpi) {
@@ -534,22 +537,23 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
               </div>
             ) : (
               activityFeed.map((act) => {
+                const view = localizeFeedItem(act, language);
                 const content = (
                   <>
                     {activityIcon(act.type, theme)}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm leading-snug" style={{ color: theme.text }}>
-                        {act.text}
-                        {act.bold ? <strong className="font-medium">{act.bold}</strong> : null}
-                        {act.text_after}
+                        {view.text}
+                        {view.bold ? <strong className="font-medium">{view.bold}</strong> : null}
+                        {view.after}
                       </p>
                       <p className="text-[10px] mt-0.5" style={{ color: theme.text3 }}>
-                        {act.time_label}
+                        {view.time}
                       </p>
                     </div>
-                    {act.badge ? (
+                    {view.badge ? (
                       <Badge variant={act.badge_variant ?? "gray"} theme={theme}>
-                        {act.badge}
+                        {view.badge}
                       </Badge>
                     ) : null}
                   </>
@@ -709,9 +713,9 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
                         {tp("student.dashboard.points", { n: groupRanking.your_points ?? 0 })}
                       </p>
                     </div>
-                    {groupRanking.top_percent_label ? (
+                    {topPercent ? (
                       <Badge variant="info" theme={theme}>
-                        {groupRanking.top_percent_label}
+                        {tp("student.dashboard.topPercent", { n: topPercent })}
                       </Badge>
                     ) : null}
                   </div>
@@ -743,6 +747,7 @@ export default function DashboardPage({ isDarkTheme = false }: DashboardPageProp
                           }}
                         >
                           {row.name}
+                          {row.is_you ? ` ${t("student.dashboard.you")}` : null}
                         </span>
                         <span style={{ color: row.is_you ? theme.accent2 : theme.text2 }}>
                           {tp("student.dashboard.points", { n: row.points })}

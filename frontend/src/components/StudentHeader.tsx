@@ -140,6 +140,8 @@ export default function StudentHeader({ isDarkTheme = false, onToggleTheme, onTo
               src="/logo_mtuci.png"
               alt="MTUCI"
               className="h-8 w-auto object-contain transition-opacity group-hover:opacity-90"
+              // The asset is solid white for the dark header; on the light one it vanished into the background.
+              style={isDarkTheme ? undefined : { filter: "brightness(0)" }}
             />
           </Link>
 

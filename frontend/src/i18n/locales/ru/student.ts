@@ -88,6 +88,7 @@ export const studentRu = {
     rankingSetGroup: "Укажите группу в профиле, чтобы видеть рейтинг",
     rankingNoGrades: "В группе пока ни у кого нет оценок",
     you: "(вы)",
+    topPercent: "Топ {n}%",
     points: "{n} {n|балл|балла|баллов}",
     kpiDeadlinesNext: "Ближайший: {title}",
     kpiDeadlinesNone: "На сегодня ничего нет",

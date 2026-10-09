@@ -437,4 +437,14 @@ export const coreEn = {
     prCommentBy: "PR #{number}, comment by {login}",
     prCommentByPreview: "PR #{number}, {login}: {preview}",
   },
+  // Student dashboard/profile feed rows (see utils/studentFeedText.ts). Parts: text, bold, after, badge.
+  studentFeed: {
+    grade: { text: "{assignment} — ", bold: "grade {score}", after: " · {course}" },
+    teacherComment: { text: "Instructor comment on ", after: ": “{preview}”", badge: "New" },
+    commit: { text: "Commit to ", after: " — {message}" },
+    pr: { text: "Pull request in ", after: " — {message}" },
+    prComment: { text: "Comment on pull request ", after: " {repo} — “{preview}”" },
+    prCommentNoText: { text: "Comment on pull request ", after: " {repo}" },
+    repoCreated: { text: "Created repository " },
+  },
 };

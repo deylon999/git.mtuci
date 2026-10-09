@@ -3598,6 +3598,8 @@ async def get_student_activity_feed(
                     text=f"{assignment.title} — ",
                     bold=f"оценка {score}",
                     text_after=f" · {course_title}",
+                    i18n_key="grade",
+                    i18n_params={"assignment": assignment.title, "score": score, "course": course_title},
                     time_label=_feed_time_label(sub.graded_at, now),
                     created_at=sub.graded_at,
                     badge=f"{score} / {grade_max_by_course.get(assignment.course_id, 100)}",
@@ -3615,6 +3617,11 @@ async def get_student_activity_feed(
                         text="Комментарий преподавателя к ",
                         bold=assignment.title,
                         text_after=f": «{sub.comment.strip()[:80]}{'…' if len(sub.comment.strip()) > 80 else ''}»",
+                        i18n_key="teacherComment",
+                        i18n_params={
+                            "assignment": assignment.title,
+                            "preview": f"{sub.comment.strip()[:80]}{'…' if len(sub.comment.strip()) > 80 else ''}",
+                        },
                         time_label=_feed_time_label(updated_at, now),
                         created_at=updated_at,
                         badge="Новое",
@@ -3652,6 +3659,8 @@ async def get_student_activity_feed(
                     text="Коммит в ",
                     bold=log.repo_name or "репозиторий",
                     text_after=f" — {log.message[:60] if log.message else ''}",
+                    i18n_key="commit" if log.repo_name else None,
+                    i18n_params={"repo": log.repo_name or "", "message": (log.message or "")[:60]},
                     time_label=_feed_time_label(log.created_at, now),
                     created_at=log.created_at,
                     href="/repositories",
@@ -3665,6 +3674,8 @@ async def get_student_activity_feed(
                     text="Pull Request в ",
                     bold=log.repo_name or "репозиторий",
                     text_after=f" — {log.message[:60] if log.message else ''}",
+                    i18n_key="pr" if log.repo_name else None,
+                    i18n_params={"repo": log.repo_name or "", "message": (log.message or "")[:60]},
                     time_label=_feed_time_label(log.created_at, now),
                     created_at=log.created_at,
                     href="/repositories",
@@ -3683,6 +3694,8 @@ async def get_student_activity_feed(
                     text="Комментарий к Pull Request ",
                     bold=pr_label or "в репозитории",
                     text_after=f" {log.repo_name or ''} — «{comment_tail}»" if comment_tail else f" {log.repo_name or ''}",
+                    i18n_key=("prComment" if comment_tail else "prCommentNoText") if pr_label else None,
+                    i18n_params={"pr": pr_label, "repo": log.repo_name or "", "preview": comment_tail},
                     time_label=_feed_time_label(log.created_at, now),
                     created_at=log.created_at,
                     badge="PR",
@@ -3697,6 +3710,8 @@ async def get_student_activity_feed(
                     type="repo",
                     text="Создан репозиторий ",
                     bold=log.repo_name or "",
+                    i18n_key="repoCreated",
+                    i18n_params={"repo": log.repo_name or ""},
                     time_label=_feed_time_label(log.created_at, now),
                     created_at=log.created_at,
                     href="/repositories",
@@ -3762,12 +3777,12 @@ async def get_student_group_ranking(
             your_place = place
             your_points = pts
         if place <= 3 or is_you:
-            display_name = f"{name} (Вы)" if is_you else name
+            # The client marks the viewer's row via `is_you` in the UI language.
             entries.append(
                 StudentGroupRankingEntryRead(
                     place=place,
                     student_id=sid,
-                    name=display_name,
+                    name=name,
                     points=pts,
                     is_you=is_you,
                 )

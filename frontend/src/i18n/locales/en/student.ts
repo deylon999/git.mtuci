@@ -88,6 +88,7 @@ export const studentEn = {
     rankingSetGroup: "Set your group in your profile to see the ranking",
     rankingNoGrades: "No one in your group has grades yet",
     you: "(you)",
+    topPercent: "Top {n}%",
     points: "{n} {n|point|points}",
     kpiDeadlinesNext: "Next: {title}",
     kpiDeadlinesNone: "Nothing due today",
