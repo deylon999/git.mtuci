@@ -45,7 +45,20 @@ export default function GradeSubmissionModal({
     setError(null);
   }, [open, target]);
 
+  // Esc closes, but not while a grade is being saved.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !loading) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, loading, onClose]);
+
   if (!open || !target) return null;
+  const close = () => {
+    if (!loading) onClose();
+  };
 
   async function handleAccept() {
     // Number("") is 0, so an empty field must be rejected explicitly instead of saving a zero grade.
@@ -75,12 +88,19 @@ export default function GradeSubmissionModal({
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center p-4"
       style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
-      onClick={onClose}
+      onClick={close}
     >
-      <div
-        className="w-full max-w-md rounded-xl border p-5 shadow-2xl"
+      <form
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("teacher.gradeModal.title")}
+        className="w-full max-w-md max-h-full overflow-y-auto rounded-xl border p-5 shadow-2xl"
         style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void handleAccept();
+        }}
       >
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
@@ -95,7 +115,7 @@ export default function GradeSubmissionModal({
               {target.assignmentTitle}
             </p>
           </div>
-          <button type="button" onClick={onClose} style={{ color: theme.text2 }}>
+          <button type="button" onClick={close} aria-label={t("common.close")} style={{ color: theme.text2 }}>
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -105,6 +125,7 @@ export default function GradeSubmissionModal({
         </label>
         <input
           type="number"
+          autoFocus
           min={0}
           max={target.gradeMax}
           value={grade}
@@ -134,16 +155,15 @@ export default function GradeSubmissionModal({
         <div className="flex justify-end gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={close}
             className="rounded-lg border px-3 py-1.5 text-xs"
             style={{ borderColor: theme.border, color: theme.text2 }}
           >
             {t("common.cancel")}
           </button>
           <button
-            type="button"
+            type="submit"
             disabled={loading}
-            onClick={() => void handleAccept()}
             className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
             style={{ backgroundColor: theme.success }}
           >
@@ -151,7 +171,7 @@ export default function GradeSubmissionModal({
             {t("teacher.gradeModal.accept")}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }
