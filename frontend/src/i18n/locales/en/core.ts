@@ -148,6 +148,8 @@ export const coreEn = {
       teacherDeadlineMissedHint: "Student did not submit on time",
       teacherDailyDigest: "Daily digest",
       teacherDailyDigestHint: "Email summary once per day",
+      saveFailed: "Couldn't save notification settings",
+      pushBlocked: "Notifications are blocked in your browser. Allow them in the site settings.",
     },
     security: {
       title: "Security",

@@ -523,7 +523,7 @@ async def sync_user_notifications(
                     ):
                         created += 1
 
-    if role == UserRole.teacher:
+    if role in (UserRole.teacher, UserRole.admin):
         courses_result = await session.execute(select(Course).where(Course.teacher_id == user_id))
         courses = list(courses_result.scalars().all())
         course_by_id = {c.id: c for c in courses}
@@ -596,7 +596,7 @@ async def sync_user_notifications(
         ):
             created += 1
 
-    if role in (UserRole.teacher, UserRole.laborant) and teacher_course_ids:
+    if role in (UserRole.teacher, UserRole.laborant, UserRole.admin) and teacher_course_ids:
         if await _maybe_send_teacher_daily_digest(session, user=user, course_ids=teacher_course_ids):
             created += 1
 

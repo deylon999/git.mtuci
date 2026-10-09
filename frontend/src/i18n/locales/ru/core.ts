@@ -148,6 +148,8 @@ export const coreRu = {
       teacherDeadlineMissedHint: "Студент не сдал вовремя",
       teacherDailyDigest: "Ежедневный дайджест",
       teacherDailyDigestHint: "Сводка на email за день",
+      saveFailed: "Не удалось сохранить настройки уведомлений",
+      pushBlocked: "Уведомления заблокированы в браузере. Разрешите их в настройках сайта.",
     },
     security: {
       title: "Безопасность",

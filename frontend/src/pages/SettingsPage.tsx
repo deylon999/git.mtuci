@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
 import { Moon, Sun, Bell, Globe, Shield, Key } from "lucide-react";
-import { getMe } from "../api/authApi";
 import { patchUserSettings } from "../api/userSettingsApi";
 import StudentGitTokenSettings from "../components/StudentGitTokenSettings";
+import { useAuthUser } from "../context/AuthUserContext";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { requestBrowserNotificationPermission } from "../utils/browserNotifications";
 import { getTheme } from "../theme";
@@ -19,34 +20,41 @@ interface SettingsPageProps {
 export default function SettingsPage({ isDarkTheme = false, onToggleTheme }: SettingsPageProps) {
   const { t, language, setLanguage, notifications, setNotifications, persistTheme } = useUserPreferences();
   const [section, setSection] = useState<SettingsSection>("general");
-  const [isStudent, setIsStudent] = useState(false);
-  const [isTeacher, setIsTeacher] = useState(false);
-
-  useEffect(() => {
-    void getMe()
-      .then((u) => {
-        setIsStudent(u.role === "student");
-        setIsTeacher(u.role === "teacher" || u.role === "laborant");
-      })
-      .catch(() => {
-        setIsStudent(false);
-        setIsTeacher(false);
-      });
-  }, []);
+  const { user } = useAuthUser();
+  const isStudent = user?.role === "student";
+  const isStaff = user?.role === "teacher" || user?.role === "laborant" || user?.role === "admin";
 
   const theme = getTheme(isDarkTheme);
 
   const toggleNotification = (key: keyof typeof notifications) => {
-    setNotifications((prev) => {
-      const next = !prev[key];
-      if (key === "push" && next) {
-        void requestBrowserNotificationPermission();
-      }
-      const updated = { ...prev, [key]: next };
-      void patchUserSettings({ notifications: updated }).catch(() => {});
-      return updated;
+    const previous = notifications;
+    const updated = { ...previous, [key]: !previous[key] };
+    setNotifications(updated);
+    if (key === "push" && updated.push) {
+      void requestBrowserNotificationPermission().then((permission) => {
+        if (permission === "denied") toast.error(t("settings.notifications.pushBlocked"));
+      });
+    }
+    void patchUserSettings({ notifications: updated }).catch(() => {
+      setNotifications(previous);
+      toast.error(t("settings.notifications.saveFailed"));
     });
   };
+
+  const switchProps = (checked: boolean, onToggle: () => void, label: string) => ({
+    className: `settings-switch ${checked ? "active" : ""}`,
+    role: "switch" as const,
+    "aria-checked": checked,
+    "aria-label": label,
+    tabIndex: 0,
+    onClick: onToggle,
+    onKeyDown: (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onToggle();
+      }
+    },
+  });
 
   const handleThemeToggle = () => {
     onToggleTheme?.();
@@ -191,19 +199,7 @@ export default function SettingsPage({ isDarkTheme = false, onToggleTheme }: Set
                     {t("settings.appearance.darkThemeHint")}
                   </div>
                 </div>
-                <div
-                  className={`settings-switch ${isDarkTheme ? "active" : ""}`}
-                  onClick={handleThemeToggle}
-                  role="switch"
-                  aria-checked={isDarkTheme}
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      handleThemeToggle();
-                    }
-                  }}
-                />
+                <div {...switchProps(isDarkTheme, handleThemeToggle, t("settings.appearance.darkTheme"))} />
               </div>
 
               <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: `1px solid ${theme.border}` }}>
@@ -308,14 +304,11 @@ export default function SettingsPage({ isDarkTheme = false, onToggleTheme }: Set
                       <div style={{ color: theme.text, fontSize: "14px", fontWeight: "500" }}>{t(titleKey)}</div>
                       <div style={{ color: theme.text2, fontSize: "11px", marginTop: "2px" }}>{t(hintKey)}</div>
                     </div>
-                    <div
-                      className={`settings-switch ${notifications[key] ? "active" : ""}`}
-                      onClick={() => toggleNotification(key)}
-                    />
+                    <div {...switchProps(notifications[key], () => toggleNotification(key), t(titleKey))} />
                   </div>
                 ))}
 
-                {isTeacher ? (
+                {isStaff ? (
                   <>
                     <p style={{ color: theme.text2, fontSize: "12px", marginTop: "16px", fontWeight: 600 }}>
                       {t("settings.notifications.teacherSection")}
@@ -343,10 +336,7 @@ export default function SettingsPage({ isDarkTheme = false, onToggleTheme }: Set
                           <div style={{ color: theme.text, fontSize: "14px", fontWeight: "500" }}>{t(titleKey)}</div>
                           <div style={{ color: theme.text2, fontSize: "11px", marginTop: "2px" }}>{t(hintKey)}</div>
                         </div>
-                        <div
-                          className={`settings-switch ${notifications[key] ? "active" : ""}`}
-                          onClick={() => toggleNotification(key)}
-                        />
+                        <div {...switchProps(Boolean(notifications[key]), () => toggleNotification(key), t(titleKey))} />
                       </div>
                     ))}
                   </>
