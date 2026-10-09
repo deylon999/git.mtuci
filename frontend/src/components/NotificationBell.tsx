@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, Check, AlertTriangle, X } from "lucide-react";
 import { getTheme } from "../theme";
@@ -49,16 +49,34 @@ export default function NotificationBell({ isDarkTheme = false }: NotificationBe
   const theme = getTheme(isDarkTheme);
   const { notifications, unreadCount, refresh, markAsRead, markAllAsRead } = useNotifications();
   const [open, setOpen] = useState(false);
-
+  const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (open) void refresh();
   }, [open, refresh]);
+
+  // Close on a click outside the menu or on Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   const hasUnread = unreadCount > 0;
 
   const handleClick = async (notification: Notification) => {
     if (!notification.read) {
-      await markAsRead(notification.id);
+      // A failed "mark as read" must not stop the user from opening what the notification points to.
+      await markAsRead(notification.id).catch(() => undefined);
     }
     setOpen(false);
     if (notification.href) {
@@ -67,7 +85,7 @@ export default function NotificationBell({ isDarkTheme = false }: NotificationBe
   };
 
   return (
-    <div className="relative" data-notification-menu>
+    <div className="relative" data-notification-menu ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -89,7 +107,7 @@ export default function NotificationBell({ isDarkTheme = false }: NotificationBe
 
       {open ? (
         <div
-          className="absolute right-0 mt-2 w-80 rounded-xl shadow-2xl z-50 overflow-hidden border"
+          className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl shadow-2xl z-50 overflow-hidden border"
           style={{ backgroundColor: theme.bg3, borderColor: theme.border }}
         >
           <div
