@@ -1,5 +1,5 @@
 import { currentLocaleTag } from "../utils/dates";
-import { useEffect, useState, useCallback, useMemo, type CSSProperties } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Users,
@@ -7,7 +7,6 @@ import {
   Clock,
   TrendingUp,
   ArrowRight,
-  MoreHorizontal,
   Download,
   Plus,
   Info,
@@ -19,8 +18,6 @@ import {
   GitPullRequest,
   BellOff,
   X,
-  Search,
-  Filter,
   type LucideIcon,
 } from "lucide-react";
 import { ApiError } from "../api/client";
@@ -71,7 +68,7 @@ interface Stats {
 interface StatCardProps {
   title: string;
   value: string;
-  trendDelta: number;
+  footnote?: string;
   icon: React.ElementType;
   isDarkTheme?: boolean;
 }
@@ -148,7 +145,6 @@ interface Notification {
   title: string;
   message: string;
   timestamp: string;
-  category: 'server' | 'users' | 'git' | 'edu';
 }
 
 function getIcon(type: Notification['type']): LucideIcon {
@@ -181,41 +177,9 @@ function getNotificationColor(type: Notification['type']): string {
   }
 }
 
-function StatCard({ title, value, trendDelta, icon: Icon, isDarkTheme = true }: StatCardProps) {
-  const { t } = useUserPreferences();
+function StatCard({ title, value, footnote, icon: Icon, isDarkTheme = true }: StatCardProps) {
   const ui = getAdminPageTheme(isDarkTheme);
   const c = ui.colors;
-  const theme = getTheme(isDarkTheme);
-
-  const renderTrend = (delta: number) => {
-    const footerStyle: CSSProperties = {
-      fontSize: "10px",
-      display: "inline-flex",
-      alignItems: "center",
-      gap: "4px",
-    };
-    if (delta === 0) {
-      return (
-        <span style={{ ...footerStyle, color: c.textMuted }}>
-          <span>—</span>
-          <span>{t("admin.dashboard.vsLastWeek")}</span>
-        </span>
-      );
-    }
-    const isPositive = delta > 0;
-    const color = isPositive ? theme.success : theme.danger;
-    const arrow = isPositive ? "↑" : "↓";
-    const sign = isPositive ? "+" : "−";
-    return (
-      <span style={footerStyle}>
-        <span style={{ color, fontWeight: 500 }}>
-          {arrow} {sign}
-          {Math.abs(delta)}
-        </span>
-        <span style={{ color: c.textMuted, fontWeight: 400 }}>{t("admin.dashboard.vsLastWeek")}</span>
-      </span>
-    );
-  };
 
   return (
     <div
@@ -245,7 +209,9 @@ function StatCard({ title, value, trendDelta, icon: Icon, isDarkTheme = true }: 
           >
             {value}
           </div>
-          <div style={{ marginTop: "3px" }}>{renderTrend(trendDelta)}</div>
+          {footnote ? (
+            <div style={{ marginTop: "3px", fontSize: "10px", color: c.textMuted }}>{footnote}</div>
+          ) : null}
         </div>
         <div className={`rounded-lg p-3 shrink-0 ${ui.iconBg}`}>
           <Icon className={`h-6 w-6 ${ui.iconColor}`} />
@@ -276,10 +242,10 @@ function getStatusBadge(status: string, t: (key: string) => string) {
 }
 
 export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
-  const { t, tp, language } = useUserPreferences();
+  const { t, tp } = useUserPreferences();
   const navigate = useNavigate();
   const { user } = useAuthUser();
-  const dateLocale = language === "en" ? "en-US" : "ru-RU";
+  const dateLocale = currentLocaleTag();
   const { hasPermission } = usePermissions();
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<AdminUserRead[]>([]);
@@ -292,7 +258,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
   const [facultyStatsLoading, setFacultyStatsLoading] = useState(false);
   const [activeRepositories, setActiveRepositories] = useState<ActiveRepositoryStat[]>([]);
   const [activeRepositoriesLoading, setActiveRepositoriesLoading] = useState(false);
-  const [showRepoDropdown, setShowRepoDropdown] = useState(false);
+  const [usersError, setUsersError] = useState(false);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [reviewQueue, setReviewQueue] = useState<AdminReviewQueueItem[]>([]);
@@ -315,7 +281,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
     try {
       const [list, sysMetrics, svcStatus, backups, facultyData, repoData, reviewData, appNotifs] =
         await Promise.all([
-        getAdminUsers(),
+        getAdminUsers().catch(() => null),
         getSystemMetrics().catch(() => null),
         getServiceStatus().catch(() => null),
         getBackups().catch(() => null),
@@ -324,21 +290,22 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
         getAdminReviewQueue(5).catch(() => []),
         getNotifications().catch(() => []),
       ]);
-      setUsers(list);
-      setStats({
-        total: list.length,
-        active: list.filter((u) => !u.is_blocked && !u.is_pending).length,
-        pending: list.filter((u) => u.is_pending).length,
-        blocked: list.filter((u) => u.is_blocked).length,
-      });
+      setUsersError(list === null);
+      if (list) {
+        setUsers(list);
+        setStats({
+          total: list.length,
+          active: list.filter((u) => !u.is_blocked && !u.is_pending).length,
+          pending: list.filter((u) => u.is_pending).length,
+          blocked: list.filter((u) => u.is_blocked).length,
+        });
+      }
       setMetrics(sysMetrics);
       setServiceStatus(svcStatus);
       setBackupInfo(backups);
       setFacultyStats(facultyData);
       setActiveRepositories(repoData);
       setReviewQueue(reviewData);
-
-      const loc = getI18nLocale();
 
       const inboxNotifications: Notification[] = appNotifs
         .filter((n) => !n.read)
@@ -355,30 +322,16 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                 : "info",
         title: n.title,
         message: n.message,
-        timestamp: new Date(n.created_at).toLocaleString(loc === "en" ? "en-US" : "ru-RU"),
-        category: "edu",
+        timestamp: new Date(n.created_at).toLocaleString(currentLocaleTag()),
       }));
 
       setNotifications(inboxNotifications);
-    } catch {
-      // keep previous data
     } finally {
       setLoading(false);
       setFacultyStatsLoading(false);
       setActiveRepositoriesLoading(false);
     }
   }, []);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (showRepoDropdown && !(event.target as Element).closest('.repo-dropdown-container')) {
-        setShowRepoDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showRepoDropdown]);
 
   const handleCreateBackup = useCallback(async () => {
     if (backupLoading) return;
@@ -397,7 +350,6 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
         title: translate(loc, "admin.dashboard.backupCreatedTitle"),
         message: translateWithParams(loc, "admin.dashboard.backupCreatedMsg", { file: result.file }),
         timestamp: justNow,
-        category: "server",
       };
       setNotifications((prev) => [newNotification, ...prev].slice(0, DASHBOARD_NOTIFICATIONS_LIMIT));
       toast.success(t("admin.dashboard.backupSuccess"));
@@ -416,7 +368,6 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
         title: translate(loc, "admin.dashboard.backupErrorTitle"),
         message: uiError,
         timestamp: justNow,
-        category: "server",
       };
       setNotifications((prev) => [errorNotification, ...prev].slice(0, DASHBOARD_NOTIFICATIONS_LIMIT));
       toast.error(uiError);
@@ -429,42 +380,23 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
     load();
   }, [load]);
 
-  // Calculate weekly trends (compare current week vs previous week)
-  const now = new Date();
-  const oneWeekAgo = new Date(now);
-  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-  const twoWeeksAgo = new Date(now);
-  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-
-  const isInRange = (date: string, start: Date, end: Date) => {
-    const d = new Date(date);
-    return d >= start && d < end;
-  };
-
-  const isActiveUser = (u: AdminUserRead) => !u.is_blocked && !u.is_pending;
-  const countNewInRange = (start: Date, end: Date, match: (u: AdminUserRead) => boolean) =>
-    users.filter((u) => isInRange(u.created_at, start, end) && match(u)).length;
-
-  const currentNew = countNewInRange(oneWeekAgo, now, () => true);
-  const prevNew = countNewInRange(twoWeeksAgo, oneWeekAgo, () => true);
-  const currentActive = countNewInRange(oneWeekAgo, now, isActiveUser);
-  const prevActive = countNewInRange(twoWeeksAgo, oneWeekAgo, isActiveUser);
-  const currentPending = countNewInRange(oneWeekAgo, now, (u) => Boolean(u.is_pending));
-  const prevPending = countNewInRange(twoWeeksAgo, oneWeekAgo, (u) => Boolean(u.is_pending));
-  const currentBlocked = countNewInRange(oneWeekAgo, now, (u) => u.is_blocked);
-  const prevBlocked = countNewInRange(twoWeeksAgo, oneWeekAgo, (u) => u.is_blocked);
-
-  const weekDelta = (currentWeek: number, previousWeek: number) => currentWeek - previousWeek;
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const newThisWeek = users.filter((u) => Date.parse(u.created_at) >= weekAgo).length;
 
   const recentUsers = [...users]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 8);
 
   const statCards = [
-    { title: t("admin.dashboard.cardTotal"), value: stats.total.toLocaleString(currentLocaleTag()), icon: Users, trendDelta: weekDelta(currentNew, prevNew) },
-    { title: t("admin.dashboard.cardActive"), value: stats.active.toLocaleString(currentLocaleTag()), icon: GitBranch, trendDelta: weekDelta(currentActive, prevActive) },
-    { title: t("admin.dashboard.cardPending"), value: stats.pending.toLocaleString(currentLocaleTag()), icon: TrendingUp, trendDelta: weekDelta(currentPending, prevPending) },
-    { title: t("admin.dashboard.cardBlocked"), value: stats.blocked.toLocaleString(currentLocaleTag()), icon: Clock, trendDelta: weekDelta(currentBlocked, prevBlocked) },
+    {
+      title: t("admin.dashboard.cardTotal"),
+      value: stats.total.toLocaleString(dateLocale),
+      icon: Users,
+      footnote: newThisWeek > 0 ? tp("admin.dashboard.newThisWeek", { n: newThisWeek }) : undefined,
+    },
+    { title: t("admin.dashboard.cardActive"), value: stats.active.toLocaleString(dateLocale), icon: GitBranch },
+    { title: t("admin.dashboard.cardPending"), value: stats.pending.toLocaleString(dateLocale), icon: TrendingUp },
+    { title: t("admin.dashboard.cardBlocked"), value: stats.blocked.toLocaleString(dateLocale), icon: Clock },
   ];
 
   const theme = getTheme(isDarkTheme);
@@ -503,7 +435,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
 
   return (
     <div className={`h-full overflow-auto transition-colors ${ui.pageWrapper}`}>
-      <div className="w-full py-6 px-6 space-y-6">
+      <div className="w-full py-6 px-4 sm:px-6 space-y-6">
         {/* Header */}
         <div className="mb-8">
           <AdminPageHeader
@@ -551,11 +483,15 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
               </Link>
             </div>
             <div className="p-5">
-              {loading ? (
+              {loading && users.length === 0 ? (
                 <div className="text-sm text-center py-8"
                 style={{ color: theme.text2 }}>{t("common.loading")}</div>
+              ) : usersError && users.length === 0 ? (
+                <div className="text-sm text-center py-8"
+                style={{ color: theme.text2 }}>{t("admin.dashboard.usersLoadError")}</div>
               ) : (
-                <table className="w-full">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px]">
                   <thead>
                     <tr className="text-left">
                       <th className="pb-3 pr-8 text-xs font-semibold uppercase tracking-wider"
@@ -612,6 +548,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                     )}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
           </div>
@@ -620,52 +557,17 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
           <div className={`lg:col-span-2 ${ui.cardShell}`}>
             <div className={`p-5 flex items-center justify-between border-b ${ui.tableBorder} ${ui.sectionHeaderBg}`}>
               <h2 className={`text-lg font-semibold transition-colors ${ui.textPrimary}`}>{t("admin.dashboard.activeRepos")}</h2>
-              <div className="relative repo-dropdown-container">
-                <button
-                  onClick={() => setShowRepoDropdown(!showRepoDropdown)}
-                  className="transition-colors"
-                  style={{ color: theme.text3 }}
-                >
-                  <MoreHorizontal className="h-5 w-5" />
-                </button>
-                {showRepoDropdown && (
-                  <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border backdrop-blur-md shadow-lg z-50"
-                  style={{ backgroundColor: theme.bg3 + 'F0', borderColor: theme.border + '80' }}>
-                    <div className="p-1.5 space-y-0.5">
-                      {hasPermission("repo_create") && (
-                        <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors"
-                        style={{ color: theme.text2 }}>
-                          <Plus className="h-4 w-4"
-                          style={{ color: theme.text3 }} />
-                          {t("admin.dashboard.createRepo")}
-                        </button>
-                      )}
-                      <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors"
-                      style={{ color: theme.text2 }}>
-                        <Search className="h-4 w-4"
-                        style={{ color: theme.text3 }} />
-                        {t("admin.dashboard.searchProject")}
-                      </button>
-                      <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors"
-                      style={{ color: theme.text2 }}>
-                        <Filter className="h-4 w-4"
-                        style={{ color: theme.text3 }} />
-                        {t("admin.dashboard.filterFaculty")}
-                      </button>
-                      <div className="h-px mx-1"
-                      style={{ backgroundColor: theme.border + '80' }} />
-                      <button
-                        onClick={() => { setActiveRepositoriesLoading(true); load(); }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors"
-                        style={{ color: theme.text2 }}>
-                        <RotateCcw className="h-4 w-4"
-                        style={{ color: theme.text3 }} />
-                        {t("admin.dashboard.refreshList")}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => void load()}
+                disabled={loading}
+                title={t("admin.dashboard.refreshList")}
+                aria-label={t("admin.dashboard.refreshList")}
+                className="transition-colors disabled:opacity-50"
+                style={{ color: theme.text3 }}
+              >
+                <RotateCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              </button>
             </div>
             <div className="p-5">
               <div className="space-y-4">
@@ -757,7 +659,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                           </p>
                           <p className="text-xs mt-1"
                           style={{ color: theme.text3 }}>
-                            {notification.timestamp} • {notification.category}
+                            {notification.timestamp}
                           </p>
                         </div>
                       </div>
@@ -795,7 +697,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                       </div>
                       <div className="h-2 rounded-full overflow-hidden"
                       style={{ backgroundColor: c.iconBg }}>
-                        <div className={`h-full rounded-full ${dept.color}`} style={{ width: `${(dept.commits / Math.max(...facultyStats.map(s => s.commits))) * 100}%` }} />
+                        <div className={`h-full rounded-full ${dept.color}`} style={{ width: `${(dept.commits / Math.max(1, ...facultyStats.map((s) => s.commits))) * 100}%` }} />
                       </div>
                     </div>
                   ))
@@ -816,7 +718,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                       {t("admin.dashboard.noReviewQueue")}
                     </p>
                   ) : (
-                    reviewQueue.map((item) => {
+                    reviewQueue.map((item, itemIdx) => {
                       const icon =
                         item.urgency === "urgent"
                           ? AlertOctagon
@@ -849,7 +751,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                               : "bg-green-100 text-green-700";
                       return (
                         <div
-                          key={item.repo_label}
+                          key={`${item.repo_label}-${itemIdx}`}
                           className="flex items-center justify-between rounded-xl p-3 transition-colors"
                           style={{ backgroundColor: theme.bg4 }}
                         >
@@ -959,7 +861,14 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
                 <div className="flex items-center justify-between gap-2">
                   <span className={`text-sm ${ui.tableCellText}`}>{t("admin.dashboard.backupLabel")}</span>
                   <span className="text-xs text-right" style={{ color: theme.text2 }}>
-                    {backupInfo?.last_backup || t("admin.dashboard.noBackupData")}
+                    {backupInfo?.last_backup && !Number.isNaN(Date.parse(backupInfo.last_backup))
+                      ? new Date(backupInfo.last_backup).toLocaleString(dateLocale, {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : backupInfo?.last_backup || t("admin.dashboard.noBackupData")}
                   </span>
                 </div>
               </div>
@@ -967,7 +876,7 @@ export default function AdminPage({ isDarkTheme = true }: AdminPageProps) {
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={load}
+                  onClick={() => void load()}
                   disabled={loading}
                   className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isDarkTheme ? "bg-[#2d2d2d] border-[#3d3d3d] text-gray-300 hover:bg-[#3d3d3d]" : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200"}`}
                 >

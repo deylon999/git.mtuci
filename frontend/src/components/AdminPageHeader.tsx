@@ -17,14 +17,14 @@ export default function AdminPageHeader({
   const subtitleText = isDarkTheme ? "text-[#8b949e]" : "text-gray-500";
 
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <div className={subtitleBelow ? "flex flex-col items-start" : "flex items-center gap-3"}>
         <h1 className={`text-2xl font-bold ${titleText} transition-colors`}>{title}</h1>
         {subtitle && (
           <span className={`text-sm ${subtitleText} transition-colors ${subtitleBelow ? "mt-1" : ""}`}>{subtitle}</span>
         )}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }

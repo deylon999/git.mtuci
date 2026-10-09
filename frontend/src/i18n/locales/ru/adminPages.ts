@@ -1,7 +1,8 @@
 /** Extended admin UI strings (merged into root locale tree). */
 export const adminPagesRu = {
   dashboard: {
-    vsLastWeek: "к прошл. неделе",
+    newThisWeek: "+{n} за неделю",
+    usersLoadError: "Не удалось загрузить пользователей",
     exportReport: "Экспорт отчёта",
     exportingReport: "Экспорт…",
     exportReportSuccess: "Отчёт скачан",
@@ -18,9 +19,6 @@ export const adminPagesRu = {
     colStatus: "Статус",
     noData: "Нет данных",
     activeRepos: "Активные репозитории",
-    createRepo: "Создать репозиторий",
-    searchProject: "Поиск проекта",
-    filterFaculty: "Фильтр по кафедре",
     refreshList: "Обновить список",
     noActiveRepos: "Нет активных репозиториев",
     commitsCount: "{n} commits",

@@ -1,7 +1,8 @@
 /** Extended admin UI strings (merged into root locale tree). */
 export const adminPagesEn = {
   dashboard: {
-    vsLastWeek: "vs last week",
+    newThisWeek: "+{n} this week",
+    usersLoadError: "Couldn't load users",
     exportReport: "Export report",
     exportingReport: "Exporting…",
     exportReportSuccess: "Report downloaded",
@@ -18,9 +19,6 @@ export const adminPagesEn = {
     colStatus: "Status",
     noData: "No data",
     activeRepos: "Active repositories",
-    createRepo: "Create repository",
-    searchProject: "Search project",
-    filterFaculty: "Filter by department",
     refreshList: "Refresh list",
     noActiveRepos: "No active repositories",
     commitsCount: "{n} commits",
