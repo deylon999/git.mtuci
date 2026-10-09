@@ -1,9 +1,6 @@
 import { translate, translateWithParams, type Locale } from "../i18n";
 import { getI18nLocale } from "../i18n/runtime";
-
-function localeTag(locale: Locale): string {
-  return locale === "en" ? "en-US" : "ru-RU";
-}
+import { localeTag } from "./dates";
 
 export function formatRelativeTime(iso: string | Date, now = new Date(), locale = getI18nLocale()): string {
   const date = new Date(iso);

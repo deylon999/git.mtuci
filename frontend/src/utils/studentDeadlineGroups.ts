@@ -2,6 +2,7 @@ import { translate, translateWithParams, type Locale } from "../i18n";
 import { getPluralForm } from "../i18n/plural";
 import { getI18nLocale } from "../i18n/runtime";
 import type { StudentDeadlineItem } from "./studentDeadlines";
+import { addDays, localeTag, startOfDay } from "./dates";
 
 export type DeadlineGroupKey = "overdue" | "today" | "tomorrow" | "week" | "later";
 
@@ -18,22 +19,6 @@ const GROUP_TITLE_KEYS: Record<DeadlineGroupKey, string> = {
   week: "student.deadline.groupWeek",
   later: "student.deadline.groupLater",
 };
-
-function localeTag(locale: Locale): string {
-  return locale === "en" ? "en-US" : "ru-RU";
-}
-
-function startOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function addDays(d: Date, days: number): Date {
-  const x = new Date(d);
-  x.setDate(x.getDate() + days);
-  return x;
-}
 
 /** Monday 00:00 (local) for the week containing `d`. */
 function startOfCalendarWeek(d: Date): Date {

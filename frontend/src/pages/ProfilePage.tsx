@@ -1,4 +1,4 @@
-import { currentLocaleTag } from "../utils/dates";
+import { addDays, currentLocaleTag } from "../utils/dates";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { pluralWord } from "../i18n/plural";
 import { translateWithParams } from "../i18n/params";
@@ -235,12 +235,6 @@ function dateKey(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function addDays(date: Date, days: number): Date {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
 }
 
 function formatGraphDate(key: string): string {

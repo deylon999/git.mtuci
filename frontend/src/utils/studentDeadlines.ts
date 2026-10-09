@@ -2,6 +2,7 @@ import type { Assignment, Course } from "../api/types";
 import { pluralWord } from "../i18n/plural";
 import { translate, translateWithParams, type Locale } from "../i18n";
 import { getI18nLocale } from "../i18n/runtime";
+import { addDays, localeTag, startOfDay } from "./dates";
 
 export type DeadlineUrgency = "danger" | "warning" | "info" | "muted";
 
@@ -14,22 +15,6 @@ export interface StudentDeadlineItem {
   deadline: Date;
   timeLabel: string;
   urgency: DeadlineUrgency;
-}
-
-function localeTag(locale: Locale): string {
-  return locale === "en" ? "en-US" : "ru-RU";
-}
-
-function startOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function addDays(d: Date, days: number): Date {
-  const x = new Date(d);
-  x.setDate(x.getDate() + days);
-  return x;
 }
 
 function formatTime(d: Date, locale: Locale): string {
