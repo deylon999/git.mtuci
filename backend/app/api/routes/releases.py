@@ -60,8 +60,14 @@ _HTTP_ENDPOINT_RE = re.compile(r"https?://[A-Za-z0-9][A-Za-z0-9.-]*(?::\d{1,5})?
 _DOCKER_ENDPOINT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]*(?::\d{1,5})?(?:/[a-z0-9][a-z0-9._-]*)*/?")
 
 
+_SEMVER_RE = re.compile(r"v?\d{1,20}\.\d{1,20}\.\d{1,20}(?:[-+][0-9A-Za-z.-]{1,128})?")
+
+
 def _is_semver_like(value: str) -> bool:
-    return bool(re.fullmatch(r"v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z\.-]+)?", value))
+    # Bounded quantifiers + length cap keep matching linear on user-supplied input.
+    if len(value) > 192:
+        return False
+    return bool(_SEMVER_RE.fullmatch(value))
 
 
 def _registry_endpoint_error(registry_type: str, endpoint: str) -> str | None:
